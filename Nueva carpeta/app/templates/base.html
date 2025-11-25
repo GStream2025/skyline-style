@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>{% block title %}Skyline Style{% endblock %}</title>
+
+    <!-- Tailwind CSS CDN (imprescindible que esté acá) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Fuente Inter (opcional pero queda más pro) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- CSS propio -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-900" style="font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">
+
+    <!-- NAVBAR FIJA -->
+    <header class="fixed top-0 inset-x-0 z-20 bg-white/80 backdrop-blur border-b border-slate-100">
+        <div class="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
+            <!-- Logo -->
+            <a href="{{ url_for('main.index') }}" class="flex items-center gap-2">
+                <span class="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-slate-900 text-slate-50 font-semibold text-sm shadow-sm">
+                    SS
+                </span>
+                <div class="flex flex-col leading-none">
+                    <span class="text-sm md:text-base font-semibold tracking-tight">Skyline Style</span>
+                    <span class="text-[10px] text-slate-400 uppercase tracking-wide">Streetwear</span>
+                </div>
+            </a>
+
+            <!-- Navegación -->
+            <nav class="hidden md:flex items-center gap-6 text-sm text-slate-600">
+                <a href="{{ url_for('main.shop') }}" class="hover:text-amber-500 transition">Tienda</a>
+                <a href="#destacados" class="hover:text-amber-500 transition">Destacados</a>
+                <a href="{{ url_for('auth.login') }}" class="hover:text-amber-500 transition">Ingresar</a>
+            </nav>
+
+            <!-- CTA -->
+            <a href="{{ url_for('main.shop') }}"
+               class="text-xs md:text-sm px-3 py-1.5 rounded-full bg-slate-900 text-slate-50 hover:bg-slate-800 shadow-sm hover:shadow-md transition">
+                Ver colección
+            </a>
+        </div>
+    </header>
+
+    <!-- CONTENIDO -->
+    <main class="pt-16">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="border-t border-slate-200 mt-10 bg-white/80 backdrop-blur">
+        <div class="max-w-6xl mx-auto px-4 py-6 text-xs text-slate-500 flex flex-wrap items-center justify-between gap-2">
+            <span>© {{ 2025 }} Skyline Style. Todos los derechos reservados.</span>
+            <span>Hecho con ❤️ por Gaby.</span>
+        </div>
+    </footer>
+
+</body>
+</html>

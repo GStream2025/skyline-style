@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}Algo salió mal - Skyline Style{% endblock %}
+
+{% block content %}
+<section class="min-h-[70vh] flex items-center justify-center px-4 pt-10 pb-16">
+    <div class="max-w-md w-full text-center bg-white border border-slate-200 rounded-3xl p-8 shadow-xl">
+        <p class="text-xs font-semibold text-amber-500 tracking-[0.2em] uppercase mb-2">
+            Skyline Style
+        </p>
+        <h1 class="text-3xl font-bold text-slate-900 mb-2">
+            Ups, algo salió mal
+        </h1>
+        <p class="text-sm text-slate-600 mb-5">
+            La página que estás buscando no existe, fue movida o hubo un error en la carga.
+        </p>
+
+        <div class="inline-flex items-center justify-center gap-4 mb-6 text-5xl font-bold text-slate-200">
+            <span>4</span>
+            <span class="text-amber-400">0</span>
+            <span>4</span>
+        </div>
+
+        <div class="flex flex-wrap items-center justify-center gap-3">
+            <a href="{{ url_for('main.index') }}"
+               class="px-6 py-2.5 rounded-full bg-slate-900 text-amber-400 text-sm font-semibold hover:bg-black transition">
+                Volver al inicio
+            </a>
+            <a href="{{ url_for('main.shop') }}"
+               class="text-xs text-slate-500 hover:text-amber-500">
+                Ir a la tienda
+            </a>
+        </div>
+    </div>
+</section>
+{% endblock %}

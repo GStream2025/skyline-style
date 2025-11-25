@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>{% block title %}Skyline Style · Streetwear con actitud{% endblock %}</title>
+    <meta name="description"
+          content="Skyline Style es una marca de streetwear con actitud, color e inclusión. Drops limitados, diseños urbanos y prendas pensadas para todos los cuerpos.">
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Config Tailwind (colores, animaciones, etc.) -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ["Inter", "system-ui", "sans-serif"],
+                    },
+                    colors: {
+                        skyline: {
+                            dark: "#020617",   // slate-950
+                            primary: "#020617",
+                            accent: "#f97316", // orange-500
+                        }
+                    },
+                    boxShadow: {
+                        'header': '0 10px 30px rgba(15,23,42,0.08)',
+                    },
+                    keyframes: {
+                        blob: {
+                            '0%, 100%': { transform: 'translate(0px, 0px) scale(1)' },
+                            '33%': { transform: 'translate(10px, -10px) scale(1.05)' },
+                            '66%': { transform: 'translate(-10px, 10px) scale(0.98)' },
+                        },
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0)' },
+                            '50%': { transform: 'translateY(-6px)' },
+                        },
+                        fadeUp: {
+                            '0%': { opacity: 0, transform: 'translateY(10px)' },
+                            '100%': { opacity: 1, transform: 'translateY(0)' },
+                        }
+                    },
+                    animation: {
+                        blob: 'blob 16s infinite',
+                        float: 'float 4s ease-in-out infinite',
+                        'fade-up': 'fadeUp 0.7s ease-out forwards',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Fuente Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- CSS propio -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
+
+    {# bloque opcional para CSS/JS extra por página #}
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-900 font-sans">
+
+<!-- HEADER -->
+<header id="main-header"
+        class="fixed top-0 inset-x-0 z-20 bg-white/80 backdrop-blur border-b border-slate-100 transition-shadow">
+    <div class="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
+
+        <!-- Logo -->
+        <a href="{{ url_for('main.index') }}" class="flex items-center gap-2 group">
+            <span
+                class="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-slate-900 text-slate-50 font-semibold text-sm shadow-sm group-hover:scale-105 group-hover:shadow-md transition">
+                SS
+            </span>
+            <div class="flex flex-col leading-none">
+                <span class="text-sm md:text-base font-semibold tracking-tight group-hover:text-slate-900 transition">
+                    Skyline Style
+                </span>
+                <span class="text-[10px] text-slate-400 uppercase tracking-[0.16em]">
+                    Streetwear
+                </span>
+            </div>
+        </a>
+
+        <!-- Navegación escritorio -->
+        <nav class="hidden md:flex items-center gap-6 text-sm text-slate-600">
+            <a href="{{ url_for('main.shop') }}"
+               class="relative hover:text-amber-500 transition after:absolute after:left-0 after:-bottom-1 after:h-0.5 after:w-0 after:bg-amber-400 after:transition-all hover:after:w-full">
+                Tienda
+            </a>
+            <a href="#destacados"
+               class="relative hover:text-amber-500 transition after:absolute after:left-0 after:-bottom-1 after:h-0.5 after:w-0 after:bg-amber-400 after:transition-all hover:after:w-full">
+                Destacados
+            </a>
+            <a href="#about"
+               class="relative hover:text-amber-500 transition after:absolute after:left-0 after:-bottom-1 after:h-0.5 after:w-0 after:bg-amber-400 after:transition-all hover:after:w-full">
+                La marca
+            </a>
+            <a href="{{ url_for('auth.login') }}"
+               class="relative hover:text-amber-500 transition after:absolute after:left-0 after:-bottom-1 after:h-0.5 after:w-0 after:bg-amber-400 after:transition-all hover:after:w-full">
+                Ingresar
+            </a>
+        </nav>
+
+        <!-- CTA escritorio -->
+        <a href="{{ url_for('main.shop') }}"
+           class="hidden sm:inline-flex text-xs md:text-sm px-3 py-1.5 rounded-full bg-slate-900 text-slate-50 hover:bg-slate-800 shadow-sm hover:shadow-md transition">
+            Ver colección
+        </a>
+
+        <!-- Botón menú mobile -->
+        <button id="mobile-toggle"
+                class="md:hidden inline-flex items-center justify-center h-9 w-9 rounded-full border border-slate-200 text-slate-700 hover:bg-slate-100 transition"
+                aria-label="Abrir menú">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                      d="M4 7h16M4 12h16M4 17h16"/>
+            </svg>
+        </button>
+    </div>
+
+    <!-- Menú mobile -->
+    <div id="mobile-menu"
+         class="md:hidden max-w-6xl mx-auto px-4 pb-3 origin-top scale-y-0 opacity-0 pointer-events-none transform transition duration-200">
+        <nav class="flex flex-col gap-2 text-sm text-slate-700 bg-white/95 border border-slate-100 rounded-2xl p-3 shadow-lg">
+            <a href="{{ url_for('main.shop') }}" class="px-2 py-1.5 rounded-lg hover:bg-slate-50">Tienda</a>
+            <a href="#destacados" class="px-2 py-1.5 rounded-lg hover:bg-slate-50">Destacados</a>
+            <a href="#about" class="px-2 py-1.5 rounded-lg hover:bg-slate-50">La marca</a>
+            <a href="{{ url_for('auth.login') }}" class="px-2 py-1.5 rounded-lg hover:bg-slate-50">Ingresar</a>
+            <a href="{{ url_for('main.shop') }}"
+               class="mt-1 px-3 py-2 rounded-full bg-slate-900 text-slate-50 text-xs text-center hover:bg-slate-800">
+                Ver colección
+            </a>
+        </nav>
+    </div>
+</header>
+
+<main class="pt-16">
+    {% block content %}{% endblock %}
+</main>
+
+<footer class="border-t border-slate-200 mt-10 bg-white/80 backdrop-blur">
+    <div class="max-w-6xl mx-auto px-4 py-6 text-xs text-slate-500 flex flex-wrap items-center justify-between gap-3">
+        <div class="flex flex-wrap items-center gap-3">
+            <span>© 2025 Skyline Style. Todos los derechos reservados.</span>
+            <span class="hidden sm:inline text-slate-400">·</span>
+            <a href="#about" class="text-slate-400 hover:text-amber-500 transition">Sobre la marca</a>
+            <a href="#" class="text-slate-400 hover:text-amber-500 transition">Términos &amp; condiciones</a>
+        </div>
+        <div class="flex items-center gap-2">
+            <span>Hecho con ❤️ por Gaby.</span>
+        </div>
+    </div>
+</footer>
+
+<!-- JS base: header scroll + menú mobile -->
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const header = document.getElementById('main-header');
+        const mobileToggle = document.getElementById('mobile-toggle');
+        const mobileMenu = document.getElementById('mobile-menu');
+
+        // sombra al hacer scroll
+        const onScroll = () => {
+            if (window.scrollY > 4) {
+                header.classList.add('shadow-header');
+            } else {
+                header.classList.remove('shadow-header');
+            }
+        };
+        window.addEventListener('scroll', onScroll);
+        onScroll();
+
+        // toggle menú mobile
+        mobileToggle?.addEventListener('click', () => {
+            const open = mobileMenu.classList.contains('scale-y-100');
+            if (open) {
+                mobileMenu.classList.remove('scale-y-100', 'opacity-100');
+                mobileMenu.classList.add('scale-y-0', 'opacity-0', 'pointer-events-none');
+            } else {
+                mobileMenu.classList.remove('scale-y-0', 'opacity-0', 'pointer-events-none');
+                mobileMenu.classList.add('scale-y-100', 'opacity-100');
+            }
+        });
+    });
+</script>
+
+{# bloque opcional para scripts por página #}
+{% block extra_js %}{% endblock %}
+
+</body>
+</html>

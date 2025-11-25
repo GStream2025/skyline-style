@@ -1,0 +1,408 @@
+{% extends "base.html" %}
+
+{% block title %}Skyline Style · Streetwear con actitud{% endblock %}
+
+{% block extra_head %}
+<style>
+    /* Glow suave para la tarjeta principal */
+    .card-glow {
+        box-shadow:
+            0 0 0 1px rgba(15, 23, 42, 0.04),
+            0 18px 40px rgba(15, 23, 42, 0.22),
+            0 0 50px rgba(56, 189, 248, 0.35); /* sky glow */
+        transition: transform .25s ease, box-shadow .25s ease;
+        will-change: transform, box-shadow;
+    }
+
+    .card-glow:hover {
+        transform: translateY(-4px);
+        box-shadow:
+            0 24px 60px rgba(15, 23, 42, 0.30),
+            0 0 60px rgba(56, 189, 248, 0.55);
+    }
+
+    /* Punto pulsando en la pill */
+    .pulse-dot {
+        box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.7);
+        animation: pulseDot 1.8s infinite;
+    }
+
+    @keyframes pulseDot {
+        0% {
+            transform: scale(1);
+            box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.7);
+        }
+        70% {
+            transform: scale(1.12);
+            box-shadow: 0 0 0 10px rgba(56, 189, 248, 0);
+        }
+        100% {
+            transform: scale(1);
+            box-shadow: 0 0 0 0 rgba(56, 189, 248, 0);
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<main class="relative bg-slate-50 text-slate-900" aria-label="Página principal de Skyline Style">
+
+    <!-- =======================
+         HERO PRINCIPAL
+    ======================== -->
+    <section id="hero" class="relative overflow-hidden bg-gradient-to-br from-white via-sky-50 to-sky-100">
+
+        <!-- blobs suaves -->
+        <div class="pointer-events-none absolute -top-40 -left-24 h-72 w-72 bg-sky-200/40 rounded-full blur-3xl animate-blob"></div>
+        <div class="pointer-events-none absolute -bottom-40 left-1/2 h-80 w-80 bg-sky-100/60 rounded-full blur-3xl animate-blob animation-delay-2000"></div>
+        <div class="pointer-events-none absolute -top-32 -right-10 h-64 w-64 bg-sky-300/40 rounded-full blur-3xl animate-blob animation-delay-4000"></div>
+
+        <div class="relative max-w-6xl mx-auto px-4 pt-16 pb-20 md:pt-24 md:pb-28 grid md:grid-cols-[1.15fr,0.95fr] gap-12 items-center">
+
+            <!-- LEFT: texto -->
+            <div class="space-y-7 md:space-y-8" data-hero-left>
+                <!-- pill -->
+                <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/80 backdrop-blur border border-sky-100 shadow-sm text-[11px] font-medium text-sky-700">
+                    <span class="h-1.5 w-1.5 rounded-full bg-sky-400 pulse-dot"></span>
+                    NUEVA MARCA URBANA
+                    <span class="text-slate-400">·</span>
+                    Drop 2025
+                </div>
+
+                <!-- título -->
+                <header class="space-y-4">
+                    <h1 class="text-4xl md:text-6xl font-bold tracking-tight leading-[1.1]">
+                        Streetwear con
+                        <span class="block text-sky-500">
+                            actitud, color e inclusión
+                        </span>
+                    </h1>
+
+                    <p class="text-sm md:text-base text-slate-600 max-w-xl leading-relaxed prose-skyline">
+                        Skyline Style nace para crear outfits que se ven increíbles en la calle, en fotos y en cámara.
+                        Diseños creados en Uruguay, pensados para todos los cuerpos, todos los tonos de piel y todos los estilos.
+                        Una marca con identidad fuerte, detalles premium y vibra urbana real.
+                    </p>
+                </header>
+
+                <!-- botones -->
+                <div class="flex flex-wrap gap-4">
+                    <a href="{{ url_for('main.shop') }}"
+                       class="btn-primary-glow inline-flex items-center justify-center gap-2 px-8 py-3 text-sm font-semibold"
+                       aria-label="Ver colección completa de Skyline Style">
+                        Ver colección completa
+                        <span aria-hidden="true">→</span>
+                    </a>
+
+                    <a href="#destacados"
+                       class="btn-ghost-soft inline-flex items-center justify-center"
+                       aria-label="Ir a productos destacados">
+                        Ver productos destacados
+                    </a>
+                </div>
+
+                <!-- mini stats -->
+                <dl class="grid grid-cols-3 gap-4 pt-2 text-xs text-slate-500" aria-label="Datos rápidos de Skyline Style">
+                    <div class="space-y-1" data-stat>
+                        <dt class="text-base font-semibold text-slate-900">+20</dt>
+                        <dd>Diseños exclusivos</dd>
+                    </div>
+                    <div class="space-y-1" data-stat>
+                        <dt class="text-base font-semibold text-slate-900">XS – 5XL</dt>
+                        <dd>Para todos los cuerpos</dd>
+                    </div>
+                    <div class="space-y-1" data-stat>
+                        <dt class="text-base font-semibold text-slate-900">100%</dt>
+                        <dd>Identidad Skyline</dd>
+                    </div>
+                </dl>
+            </div>
+
+            <!-- RIGHT: tarjeta / campaña -->
+            <div class="flex items-center justify-center">
+                <div class="relative w-full max-w-md" data-hero-card>
+                    <!-- halo -->
+                    <div class="absolute -inset-1 rounded-3xl bg-gradient-to-tr from-sky-200/70 via-sky-300/40 to-slate-100/80 blur-xl opacity-90"></div>
+
+                    <article class="relative rounded-3xl bg-slate-900 text-slate-50 border border-slate-200/40 card-glow overflow-hidden"
+                             aria-label="Vista previa de la colección Skyline Crew">
+
+                        <!-- top bar -->
+                        <div class="flex items-center justify-between px-4 pt-4 pb-2 text-[11px] text-slate-300">
+                            <span class="flex items-center gap-1">
+                                <span class="inline-flex h-4 w-4 items-center justify-center rounded-full bg-slate-800 text-[9px] text-sky-300 font-semibold">
+                                    SS
+                                </span>
+                                Skyline campaign · inclusiva
+                            </span>
+                            <span class="text-sky-300 font-medium">Nuevo drop</span>
+                        </div>
+
+                        <!-- media (solo imagen) -->
+                        <div class="relative px-4 pb-0">
+                            <div class="rounded-2xl overflow-hidden bg-slate-900 border border-slate-800 relative aspect-[4/3]">
+                                <img
+                                    src="{{ url_for('static', filename='img/skyline_team.jpg') }}"
+                                    alt="Grupo diverso usando buzos y hoodies Skyline Style"
+                                    class="w-full h-full object-cover"
+                                    loading="lazy"
+                                    decoding="async"
+                                >
+
+                                <!-- overlay info -->
+                                <div class="absolute left-4 bottom-4 flex flex-col gap-1">
+                                    <span class="inline-flex items-center gap-2 rounded-full bg-slate-950/80 px-3 py-1 text-[11px] text-sky-200 border border-sky-400/40">
+                                        <span class="h-1.5 w-1.5 rounded-full bg-sky-400 animate-pulse"></span>
+                                        Skyline Crew · edición 2025
+                                    </span>
+                                    <span class="inline-flex text-[10px] text-slate-200">
+                                        Streetwear unisex · campaña oficial
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- info -->
+                        <div class="px-4 pb-4 pt-3 space-y-2 bg-gradient-to-t from-slate-950 to-slate-900/90">
+                            <div class="flex items-center justify-between gap-3">
+                                <div class="min-w-0">
+                                    <h3 class="text-sm font-semibold text-slate-50 truncate">
+                                        Colección Skyline Crew
+                                    </h3>
+                                    <p class="text-[11px] text-slate-400">
+                                        Buzos, hoodies y remeras unisex
+                                    </p>
+                                </div>
+                                <p class="text-xs text-slate-200 text-right">
+                                    Desde <span class="font-semibold text-sky-300">$ 1.490 UYU</span>
+                                </p>
+                            </div>
+
+                            <div class="flex flex-wrap gap-2 text-[11px] text-slate-200">
+                                <span class="tag-pill">
+                                    <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+                                    Todas las tallas
+                                </span>
+                                <span class="tag-pill">
+                                    Diseñado para cualquier cuerpo
+                                </span>
+                                <span class="tag-pill--accent">
+                                    Diseño exclusivo de Skyline
+                                </span>
+                            </div>
+                        </div>
+                    </article>
+
+                    <!-- stickers flotantes -->
+                    <div class="absolute -left-3 top-10 md:-left-5 md:top-6 rounded-2xl bg-white text-slate-900 shadow-lg border border-slate-200 px-3 py-2 text-[10px] font-medium rotate-[-6deg]">
+                        + Gorras, remeras &amp; más
+                    </div>
+                    <div class="absolute -right-2 -bottom-3 md:-right-4 md:-bottom-4 rounded-full bg-sky-400 text-[10px] text-slate-900 px-4 py-2 shadow-lg shadow-sky-500/50 rotate-3">
+                        Drop 2025
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- =======================
+         CINTA SKYLINE
+    ======================== -->
+    <section class="bg-slate-950 text-slate-50 border-y border-slate-800">
+        <div class="max-w-6xl mx-auto px-4 py-4 flex flex-wrap items-center justify-between gap-3 text-xs md:text-sm">
+            <div class="flex items-center gap-2">
+                <span class="badge-round bg-sky-400 text-slate-900 font-bold">S</span>
+                <p>
+                    Producción bajo demanda con fábrica aliada. Sin stock físico ni exceso: solo lanzamientos frescos y drops limitados.
+                </p>
+            </div>
+            <p class="text-slate-300">
+                Mockups, paletas y tipografías pensadas para que Skyline Style destaque en tu tienda online y redes.
+            </p>
+        </div>
+    </section>
+
+    <!-- =======================
+         COLECCIONES
+    ======================== -->
+    <section class="max-w-6xl mx-auto px-4 pt-10 pb-6 md:pt-14 md:pb-10">
+        <div class="flex items-center justify-between mb-6">
+            <h2 class="text-xl md:text-2xl font-semibold text-slate-900">
+                Colecciones Skyline
+            </h2>
+            <a href="{{ url_for('main.shop') }}"
+               class="text-xs md:text-sm text-slate-500 hover:text-sky-500 transition flex items-center gap-1">
+                Ver tienda completa
+                <span aria-hidden="true">→</span>
+            </a>
+        </div>
+
+        <div class="grid md:grid-cols-3 gap-6">
+            <!-- card 1 -->
+            <article class="card-elevated bg-gradient-to-br from-slate-900 to-slate-800 text-slate-50" data-collection-card>
+                <div class="p-5 flex flex-col gap-3 min-h-[170px]">
+                    <h3 class="text-lg font-semibold flex items-center gap-2">
+                        Hoodies &amp; Buzos
+                        <span class="text-[10px] px-2 py-0.5 rounded-full bg-sky-400 text-slate-900 font-semibold">
+                            HOT
+                        </span>
+                    </h3>
+                    <p class="text-xs text-slate-200">
+                        Capuchas amplias, cortes cómodos y colores que explotan en cámara.
+                        Prendas pensadas para street, estudio y contenido diario.
+                    </p>
+                    <p class="mt-auto text-xs text-slate-300">
+                        Drops de invierno y outfits oversized con presencia.
+                    </p>
+                </div>
+            </article>
+
+            <!-- card 2 -->
+            <article class="card-elevated bg-white text-slate-900" data-collection-card>
+                <div class="p-5 flex flex-col gap-3 min-h-[170px]">
+                    <h3 class="text-lg font-semibold">
+                        Remeras Statement
+                    </h3>
+                    <p class="text-xs text-slate-600">
+                        Tipografías con carácter, frases con actitud y combinaciones de color que se ven perfectas
+                        en fotos y videos. Desde básicos neutros hasta azules intensos.
+                    </p>
+                    <p class="mt-auto text-xs text-slate-500">
+                        Ideales para TikToks, fotos espejo y contenido diario.
+                    </p>
+                </div>
+            </article>
+
+            <!-- card 3 -->
+            <article class="card-elevated bg-slate-900 text-slate-50" data-collection-card>
+                <div class="p-5 flex flex-col gap-3 min-h-[170px]">
+                    <h3 class="text-lg font-semibold">
+                        Accesorios Skyline
+                    </h3>
+                    <p class="text-xs text-slate-200">
+                        Gorras, beanies y tote bags que cierran el outfit y suman branding en cada historia.
+                    </p>
+                    <p class="mt-auto text-xs text-slate-300">
+                        Perfectos para packs, bundles y regalos.
+                    </p>
+                </div>
+            </article>
+        </div>
+    </section>
+
+    <!-- =======================
+         DESTACADOS
+    ======================== -->
+    <section id="destacados" class="max-w-6xl mx-auto px-4 pb-16">
+        <div class="flex items-center justify-between mb-4 md:mb-6">
+            <h2 class="text-xl md:text-2xl font-semibold text-slate-900">
+                Productos destacados
+            </h2>
+            <a href="{{ url_for('main.shop') }}"
+               class="text-xs md:text-sm text-slate-500 hover:text-sky-500 transition flex items-center gap-1">
+                Ver toda la colección
+                <span aria-hidden="true">→</span>
+            </a>
+        </div>
+
+        {% set default_products = [
+            {"id": 1, "name": "Hoodie Skyline Negro", "price": 1490, "category": "Hoodie", "image": url_for('static', filename='img/skyline_team.jpg')},
+            {"id": 2, "name": "Remera Skyline Blanca", "price": 990, "category": "Remera", "image": url_for('static', filename='img/skyline_team.jpg')},
+            {"id": 3, "name": "Gorra Skyline Logo", "price": 790, "category": "Accesorio", "image": url_for('static', filename='img/skyline_team.jpg')}
+        ] %}
+        {% set products = featured_products if featured_products is defined and featured_products else default_products %}
+
+        {% if products %}
+            <div class="grid sm:grid-cols-2 md:grid-cols-3 gap-6">
+                {% for product in products %}
+                    <a href="{{ url_for('main.product_detail', product_id=product.id) if product.id is defined else '#' }}"
+                       class="group bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-1 transition duration-300 flex flex-col card-hover"
+                       aria-label="Ver detalles de {{ product.name }}"
+                       data-product-card>
+                        <div class="aspect-square bg-slate-100 overflow-hidden">
+                            <img src="{{ product.image }}"
+                                 alt="{{ product.name }}"
+                                 class="w-full h-full object-cover group-hover:scale-105 transition duration-500"
+                                 loading="lazy"
+                                 decoding="async">
+                        </div>
+                        <div class="p-4 flex flex-col gap-1">
+                            <p class="text-[11px] uppercase tracking-wide text-slate-400">
+                                {{ product.category or 'Skyline' }}
+                            </p>
+                            <h3 class="text-sm font-medium text-slate-900 group-hover:text-sky-500 transition line-clamp-2">
+                                {{ product.name }}
+                            </h3>
+                            {% if product.price is not none %}
+                                <p class="text-sm font-semibold text-sky-500 mt-1">
+                                    $ {{ product.price }} UYU
+                                </p>
+                            {% else %}
+                                <p class="text-xs text-slate-400 mt-1">
+                                    Precio según variante
+                                </p>
+                            {% endif %}
+                        </div>
+                    </a>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="text-sm text-slate-500">
+                Todavía no hay productos destacados cargados. Pronto vas a ver acá los primeros drops de Skyline Style.
+            </p>
+        {% endif %}
+    </section>
+
+</main>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    gsap.from('[data-hero-left]', {
+        opacity: 0,
+        y: 40,
+        duration: 0.9,
+        ease: 'power3.out'
+    });
+
+    gsap.from('[data-hero-card]', {
+        opacity: 0,
+        y: 40,
+        duration: 0.9,
+        delay: 0.2,
+        ease: 'power3.out'
+    });
+
+    gsap.from('[data-stat]', {
+        opacity: 0,
+        y: 15,
+        stagger: 0.1,
+        delay: 0.5,
+        duration: 0.6
+    });
+
+    gsap.from('[data-collection-card]', {
+        opacity: 0,
+        y: 25,
+        stagger: 0.12,
+        delay: 0.3,
+        duration: 0.7,
+        ease: 'power3.out'
+    });
+
+    gsap.from('[data-product-card]', {
+        opacity: 0,
+        y: 25,
+        stagger: 0.08,
+        delay: 0.4,
+        duration: 0.6,
+        ease: 'power3.out'
+    });
+});
+</script>
+{% endblock %}
