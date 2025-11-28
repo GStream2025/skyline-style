@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="es">
+<html lang="es" class="scroll-smooth">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -7,6 +7,13 @@
     <title>{% block title %}Skyline Style · Streetwear con actitud{% endblock %}</title>
     <meta name="description"
           content="Skyline Style es una marca de streetwear con actitud, color e inclusión. Drops limitados, diseños urbanos y prendas pensadas para todos los cuerpos.">
+    <meta name="theme-color" content="#020617">
+    <meta name="robots" content="index,follow">
+
+    <!-- Open Graph básico -->
+    <meta property="og:title" content="Skyline Style · Streetwear con actitud">
+    <meta property="og:description" content="Drops limitados, diseños urbanos y prendas para todos los cuerpos.">
+    <meta property="og:type" content="website">
 
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -27,13 +34,14 @@
                         }
                     },
                     boxShadow: {
-                        'header': '0 10px 30px rgba(15,23,42,0.08)',
+                        'header': '0 10px 30px rgba(15,23,42,0.16)',
+                        'floating': '0 18px 45px rgba(15,23,42,0.20)',
                     },
                     keyframes: {
                         blob: {
                             '0%, 100%': { transform: 'translate(0px, 0px) scale(1)' },
-                            '33%': { transform: 'translate(10px, -10px) scale(1.05)' },
-                            '66%': { transform: 'translate(-10px, 10px) scale(0.98)' },
+                            '33%': { transform: 'translate(12px, -16px) scale(1.05)' },
+                            '66%': { transform: 'translate(-14px, 12px) scale(0.97)' },
                         },
                         float: {
                             '0%, 100%': { transform: 'translateY(0)' },
@@ -45,7 +53,7 @@
                         }
                     },
                     animation: {
-                        blob: 'blob 16s infinite',
+                        blob: 'blob 18s ease-in-out infinite',
                         float: 'float 4s ease-in-out infinite',
                         'fade-up': 'fadeUp 0.7s ease-out forwards',
                     }
@@ -65,21 +73,23 @@
     {# bloque opcional para CSS/JS extra por página #}
     {% block extra_head %}{% endblock %}
 </head>
-<body class="min-h-screen bg-slate-50 text-slate-900 font-sans">
+<body class="min-h-screen bg-slate-50 text-slate-900 font-sans antialiased">
+
+{% set current = request.endpoint or '' %}
 
 <!-- HEADER -->
 <header id="main-header"
-        class="fixed top-0 inset-x-0 z-20 bg-white/80 backdrop-blur border-b border-slate-100 transition-shadow">
+        class="fixed top-0 inset-x-0 z-30 bg-white/80 backdrop-blur border-b border-slate-100 transition-shadow">
     <div class="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
 
-        <!-- Logo -->
-        <a href="{{ url_for('main.index') }}" class="flex items-center gap-2 group">
+        <!-- Logo / Home -->
+        <a href="{{ url_for('main.index') }}" class="flex items-center gap-2 group" aria-label="Volver al inicio">
             <span
-                class="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-slate-900 text-slate-50 font-semibold text-sm shadow-sm group-hover:scale-105 group-hover:shadow-md transition">
+                class="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-slate-900 text-slate-50 font-semibold text-sm shadow-sm group-hover:scale-105 group-hover:shadow-md transition-transform">
                 SS
             </span>
             <div class="flex flex-col leading-none">
-                <span class="text-sm md:text-base font-semibold tracking-tight group-hover:text-slate-900 transition">
+                <span class="text-sm md:text-base font-semibold tracking-tight group-hover:text-slate-900 transition-colors">
                     Skyline Style
                 </span>
                 <span class="text-[10px] text-slate-400 uppercase tracking-[0.16em]">
@@ -89,35 +99,48 @@
         </a>
 
         <!-- Navegación escritorio -->
-        <nav class="hidden md:flex items-center gap-6 text-sm text-slate-600">
+        <nav class="hidden md:flex items-center gap-6 text-sm" aria-label="Navegación principal">
+            <!-- Tienda -->
             <a href="{{ url_for('main.shop') }}"
-               class="relative hover:text-amber-500 transition after:absolute after:left-0 after:-bottom-1 after:h-0.5 after:w-0 after:bg-amber-400 after:transition-all hover:after:w-full">
+               class="relative py-0.5 {{ 'text-slate-900' if current == 'main.shop' else 'text-slate-600' }} hover:text-amber-500 transition-colors
+                      after:absolute after:left-0 after:-bottom-1 after:h-0.5 after:w-0 after:bg-amber-400 after:transition-all hover:after:w-full">
                 Tienda
             </a>
-            <a href="#destacados"
-               class="relative hover:text-amber-500 transition after:absolute after:left-0 after:-bottom-1 after:h-0.5 after:w-0 after:bg-amber-400 after:transition-all hover:after:w-full">
+
+            <!-- Destacados (anchor en el inicio) -->
+            <a href="{{ url_for('main.index') }}#destacados"
+               class="relative py-0.5 {{ 'text-slate-900' if current == 'main.index' else 'text-slate-600' }} hover:text-amber-500 transition-colors
+                      after:absolute after:left-0 after:-bottom-1 after:h-0.5 after:w-0 after:bg-amber-400 after:transition-all hover:after:w-full">
                 Destacados
             </a>
-            <a href="#about"
-               class="relative hover:text-amber-500 transition after:absolute after:left-0 after:-bottom-1 after:h-0.5 after:w-0 after:bg-amber-400 after:transition-all hover:after:w-full">
+
+            <!-- La marca -->
+            <a href="{{ url_for('main.about') }}"
+               class="relative py-0.5 {{ 'text-slate-900' if current == 'main.about' else 'text-slate-600' }} hover:text-amber-500 transition-colors
+                      after:absolute after:left-0 after:-bottom-1 after:h-0.5 after:w-0 after:bg-amber-400 after:transition-all hover:after:w-full">
                 La marca
             </a>
+
+            <!-- Ingresar -->
             <a href="{{ url_for('auth.login') }}"
-               class="relative hover:text-amber-500 transition after:absolute after:left-0 after:-bottom-1 after:h-0.5 after:w-0 after:bg-amber-400 after:transition-all hover:after:w-full">
+               class="relative py-0.5 {{ 'text-slate-900' if current == 'auth.login' else 'text-slate-600' }} hover:text-amber-500 transition-colors
+                      after:absolute after:left-0 after:-bottom-1 after:h-0.5 after:w-0 after:bg-amber-400 after:transition-all hover:after:w-full">
                 Ingresar
             </a>
         </nav>
 
         <!-- CTA escritorio -->
         <a href="{{ url_for('main.shop') }}"
-           class="hidden sm:inline-flex text-xs md:text-sm px-3 py-1.5 rounded-full bg-slate-900 text-slate-50 hover:bg-slate-800 shadow-sm hover:shadow-md transition">
+           class="hidden sm:inline-flex text-xs md:text-sm px-3 py-1.5 rounded-full bg-slate-900 text-slate-50 hover:bg-slate-800 shadow-sm hover:shadow-md transition-colors">
             Ver colección
         </a>
 
         <!-- Botón menú mobile -->
         <button id="mobile-toggle"
-                class="md:hidden inline-flex items-center justify-center h-9 w-9 rounded-full border border-slate-200 text-slate-700 hover:bg-slate-100 transition"
-                aria-label="Abrir menú">
+                class="md:hidden inline-flex items-center justify-center h-9 w-9 rounded-full border border-slate-200 text-slate-700 hover:bg-slate-100 transition-colors"
+                aria-label="Abrir menú"
+                aria-expanded="false"
+                aria-controls="mobile-menu">
             <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round"
                       d="M4 7h16M4 12h16M4 17h16"/>
@@ -127,12 +150,25 @@
 
     <!-- Menú mobile -->
     <div id="mobile-menu"
-         class="md:hidden max-w-6xl mx-auto px-4 pb-3 origin-top scale-y-0 opacity-0 pointer-events-none transform transition duration-200">
-        <nav class="flex flex-col gap-2 text-sm text-slate-700 bg-white/95 border border-slate-100 rounded-2xl p-3 shadow-lg">
-            <a href="{{ url_for('main.shop') }}" class="px-2 py-1.5 rounded-lg hover:bg-slate-50">Tienda</a>
-            <a href="#destacados" class="px-2 py-1.5 rounded-lg hover:bg-slate-50">Destacados</a>
-            <a href="#about" class="px-2 py-1.5 rounded-lg hover:bg-slate-50">La marca</a>
-            <a href="{{ url_for('auth.login') }}" class="px-2 py-1.5 rounded-lg hover:bg-slate-50">Ingresar</a>
+         class="md:hidden max-w-6xl mx-auto px-4 pb-3 origin-top scale-y-0 opacity-0 pointer-events-none transform-gpu transition duration-200">
+        <nav class="flex flex-col gap-2 text-sm text-slate-700 bg-white/95 border border-slate-100 rounded-2xl p-3 shadow-lg"
+             aria-label="Navegación móvil">
+            <a href="{{ url_for('main.shop') }}"
+               class="px-2 py-1.5 rounded-lg hover:bg-slate-50 {{ 'font-semibold text-slate-900' if current == 'main.shop' else '' }}">
+                Tienda
+            </a>
+            <a href="{{ url_for('main.index') }}#destacados"
+               class="px-2 py-1.5 rounded-lg hover:bg-slate-50 {{ 'font-semibold text-slate-900' if current == 'main.index' else '' }}">
+                Destacados
+            </a>
+            <a href="{{ url_for('main.about') }}"
+               class="px-2 py-1.5 rounded-lg hover:bg-slate-50 {{ 'font-semibold text-slate-900' if current == 'main.about' else '' }}">
+                La marca
+            </a>
+            <a href="{{ url_for('auth.login') }}"
+               class="px-2 py-1.5 rounded-lg hover:bg-slate-50 {{ 'font-semibold text-slate-900' if current == 'auth.login' else '' }}">
+                Ingresar
+            </a>
             <a href="{{ url_for('main.shop') }}"
                class="mt-1 px-3 py-2 rounded-full bg-slate-900 text-slate-50 text-xs text-center hover:bg-slate-800">
                 Ver colección
@@ -150,14 +186,29 @@
         <div class="flex flex-wrap items-center gap-3">
             <span>© 2025 Skyline Style. Todos los derechos reservados.</span>
             <span class="hidden sm:inline text-slate-400">·</span>
-            <a href="#about" class="text-slate-400 hover:text-amber-500 transition">Sobre la marca</a>
-            <a href="#" class="text-slate-400 hover:text-amber-500 transition">Términos &amp; condiciones</a>
+            <a href="{{ url_for('main.about') }}" class="text-slate-400 hover:text-amber-500 transition-colors">
+                Sobre la marca
+            </a>
+            <a href="#" class="text-slate-400 hover:text-amber-500 transition-colors">
+                Términos &amp; condiciones
+            </a>
         </div>
         <div class="flex items-center gap-2">
             <span>Hecho con ❤️ por Gaby.</span>
         </div>
     </div>
 </footer>
+
+<!-- BOTÓN GLOBAL "VOLVER AL INICIO" (aparece en TODAS LAS PÁGINAS) -->
+<a href="{{ url_for('main.index') }}"
+   class="fixed bottom-5 right-5 z-40 inline-flex items-center gap-2 px-3.5 py-2 rounded-full 
+          bg-slate-900 text-slate-50 text-xs md:text-sm font-medium shadow-floating 
+          hover:bg-slate-800 hover:translate-y-0.5 active:translate-y-1 
+          transition-transform transition-colors">
+    <span class="text-base leading-none">←</span>
+    <span class="hidden sm:inline">Volver al inicio</span>
+    <span class="sm:hidden">Inicio</span>
+</a>
 
 <!-- JS base: header scroll + menú mobile -->
 <script>
@@ -168,7 +219,7 @@
 
         // sombra al hacer scroll
         const onScroll = () => {
-            if (window.scrollY > 4) {
+            if (window.scrollY > 6) {
                 header.classList.add('shadow-header');
             } else {
                 header.classList.remove('shadow-header');
@@ -179,13 +230,15 @@
 
         // toggle menú mobile
         mobileToggle?.addEventListener('click', () => {
-            const open = mobileMenu.classList.contains('scale-y-100');
-            if (open) {
+            const isOpen = mobileMenu.classList.contains('scale-y-100');
+            if (isOpen) {
                 mobileMenu.classList.remove('scale-y-100', 'opacity-100');
                 mobileMenu.classList.add('scale-y-0', 'opacity-0', 'pointer-events-none');
+                mobileToggle.setAttribute('aria-expanded', 'false');
             } else {
                 mobileMenu.classList.remove('scale-y-0', 'opacity-0', 'pointer-events-none');
                 mobileMenu.classList.add('scale-y-100', 'opacity-100');
+                mobileToggle.setAttribute('aria-expanded', 'true');
             }
         });
     });

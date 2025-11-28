@@ -11,65 +11,120 @@
         transform: translateY(-6px);
         box-shadow: 0 25px 40px -20px rgba(15,23,42,0.45);
     }
+
+    .about-pill {
+        backdrop-filter: blur(10px);
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 <section class="max-w-5xl mx-auto px-4 pt-16 pb-20" id="about">
 
+    <!-- Badge arriba -->
+    <div class="flex justify-center mb-5">
+        <div class="about-pill inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/60 border border-slate-200 text-[11px] uppercase tracking-[0.18em] text-slate-500 shadow-sm">
+            <span class="h-1.5 w-1.5 rounded-full bg-amber-400"></span>
+            Proyecto en crecimiento · Hecho con gratitud
+        </div>
+    </div>
+
     <!-- Título -->
-    <div class="text-center mb-12">
+    <div class="text-center mb-10 md:mb-12">
         <h1 class="text-4xl md:text-5xl font-bold tracking-tight text-slate-900">
-            La historia detrás de <span class="text-amber-500">Skyline Style</span>
+            El sueño detrás de <span class="text-amber-500">Skyline Style</span>
         </h1>
         <p class="mt-3 text-slate-600 max-w-2xl mx-auto text-sm md:text-base">
-            No hacemos solo ropa. Creamos actitud, identidad y piezas que te acompañan en cada momento del día.
+            Esto empezó como una idea sencilla: crear algo nuestro, con cariño y dedicación,
+            y convertirlo de a poco en una marca que te acompañe en tu día a día.
         </p>
     </div>
 
     <!-- Imagen -->
-    <div class="rounded-3xl overflow-hidden shadow-xl about-card mb-14 bg-slate-900">
+    <div class="rounded-3xl overflow-hidden shadow-xl about-card mb-10 md:mb-14 bg-slate-900">
         <img src="{{ url_for('static', filename='img/skyline_team.jpg') }}"
-             class="w-full h-[380px] object-cover opacity-95"
+             class="w-full h-[320px] md:h-[380px] object-cover opacity-95"
              alt="Equipo Skyline Style">
+    </div>
+
+    <!-- Mini métricas / sellos -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10 text-xs md:text-sm">
+        <div class="rounded-2xl border border-slate-200 bg-white/70 px-4 py-3 shadow-sm">
+            <p class="font-semibold text-slate-900">Hecho desde Uruguay</p>
+            <p class="mt-1 text-slate-500">Diseñado con acento uruguayo y mirada global.</p>
+        </div>
+        <div class="rounded-2xl border border-slate-200 bg-white/70 px-4 py-3 shadow-sm">
+            <p class="font-semibold text-slate-900">Drops limitados</p>
+            <p class="mt-1 text-slate-500">Series pequeñas pensadas para que cada prenda tenga historia.</p>
+        </div>
+        <div class="rounded-2xl border border-slate-200 bg-white/70 px-4 py-3 shadow-sm">
+            <p class="font-semibold text-slate-900">Sueños que viajan</p>
+            <p class="mt-1 text-slate-500">Cada pedido es un sueño cumplido que cruza fronteras.</p>
+        </div>
     </div>
 
     <!-- Texto -->
     <div class="space-y-10 text-slate-700 leading-relaxed text-sm md:text-base">
-        
+
+        <!-- Bloque 1 -->
         <div class="space-y-3">
-            <h2 class="text-2xl font-semibold text-slate-900">Nacimos para vestir la calle</h2>
+            <h2 class="text-2xl font-semibold text-slate-900">Un simple sueño que se está haciendo real</h2>
             <p>
-                Skyline Style surge desde una idea simple: crear streetwear que se vea bien en todos.
-                Outfits pensados para fotos, videos, salidas con amigos y para el día a día.
-                Diseños urbanos que mezclan comodidad, presencia y mucha personalidad.
+                Skyline Style nace de esas charlas donde uno se imagina: “¿y si algún día tenemos nuestra propia marca?”.
+                No venimos de grandes empresas ni de fábricas enormes: venimos de la calle, del día a día, de ganas de
+                crear algo distinto y empezar de a poco, pero con el corazón puesto al 100%.
+            </p>
+            <p>
+                Cada diseño, cada prenda y cada detalle los hacemos pensando en que esto es más que ropa:
+                es una forma de ir construyendo ese sueño junto a las personas que se sienten parte de la marca.
             </p>
         </div>
 
+        <!-- Bloque 2 -->
         <div class="space-y-3">
-            <h2 class="text-2xl font-semibold text-slate-900">Inclusión como punto de partida</h2>
+            <h2 class="text-2xl font-semibold text-slate-900">Hacer las cosas con la mayor gratitud</h2>
             <p>
-                Trabajamos con talles amplios y cortes versátiles.  
-                Creemos en una moda que no excluye, que no etiqueta y que respeta la diversidad de cuerpos,
-                estilos y formas de vivir la vida.
+                Estamos agradecidos por cada persona que se toma un minuto para mirar lo que hacemos,
+                para seguirnos, para comprar una prenda o simplemente para compartir la marca.
+                Nada de esto sería posible sin esa confianza.
+            </p>
+            <p>
+                Por eso intentamos hacer todo de la mejor manera posible: elegir buenos materiales,
+                cuidar los detalles del diseño, mejorar en cada colección y estar atentos a los comentarios
+                de quienes se ponen Skyline. Cada mensaje, cada foto y cada historia usando nuestras prendas
+                es un recordatorio de por qué empezamos.
             </p>
         </div>
 
+        <!-- Bloque 3 -->
         <div class="space-y-3">
-            <h2 class="text-2xl font-semibold text-slate-900">Drops pensados, no masivos</h2>
+            <h2 class="text-2xl font-semibold text-slate-900">Crecemos de a poco, pero con intención</h2>
             <p>
-                Nuestros lanzamientos no son colecciones eternas: son drops.  
-                Series limitadas que le dan valor a cada prenda y permiten experimentar con colores,
-                gráficos y conceptos nuevos sin perder el ADN de la marca.
+                No buscamos hacer miles de prendas iguales. Preferimos trabajar con drops pensados,
+                cantidades limitadas y diseños que tengan una historia detrás. Así cada pieza tiene su valor
+                y sentimos que realmente aporta algo nuevo.
+            </p>
+            <p>
+                Nuestro objetivo es simple: ir creciendo paso a paso, sin perder la esencia ni la cercanía,
+                para poder seguir trayendo colecciones nuevas, ideas frescas y productos que te sorprendan.
             </p>
         </div>
 
+        <!-- Bloque 4: Uruguay + empresa del exterior + envíos al mundo -->
         <div class="space-y-3">
-            <h2 class="text-2xl font-semibold text-slate-900">Diseño desde Uruguay para el mundo</h2>
+            <h2 class="text-2xl font-semibold text-slate-900">Desde Uruguay, con ayuda del mundo</h2>
             <p>
-                Skyline Style nace en Uruguay pero piensa en grande.  
-                Trabajamos con una fábrica aliada para producir bajo demanda, reducir desperdicio y asegurar
-                que cada pieza se haga especialmente para vos.
+                Somos uruguayos, con los pies en nuestro país y la cabeza soñando en grande.  
+                Sabemos que para hacer realidad este proyecto necesitamos aliados, y por eso trabajamos
+                con una empresa del exterior que nos brinda la posibilidad de producir y enviar cada prenda
+                de forma segura y profesional.
+            </p>
+            <p>
+                Gracias a esa alianza, cada compra que hacés no se queda solo en una pantalla:
+                se transforma en una prenda real que viaja desde nuestros socios en el exterior hasta
+                donde estés, en cualquier lugar del mundo.  
+                Para nosotros, cada paquete que se arma es un pequeño sueño cumplido, preparado con todo
+                el cariño del mundo para llegar a tus manos.
             </p>
         </div>
     </div>
