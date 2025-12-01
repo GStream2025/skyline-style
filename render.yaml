@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: skyline-style
+    env: python
+    region: oregon
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn app:app"
+    plan: free
+
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10
+
+      # Si usas variables secretas como PRINTFUL_TOKEN, FIREBASE, etc:
+      - key: PRINTFUL_KEY
+        sync: false
+      - key: SECRET_KEY
+        sync: false
