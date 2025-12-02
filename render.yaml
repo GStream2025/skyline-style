@@ -2,39 +2,40 @@ services:
   - type: web
     name: skyline-style
     env: python
-    region: oregon          # Región de Render
-    plan: free              # Plan gratuito
-    branch: main            # Rama de Git a desplegar (tu repo usa 'main')
+    region: oregon
+    plan: free
+    branch: main
 
-    # Comando que Render ejecuta para instalar dependencias
-    buildCommand: "pip install --no-cache-dir -r requirements.txt"
+    buildCommand: |
+      pip install --no-cache-dir -r requirements.txt
 
-    # Comando de arranque de la app (usa run.py y la variable app)
-    startCommand: "gunicorn run:app"
+    startCommand: |
+      gunicorn run:app --log-level info --workers 3 --timeout 120
 
-    autoDeploy: true        # Cada push a main dispara un nuevo deploy
+    autoDeploy: true
 
     envVars:
-      # Versión de Python que usará Render
       - key: PYTHON_VERSION
         value: 3.10.0
 
-      # Entorno de Flask (production para la web pública)
       - key: FLASK_ENV
         value: production
 
-      # ==== SECRETS / CLAVES (las cargás desde el panel de Render) ====
-      # Estas las marcamos con sync: false para que NO se guarden en el repo
+      # ==== VARIABLES SENSIBLES (NO GUARDAR EN GIT) =====
       - key: SECRET_KEY
         sync: false
 
       - key: PRINTFUL_KEY
         sync: false
 
-      # Si en el futuro usás Postgres en Render
+      # Base de datos opcional (Render añade DATABASE_URL si usas Postgres)
       - key: DATABASE_URL
         sync: false
 
-      # Si usás un ID de tienda de Printful separado
+      # Opcional si manejas varias tiendas
       - key: PRINTFUL_STORE_ID
         sync: false
+
+      # Host obligatorio para Flask en Render
+      - key: HOST
+        value: 0.0.0.0
