@@ -1,76 +1,62 @@
+##############################
+# SKYLINE STYLE · BACKEND PRO
+# Deploy-ready para Render
+##############################
+
 # === FRAMEWORK PRINCIPAL ===
 Flask==3.0.2
 Werkzeug==3.0.1
 gunicorn==21.2.0
 
-# === TEMPLATES / RENDER ===
+# === TEMPLATES / RENDERIZADO ===
 Jinja2==3.1.3
-Flask-Minify==0.42
-Flask-Compress==1.13
+Flask-Compress==1.13       # gzip/br para respuestas (más rápido)
+Flask-Minify==0.42         # minificación de HTML/JS/CSS en server
 
-# === FORMULARIOS ===
+# === FORMULARIOS / VALIDACIONES ===
 Flask-WTF==1.2.1
 WTForms==3.1.1
-email-validator==2.0.0.post2
+email-validator==2.1.1
 
-# === LOGIN / USUARIOS ===
+# === LOGIN / AUTENTICACIÓN ===
 Flask-Login==0.6.3
 Flask-Bcrypt==1.0.1
-Flask-JWT-Extended==4.6.0
-python-dotenv==1.0.1
+python-dotenv==1.0.1       # lee .env en local / desarrollo
 
-# === BASE DE DATOS ===
+# === BASE DE DATOS (LISTO PARA POSTGRES EN RENDER) ===
 Flask-SQLAlchemy==3.1.1
 SQLAlchemy==2.0.29
 alembic==1.13.2
-psycopg2-binary==2.9.9
+psycopg2-binary==2.9.9     # driver Postgres (Render usa Postgres)
 
-# === APIs / REQUESTS ===
+# === HTTP / APIS (PRINTFUL, ETC.) ===
 requests==2.31.0
-httpx==0.26.0
-
-# === PROCESAMIENTO / BACKGROUND ===
-celery==5.3.6
-redis==5.0.1
+httpx==0.27.0
 
 # === ARCHIVOS / IMÁGENES ===
 Pillow==10.2.0
 python-magic==0.4.27
 
-# === SEGURIDAD ===
+# === SEGURIDAD / TOKENS ===
+itsdangerous==2.2.0
 cryptography==42.0.5
 PyJWT==2.8.0
-itsdangerous==2.2.0
-Flask-Talisman==1.1.0
+Flask-Talisman==1.1.0      # cabeceras de seguridad (HTTPS, CSP) - opcional, se configura en app
 
-# === CACHING Y OPTIMIZACIÓN ===
+# === CACHÉ / OPTIMIZACIÓN ===
 Flask-Caching==2.1.0
 cachelib==0.9.0
 
-# === LOGS PROFESIONALES ===
+# === LOGGING / DEBUG ELEGANTE ===
 loguru==0.7.2
 rich==13.7.1
 
 # === EMAILS ===
 Flask-Mail==0.9.1
 
-# === VALIDACIONES ===
-marshmallow==3.21.1
-
-# === PAGOS (MercadoPago / Stripe) ===
-mercadopago==2.2.3
-stripe==9.3.0
-
-# === CLOUD / STORAGE OPCIONAL ===
-boto3==1.34.41
-google-cloud-storage==2.14.0
-
-# === STATIC / ASSETS ===
-whitenoise==6.7.0
-
-# === TESTING ===
-pytest==8.0.2
-
-# === UTILES GENERALES ===
+# === UTILIDADES ===
 python-dateutil==2.8.2
 simplejson==3.19.2
+
+# === ASSETS ESTÁTICOS PARA PRODUCCIÓN ===
+whitenoise==6.7.0          # servir static de forma eficiente junto a gunicorn
