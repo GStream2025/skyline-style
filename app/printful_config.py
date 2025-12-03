@@ -1,5 +1,8 @@
 # app/printful_config.py
-# NO compartas este archivo ni tu token con nadie.
+# Carga segura de configuración para Printful
+# NO guardar claves directamente en este archivo
 
-PRINTFUL_API_KEY = "GwceooXXKNhyUi3UrFobwFnEcRGYYaMLAuguu7mY"
+import os
+
+PRINTFUL_API_KEY = os.getenv("PRINTFUL_API_KEY")
 PRINTFUL_BASE_URL = "https://api.printful.com"
