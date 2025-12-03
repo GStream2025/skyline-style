@@ -4,12 +4,27 @@
 
 {% block extra_head %}
 <style>
+    /* ================
+       HEADER / NAVBAR
+       ================ */
+    .skyline-header-blur {
+        background: radial-gradient(circle at top, rgba(15,23,42,0.98), rgba(2,6,23,0.98));
+        backdrop-filter: blur(18px);
+        -webkit-backdrop-filter: blur(18px);
+    }
+
+    #mobile-nav {
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+    }
+
     /* ==========================
        Ajustes globales de página
        ========================== */
     main.skyline-main {
         background: radial-gradient(circle at top, #0f172a 0, #020617 35%, #020617 100%);
         color: #e5e7eb;
+        min-height: 100vh;
     }
 
     /* Hero con altura controlada (sin bloque gigante en mobile) */
@@ -21,14 +36,15 @@
 
     @media (min-width: 768px) {
         .hero-main {
-            min-height: 78vh;
+            min-height: 82vh;
+            padding-top: 7rem;   /* espacio para el header fijo */
         }
     }
 
     @media (max-width: 767px) {
         .hero-main {
-            padding-top: 4.5rem;   /* espacio para el navbar */
-            padding-bottom: 2.25rem;
+            padding-top: 5.5rem;   /* espacio para el navbar fijo en mobile */
+            padding-bottom: 2.75rem;
         }
     }
 
@@ -86,6 +102,69 @@
 
 {% block content %}
 
+<!-- =======================
+     HEADER PRO · NAVBAR
+     (quitá / comentá el navbar viejo de base.html si aún existe)
+======================= -->
+<header class="fixed inset-x-0 top-0 z-40">
+    <div class="skyline-header-blur border-b border-slate-800/60">
+        <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
+            <!-- Logo -->
+            <a href="{{ url_for('main.home') }}"
+               class="flex items-center gap-2">
+                <div class="h-9 w-9 rounded-full bg-slate-900 flex items-center justify-center text-white text-sm font-semibold shadow-lg shadow-sky-500/30">
+                    SS
+                </div>
+                <div class="flex flex-col leading-tight">
+                    <span class="text-sm font-semibold text-slate-50 tracking-tight">
+                        Skyline Style
+                    </span>
+                    <span class="text-[11px] tracking-[0.16em] text-slate-400 uppercase">
+                        Streetwear
+                    </span>
+                </div>
+            </a>
+
+            <!-- Navegación desktop -->
+            <nav class="hidden md:flex items-center gap-6 text-xs font-medium text-slate-200">
+                <a href="#colecciones" class="hover:text-sky-300 transition">Colecciones</a>
+                <a href="#destacados" class="hover:text-sky-300 transition">Destacados</a>
+                <a href="{{ url_for('main.shop') }}" class="hover:text-sky-300 transition">Tienda</a>
+                <a href="#contacto" class="hover:text-sky-300 transition">Contacto</a>
+            </nav>
+
+            <!-- CTA desktop -->
+            <div class="hidden md:flex items-center">
+                <a href="{{ url_for('main.shop') }}"
+                   class="inline-flex items-center gap-2 rounded-full bg-sky-500 px-4 py-1.5 text-xs font-semibold text-slate-950 shadow-lg shadow-sky-500/40 hover:bg-sky-400 transition">
+                    Ver drop 2025
+                    <span aria-hidden="true">→</span>
+                </a>
+            </div>
+
+            <!-- Botón hamburguesa mobile -->
+            <button id="nav-toggle"
+                    class="md:hidden inline-flex items-center justify-center rounded-full border border-white/10 bg-slate-950/70 px-2.5 py-2 text-slate-50 shadow-md backdrop-blur"
+                    aria-label="Abrir menú">
+                <span class="sr-only">Abrir menú</span>
+                <div class="space-y-1.5">
+                    <span class="block h-[2px] w-5 rounded-full bg-slate-100"></span>
+                    <span class="block h-[2px] w-4 rounded-full bg-slate-300 ml-auto"></span>
+                </div>
+            </button>
+        </div>
+    </div>
+
+    <!-- Menú mobile: dropdown elegante, NO pantalla completa -->
+    <nav id="mobile-nav"
+         class="hidden absolute right-4 top-16 w-56 rounded-2xl bg-slate-950/98 text-slate-50 shadow-2xl border border-slate-700/80 md:hidden">
+        <a href="#colecciones" class="block px-4 py-2.5 text-sm hover:bg-slate-900/90">Colecciones</a>
+        <a href="#destacados" class="block px-4 py-2.5 text-sm hover:bg-slate-900/90">Productos destacados</a>
+        <a href="{{ url_for('main.shop') }}" class="block px-4 py-2.5 text-sm hover:bg-slate-900/90">Tienda</a>
+        <a href="#contacto" class="block px-4 py-2.5 text-sm hover:bg-slate-900/90">Contacto</a>
+    </nav>
+</header>
+
 <main class="skyline-main relative" aria-label="Página principal de Skyline Style">
 
     <!-- =======================
@@ -98,12 +177,12 @@
         <div class="pointer-events-none absolute -bottom-40 left-1/2 h-80 w-80 bg-indigo-500/25 rounded-full blur-3xl animate-blob animation-delay-2000"></div>
         <div class="pointer-events-none absolute -top-32 -right-10 h-64 w-64 bg-cyan-400/30 rounded-full blur-3xl animate-blob animation-delay-4000"></div>
 
-        <div class="relative max-w-6xl mx-auto px-4 pt-10 pb-16 md:pt-20 md:pb-24 grid md:grid-cols-[1.15fr,0.95fr] gap-10 items-center">
+        <div class="relative max-w-6xl mx-auto px-4 pt-10 pb-16 md:pt-6 md:pb-24 grid md:grid-cols-[1.15fr,0.95fr] gap-10 items-center">
 
             <!-- LEFT: texto -->
             <div class="space-y-7 md:space-y-8" data-hero-left>
                 <!-- pill -->
-                <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-900/70 backdrop-blur border border-sky-500/40 shadow-sm text-[11px] font-medium text-sky-100">
+                <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-950/80 backdrop-blur border border-sky-500/40 shadow-sm text-[11px] font-medium text-sky-100">
                     <span class="h-1.5 w-1.5 rounded-full bg-sky-400 pulse-dot"></span>
                     NUEVA MARCA URBANA
                     <span class="text-slate-500">·</span>
@@ -112,7 +191,7 @@
 
                 <!-- título -->
                 <header class="space-y-4">
-                    <h1 class="text-3xl md:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.1]">
+                    <h1 class="text-3xl md:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.08]">
                         Streetwear con
                         <span class="block text-sky-400">
                             actitud, color e inclusión
@@ -267,7 +346,7 @@
     <!-- =======================
          COLECCIONES
     ======================== -->
-    <section class="max-w-6xl mx-auto px-4 pt-10 pb-6 md:pt-14 md:pb-10">
+    <section id="colecciones" class="max-w-6xl mx-auto px-4 pt-10 pb-6 md:pt-14 md:pb-10">
         <div class="flex items-center justify-between mb-6">
             <h2 class="text-xl md:text-2xl font-semibold text-slate-50">
                 Colecciones Skyline
@@ -395,6 +474,14 @@
         {% endif %}
     </section>
 
+    <!-- (Opcional) sección contacto futura -->
+    <section id="contacto" class="max-w-6xl mx-auto px-4 pb-12 text-xs text-slate-500">
+        <p>
+            ¿Querés colaborar, licenciar diseños o armar una colección cápsula con Skyline Style?
+            Escribinos por Instagram o mail y coordinamos.
+        </p>
+    </section>
+
 </main>
 
 {% endblock %}
@@ -403,6 +490,26 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
+    // Toggle menú mobile (sin pantalla blanca)
+    const navToggle = document.getElementById('nav-toggle');
+    const mobileNav = document.getElementById('mobile-nav');
+
+    if (navToggle && mobileNav) {
+        navToggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            mobileNav.classList.toggle('hidden');
+        });
+
+        // Cerrar si se toca afuera
+        document.addEventListener('click', (e) => {
+            if (!mobileNav.classList.contains('hidden')) {
+                if (!mobileNav.contains(e.target) && !navToggle.contains(e.target)) {
+                    mobileNav.classList.add('hidden');
+                }
+            }
+        });
+    }
+
     // Animaciones de entrada
     gsap.from('[data-hero-left]', {
         opacity: 0,
