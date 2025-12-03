@@ -1,10 +1,13 @@
 # app/routes/main_routes.py
 from __future__ import annotations
 
-from flask import Blueprint, render_template, jsonify, flash
+import time
+from typing import Any, Dict, List
+
+from flask import Blueprint, render_template, jsonify, flash, redirect, url_for
+
 from app.models import Product
 from app.printful_client import PrintfulClient
-import time
 
 # ==========================================
 #  BLUEPRINT PRINCIPAL DE LA WEB PÚBLICA
@@ -14,7 +17,7 @@ main_bp = Blueprint("main", __name__)
 # =================================================
 #   PRODUCTOS DEMO (fallback si falla Printful)
 # =================================================
-PRODUCTS_DEMO: list[Product] = [
+PRODUCTS_DEMO: List[Product] = [
     Product(
         id=1,
         name="Hoodie Skyline Negro",
@@ -46,9 +49,11 @@ PRODUCTS_DEMO: list[Product] = [
 #   - Evita pegarle a la API en cada request
 #   - TTL (tiempo de vida) configurable
 # =================================================
-_PRINTFUL_CACHE: dict[str, object] = {
+CacheType = Dict[str, Any]
+
+_PRINTFUL_CACHE: CacheType = {
     "timestamp": 0.0,
-    "products": None,  # type: ignore
+    "products": None,
 }
 PRINTFUL_TTL_SECONDS: int = 300  # 5 minutos aprox.
 
@@ -65,7 +70,7 @@ def _usd_to_uyu(usd: float) -> int:
 # ===================================================
 #   FUNCIÓN: cargar productos desde Printful
 # ===================================================
-def load_printful_products(force_refresh: bool = False) -> list[Product]:
+def load_printful_products(force_refresh: bool = False) -> List[Product]:
     """
     Trae productos reales de Printful.
 
@@ -79,8 +84,8 @@ def load_printful_products(force_refresh: bool = False) -> list[Product]:
     now = time.time()
     if (
         not force_refresh
-        and _PRINTFUL_CACHE["products"] is not None
-        and now - float(_PRINTFUL_CACHE["timestamp"]) < PRINTFUL_TTL_SECONDS
+        and _PRINTFUL_CACHE.get("products") is not None
+        and now - float(_PRINTFUL_CACHE.get("timestamp", 0.0)) < PRINTFUL_TTL_SECONDS
     ):
         return _PRINTFUL_CACHE["products"]  # type: ignore[return-value]
 
@@ -88,9 +93,9 @@ def load_printful_products(force_refresh: bool = False) -> list[Product]:
         client = PrintfulClient()
         data = client.get_synced_products(limit=50, offset=0)
 
-        productos_printful: list[Product] = []
+        productos_printful: List[Product] = []
 
-        # data viene como LISTA de productos de tienda
+        # data debe ser lista de productos; si no, usamos lista vacía
         items = data if isinstance(data, list) else []
 
         for item in items:
@@ -139,6 +144,7 @@ def load_printful_products(force_refresh: bool = False) -> list[Product]:
             return productos_printful
 
         # Si la lista vino vacía, usamos DEMO
+        print("⚠ Printful devolvió lista vacía. Usando productos demo.")
         return PRODUCTS_DEMO
 
     except Exception as e:
@@ -149,19 +155,30 @@ def load_printful_products(force_refresh: bool = False) -> list[Product]:
 # ======================
 #       HOME
 # ======================
-@main_bp.route("/")
-def index():
+@main_bp.route("/", endpoint="home")
+def home():
     """
     Landing principal con destacados.
+    Endpoint oficial: main.home
     """
     featured_products = load_printful_products()[:6]
+    # Template principal: index.html (ya contiene el hero + secciones)
     return render_template("index.html", featured_products=featured_products)
+
+
+# Alias opcional para compatibilidad (main.index → /index)
+@main_bp.route("/index", endpoint="index")
+def index_alias():
+    """
+    Alias de / para compatibilidad con código viejo (main.index).
+    """
+    return redirect(url_for("main.home"))
 
 
 # ======================
 #     TIENDA GENERAL
 # ======================
-@main_bp.route("/shop")
+@main_bp.route("/shop", endpoint="shop")
 def shop():
     """
     Listado general de productos.
@@ -170,10 +187,16 @@ def shop():
     return render_template("shop.html", products=products)
 
 
+# Alias opcional /tienda
+@main_bp.route("/tienda", endpoint="shop_alias")
+def shop_alias():
+    return redirect(url_for("main.shop"))
+
+
 # ======================
 #       LA MARCA
 # ======================
-@main_bp.route("/about")
+@main_bp.route("/about", endpoint="about")
 def about():
     """
     Página 'La marca' / Sobre Skyline Style.
@@ -184,19 +207,19 @@ def about():
 # ======================
 #      CARRITO
 # ======================
-@main_bp.route("/cart")
+@main_bp.route("/cart", endpoint="cart")
 def cart():
     """
     Carrito de compras (por ahora demo).
     """
-    cart_items: list[dict] = []  # TODO: integrar con sesión
+    cart_items: List[dict] = []  # TODO: integrar con sesión
     return render_template("cart.html", cart_items=cart_items)
 
 
 # ======================
 #   PRODUCTO INDIVIDUAL
 # ======================
-@main_bp.route("/product/<int:product_id>")
+@main_bp.route("/product/<int:product_id>", endpoint="product_detail")
 def product_detail(product_id: int):
     """
     Vista de producto individual.
@@ -207,7 +230,8 @@ def product_detail(product_id: int):
 
     if not product:
         flash("El producto no existe o no está disponible.", "error")
-        return render_template("product_detail.html", product=None), 404
+        # Redirigimos a la tienda en lugar de mostrar un 404 seco
+        return redirect(url_for("main.shop"))
 
     return render_template("product_detail.html", product=product)
 
@@ -215,7 +239,7 @@ def product_detail(product_id: int):
 # ======================
 #   TEST PRINTFUL JSON
 # ======================
-@main_bp.route("/printful/test")
+@main_bp.route("/printful/test", endpoint="printful_test")
 def printful_test():
     """
     Endpoint de prueba para ver el JSON crudo que devuelve Printful.
@@ -226,4 +250,5 @@ def printful_test():
         data = client.get_synced_products(limit=50, offset=0)
         return jsonify({"status": "ok", "data": data})
     except Exception as e:
+        print(f"⚠ Error en /printful/test: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
