@@ -4,21 +4,49 @@
 
 {% block extra_head %}
 <style>
+    /* ==========================
+       Ajustes globales de página
+       ========================== */
+    main.skyline-main {
+        background: radial-gradient(circle at top, #0f172a 0, #020617 35%, #020617 100%);
+        color: #e5e7eb;
+    }
+
+    /* Hero con altura controlada (sin bloque gigante en mobile) */
+    .hero-main {
+        position: relative;
+        overflow: hidden;
+        background: radial-gradient(circle at top left, #1d4ed8 0, #020617 45%);
+    }
+
+    @media (min-width: 768px) {
+        .hero-main {
+            min-height: 78vh;
+        }
+    }
+
+    @media (max-width: 767px) {
+        .hero-main {
+            padding-top: 4.5rem;   /* espacio para el navbar */
+            padding-bottom: 2.25rem;
+        }
+    }
+
     /* Glow suave para la tarjeta principal */
     .card-glow {
         box-shadow:
-            0 0 0 1px rgba(15, 23, 42, 0.04),
-            0 18px 40px rgba(15, 23, 42, 0.22),
-            0 0 50px rgba(56, 189, 248, 0.35); /* sky glow */
-        transition: transform .25s ease, box-shadow .25s ease;
+            0 0 0 1px rgba(15, 23, 42, 0.4),
+            0 18px 40px rgba(15, 23, 42, 0.9),
+            0 0 50px rgba(56, 189, 248, 0.35);
+        transition: transform .3s ease, box-shadow .3s ease, translate .3s ease;
         will-change: transform, box-shadow;
     }
 
     .card-glow:hover {
-        transform: translateY(-4px);
+        transform: translateY(-6px);
         box-shadow:
-            0 24px 60px rgba(15, 23, 42, 0.30),
-            0 0 60px rgba(56, 189, 248, 0.55);
+            0 24px 60px rgba(15, 23, 42, 0.95),
+            0 0 70px rgba(56, 189, 248, 0.65);
     }
 
     /* Punto pulsando en la pill */
@@ -33,7 +61,7 @@
             box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.7);
         }
         70% {
-            transform: scale(1.12);
+            transform: scale(1.15);
             box-shadow: 0 0 0 10px rgba(56, 189, 248, 0);
         }
         100% {
@@ -41,45 +69,57 @@
             box-shadow: 0 0 0 0 rgba(56, 189, 248, 0);
         }
     }
+
+    /* Pequeño parallax en la tarjeta hero (solo desktop) */
+    @media (min-width: 1024px) {
+        [data-hero-card] {
+            transform-origin: center;
+            transition: transform .25s ease;
+        }
+
+        [data-hero-card].floating {
+            transform: translateY(-6px) translateX(4px);
+        }
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 
-<main class="relative bg-slate-50 text-slate-900" aria-label="Página principal de Skyline Style">
+<main class="skyline-main relative" aria-label="Página principal de Skyline Style">
 
     <!-- =======================
          HERO PRINCIPAL
     ======================== -->
-    <section id="hero" class="relative overflow-hidden bg-gradient-to-br from-white via-sky-50 to-sky-100">
+    <section id="hero" class="hero-main">
 
         <!-- blobs suaves -->
-        <div class="pointer-events-none absolute -top-40 -left-24 h-72 w-72 bg-sky-200/40 rounded-full blur-3xl animate-blob"></div>
-        <div class="pointer-events-none absolute -bottom-40 left-1/2 h-80 w-80 bg-sky-100/60 rounded-full blur-3xl animate-blob animation-delay-2000"></div>
-        <div class="pointer-events-none absolute -top-32 -right-10 h-64 w-64 bg-sky-300/40 rounded-full blur-3xl animate-blob animation-delay-4000"></div>
+        <div class="pointer-events-none absolute -top-40 -left-24 h-72 w-72 bg-sky-500/30 rounded-full blur-3xl animate-blob"></div>
+        <div class="pointer-events-none absolute -bottom-40 left-1/2 h-80 w-80 bg-indigo-500/25 rounded-full blur-3xl animate-blob animation-delay-2000"></div>
+        <div class="pointer-events-none absolute -top-32 -right-10 h-64 w-64 bg-cyan-400/30 rounded-full blur-3xl animate-blob animation-delay-4000"></div>
 
-        <div class="relative max-w-6xl mx-auto px-4 pt-16 pb-20 md:pt-24 md:pb-28 grid md:grid-cols-[1.15fr,0.95fr] gap-12 items-center">
+        <div class="relative max-w-6xl mx-auto px-4 pt-10 pb-16 md:pt-20 md:pb-24 grid md:grid-cols-[1.15fr,0.95fr] gap-10 items-center">
 
             <!-- LEFT: texto -->
             <div class="space-y-7 md:space-y-8" data-hero-left>
                 <!-- pill -->
-                <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/80 backdrop-blur border border-sky-100 shadow-sm text-[11px] font-medium text-sky-700">
+                <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-900/70 backdrop-blur border border-sky-500/40 shadow-sm text-[11px] font-medium text-sky-100">
                     <span class="h-1.5 w-1.5 rounded-full bg-sky-400 pulse-dot"></span>
                     NUEVA MARCA URBANA
-                    <span class="text-slate-400">·</span>
+                    <span class="text-slate-500">·</span>
                     Drop 2025
                 </div>
 
                 <!-- título -->
                 <header class="space-y-4">
-                    <h1 class="text-4xl md:text-6xl font-bold tracking-tight leading-[1.1]">
+                    <h1 class="text-3xl md:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.1]">
                         Streetwear con
-                        <span class="block text-sky-500">
+                        <span class="block text-sky-400">
                             actitud, color e inclusión
                         </span>
                     </h1>
 
-                    <p class="text-sm md:text-base text-slate-600 max-w-xl leading-relaxed prose-skyline">
+                    <p class="text-sm md:text-base text-slate-300 max-w-xl leading-relaxed prose-skyline">
                         Skyline Style nace para crear outfits que se ven increíbles en la calle, en fotos y en cámara.
                         Diseños creados en Uruguay, pensados para todos los cuerpos, todos los tonos de piel y todos los estilos.
                         Una marca con identidad fuerte, detalles premium y vibra urbana real.
@@ -96,24 +136,24 @@
                     </a>
 
                     <a href="#destacados"
-                       class="btn-ghost-soft inline-flex items-center justify-center"
+                       class="btn-ghost-soft inline-flex items-center justify-center bg-slate-900/60 border-slate-600 text-slate-100 hover:bg-slate-800"
                        aria-label="Ir a productos destacados">
                         Ver productos destacados
                     </a>
                 </div>
 
                 <!-- mini stats -->
-                <dl class="grid grid-cols-3 gap-4 pt-2 text-xs text-slate-500" aria-label="Datos rápidos de Skyline Style">
+                <dl class="grid grid-cols-3 gap-4 pt-2 text-xs text-slate-400" aria-label="Datos rápidos de Skyline Style">
                     <div class="space-y-1" data-stat>
-                        <dt class="text-base font-semibold text-slate-900">+20</dt>
+                        <dt class="text-base font-semibold text-sky-300">+20</dt>
                         <dd>Diseños exclusivos</dd>
                     </div>
                     <div class="space-y-1" data-stat>
-                        <dt class="text-base font-semibold text-slate-900">XS – 5XL</dt>
+                        <dt class="text-base font-semibold text-sky-300">XS – 5XL</dt>
                         <dd>Para todos los cuerpos</dd>
                     </div>
                     <div class="space-y-1" data-stat>
-                        <dt class="text-base font-semibold text-slate-900">100%</dt>
+                        <dt class="text-base font-semibold text-sky-300">100%</dt>
                         <dd>Identidad Skyline</dd>
                     </div>
                 </dl>
@@ -123,9 +163,9 @@
             <div class="flex items-center justify-center">
                 <div class="relative w-full max-w-md" data-hero-card>
                     <!-- halo -->
-                    <div class="absolute -inset-1 rounded-3xl bg-gradient-to-tr from-sky-200/70 via-sky-300/40 to-slate-100/80 blur-xl opacity-90"></div>
+                    <div class="absolute -inset-1 rounded-3xl bg-gradient-to-tr from-sky-400/40 via-indigo-400/30 to-slate-50/10 blur-xl opacity-90"></div>
 
-                    <article class="relative rounded-3xl bg-slate-900 text-slate-50 border border-slate-200/40 card-glow overflow-hidden"
+                    <article class="relative rounded-3xl bg-slate-950 text-slate-50 border border-sky-500/40 card-glow overflow-hidden"
                              aria-label="Vista previa de la colección Skyline Crew">
 
                         <!-- top bar -->
@@ -152,7 +192,7 @@
 
                                 <!-- overlay info -->
                                 <div class="absolute left-4 bottom-4 flex flex-col gap-1">
-                                    <span class="inline-flex items-center gap-2 rounded-full bg-slate-950/80 px-3 py-1 text-[11px] text-sky-200 border border-sky-400/40">
+                                    <span class="inline-flex items-center gap-2 rounded-full bg-slate-950/85 px-3 py-1 text-[11px] text-sky-200 border border-sky-400/40">
                                         <span class="h-1.5 w-1.5 rounded-full bg-sky-400 animate-pulse"></span>
                                         Skyline Crew · edición 2025
                                     </span>
@@ -195,7 +235,7 @@
                     </article>
 
                     <!-- stickers flotantes -->
-                    <div class="absolute -left-3 top-10 md:-left-5 md:top-6 rounded-2xl bg-white text-slate-900 shadow-lg border border-slate-200 px-3 py-2 text-[10px] font-medium rotate-[-6deg]">
+                    <div class="absolute -left-3 top-10 md:-left-5 md:top-6 rounded-2xl bg-slate-900/90 text-slate-50 shadow-lg border border-slate-700 px-3 py-2 text-[10px] font-medium rotate-[-6deg]">
                         + Gorras, remeras &amp; más
                     </div>
                     <div class="absolute -right-2 -bottom-3 md:-right-4 md:-bottom-4 rounded-full bg-sky-400 text-[10px] text-slate-900 px-4 py-2 shadow-lg shadow-sky-500/50 rotate-3">
@@ -210,15 +250,15 @@
     <!-- =======================
          CINTA SKYLINE
     ======================== -->
-    <section class="bg-slate-950 text-slate-50 border-y border-slate-800">
+    <section class="bg-slate-950/95 text-slate-50 border-y border-slate-800">
         <div class="max-w-6xl mx-auto px-4 py-4 flex flex-wrap items-center justify-between gap-3 text-xs md:text-sm">
             <div class="flex items-center gap-2">
                 <span class="badge-round bg-sky-400 text-slate-900 font-bold">S</span>
-                <p>
+                <p class="text-slate-300">
                     Producción bajo demanda con fábrica aliada. Sin stock físico ni exceso: solo lanzamientos frescos y drops limitados.
                 </p>
             </div>
-            <p class="text-slate-300">
+            <p class="text-slate-400">
                 Mockups, paletas y tipografías pensadas para que Skyline Style destaque en tu tienda online y redes.
             </p>
         </div>
@@ -229,11 +269,11 @@
     ======================== -->
     <section class="max-w-6xl mx-auto px-4 pt-10 pb-6 md:pt-14 md:pb-10">
         <div class="flex items-center justify-between mb-6">
-            <h2 class="text-xl md:text-2xl font-semibold text-slate-900">
+            <h2 class="text-xl md:text-2xl font-semibold text-slate-50">
                 Colecciones Skyline
             </h2>
             <a href="{{ url_for('main.shop') }}"
-               class="text-xs md:text-sm text-slate-500 hover:text-sky-500 transition flex items-center gap-1">
+               class="text-xs md:text-sm text-slate-400 hover:text-sky-400 transition flex items-center gap-1">
                 Ver tienda completa
                 <span aria-hidden="true">→</span>
             </a>
@@ -260,16 +300,16 @@
             </article>
 
             <!-- card 2 -->
-            <article class="card-elevated bg-white text-slate-900" data-collection-card>
+            <article class="card-elevated bg-slate-900/80 text-slate-50" data-collection-card>
                 <div class="p-5 flex flex-col gap-3 min-h-[170px]">
                     <h3 class="text-lg font-semibold">
                         Remeras Statement
                     </h3>
-                    <p class="text-xs text-slate-600">
+                    <p class="text-xs text-slate-200">
                         Tipografías con carácter, frases con actitud y combinaciones de color que se ven perfectas
                         en fotos y videos. Desde básicos neutros hasta azules intensos.
                     </p>
-                    <p class="mt-auto text-xs text-slate-500">
+                    <p class="mt-auto text-xs text-slate-300">
                         Ideales para TikToks, fotos espejo y contenido diario.
                     </p>
                 </div>
@@ -297,11 +337,11 @@
     ======================== -->
     <section id="destacados" class="max-w-6xl mx-auto px-4 pb-16">
         <div class="flex items-center justify-between mb-4 md:mb-6">
-            <h2 class="text-xl md:text-2xl font-semibold text-slate-900">
+            <h2 class="text-xl md:text-2xl font-semibold text-slate-50">
                 Productos destacados
             </h2>
             <a href="{{ url_for('main.shop') }}"
-               class="text-xs md:text-sm text-slate-500 hover:text-sky-500 transition flex items-center gap-1">
+               class="text-xs md:text-sm text-slate-400 hover:text-sky-400 transition flex items-center gap-1">
                 Ver toda la colección
                 <span aria-hidden="true">→</span>
             </a>
@@ -318,10 +358,10 @@
             <div class="grid sm:grid-cols-2 md:grid-cols-3 gap-6">
                 {% for product in products %}
                     <a href="{{ url_for('main.product_detail', product_id=product.id) if product.id is defined else '#' }}"
-                       class="group bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-1 transition duration-300 flex flex-col card-hover"
+                       class="group bg-slate-900/80 border border-slate-700 rounded-2xl overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-1 transition duration-300 flex flex-col card-hover"
                        aria-label="Ver detalles de {{ product.name }}"
                        data-product-card>
-                        <div class="aspect-square bg-slate-100 overflow-hidden">
+                        <div class="aspect-square bg-slate-900 overflow-hidden">
                             <img src="{{ product.image }}"
                                  alt="{{ product.name }}"
                                  class="w-full h-full object-cover group-hover:scale-105 transition duration-500"
@@ -329,18 +369,18 @@
                                  decoding="async">
                         </div>
                         <div class="p-4 flex flex-col gap-1">
-                            <p class="text-[11px] uppercase tracking-wide text-slate-400">
+                            <p class="text-[11px] uppercase tracking-wide text-slate-500">
                                 {{ product.category or 'Skyline' }}
                             </p>
-                            <h3 class="text-sm font-medium text-slate-900 group-hover:text-sky-500 transition line-clamp-2">
+                            <h3 class="text-sm font-medium text-slate-50 group-hover:text-sky-400 transition line-clamp-2">
                                 {{ product.name }}
                             </h3>
                             {% if product.price is not none %}
-                                <p class="text-sm font-semibold text-sky-500 mt-1">
+                                <p class="text-sm font-semibold text-sky-400 mt-1">
                                     $ {{ product.price }} UYU
                                 </p>
                             {% else %}
-                                <p class="text-xs text-slate-400 mt-1">
+                                <p class="text-xs text-slate-500 mt-1">
                                     Precio según variante
                                 </p>
                             {% endif %}
@@ -349,7 +389,7 @@
                 {% endfor %}
             </div>
         {% else %}
-            <p class="text-sm text-slate-500">
+            <p class="text-sm text-slate-400">
                 Todavía no hay productos destacados cargados. Pronto vas a ver acá los primeros drops de Skyline Style.
             </p>
         {% endif %}
@@ -363,6 +403,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
+    // Animaciones de entrada
     gsap.from('[data-hero-left]', {
         opacity: 0,
         y: 40,
@@ -403,6 +444,13 @@ document.addEventListener('DOMContentLoaded', () => {
         duration: 0.6,
         ease: 'power3.out'
     });
+
+    // Parallax suave en hero card (solo desktop)
+    const heroCard = document.querySelector('[data-hero-card]');
+    if (heroCard && window.innerWidth >= 1024) {
+        heroCard.addEventListener('mouseenter', () => heroCard.classList.add('floating'));
+        heroCard.addEventListener('mouseleave', () => heroCard.classList.remove('floating'));
+    }
 });
 </script>
 {% endblock %}
