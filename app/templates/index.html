@@ -8,9 +8,15 @@
        HEADER / NAVBAR
        ================ */
     .skyline-header-blur {
-        background: radial-gradient(circle at top, rgba(15,23,42,0.98), rgba(2,6,23,0.98));
+        background: linear-gradient(
+            to bottom,
+            rgba(15,23,42,0.96),
+            rgba(15,23,42,0.90),
+            rgba(15,23,42,0.80)
+        );
         backdrop-filter: blur(18px);
         -webkit-backdrop-filter: blur(18px);
+        border-bottom: 1px solid rgba(148,163,184,0.35);
     }
 
     #mobile-nav {
@@ -22,38 +28,44 @@
        Ajustes globales de página
        ========================== */
     main.skyline-main {
-        background: radial-gradient(circle at top, #0f172a 0, #020617 35%, #020617 100%);
+        background:
+            radial-gradient(circle at 0% 0%, #38bdf8 0, transparent 55%),
+            radial-gradient(circle at 100% 0%, #4f46e5 0, transparent 55%),
+            linear-gradient(145deg, #0f172a 0%, #020617 40%, #020617 100%);
         color: #e5e7eb;
         min-height: 100vh;
     }
 
-    /* Hero con altura controlada (sin bloque gigante en mobile) */
+    /* Hero con altura controlada y azul más suave */
     .hero-main {
         position: relative;
         overflow: hidden;
-        background: radial-gradient(circle at top left, #1d4ed8 0, #020617 45%);
+        background:
+            radial-gradient(circle at 10% 0%, rgba(56,189,248,0.32), transparent 55%),
+            radial-gradient(circle at 80% 15%, rgba(129,140,248,0.36), transparent 60%),
+            linear-gradient(to bottom right, #0f172a, #020617);
     }
 
     @media (min-width: 768px) {
         .hero-main {
-            min-height: 82vh;
-            padding-top: 7rem;   /* espacio para el header fijo */
+            min-height: 78vh;
+            padding-top: 6.5rem;   /* espacio para el header fijo */
         }
     }
 
     @media (max-width: 767px) {
         .hero-main {
-            padding-top: 5.5rem;   /* espacio para el navbar fijo en mobile */
-            padding-bottom: 2.75rem;
+            padding-top: 5rem;   /* espacio para el navbar fijo en mobile */
+            padding-bottom: 2.5rem;
         }
     }
 
     /* Glow suave para la tarjeta principal */
     .card-glow {
         box-shadow:
-            0 0 0 1px rgba(15, 23, 42, 0.4),
-            0 18px 40px rgba(15, 23, 42, 0.9),
-            0 0 50px rgba(56, 189, 248, 0.35);
+            0 0 0 1px rgba(15, 23, 42, 0.45),
+            0 20px 44px rgba(15, 23, 42, 0.9),
+            0 0 55px rgba(56, 189, 248, 0.45);
         transition: transform .3s ease, box-shadow .3s ease, translate .3s ease;
         will-change: transform, box-shadow;
     }
@@ -61,8 +73,8 @@
     .card-glow:hover {
         transform: translateY(-6px);
         box-shadow:
-            0 24px 60px rgba(15, 23, 42, 0.95),
-            0 0 70px rgba(56, 189, 248, 0.65);
+            0 26px 70px rgba(15, 23, 42, 0.96),
+            0 0 80px rgba(56, 189, 248, 0.7);
     }
 
     /* Punto pulsando en la pill */
@@ -78,7 +90,7 @@
         }
         70% {
             transform: scale(1.15);
-            box-shadow: 0 0 0 10px rgba(56, 189, 248, 0);
+            box-shadow: 0 0 0 12px rgba(56, 189, 248, 0);
         }
         100% {
             transform: scale(1);
@@ -97,6 +109,56 @@
             transform: translateY(-6px) translateX(4px);
         }
     }
+
+    /* -------- Recomendaciones / marketing -------- */
+    .rec-card {
+        border-radius: 1.4rem;
+        background:
+            radial-gradient(circle at top left,
+                rgba(56,189,248,0.18),
+                transparent 55%),
+            rgba(15,23,42,0.96);
+        border: 1px solid rgba(148,163,184,0.45);
+        box-shadow:
+            0 20px 45px rgba(15,23,42,0.85),
+            0 0 0 1px rgba(30,64,175,0.65);
+        padding: 1.3rem 1.4rem;
+        font-size: 0.82rem;
+        line-height: 1.6;
+        color: #cbd5f5;
+        transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease;
+    }
+
+    .rec-card:hover {
+        transform: translateY(-4px);
+        border-color: rgba(56,189,248,0.9);
+        box-shadow:
+            0 26px 60px rgba(15,23,42,0.9),
+            0 0 0 1px rgba(59,130,246,0.9);
+    }
+
+    .rec-tag {
+        font-size: 0.72rem;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: #93c5fd;
+    }
+
+    .rec-title {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: #e5e7eb;
+    }
+
+    .rec-meta {
+        font-size: 0.74rem;
+        color: #9ca3af;
+    }
+
+    .rec-stars {
+        font-size: 0.75rem;
+        color: #facc15;
+    }
 </style>
 {% endblock %}
 
@@ -104,13 +166,12 @@
 
 <!-- =======================
      HEADER PRO · NAVBAR
-     (quitá / comentá el navbar viejo de base.html si aún existe)
 ======================= -->
 <header class="fixed inset-x-0 top-0 z-40">
-    <div class="skyline-header-blur border-b border-slate-800/60">
+    <div class="skyline-header-blur">
         <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
             <!-- Logo -->
-            <a href="{{ url_for('main.home') }}"
+            <a href="{{ url_for('main.index') }}"
                class="flex items-center gap-2">
                 <div class="h-9 w-9 rounded-full bg-slate-900 flex items-center justify-center text-white text-sm font-semibold shadow-lg shadow-sky-500/30">
                     SS
@@ -136,7 +197,7 @@
             <!-- CTA desktop -->
             <div class="hidden md:flex items-center">
                 <a href="{{ url_for('main.shop') }}"
-                   class="inline-flex items-center gap-2 rounded-full bg-sky-500 px-4 py-1.5 text-xs font-semibold text-slate-950 shadow-lg shadow-sky-500/40 hover:bg-sky-400 transition">
+                   class="btn-primary-glow inline-flex items-center gap-2 text-xs px-4 py-2">
                     Ver drop 2025
                     <span aria-hidden="true">→</span>
                 </a>
@@ -193,12 +254,12 @@
                 <header class="space-y-4">
                     <h1 class="text-3xl md:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.08]">
                         Streetwear con
-                        <span class="block text-sky-400">
+                        <span class="block text-sky-300">
                             actitud, color e inclusión
                         </span>
                     </h1>
 
-                    <p class="text-sm md:text-base text-slate-300 max-w-xl leading-relaxed prose-skyline">
+                    <p class="text-sm md:text-base text-slate-200 max-w-xl leading-relaxed prose-skyline">
                         Skyline Style nace para crear outfits que se ven increíbles en la calle, en fotos y en cámara.
                         Diseños creados en Uruguay, pensados para todos los cuerpos, todos los tonos de piel y todos los estilos.
                         Una marca con identidad fuerte, detalles premium y vibra urbana real.
@@ -215,24 +276,24 @@
                     </a>
 
                     <a href="#destacados"
-                       class="btn-ghost-soft inline-flex items-center justify-center bg-slate-900/60 border-slate-600 text-slate-100 hover:bg-slate-800"
+                       class="btn-ghost-soft inline-flex items-center justify-center bg-slate-900/70 border-slate-600 text-slate-100 hover:bg-slate-900"
                        aria-label="Ir a productos destacados">
                         Ver productos destacados
                     </a>
                 </div>
 
                 <!-- mini stats -->
-                <dl class="grid grid-cols-3 gap-4 pt-2 text-xs text-slate-400" aria-label="Datos rápidos de Skyline Style">
+                <dl class="grid grid-cols-3 gap-4 pt-2 text-xs text-slate-300" aria-label="Datos rápidos de Skyline Style">
                     <div class="space-y-1" data-stat>
-                        <dt class="text-base font-semibold text-sky-300">+20</dt>
+                        <dt class="text-base font-semibold text-sky-200">+20</dt>
                         <dd>Diseños exclusivos</dd>
                     </div>
                     <div class="space-y-1" data-stat>
-                        <dt class="text-base font-semibold text-sky-300">XS – 5XL</dt>
+                        <dt class="text-base font-semibold text-sky-200">XS – 5XL</dt>
                         <dd>Para todos los cuerpos</dd>
                     </div>
                     <div class="space-y-1" data-stat>
-                        <dt class="text-base font-semibold text-sky-300">100%</dt>
+                        <dt class="text-base font-semibold text-sky-200">100%</dt>
                         <dd>Identidad Skyline</dd>
                     </div>
                 </dl>
@@ -242,7 +303,7 @@
             <div class="flex items-center justify-center">
                 <div class="relative w-full max-w-md" data-hero-card>
                     <!-- halo -->
-                    <div class="absolute -inset-1 rounded-3xl bg-gradient-to-tr from-sky-400/40 via-indigo-400/30 to-slate-50/10 blur-xl opacity-90"></div>
+                    <div class="absolute -inset-1 rounded-3xl bg-gradient-to-tr from-sky-400/45 via-indigo-400/35 to-slate-50/10 blur-xl opacity-95"></div>
 
                     <article class="relative rounded-3xl bg-slate-950 text-slate-50 border border-sky-500/40 card-glow overflow-hidden"
                              aria-label="Vista previa de la colección Skyline Crew">
@@ -414,7 +475,7 @@
     <!-- =======================
          DESTACADOS
     ======================== -->
-    <section id="destacados" class="max-w-6xl mx-auto px-4 pb-16">
+    <section id="destacados" class="max-w-6xl mx-auto px-4 pb-12">
         <div class="flex items-center justify-between mb-4 md:mb-6">
             <h2 class="text-xl md:text-2xl font-semibold text-slate-50">
                 Productos destacados
@@ -437,8 +498,9 @@
             <div class="grid sm:grid-cols-2 md:grid-cols-3 gap-6">
                 {% for product in products %}
                     <a href="{{ url_for('main.product_detail', product_id=product.id) if product.id is defined else '#' }}"
-                       class="group bg-slate-900/80 border border-slate-700 rounded-2xl overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-1 transition duration-300 flex flex-col card-hover"
+                       class="group bg-slate-900/85 border border-slate-700 rounded-2xl overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-1 transition duration-300 flex flex-col card-hover"
                        aria-label="Ver detalles de {{ product.name }}"
+
                        data-product-card>
                         <div class="aspect-square bg-slate-900 overflow-hidden">
                             <img src="{{ product.image }}"
@@ -474,8 +536,71 @@
         {% endif %}
     </section>
 
-    <!-- (Opcional) sección contacto futura -->
-    <section id="contacto" class="max-w-6xl mx-auto px-4 pb-12 text-xs text-slate-500">
+    <!-- =======================
+         RECOMENDACIONES / MARKETING
+    ======================== -->
+    <section class="max-w-6xl mx-auto px-4 pb-14">
+        <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-3 mb-5">
+            <div>
+                <h2 class="text-xl md:text-2xl font-semibold text-slate-50">
+                    Por qué eligen Skyline Style
+                </h2>
+                <p class="text-xs md:text-sm text-slate-300 mt-1 max-w-md">
+                    Feedback real de creadoras, fotógrafos y streamers que ya usan nuestras prendas
+                    para contenido y día a día.
+                </p>
+            </div>
+            <p class="hidden md:block text-xs text-sky-300">
+                +120 prendas testeadas en sesiones, streams y calle.
+            </p>
+        </div>
+
+        <div class="grid md:grid-cols-3 gap-4">
+            <article class="rec-card">
+                <p class="rec-tag">CREADORAS DE CONTENIDO</p>
+                <h3 class="rec-title mt-2">“En cámara los colores explotan”</h3>
+                <p class="mt-2">
+                    Uso los hoodies Skyline para TikTok y streams. Los colores se ven vivos incluso con
+                    poca luz y no se ve “barato” como otras marcas que probé.
+                </p>
+                <div class="mt-3 flex items-center justify-between">
+                    <span class="rec-meta">Lara · Creadora UY</span>
+                    <span class="rec-stars">★★★★★</span>
+                </div>
+            </article>
+
+            <article class="rec-card">
+                <p class="rec-tag">FOTOGRAFÍA / VIDEO</p>
+                <h3 class="rec-title mt-2">“La ropa suma presencia al modelo”</h3>
+                <p class="mt-2">
+                    Para shootings urbanos siempre llevo 2–3 prendas Skyline. El fit oversize
+                    y las paletas que usan hacen que cualquier plano tenga más carácter.
+                </p>
+                <div class="mt-3 flex items-center justify-between">
+                    <span class="rec-meta">Nico · Fotógrafo MVD</span>
+                    <span class="rec-stars">★★★★★</span>
+                </div>
+            </article>
+
+            <article class="rec-card">
+                <p class="rec-tag">USO DIARIO</p>
+                <h3 class="rec-title mt-2">“Cómodo como buzo, prolijo como outfit”</h3>
+                <p class="mt-2">
+                    Lo uso para ir a la facu y después para grabar. No tengo que cambiarme:
+                    queda cómodo, moderno y no se arruga fácil.
+                </p>
+                <div class="mt-3 flex items-center justify-between">
+                    <span class="rec-meta">Meli · Estudiante &amp; streamer</span>
+                    <span class="rec-stars">★★★★☆</span>
+                </div>
+            </article>
+        </div>
+    </section>
+
+    <!-- =======================
+         CONTACTO
+    ======================== -->
+    <section id="contacto" class="max-w-6xl mx-auto px-4 pb-12 text-xs text-slate-400">
         <p>
             ¿Querés colaborar, licenciar diseños o armar una colección cápsula con Skyline Style?
             Escribinos por Instagram o mail y coordinamos.
@@ -549,6 +674,15 @@ document.addEventListener('DOMContentLoaded', () => {
         stagger: 0.08,
         delay: 0.4,
         duration: 0.6,
+        ease: 'power3.out'
+    });
+
+    gsap.from('.rec-card', {
+        opacity: 0,
+        y: 20,
+        stagger: 0.12,
+        delay: 0.5,
+        duration: 0.7,
         ease: 'power3.out'
     });
 
