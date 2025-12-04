@@ -88,7 +88,7 @@
             </p>
         </div>
 
-        <!-- Filtros por categoría (anclas a las secciones) -->
+        <!-- Filtros por categoría -->
         <div class="w-full md:w-auto">
             <div class="filters-scroll" data-category-filters>
                 <a href="#cat-todos" class="filter-pill is-active" data-filter-target="todos">
@@ -127,7 +127,7 @@
             "otros": "Otros"
         } %}
 
-        <!-- Sección Todos: muestra todo mezclado pero categorizado internamente -->
+        <!-- Sección Todos -->
         <div id="cat-todos" class="mb-12" data-category-section="todos">
             <div class="flex items-center justify-between mb-4">
                 <h2 class="text-xl md:text-2xl font-semibold text-slate-900">
@@ -146,25 +146,19 @@
                                class="group bg-white border border-slate-200 rounded-2xl overflow-hidden card-hover flex flex-col"
                                data-product-card
                                data-product-category="{{ cat }}">
-                                
-                                <!-- Imagen -->
                                 <div class="aspect-square bg-slate-100 overflow-hidden">
                                     <img src="{{ product.image }}"
                                          alt="{{ product.name }}"
                                          loading="lazy"
                                          class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
                                 </div>
-
-                                <!-- Info -->
                                 <div class="p-4 flex flex-col gap-1">
                                     <p class="text-[11px] uppercase tracking-wide text-slate-400">
                                         {{ labels.get(cat, cat)|default(cat)|capitalize }}
                                     </p>
-
                                     <h3 class="text-sm font-semibold text-slate-900 group-hover:text-amber-600 transition line-clamp-2">
                                         {{ product.name }}
                                     </h3>
-
                                     <p class="text-sm font-semibold text-amber-500 mt-1">
                                         $ {{ product.price }} UYU
                                     </p>
@@ -192,25 +186,19 @@
                                class="group bg-white border border-slate-200 rounded-2xl overflow-hidden card-hover flex flex-col"
                                data-product-card
                                data-product-category="{{ cat }}">
-                                
-                                <!-- Imagen -->
                                 <div class="aspect-square bg-slate-100 overflow-hidden">
                                     <img src="{{ product.image }}"
                                          alt="{{ product.name }}"
                                          loading="lazy"
                                          class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
                                 </div>
-
-                                <!-- Info -->
                                 <div class="p-4 flex flex-col gap-1">
                                     <p class="text-[11px] uppercase tracking-wide text-slate-400">
                                         {{ labels.get(cat, cat)|default(cat)|capitalize }}
                                     </p>
-
                                     <h3 class="text-sm font-semibold text-slate-900 group-hover:text-amber-600 transition line-clamp-2">
                                         {{ product.name }}
                                     </h3>
-
                                     <p class="text-sm font-semibold text-amber-500 mt-1">
                                         $ {{ product.price }} UYU
                                     </p>
@@ -224,7 +212,6 @@
 
     {# ======================================================
        MODO 2: compatibilidad – si solo viene "products"
-       (sigue funcionando como tu versión original)
        ======================================================= #}
     {% else %}
         <div id="cat-todos" class="mb-12" data-category-section="todos">
@@ -240,25 +227,19 @@
                        class="group bg-white border border-slate-200 rounded-2xl overflow-hidden card-hover flex flex-col"
                        data-product-card
                        data-product-category="{{ product.category|default('otros')|lower }}">
-                        
-                        <!-- Imagen -->
                         <div class="aspect-square bg-slate-100 overflow-hidden">
                             <img src="{{ product.image }}"
                                  alt="{{ product.name }}"
                                  loading="lazy"
                                  class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
                         </div>
-
-                        <!-- Info -->
                         <div class="p-4 flex flex-col gap-1">
                             <p class="text-[11px] uppercase tracking-wide text-slate-400">
                                 {{ product.category or 'Otros' }}
                             </p>
-
                             <h3 class="text-sm font-semibold text-slate-900 group-hover:text-amber-600 transition line-clamp-2">
                                 {{ product.name }}
                             </h3>
-
                             <p class="text-sm font-semibold text-amber-500 mt-1">
                                 $ {{ product.price }} UYU
                             </p>
@@ -278,30 +259,71 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 <script>
     document.addEventListener('DOMContentLoaded', () => {
-        // Animación de entrada de cards
         const grids = document.querySelectorAll('[data-shop-grid]');
-        grids.forEach(grid => {
-            gsap.from(grid.querySelectorAll('[data-product-card]'), {
+        const sections = document.querySelectorAll('[data-category-section]');
+        const pills = document.querySelectorAll('[data-category-filters] .filter-pill');
+
+        // -------- Animación inicial de las cards --------
+        function animateCards(grid) {
+            if (!grid) return;
+            const cards = grid.querySelectorAll('[data-product-card]');
+            if (!cards.length) return;
+
+            gsap.from(cards, {
                 opacity: 0,
-                y: 30,
-                stagger: 0.06,
-                duration: 0.5,
-                ease: 'power3.out',
-                scrollTrigger: {
-                    trigger: grid,
-                    start: 'top 80%',
+                y: 24,
+                stagger: 0.05,
+                duration: 0.45,
+                ease: 'power3.out'
+            });
+        }
+
+        grids.forEach(animateCards);
+
+        // -------- Filtros por categoría --------
+        function setActivePill(target) {
+            pills.forEach(pill => {
+                pill.classList.toggle('is-active', pill.dataset.filterTarget === target);
+            });
+        }
+
+        function filterSections(target) {
+            sections.forEach(sec => {
+                const key = sec.dataset.categorySection;
+                if (target === 'todos' || key === target) {
+                    sec.style.display = '';
+                } else {
+                    sec.style.display = 'none';
                 }
+            });
+
+            // Animar la primera sección visible después de filtrar
+            const firstVisibleSection = Array.from(sections).find(
+                sec => sec.style.display !== 'none'
+            );
+            if (firstVisibleSection) {
+                const grid = firstVisibleSection.querySelector('[data-shop-grid]');
+                animateCards(grid);
+
+                firstVisibleSection.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start'
+                });
+            }
+        }
+
+        pills.forEach(pill => {
+            pill.addEventListener('click', (event) => {
+                event.preventDefault(); // evitamos salto de ancla
+                const target = pill.dataset.filterTarget || 'todos';
+                setActivePill(target);
+                filterSections(target);
             });
         });
 
-        // Estado visual de filtros (solo estilo, las secciones ya están por ancla)
-        const pills = document.querySelectorAll('[data-category-filters] .filter-pill');
-        pills.forEach(pill => {
-            pill.addEventListener('click', () => {
-                pills.forEach(p => p.classList.remove('is-active'));
-                pill.classList.add('is-active');
-            });
-        });
+        // Estado inicial
+        setActivePill('todos');
+        filterSections('todos');
     });
 </script>
 {% endblock %}
