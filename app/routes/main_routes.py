@@ -2,12 +2,22 @@
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, List
+from collections import defaultdict
+from typing import Any, DefaultDict, Dict, List, Mapping
 
-from flask import Blueprint, render_template, jsonify, flash, redirect, url_for
+from flask import (
+    Blueprint,
+    current_app,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    url_for,
+)
 
 from app.models import Product
 from app.printful_client import PrintfulClient
+from app.utils.printful_mapper import guess_category_from_printful
 
 # ==========================================
 #  BLUEPRINT PRINCIPAL DE LA WEB PÚBLICA
@@ -16,13 +26,14 @@ main_bp = Blueprint("main", __name__)
 
 # =================================================
 #   PRODUCTOS DEMO (fallback si falla Printful)
+#   - Ya vienen con categorías aproximadas
 # =================================================
 PRODUCTS_DEMO: List[Product] = [
     Product(
         id=1,
         name="Hoodie Skyline Negro",
         price=1490,
-        category="Hoodie",
+        category="buzos",
         image="/static/img/skyline_team.jpg",
         description="Hoodie unisex negro con logo Skyline, corte cómodo y urbano.",
     ),
@@ -30,7 +41,7 @@ PRODUCTS_DEMO: List[Product] = [
         id=2,
         name="Remera Skyline Blanca",
         price=990,
-        category="Remera",
+        category="remeras",
         image="/static/img/skyline_team.jpg",
         description="Remera blanca statement con branding Skyline frontal.",
     ),
@@ -38,7 +49,7 @@ PRODUCTS_DEMO: List[Product] = [
         id=3,
         name="Gorra Skyline Logo",
         price=790,
-        category="Accesorio",
+        category="gorros",
         image="/static/img/skyline_team.jpg",
         description="Gorra urbana con logo Skyline bordado.",
     ),
@@ -53,7 +64,7 @@ CacheType = Dict[str, Any]
 
 _PRINTFUL_CACHE: CacheType = {
     "timestamp": 0.0,
-    "products": None,
+    "products": None,  # type: ignore[assignment]
 }
 PRINTFUL_TTL_SECONDS: int = 300  # 5 minutos aprox.
 
@@ -67,18 +78,36 @@ def _usd_to_uyu(usd: float) -> int:
     return round(usd * factor)
 
 
+def _normalize_category_for_demo(category: str) -> str:
+    """
+    Normaliza categorías sueltas (Hoodie, Remera, Accesorio)
+    a las categorías internas canónicas usadas en la tienda.
+    """
+    c = (category or "").strip().lower()
+
+    if "hoodie" in c or "buzo" in c:
+        return "buzos"
+    if "remera" in c or "t-shirt" in c or "tee" in c:
+        return "remeras"
+    if "gorra" in c or "hat" in c or "cap" in c:
+        return "gorros"
+    if "campera" in c or "jacket" in c:
+        return "camperas"
+    return "otros"
+
+
 # ===================================================
 #   FUNCIÓN: cargar productos desde Printful
 # ===================================================
 def load_printful_products(force_refresh: bool = False) -> List[Product]:
     """
-    Trae productos reales de Printful.
+    Trae productos reales de Printful listos para usar en la web.
 
-    - Usa /store/products para listado
-    - Usa /store/products/{id} para obtener el precio (primer variante)
-    - Si algo falla, vuelve a PRODUCTS_DEMO
-    - Usa un caché simple en memoria para no llamar
-      a la API en cada request.
+    - Usa get_synced_products() para listado base.
+    - Usa get_synced_product(id) para obtener el precio (primer variante).
+    - Asigna categoría interna usando guess_category_from_printful.
+    - Aplica caché en memoria para no llamar a la API en cada request.
+    - Si algo falla, devuelve PRODUCTS_DEMO.
     """
     # ---------- CACHÉ ----------
     now = time.time()
@@ -95,10 +124,19 @@ def load_printful_products(force_refresh: bool = False) -> List[Product]:
 
         productos_printful: List[Product] = []
 
-        # data debe ser lista de productos; si no, usamos lista vacía
-        items = data if isinstance(data, list) else []
+        # Según cómo esté implementado tu cliente, data puede ser lista o dict
+        if isinstance(data, list):
+            items = data
+        elif isinstance(data, Mapping):
+            # Si alguna vez cambiás a la versión que devuelve {"sync_products": [...]}
+            items = data.get("sync_products", []) or []
+        else:
+            items = []
 
         for item in items:
+            if not isinstance(item, Mapping):
+                continue
+
             product_id = item.get("id")
             if not product_id:
                 continue
@@ -106,34 +144,41 @@ def load_printful_products(force_refresh: bool = False) -> List[Product]:
             # Nombre
             name = item.get("name") or "Producto Skyline"
 
-            # Imagen (Printful usa normalmente 'thumbnail_url')
-            thumbnail = item.get("thumbnail_url") or item.get("thumbnail")
-            if not thumbnail:
-                thumbnail = "/static/img/skyline_team.jpg"
+            # Imagen (Printful suele usar 'thumbnail' o 'thumbnail_url')
+            thumbnail = (
+                item.get("thumbnail_url")
+                or item.get("thumbnail")
+                or "/static/img/skyline_team.jpg"
+            )
 
-            # --- Precio aproximado en UYU ---
+            # --- Precio aproximado en UYU (opcional, si tenés el endpoint de detalle) ---
             price_uyu: int | None = None
             try:
                 detail = client.get_synced_product(product_id)
                 # detail es un dict con 'sync_variants'
                 sync_variants = detail.get("sync_variants") or []
-                if sync_variants:
-                    first_variant = sync_variants[0]
+                if isinstance(sync_variants, list) and sync_variants:
+                    first_variant = sync_variants[0] or {}
                     retail_str = first_variant.get("retail_price")
                     if retail_str:
                         retail_usd = float(retail_str)
                         price_uyu = _usd_to_uyu(retail_usd)
-            except Exception as e:
-                print(f"⚠ Error obteniendo detalle de producto {product_id}: {e}")
+            except Exception as e:  # noqa: BLE001
+                current_app.logger.warning(
+                    "Error obteniendo detalle de producto %s: %s", product_id, e
+                )
+
+            # Categoría interna (buzos, remeras, gorros, camperas, otros)
+            category = guess_category_from_printful(item)
 
             productos_printful.append(
                 Product(
                     id=product_id,
                     name=name,
-                    price=price_uyu,
-                    category="Skyline Style",  # tu marca, no "Printful"
+                    price=price_uyu or 0,
+                    category=category,
                     image=thumbnail,
-                    description="Colección oficial Skyline Style",
+                    description="Colección oficial Skyline Style.",
                 )
             )
 
@@ -144,11 +189,13 @@ def load_printful_products(force_refresh: bool = False) -> List[Product]:
             return productos_printful
 
         # Si la lista vino vacía, usamos DEMO
-        print("⚠ Printful devolvió lista vacía. Usando productos demo.")
+        current_app.logger.warning(
+            "Printful devolvió lista vacía. Usando productos demo."
+        )
         return PRODUCTS_DEMO
 
-    except Exception as e:
-        print(f"⚠ Error al cargar productos de Printful: {e}")
+    except Exception as e:  # noqa: BLE001
+        current_app.logger.exception("Error al cargar productos de Printful: %s", e)
         return PRODUCTS_DEMO
 
 
@@ -159,10 +206,9 @@ def load_printful_products(force_refresh: bool = False) -> List[Product]:
 def home():
     """
     Landing principal con destacados.
-    Endpoint oficial: main.home
+    Muestra los primeros 6 productos como "destacados".
     """
     featured_products = load_printful_products()[:6]
-    # Template principal: index.html (ya contiene el hero + secciones)
     return render_template("index.html", featured_products=featured_products)
 
 
@@ -181,10 +227,26 @@ def index_alias():
 @main_bp.route("/shop", endpoint="shop")
 def shop():
     """
-    Listado general de productos.
+    Tienda general Skyline.
+
+    - Carga productos desde Printful (o demo).
+    - Los agrupa por categoría interna.
+    - Envía grouped_products al template para que los filtros
+      de la tienda funcionen (buzos, remeras, gorros, etc.).
     """
     products = load_printful_products()
-    return render_template("shop.html", products=products)
+
+    grouped: DefaultDict[str, List[Product]] = defaultdict(list)
+    for p in products:
+        cat = _normalize_category_for_demo(getattr(p, "category", "") or "otros")
+        grouped[cat].append(p)
+
+    # Pasamos también la lista plana por si la querés usar en otro momento
+    return render_template(
+        "shop.html",
+        grouped_products=dict(grouped),
+        products=products,
+    )
 
 
 # Alias opcional /tienda
@@ -212,7 +274,7 @@ def cart():
     """
     Carrito de compras (por ahora demo).
     """
-    cart_items: List[dict] = []  # TODO: integrar con sesión
+    cart_items: List[dict] = []  # TODO: integrar con sesión / base de datos
     return render_template("cart.html", cart_items=cart_items)
 
 
@@ -230,7 +292,6 @@ def product_detail(product_id: int):
 
     if not product:
         flash("El producto no existe o no está disponible.", "error")
-        # Redirigimos a la tienda en lugar de mostrar un 404 seco
         return redirect(url_for("main.shop"))
 
     return render_template("product_detail.html", product=product)
@@ -249,6 +310,6 @@ def printful_test():
         client = PrintfulClient()
         data = client.get_synced_products(limit=50, offset=0)
         return jsonify({"status": "ok", "data": data})
-    except Exception as e:
-        print(f"⚠ Error en /printful/test: {e}")
+    except Exception as e:  # noqa: BLE001
+        current_app.logger.exception("Error en /printful/test: %s", e)
         return jsonify({"status": "error", "message": str(e)}), 500
