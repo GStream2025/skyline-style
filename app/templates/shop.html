@@ -4,13 +4,68 @@
 
 {% block extra_head %}
 <style>
-    /* efecto sutil para cards */
+    /* ---------- Efectos para cards ---------- */
     .card-hover {
-        transition: transform 0.35s ease, box-shadow 0.35s ease;
+        transition:
+            transform 0.35s ease,
+            box-shadow 0.35s ease,
+            border-color 0.25s ease,
+            background-color 0.25s ease;
     }
     .card-hover:hover {
         transform: translateY(-6px) scale(1.015);
-        box-shadow: 0 20px 30px -10px rgba(15,23,42,0.15);
+        box-shadow: 0 20px 30px -10px rgba(15,23,42,0.18);
+        border-color: rgba(251,191,36,0.8); /* amber-400 */
+        background-color: #fefce8;          /* amber-50 */
+    }
+
+    /* Pills de filtros / categorías */
+    .filter-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: .35rem;
+        border-radius: 9999px;
+        padding: .45rem 1.1rem;
+        border: 1px solid #e2e8f0; /* slate-200 */
+        font-size: .75rem;
+        line-height: 1;
+        color: #0f172a;
+        background: rgba(248,250,252,0.9);
+        cursor: pointer;
+        white-space: nowrap;
+        transition:
+            background-color .25s ease,
+            border-color .25s ease,
+            color .25s ease,
+            transform .2s ease;
+    }
+    .filter-pill:hover {
+        border-color: #fbbf24;  /* amber-400 */
+        color: #b45309;         /* amber-700 */
+        transform: translateY(-1px);
+        background: #fffbeb;    /* amber-50 */
+    }
+    .filter-pill.is-active {
+        border-color: #f97316;  /* orange-500 */
+        background: #fffbeb;
+        color: #9a3412;
+        font-weight: 600;
+    }
+
+    /* Scroll horizontal para filtros en mobile */
+    .filters-scroll {
+        display: flex;
+        gap: .5rem;
+        padding-bottom: .25rem;
+        overflow-x: auto;
+        scrollbar-width: thin;
+    }
+    .filters-scroll::-webkit-scrollbar {
+        height: 4px;
+    }
+    .filters-scroll::-webkit-scrollbar-thumb {
+        background: rgba(148,163,184,0.5);
+        border-radius: 9999px;
     }
 </style>
 {% endblock %}
@@ -19,68 +74,200 @@
 
 <section class="max-w-6xl mx-auto px-4 pt-10 pb-16">
 
-    <!-- Header tienda -->
-    <div class="flex flex-wrap items-center justify-between gap-3 mb-8">
-        <div>
-            <h1 class="text-3xl md:text-4xl font-bold text-slate-900 tracking-tight">
+    <!-- ========== Header tienda ========== -->
+    <div class="flex flex-wrap items-start justify-between gap-4 mb-8">
+        <div class="max-w-xl">
+            <p class="text-xs font-semibold tracking-[0.2em] uppercase text-amber-500">
+                Nueva colección
+            </p>
+            <h1 class="text-3xl md:text-4xl font-bold text-slate-900 tracking-tight mt-1">
                 Tienda Skyline
             </h1>
-            <p class="text-sm md:text-base text-slate-500 mt-1">
-                Diseños exclusivos. Drops limitados. Streetwear con actitud.
+            <p class="text-sm md:text-base text-slate-500 mt-2">
+                Diseños exclusivos, drops limitados y streetwear listo para usar en la vida real.
             </p>
         </div>
 
-        <!-- Filtros -->
-        <div class="flex items-center gap-2 text-xs md:text-sm">
-            <a href="{{ url_for('main.shop') }}"
-               class="px-4 py-2 rounded-full border border-slate-300 text-slate-700 hover:border-amber-500 hover:text-amber-600 transition">
-                Todos
-            </a>
-            <a href="?cat=Hoodie"
-               class="px-4 py-2 rounded-full border border-slate-300 text-slate-700 hover:border-amber-500 hover:text-amber-600 transition">
-                Hoodies
-            </a>
-            <a href="?cat=Remera"
-               class="px-4 py-2 rounded-full border border-slate-300 text-slate-700 hover:border-amber-500 hover:text-amber-600 transition">
-                Remeras
-            </a>
-            <a href="?cat=Accesorio"
-               class="px-4 py-2 rounded-full border border-slate-300 text-slate-700 hover:border-amber-500 hover:text-amber-600 transition">
-                Accesorios
-            </a>
+        <!-- Filtros por categoría (anclas a las secciones) -->
+        <div class="w-full md:w-auto">
+            <div class="filters-scroll" data-category-filters>
+                <a href="#cat-todos" class="filter-pill is-active" data-filter-target="todos">
+                    <span>Todos</span>
+                </a>
+                <a href="#cat-buzos" class="filter-pill" data-filter-target="buzos">
+                    <span>Buzos / Hoodies</span>
+                </a>
+                <a href="#cat-remeras" class="filter-pill" data-filter-target="remeras">
+                    <span>Remeras</span>
+                </a>
+                <a href="#cat-gorros" class="filter-pill" data-filter-target="gorros">
+                    <span>Gorros</span>
+                </a>
+                <a href="#cat-camperas" class="filter-pill" data-filter-target="camperas">
+                    <span>Camperas</span>
+                </a>
+                <a href="#cat-otros" class="filter-pill" data-filter-target="otros">
+                    <span>Otros</span>
+                </a>
+            </div>
         </div>
     </div>
 
-    <!-- Productos -->
-    <div class="grid sm:grid-cols-2 md:grid-cols-3 gap-6" data-shop-grid>
-        {% for product in products %}
-            <a href="{{ url_for('main.product_detail', product_id=product.id) }}"
-               class="group bg-white border border-slate-200 rounded-2xl overflow-hidden card-hover flex flex-col">
-                
-                <!-- Imagen -->
-                <div class="aspect-square bg-slate-100 overflow-hidden">
-                    <img src="{{ product.image }}"
-                         alt="{{ product.name }}"
-                         class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
+    {# ======================================================
+       MODO 1: backend manda grouped_products (dict por categoría)
+       ======================================================= #}
+    {% if grouped_products is defined %}
+
+        {% set order = ["buzos", "remeras", "gorros", "camperas", "otros"] %}
+        {% set labels = {
+            "buzos": "Buzos / Hoodies",
+            "remeras": "Remeras",
+            "gorros": "Gorros",
+            "camperas": "Camperas",
+            "otros": "Otros"
+        } %}
+
+        <!-- Sección Todos: muestra todo mezclado pero categorizado internamente -->
+        <div id="cat-todos" class="mb-12" data-category-section="todos">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl md:text-2xl font-semibold text-slate-900">
+                    Todos los productos
+                </h2>
+                <p class="text-xs md:text-sm text-slate-500">
+                    Vista general de toda la colección Skyline Style.
+                </p>
+            </div>
+
+            <div class="grid sm:grid-cols-2 md:grid-cols-3 gap-6" data-shop-grid>
+                {% for cat in order %}
+                    {% if grouped_products.get(cat) %}
+                        {% for product in grouped_products[cat] %}
+                            <a href="{{ url_for('main.product_detail', product_id=product.id) }}"
+                               class="group bg-white border border-slate-200 rounded-2xl overflow-hidden card-hover flex flex-col"
+                               data-product-card
+                               data-product-category="{{ cat }}">
+                                
+                                <!-- Imagen -->
+                                <div class="aspect-square bg-slate-100 overflow-hidden">
+                                    <img src="{{ product.image }}"
+                                         alt="{{ product.name }}"
+                                         loading="lazy"
+                                         class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
+                                </div>
+
+                                <!-- Info -->
+                                <div class="p-4 flex flex-col gap-1">
+                                    <p class="text-[11px] uppercase tracking-wide text-slate-400">
+                                        {{ labels.get(cat, cat)|default(cat)|capitalize }}
+                                    </p>
+
+                                    <h3 class="text-sm font-semibold text-slate-900 group-hover:text-amber-600 transition line-clamp-2">
+                                        {{ product.name }}
+                                    </h3>
+
+                                    <p class="text-sm font-semibold text-amber-500 mt-1">
+                                        $ {{ product.price }} UYU
+                                    </p>
+                                </div>
+                            </a>
+                        {% endfor %}
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Secciones por categoría -->
+        {% for cat in order %}
+            {% if grouped_products.get(cat) %}
+                <div id="cat-{{ cat }}" class="mb-12" data-category-section="{{ cat }}">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-xl md:text-2xl font-semibold text-slate-900">
+                            {{ labels.get(cat, cat)|default(cat)|capitalize }}
+                        </h2>
+                    </div>
+
+                    <div class="grid sm:grid-cols-2 md:grid-cols-3 gap-6" data-shop-grid>
+                        {% for product in grouped_products[cat] %}
+                            <a href="{{ url_for('main.product_detail', product_id=product.id) }}"
+                               class="group bg-white border border-slate-200 rounded-2xl overflow-hidden card-hover flex flex-col"
+                               data-product-card
+                               data-product-category="{{ cat }}">
+                                
+                                <!-- Imagen -->
+                                <div class="aspect-square bg-slate-100 overflow-hidden">
+                                    <img src="{{ product.image }}"
+                                         alt="{{ product.name }}"
+                                         loading="lazy"
+                                         class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
+                                </div>
+
+                                <!-- Info -->
+                                <div class="p-4 flex flex-col gap-1">
+                                    <p class="text-[11px] uppercase tracking-wide text-slate-400">
+                                        {{ labels.get(cat, cat)|default(cat)|capitalize }}
+                                    </p>
+
+                                    <h3 class="text-sm font-semibold text-slate-900 group-hover:text-amber-600 transition line-clamp-2">
+                                        {{ product.name }}
+                                    </h3>
+
+                                    <p class="text-sm font-semibold text-amber-500 mt-1">
+                                        $ {{ product.price }} UYU
+                                    </p>
+                                </div>
+                            </a>
+                        {% endfor %}
+                    </div>
                 </div>
-
-                <!-- Info -->
-                <div class="p-4 flex flex-col gap-1">
-                    <p class="text-[11px] uppercase tracking-wide text-slate-400">
-                        {{ product.category }}
-                    </p>
-
-                    <h3 class="text-sm font-semibold text-slate-900 group-hover:text-amber-600 transition line-clamp-2">
-                        {{ product.name }}
-                    </h3>
-
-                    <p class="text-sm font-semibold text-amber-500 mt-1">
-                        $ {{ product.price }} UYU
-                    </p>
-                </div>
-            </a>
+            {% endif %}
         {% endfor %}
-    </div>
+
+    {# ======================================================
+       MODO 2: compatibilidad – si solo viene "products"
+       (sigue funcionando como tu versión original)
+       ======================================================= #}
+    {% else %}
+        <div id="cat-todos" class="mb-12" data-category-section="todos">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl md:text-2xl font-semibold text-slate-900">
+                    Todos los productos
+                </h2>
+            </div>
+
+            <div class="grid sm:grid-cols-2 md:grid-cols-3 gap-6" data-shop-grid>
+                {% for product in products %}
+                    <a href="{{ url_for('main.product_detail', product_id=product.id) }}"
+                       class="group bg-white border border-slate-200 rounded-2xl overflow-hidden card-hover flex flex-col"
+                       data-product-card
+                       data-product-category="{{ product.category|default('otros')|lower }}">
+                        
+                        <!-- Imagen -->
+                        <div class="aspect-square bg-slate-100 overflow-hidden">
+                            <img src="{{ product.image }}"
+                                 alt="{{ product.name }}"
+                                 loading="lazy"
+                                 class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
+                        </div>
+
+                        <!-- Info -->
+                        <div class="p-4 flex flex-col gap-1">
+                            <p class="text-[11px] uppercase tracking-wide text-slate-400">
+                                {{ product.category or 'Otros' }}
+                            </p>
+
+                            <h3 class="text-sm font-semibold text-slate-900 group-hover:text-amber-600 transition line-clamp-2">
+                                {{ product.name }}
+                            </h3>
+
+                            <p class="text-sm font-semibold text-amber-500 mt-1">
+                                $ {{ product.price }} UYU
+                            </p>
+                        </div>
+                    </a>
+                {% endfor %}
+            </div>
+        </div>
+    {% endif %}
 
 </section>
 
@@ -91,12 +278,29 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 <script>
     document.addEventListener('DOMContentLoaded', () => {
-        gsap.from('[data-shop-grid] > a', {
-            opacity: 0,
-            y: 30,
-            stagger: 0.08,
-            duration: 0.6,
-            ease: 'power3.out'
+        // Animación de entrada de cards
+        const grids = document.querySelectorAll('[data-shop-grid]');
+        grids.forEach(grid => {
+            gsap.from(grid.querySelectorAll('[data-product-card]'), {
+                opacity: 0,
+                y: 30,
+                stagger: 0.06,
+                duration: 0.5,
+                ease: 'power3.out',
+                scrollTrigger: {
+                    trigger: grid,
+                    start: 'top 80%',
+                }
+            });
+        });
+
+        // Estado visual de filtros (solo estilo, las secciones ya están por ancla)
+        const pills = document.querySelectorAll('[data-category-filters] .filter-pill');
+        pills.forEach(pill => {
+            pill.addEventListener('click', () => {
+                pills.forEach(p => p.classList.remove('is-active'));
+                pill.classList.add('is-active');
+            });
         });
     });
 </script>
