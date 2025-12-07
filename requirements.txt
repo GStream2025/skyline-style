@@ -3,60 +3,64 @@
 # Deploy-ready para Render
 ##############################
 
-# === FRAMEWORK PRINCIPAL ===
+########## CORE WEB ##########
 Flask==3.0.2
 Werkzeug==3.0.1
 gunicorn==21.2.0
 
-# === TEMPLATES / RENDERIZADO ===
+########## TEMPLATES / RENDER ##########
 Jinja2==3.1.3
-Flask-Compress==1.13       # gzip/br para respuestas (más rápido)
-Flask-Minify==0.42         # minificación de HTML/JS/CSS en server
+Flask-Compress==1.13        # gzip/br para respuestas más rápidas
+Flask-Minify==0.42          # minificación HTML/JS/CSS en servidor
 
-# === FORMULARIOS / VALIDACIONES ===
+########## FORMULARIOS / VALIDACIÓN ##########
 Flask-WTF==1.2.1
 WTForms==3.1.1
 email-validator==2.1.1
 
-# === LOGIN / AUTENTICACIÓN ===
+########## AUTH / USUARIOS ##########
 Flask-Login==0.6.3
 Flask-Bcrypt==1.0.1
-python-dotenv==1.0.1       # lee .env en local / desarrollo
+itsdangerous==2.2.0          # tokens seguros (reset password, etc.)
+PyJWT==2.8.0                 # JWT opcional (APIs)
+python-dotenv==1.0.1         # lee .env en desarrollo
 
-# === BASE DE DATOS (LISTO PARA POSTGRES EN RENDER) ===
+########## BASE DE DATOS ##########
 Flask-SQLAlchemy==3.1.1
 SQLAlchemy==2.0.29
-alembic==1.13.2
-psycopg2-binary==2.9.9     # driver Postgres (Render usa Postgres)
+alembic==1.13.2              # migraciones
+psycopg2-binary==2.9.9       # Postgres (Render)
 
-# === HTTP / APIS (PRINTFUL, ETC.) ===
+########## HTTP / APIS (PRINTFUL, ETC.) ##########
 requests==2.31.0
 httpx==0.27.0
 
-# === ARCHIVOS / IMÁGENES ===
+########## ARCHIVOS / IMÁGENES ##########
 Pillow==10.2.0
-python-magic==0.4.27
+python-magic==0.4.27         # detección de tipo de archivo (seguridad básica)
 
-# === SEGURIDAD / TOKENS ===
-itsdangerous==2.2.0
+########## SEGURIDAD / CABECERAS ##########
 cryptography==42.0.5
-PyJWT==2.8.0
-Flask-Talisman==1.1.0      # cabeceras de seguridad (HTTPS, CSP) - opcional, se configura en app
+Flask-Talisman==1.1.0        # CSP, HSTS, etc. (opcional, se configura en app)
 
-# === CACHÉ / OPTIMIZACIÓN ===
+########## CACHÉ / OPTIMIZACIÓN ##########
 Flask-Caching==2.1.0
 cachelib==0.9.0
 
-# === LOGGING / DEBUG ELEGANTE ===
+########## LOGGING / DEBUG BONITO ##########
 loguru==0.7.2
 rich==13.7.1
 
-# === EMAILS ===
+########## EMAILS ##########
 Flask-Mail==0.9.1
 
-# === UTILIDADES ===
+########## UTILIDADES ##########
 python-dateutil==2.8.2
 simplejson==3.19.2
 
-# === ASSETS ESTÁTICOS PARA PRODUCCIÓN ===
-whitenoise==6.7.0          # servir static de forma eficiente junto a gunicorn
+########## ESTÁTICOS EN PRODUCCIÓN ##########
+whitenoise==6.7.0            # servir /static de forma eficiente junto a gunicorn
+
+########## MERCADO PAGO (LISTO PARA CONECTAR) ##########
+# SDK oficial de Mercado Pago para crear preferencias de pago
+mercadopago>=2.0.0,<3.0.0

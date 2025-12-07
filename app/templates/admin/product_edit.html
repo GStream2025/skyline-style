@@ -1,0 +1,216 @@
+{% extends "base.html" %}
+
+{% block title %}Editar producto · Skyline Style{% endblock %}
+
+{% block content %}
+<section class="max-w-6xl mx-auto px-4 py-8 md:py-10">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between gap-3 mb-6">
+        <div>
+            <p class="text-[11px] uppercase tracking-[0.18em] text-slate-400 mb-1">
+                Panel administrador
+            </p>
+            <h1 class="text-2xl md:text-3xl font-semibold tracking-tight text-slate-50">
+                Editar producto
+            </h1>
+            <p class="text-xs md:text-sm text-slate-400 mt-1">
+                Ajustá la categoría y subí fotos extra para mejorar la ficha del producto.
+            </p>
+        </div>
+
+        <a href="{{ url_for('admin.products_list') }}"
+           class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-slate-700/70 text-xs md:text-sm text-slate-200 hover:bg-slate-900 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-skyline.accent focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950">
+            <span class="text-base">←</span>
+            <span>Volver al listado</span>
+        </a>
+    </div>
+
+    <!-- Contenido principal -->
+    <div class="grid md:grid-cols-[1.1fr,0.9fr] gap-6 md:gap-8">
+
+        <!-- Columna izquierda: preview del producto -->
+        <article class="bg-slate-950/70 border border-slate-800/80 rounded-2xl shadow-card p-4 md:p-5">
+            <header class="flex items-start gap-4 mb-4">
+                {% if product.main_image_url %}
+                    <div class="w-20 h-20 rounded-xl overflow-hidden border border-slate-800/90 bg-slate-900/80 flex-shrink-0">
+                        <img src="{{ product.main_image_url }}"
+                             alt="Mockup principal del producto"
+                             class="w-full h-full object-cover">
+                    </div>
+                {% endif %}
+                <div class="min-w-0">
+                    <h2 class="text-base md:text-lg font-semibold text-slate-50 leading-snug line-clamp-2">
+                        {{ product.name }}
+                    </h2>
+                    <p class="mt-1 text-[11px] text-slate-400">
+                        ID interno: <span class="text-slate-200 font-medium">{{ product.id }}</span>
+                        {% if product.printful_id is defined and product.printful_id %}
+                            · Printful ID: <span class="text-slate-200 font-medium">{{ product.printful_id }}</span>
+                        {% endif %}
+                    </p>
+                    <p class="mt-1 inline-flex items-center gap-2 text-[11px] text-slate-400">
+                        <span class="h-1.5 w-1.5 rounded-full bg-skyline.accent"></span>
+                        Categoría actual:
+                        <span class="font-medium text-slate-100">
+                            {{ product.category.name if product.category else 'Sin categoría' }}
+                        </span>
+                    </p>
+                </div>
+            </header>
+
+            <hr class="border-slate-800/80 my-4">
+
+            <!-- Mockup principal grande -->
+            {% if product.main_image_url %}
+                <div class="rounded-2xl overflow-hidden border border-slate-800/80 bg-slate-900/80 mb-5">
+                    <img src="{{ product.main_image_url }}"
+                         alt="Imagen principal del producto"
+                         class="w-full max-h-[320px] object-contain bg-slate-900">
+                </div>
+            {% else %}
+                <div class="rounded-2xl border border-dashed border-slate-700/80 bg-slate-900/60 mb-5 p-10 flex items-center justify-center">
+                    <p class="text-xs text-slate-500 text-center">
+                        Este producto no tiene imagen principal desde Printful.<br>
+                        Las fotos extra que subas se mostrarán igualmente en la ficha.
+                    </p>
+                </div>
+            {% endif %}
+
+            <!-- Galería de fotos extra -->
+            <section>
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-sm font-semibold text-slate-100">
+                        Fotos extra actuales
+                    </h3>
+                    {% if product.images %}
+                        <p class="text-[11px] text-slate-400">
+                            {{ product.images|length }} archivo{{ 's' if product.images|length != 1 }}
+                        </p>
+                    {% endif %}
+                </div>
+
+                {% if product.images %}
+                    <div class="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
+                        {% for img in product.images %}
+                            <figure class="group relative rounded-xl overflow-hidden border border-slate-800/80 bg-slate-900/80">
+                                <img src="{{ url_for('static', filename='uploads/products/' ~ img.filename) }}"
+                                     alt="Foto extra del producto"
+                                     class="w-full h-24 sm:h-28 object-cover group-hover:scale-105 transition-transform duration-200">
+                                <figcaption class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-black/0 text-[10px] text-slate-200 px-1.5 py-1 flex items-center justify-between gap-1 opacity-0 group-hover:opacity-100 transition">
+                                    <span class="truncate">{{ img.filename }}</span>
+                                    <form action="{{ url_for('admin.delete_image', image_id=img.id) }}"
+                                          method="post"
+                                          onsubmit="return confirm('¿Eliminar esta imagen?');">
+                                        <button type="submit"
+                                                class="text-[10px] px-1.5 py-0.5 rounded-full bg-rose-600/90 hover:bg-rose-500 text-rose-50">
+                                            Eliminar
+                                        </button>
+                                    </form>
+                                </figcaption>
+                            </figure>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="text-[11px] text-slate-500">
+                        Aún no subiste fotos extra para este producto.
+                    </p>
+                {% endif %}
+            </section>
+        </article>
+
+        <!-- Columna derecha: formulario de edición -->
+        <aside class="bg-slate-950/70 border border-slate-800/80 rounded-2xl shadow-card p-4 md:p-5">
+            <h2 class="text-sm md:text-base font-semibold text-slate-100 mb-3">
+                Ajustes del producto
+            </h2>
+
+            <form method="post" enctype="multipart/form-data" class="space-y-5">
+
+                <!-- Categoría -->
+                <div>
+                    <label for="category_id"
+                           class="block text-xs font-medium text-slate-300 mb-1.5">
+                        Categoría manual
+                    </label>
+                    <select id="category_id" name="category_id"
+                            class="w-full bg-slate-900/80 border border-slate-700/80 rounded-lg px-3 py-2 text-xs md:text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-skyline.accent focus:border-skyline.accent">
+                        <option value="">Sin categoría</option>
+                        {% for c in categories %}
+                            <option value="{{ c.id }}" {% if product.category_id == c.id %}selected{% endif %}>
+                                {{ c.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <p class="mt-1 text-[11px] text-slate-500">
+                        Esta categoría es la que se usará en la tienda para filtros y secciones.
+                    </p>
+                </div>
+
+                <!-- Info rápida (solo lectura) -->
+                <div class="grid grid-cols-2 gap-3 text-[11px] text-slate-400">
+                    <div>
+                        <p class="uppercase tracking-[0.18em] text-slate-500 mb-0.5">
+                            Nombre
+                        </p>
+                        <p class="text-slate-100 line-clamp-2">{{ product.name }}</p>
+                    </div>
+                    <div>
+                        <p class="uppercase tracking-[0.18em] text-slate-500 mb-0.5">
+                            Estado
+                        </p>
+                        <p class="inline-flex items-center gap-1 text-emerald-300">
+                            <span class="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                            Activo en catálogo
+                        </p>
+                    </div>
+                </div>
+
+                <hr class="border-slate-800/80">
+
+                <!-- Subida de imágenes extra -->
+                <div>
+                    <label for="extra_images"
+                           class="block text-xs font-medium text-slate-300 mb-1.5">
+                        Subir fotos extra
+                    </label>
+
+                    <label class="flex flex-col items-center justify-center gap-2 px-4 py-5 border border-dashed border-slate-700/80 rounded-xl bg-slate-900/70 hover:border-skyline.accent/70 hover:bg-slate-900 transition cursor-pointer">
+                        <svg class="h-7 w-7 text-slate-300" fill="none" stroke="currentColor" stroke-width="1.4" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round"
+                                  d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M7.5 10.5L12 6m0 0l4.5 4.5M12 6v12"/>
+                        </svg>
+                        <div class="text-center">
+                            <p class="text-xs text-slate-100 font-medium">
+                                Click para seleccionar archivos
+                            </p>
+                            <p class="text-[11px] text-slate-500">
+                                Podés elegir varias fotos a la vez · PNG, JPG, JPEG o WEBP.
+                            </p>
+                        </div>
+                        <input id="extra_images"
+                               name="extra_images"
+                               type="file"
+                               multiple
+                               accept="image/png,image/jpeg,image/webp"
+                               class="hidden">
+                    </label>
+
+                    <p class="mt-2 text-[11px] text-slate-500">
+                        Tamaño máximo recomendado: 3000x3000px. Peso total máximo: 10&nbsp;MB por envío.
+                        Se mostrarán junto a la imagen de Printful en la ficha del producto.
+                    </p>
+                </div>
+
+                <!-- Botón guardar -->
+                <div class="pt-1">
+                    <button type="submit"
+                            class="w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full bg-skyline.accent text-slate-950 text-sm font-semibold shadow-glow hover:bg-skyline.accent2 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-skyline.accent2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950">
+                        <span>Guardar cambios</span>
+                    </button>
+                </div>
+            </form>
+        </aside>
+    </div>
+</section>
+{% endblock %}

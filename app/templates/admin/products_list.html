@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+
+{% block title %}Productos · Panel admin · Skyline Style{% endblock %}
+
+{% block content %}
+<section class="max-w-6xl mx-auto px-4 py-8 md:py-10">
+
+    <!-- Header -->
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <div>
+            <p class="text-[11px] uppercase tracking-[0.18em] text-slate-400 mb-1">
+                Panel administrador
+            </p>
+            <h1 class="text-2xl md:text-3xl font-semibold tracking-tight text-slate-50">
+                Productos sincronizados
+            </h1>
+            <p class="text-xs md:text-sm text-slate-400 mt-1">
+                Desde acá podés ver todos los productos, asignarles categoría manual
+                y entrar al detalle para subir fotos extra.
+            </p>
+        </div>
+
+        <div class="flex flex-col items-end gap-1 text-right">
+            <span class="text-xs text-slate-400">
+                Total de productos:
+            </span>
+            <span class="text-lg font-semibold text-slate-100">
+                {{ products|length }}
+            </span>
+        </div>
+    </div>
+
+    <!-- Barra de filtros / búsqueda -->
+    <div class="mb-4 flex flex-wrap gap-3 items-center justify-between">
+        <div class="flex flex-wrap gap-2 items-center text-[11px] md:text-xs text-slate-400">
+            <span class="uppercase tracking-[0.18em] text-slate-500">Filtros</span>
+            <div class="flex items-center gap-2">
+                <span class="h-1 w-1 rounded-full bg-slate-600"></span>
+                <span>Buscá por nombre o categoría</span>
+            </div>
+        </div>
+
+        <div class="flex flex-wrap gap-2">
+            <!-- Buscador -->
+            <div class="flex items-center gap-2 px-2.5 py-1.5 rounded-full bg-slate-950/80 border border-slate-800/80">
+                <svg class="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" stroke-width="1.4" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M21 21l-4.35-4.35M11 6a5 5 0 015 5m-5 5a5 5 0 100-10 5 5 0 000 10z"/>
+                </svg>
+                <input id="product-search"
+                       type="text"
+                       placeholder="Buscar producto..."
+                       class="bg-transparent border-0 focus:outline-none text-xs md:text-sm text-slate-100 placeholder:text-slate-500 w-40 md:w-56">
+            </div>
+
+            <!-- Filtro de categoría (solo visual / JS) -->
+            <select id="category-filter"
+                    class="bg-slate-950/80 border border-slate-800/80 text-xs md:text-sm text-slate-100 rounded-full px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-skyline.accent focus:border-skyline.accent">
+                <option value="">Todas las categorías</option>
+                <option value="sin categoría">Sin categoría</option>
+                {% for c in categories %}
+                    <option value="{{ c.name|lower }}">{{ c.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+
+    <!-- Tabla de productos -->
+    <div class="overflow-hidden rounded-2xl border border-slate-800/80 bg-slate-950/70 shadow-card">
+        <div class="overflow-x-auto">
+            <table class="min-w-full text-xs md:text-sm text-slate-200 align-middle">
+                <thead class="bg-slate-950/95 border-b border-slate-800/80 text-[11px] uppercase tracking-[0.16em] text-slate-400">
+                    <tr>
+                        <th scope="col" class="px-3 py-2 text-left w-[56px]">Mockup</th>
+                        <th scope="col" class="px-3 py-2 text-left min-w-[180px]">Producto</th>
+                        <th scope="col" class="px-3 py-2 text-left min-w-[120px]">Categoría</th>
+                        <th scope="col" class="px-3 py-2 text-left w-[80px]">Fotos extra</th>
+                        <th scope="col" class="px-3 py-2 text-left w-[110px]">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="products-table-body" class="divide-y divide-slate-800/80">
+                {% for p in products %}
+                    <tr class="hover:bg-slate-900/60 transition"
+                        data-name="{{ p.name|lower }}"
+                        data-category="{{ (p.category.name if p.category else 'Sin categoría')|lower }}">
+                        <!-- Mockup -->
+                        <td class="px-3 py-2">
+                            {% if p.main_image_url %}
+                                <div class="h-12 w-12 rounded-lg overflow-hidden border border-slate-800/80 bg-slate-900/80">
+                                    <img src="{{ p.main_image_url }}"
+                                         alt="Mockup de {{ p.name }}"
+                                         class="w-full h-full object-cover">
+                                </div>
+                            {% else %}
+                                <div class="h-12 w-12 rounded-lg border border-dashed border-slate-700/80 bg-slate-900/60 flex items-center justify-center text-[10px] text-slate-500">
+                                    Sin img
+                                </div>
+                            {% endif %}
+                        </td>
+
+                        <!-- Nombre + IDs -->
+                        <td class="px-3 py-2 align-top">
+                            <div class="max-w-xs">
+                                <p class="font-medium text-slate-50 truncate" title="{{ p.name }}">{{ p.name }}</p>
+                                <p class="text-[10px] text-slate-500 mt-0.5">
+                                    ID interno: <span class="text-slate-300">{{ p.id }}</span>
+                                    {% if p.printful_id %}
+                                        · Printful: <span class="text-slate-300">{{ p.printful_id }}</span>
+                                    {% endif %}
+                                </p>
+                                {% if p.price %}
+                                    <p class="text-[11px] text-slate-400 mt-0.5">
+                                        Precio: <span class="text-slate-100 font-medium">{{ p.price }} {{ p.currency or 'UYU' }}</span>
+                                    </p>
+                                {% endif %}
+                            </div>
+                        </td>
+
+                        <!-- Categoría editable -->
+                        <td class="px-3 py-2 align-top">
+                            <form action="{{ url_for('admin.product_update', product_id=p.id) }}"
+                                  method="post"
+                                  class="flex items-center gap-2">
+                                <select name="category_id"
+                                        class="bg-slate-950/80 border border-slate-700/80 rounded-full px-2.5 py-1 text-[11px] text-slate-100 focus:outline-none focus:ring-1 focus:ring-skyline.accent focus:border-skyline.accent">
+                                    <option value="">Sin categoría</option>
+                                    {% for c in categories %}
+                                        <option value="{{ c.id }}" {% if p.category_id == c.id %}selected{% endif %}>
+                                            {{ c.name }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                                <button type="submit"
+                                        class="inline-flex items-center justify-center px-2 py-1 rounded-full bg-slate-900 text-[10px] font-medium text-slate-100 border border-slate-700 hover:bg-slate-800 hover:border-skyline.accent/70 transition">
+                                    Guardar
+                                </button>
+                            </form>
+                        </td>
+
+                        <!-- Fotos extra -->
+                        <td class="px-3 py-2 align-top">
+                            <span class="inline-flex items-center gap-1.5 rounded-full bg-slate-900/80 border border-slate-700/80 px-2 py-1 text-[11px] text-slate-200">
+                                <span class="h-1.5 w-1.5 rounded-full {% if p.images and p.images|length > 0 %}bg-emerald-400{% else %}bg-slate-500{% endif %}"></span>
+                                {{ p.images|length if p.images is defined else 0 }}
+                                foto{{ '' if (p.images|length if p.images is defined else 0) == 1 else 's' }}
+                            </span>
+                        </td>
+
+                        <!-- Acciones -->
+                        <td class="px-3 py-2 align-top">
+                            <div class="flex flex-col gap-1">
+                                <a href="{{ url_for('admin.product_edit', product_id=p.id) }}"
+                                   class="inline-flex items-center justify-center px-2.5 py-1 rounded-full bg-skyline.accent text-[11px] font-semibold text-slate-950 hover:bg-skyline.accent2 transition">
+                                    Editar / fotos
+                                </a>
+                                <a href="{{ url_for('main.product_detail', product_id=p.id) if 'main.product_detail' in current_app.view_functions else '#' }}"
+                                   class="inline-flex items-center justify-center px-2.5 py-1 rounded-full bg-slate-900 text-[10px] text-slate-300 border border-slate-700 hover:bg-slate-800 transition">
+                                    Ver en tienda
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="5" class="px-4 py-6 text-center text-xs text-slate-500">
+                            Aún no hay productos sincronizados. Conectá tu cuenta de Printful o cargá productos manualmente.
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const searchInput   = document.getElementById("product-search");
+    const categoryInput = document.getElementById("category-filter");
+    const rows          = Array.from(document.querySelectorAll("#products-table-body tr"));
+
+    function applyFilters() {
+        const text = (searchInput?.value || "").toLowerCase().trim();
+        const cat  = (categoryInput?.value || "").toLowerCase().trim();
+
+        rows.forEach(row => {
+            const name = row.getAttribute("data-name") || "";
+            const category = row.getAttribute("data-category") || "";
+
+            const matchesText = !text || name.includes(text) || category.includes(text);
+            const matchesCat  = !cat || category === cat;
+
+            row.style.display = (matchesText && matchesCat) ? "" : "none";
+        });
+    }
+
+    if (searchInput) {
+        searchInput.addEventListener("input", applyFilters);
+    }
+    if (categoryInput) {
+        categoryInput.addEventListener("change", applyFilters);
+    }
+});
+</script>
+{% endblock %}

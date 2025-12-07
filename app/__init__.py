@@ -10,41 +10,50 @@ from flask import Flask
 from dotenv import load_dotenv
 from loguru import logger
 
+from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
+
+# ----------------------------------------------------------------------
+# 0) Instancias globales de extensiones
+#    (importables desde otros módulos: from app import db)
+# ----------------------------------------------------------------------
+db = SQLAlchemy()
+migrate = Migrate()
+
 # ----------------------------------------------------------------------
 # 1) Importar configuración de forma flexible
-#    - Soporta tanto:
+#    - Soporta:
 #        config = {"development": ..., "production": ...}
-#      como:
+#      o:
 #        class Config: ...
 # ----------------------------------------------------------------------
 CONFIG_MAP = {}
 DEFAULT_CONFIG_CLASS: Optional[Type] = None
 
 try:
-    # Caso config.py PRO (dict con entornos)
-    from app.config import config as CONFIG_MAP  # type: ignore
+    # Caso PRO: config = {"development": ..., "production": ...}
+    from app.config import config as CONFIG_MAP  # type: ignore[attr-defined]
 except Exception:
     CONFIG_MAP = {}
 
 try:
     # Caso clásico: class Config
-    from app.config import Config as DEFAULT_CONFIG_CLASS  # type: ignore
+    from app.config import Config as DEFAULT_CONFIG_CLASS  # type: ignore[attr-defined]
 except Exception:
-    DEFAULT_CONFIG_CLASS = None  # type: ignore
-
+    DEFAULT_CONFIG_CLASS = None  # type: ignore[assignment]
 
 # ----------------------------------------------------------------------
-# 2) Extras opcionales
+# 2) Extras opcionales (se usan solo si están instalados)
 # ----------------------------------------------------------------------
 try:
     from flask_compress import Compress
-except ImportError:
-    Compress = None  # type: ignore
+except ImportError:  # pragma: no cover - entorno sin dependencia
+    Compress = None  # type: ignore[assignment]
 
 try:
     from flask_minify import Minify
-except ImportError:
-    Minify = None  # type: ignore
+except ImportError:  # pragma: no cover
+    Minify = None  # type: ignore[assignment]
 
 compress = Compress() if Compress else None
 
@@ -60,12 +69,14 @@ def create_app(env_name: str | None = None) -> Flask:
     """
     Application factory principal de Skyline Style Store.
 
-    - Carga variables de entorno desde .env (si existe)
-    - Detecta el entorno (development / production)
-    - Selecciona la configuración adecuada
-    - Inicializa extensiones ligeras (compress, minify)
-    - Registra blueprints
-    - Registra handlers de error
+    Responsabilidades:
+        - Cargar variables de entorno desde .env (en desarrollo)
+        - Configurar logging con loguru
+        - Detectar entorno (development / production)
+        - Seleccionar la configuración adecuada (Config o dict config)
+        - Inicializar extensiones (DB, migraciones, compresión, minify)
+        - Registrar todos los blueprints (main, auth, printful, admin)
+        - Registrar handlers de error globales
     """
     _load_env()
     _configure_logging()
@@ -121,29 +132,37 @@ def create_app(env_name: str | None = None) -> Flask:
 def _load_env() -> None:
     """
     Carga variables desde .env en la raíz del proyecto (solo si existe).
-    Útil en desarrollo/local. En Render las env vars vienen del panel.
+
+    Ideal en desarrollo/local. En producción (Render, Railway, etc.)
+    las variables vienen del panel de la plataforma.
     """
     env_path = PROJECT_ROOT / ".env"
     if env_path.exists():
         load_dotenv(env_path)
         logger.debug(".env cargado desde: {}", env_path)
     else:
-        logger.debug("No se encontró .env en {}, usando solo variables del sistema.", PROJECT_ROOT)
+        logger.debug(
+            "No se encontró .env en {}. Usando solo variables del sistema.",
+            PROJECT_ROOT,
+        )
 
 
 def _detect_env(explicit_env: str | None = None) -> str:
     """
     Determina el entorno activo:
-    - Prioriza el parámetro explícito
-    - Luego FLASK_ENV
-    - Por defecto 'production'
+        - Si se pasa env_name a create_app, se usa ese
+        - Si no, se toma FLASK_ENV
+        - Por defecto: 'production'
     """
     if explicit_env:
         return explicit_env.lower()
 
     env = os.getenv("FLASK_ENV", "production").lower()
     if env not in {"development", "production"}:
-        logger.warning("Valor de FLASK_ENV desconocido: {}. Usando 'production'.", env)
+        logger.warning(
+            "Valor de FLASK_ENV desconocido: '{}'. Usando 'production'.",
+            env,
+        )
         env = "production"
     return env
 
@@ -151,8 +170,8 @@ def _detect_env(explicit_env: str | None = None) -> str:
 def _select_config(env: str):
     """
     Selecciona la clase de configuración adecuada según:
-    - dict config[env] en app.config (si existe)
-    - DEFAULT_CONFIG_CLASS (class Config) si no hay dict
+        - dict config[env] en app.config (si existe)
+        - DEFAULT_CONFIG_CLASS (class Config) si no hay dict
     """
     # Caso PRO: config = {"development": ..., "production": ...}
     if CONFIG_MAP:
@@ -180,7 +199,18 @@ def _select_config(env: str):
 
 
 def _init_extensions(app: Flask) -> None:
-    """Inicializa extensiones ligeras (compresión, minify)."""
+    """
+    Inicializa extensiones de la app:
+        - Base de datos (SQLAlchemy)
+        - Migraciones (Flask-Migrate)
+        - Compresión gzip/br (opcional)
+        - Minificado de HTML/JS/CSS (solo producción, opcional)
+    """
+    # DB + migraciones
+    db.init_app(app)
+    migrate.init_app(app, db)
+    logger.debug("SQLAlchemy y Flask-Migrate inicializados")
+
     # Compresión gzip/br para respuestas HTTP
     if compress:
         compress.init_app(app)
@@ -193,7 +223,12 @@ def _init_extensions(app: Flask) -> None:
 
 
 def _register_blueprints(app: Flask) -> None:
-    """Importa y registra los blueprints de la app."""
+    """
+    Importa y registra los blueprints de la app.
+
+    Si alguno opcional falla, lo loguea pero no rompe la app,
+    salvo el main_bp que sí es obligatorio.
+    """
     # Rutas públicas: home, tienda, producto, about
     try:
         from app.routes.main_routes import main_bp
@@ -221,6 +256,19 @@ def _register_blueprints(app: Flask) -> None:
         logger.debug("Blueprint 'printful_bp' registrado")
     except Exception as exc:
         logger.warning("No se pudo registrar printful_bp (opcional): {}", exc)
+
+    # Blueprint del PANEL ADMIN (obligatorio para tu modo admin)
+    try:
+        from app.routes_admin import admin_bp
+
+        app.register_blueprint(admin_bp)
+        logger.debug("Blueprint 'admin_bp' registrado en /admin")
+    except Exception as exc:
+        logger.warning(
+            "No se pudo registrar admin_bp. "
+            "El panel admin no estará disponible: {}",
+            exc,
+        )
 
 
 def _register_error_handlers(app: Flask) -> None:
@@ -262,6 +310,7 @@ def _register_error_handlers(app: Flask) -> None:
 def _configure_logging() -> None:
     """
     Configura loguru para logs prolijos en consola (ideal para Render y dev).
+
     Respeta LOG_LEVEL si está definido en las variables de entorno.
     """
     log_level = os.getenv("LOG_LEVEL", "INFO").upper()

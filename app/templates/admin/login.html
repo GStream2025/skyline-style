@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block title %}Iniciar sesión · Skyline Style{% endblock %}
+
+{% block content %}
+<section class="min-h-[calc(100vh-4rem)] flex items-center justify-center px-4 py-10">
+    <div class="max-w-md w-full">
+
+        <!-- Tarjeta de login -->
+        <div class="bg-slate-950/80 border border-slate-800/80 rounded-2xl shadow-card px-5 py-6 md:px-7 md:py-8">
+
+            <!-- Header -->
+            <header class="mb-6 text-center">
+                <p class="text-[11px] uppercase tracking-[0.24em] text-slate-500 mb-2">
+                    Panel administrador
+                </p>
+                <h1 class="text-2xl md:text-3xl font-semibold tracking-tight text-slate-50">
+                    Iniciar sesión
+                </h1>
+                <p class="mt-2 text-xs md:text-sm text-slate-400">
+                    Acceso para gestionar productos, categorías y fotos extra de la tienda.
+                </p>
+            </header>
+
+            <!-- Formulario de login -->
+            <form method="post" action="{{ url_for('admin.login') }}" class="space-y-4">
+
+                <!-- Usuario -->
+                <div>
+                    <label for="username"
+                           class="block text-xs font-medium text-slate-300 mb-1.5">
+                        Usuario
+                    </label>
+                    <input id="username"
+                           name="username"
+                           type="text"
+                           autocomplete="username"
+                           required
+                           class="w-full bg-slate-900/80 border border-slate-700/80 rounded-lg px-3 py-2 text-xs md:text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-skyline.accent focus:border-skyline.accent"
+                           placeholder="admin">
+                </div>
+
+                <!-- Contraseña -->
+                <div>
+                    <label for="password"
+                           class="block text-xs font-medium text-slate-300 mb-1.5">
+                        Contraseña
+                    </label>
+                    <input id="password"
+                           name="password"
+                           type="password"
+                           autocomplete="current-password"
+                           required
+                           class="w-full bg-slate-900/80 border border-slate-700/80 rounded-lg px-3 py-2 text-xs md:text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-skyline.accent focus:border-skyline.accent"
+                           placeholder="••••••••">
+                </div>
+
+                <!-- Opciones -->
+                <div class="flex items-center justify-between text-[11px] text-slate-400">
+                    <label class="inline-flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox"
+                               name="remember"
+                               class="h-3.5 w-3.5 rounded border-slate-600 bg-slate-900 text-skyline.accent focus:ring-skyline.accent">
+                        <span>Mantener sesión iniciada</span>
+                    </label>
+                    <span class="text-slate-500">
+                        Usuario: <span class="font-medium text-slate-200">admin</span>
+                    </span>
+                </div>
+
+                <!-- Botón -->
+                <div class="pt-1">
+                    <button type="submit"
+                            class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-full bg-skyline.accent text-slate-950 text-sm font-semibold shadow-glow hover:bg-skyline.accent2 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-skyline.accent2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950">
+                        <span>Entrar al panel</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Link volver al sitio -->
+        <div class="mt-4 text-center text-[11px] md:text-xs text-slate-500">
+            <a href="{{ url_for('main.index') }}"
+               class="inline-flex items-center gap-1 hover:text-skyline.accent transition">
+                <span class="text-base">←</span>
+                <span>Volver al inicio</span>
+            </a>
+        </div>
+    </div>
+</section>
+{% endblock %}

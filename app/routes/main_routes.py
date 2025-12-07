@@ -12,6 +12,7 @@ from flask import (
     jsonify,
     redirect,
     render_template,
+    request,
     url_for,
 )
 
@@ -66,7 +67,7 @@ _PRINTFUL_CACHE: CacheType = {
     "timestamp": 0.0,
     "products": None,  # type: ignore[assignment]
 }
-PRINTFUL_TTL_SECONDS: int = 300  # 5 minutos aprox.
+DEFAULT_PRINTFUL_TTL_SECONDS: int = 300  # 5 minutos aprox.
 
 
 def _usd_to_uyu(usd: float) -> int:
@@ -93,6 +94,8 @@ def _normalize_category_for_demo(category: str) -> str:
         return "gorros"
     if "campera" in c or "jacket" in c:
         return "camperas"
+    if "accesorio" in c or "accessor" in c or "bag" in c:
+        return "accesorios"
     return "otros"
 
 
@@ -109,15 +112,33 @@ def load_printful_products(force_refresh: bool = False) -> List[Product]:
     - Aplica caché en memoria para no llamar a la API en cada request.
     - Si algo falla, devuelve PRODUCTS_DEMO.
     """
+    # Si no hay API key configurada, directamente devolvemos demo
+    api_key = current_app.config.get("PRINTFUL_API_KEY") or ""
+    if not api_key.strip():
+        current_app.logger.warning(
+            "PRINTFUL_API_KEY no configurada. Usando productos demo."
+        )
+        return PRODUCTS_DEMO
+
     # ---------- CACHÉ ----------
     now = time.time()
+    ttl_config = current_app.config.get(
+        "PRINTFUL_CACHE_TTL", DEFAULT_PRINTFUL_TTL_SECONDS
+    )
+
+    try:
+        ttl = int(ttl_config)
+    except (TypeError, ValueError):
+        ttl = DEFAULT_PRINTFUL_TTL_SECONDS
+
     if (
         not force_refresh
         and _PRINTFUL_CACHE.get("products") is not None
-        and now - float(_PRINTFUL_CACHE.get("timestamp", 0.0)) < PRINTFUL_TTL_SECONDS
+        and now - float(_PRINTFUL_CACHE.get("timestamp", 0.0)) < ttl
     ):
         return _PRINTFUL_CACHE["products"]  # type: ignore[return-value]
 
+    # ---------- LLAMADA A PRINTFUL ----------
     try:
         client = PrintfulClient()
         data = client.get_synced_products(limit=50, offset=0)
@@ -128,7 +149,7 @@ def load_printful_products(force_refresh: bool = False) -> List[Product]:
         if isinstance(data, list):
             items = data
         elif isinstance(data, Mapping):
-            # Si alguna vez cambiás a la versión que devuelve {"sync_products": [...]}
+            # Ej: {"sync_products": [...], "paging": {...}}
             items = data.get("sync_products", []) or []
         else:
             items = []
@@ -168,8 +189,9 @@ def load_printful_products(force_refresh: bool = False) -> List[Product]:
                     "Error obteniendo detalle de producto %s: %s", product_id, e
                 )
 
-            # Categoría interna (buzos, remeras, gorros, camperas, otros)
+            # Categoría interna (buzos, remeras, gorros, camperas, accesorios, otros)
             category = guess_category_from_printful(item)
+            category = _normalize_category_for_demo(category)
 
             productos_printful.append(
                 Product(
@@ -186,6 +208,10 @@ def load_printful_products(force_refresh: bool = False) -> List[Product]:
         if productos_printful:
             _PRINTFUL_CACHE["products"] = productos_printful
             _PRINTFUL_CACHE["timestamp"] = now
+            current_app.logger.info(
+                "Productos Printful cargados correctamente (%d items).",
+                len(productos_printful),
+            )
             return productos_printful
 
         # Si la lista vino vacía, usamos DEMO
@@ -217,6 +243,7 @@ def home():
 def index_alias():
     """
     Alias de / para compatibilidad con código viejo (main.index).
+    Cualquier url_for('main.index') redirige a la home nueva.
     """
     return redirect(url_for("main.home"))
 
@@ -231,21 +258,32 @@ def shop():
 
     - Carga productos desde Printful (o demo).
     - Los agrupa por categoría interna.
-    - Envía grouped_products al template para que los filtros
-      de la tienda funcionen (buzos, remeras, gorros, etc.).
+    - Soporta querystring ?categoria=buzos|remeras|gorros|accesorios...
+      para que los links del hero filtren la vista.
     """
     products = load_printful_products()
 
     grouped: DefaultDict[str, List[Product]] = defaultdict(list)
     for p in products:
-        cat = _normalize_category_for_demo(getattr(p, "category", "") or "otros")
+        raw_cat = getattr(p, "category", "") or "otros"
+        cat = _normalize_category_for_demo(raw_cat)
         grouped[cat].append(p)
 
-    # Pasamos también la lista plana por si la querés usar en otro momento
+    # Filtro opcional desde el hero (?categoria=buzos, etc.)
+    selected_category: str | None = request.args.get("categoria")
+    if selected_category:
+        selected_category = _normalize_category_for_demo(selected_category)
+        filtered_products = grouped.get(selected_category, [])
+    else:
+        filtered_products = products
+        selected_category = None
+
     return render_template(
         "shop.html",
         grouped_products=dict(grouped),
-        products=products,
+        products=filtered_products,
+        selected_category=selected_category,
+        all_products=products,  # por si el template quiere la lista completa
     )
 
 
@@ -291,7 +329,8 @@ def product_detail(product_id: int):
     product = next((p for p in products if p.id == product_id), None)
 
     if not product:
-        flash("El producto no existe o no está disponible.", "error")
+        # En base.html usamos 'danger' para los flashes de error visualmente rojos
+        flash("El producto no existe o no está disponible.", "danger")
         return redirect(url_for("main.shop"))
 
     return render_template("product_detail.html", product=product)
@@ -304,7 +343,7 @@ def product_detail(product_id: int):
 def printful_test():
     """
     Endpoint de prueba para ver el JSON crudo que devuelve Printful.
-    Útil para debug.
+    Útil para debug rápido desde el navegador.
     """
     try:
         client = PrintfulClient()
