@@ -10,8 +10,8 @@ gunicorn==21.2.0
 
 ########## TEMPLATES / RENDER ##########
 Jinja2==3.1.3
-Flask-Compress==1.13        # gzip/br para respuestas más rápidas
-Flask-Minify==0.42          # minificación HTML/JS/CSS en servidor
+Flask-Compress==1.13
+Flask-Minify==0.42
 
 ########## FORMULARIOS / VALIDACIÓN ##########
 Flask-WTF==1.2.1
@@ -21,27 +21,27 @@ email-validator==2.1.1
 ########## AUTH / USUARIOS ##########
 Flask-Login==0.6.3
 Flask-Bcrypt==1.0.1
-itsdangerous==2.2.0          # tokens seguros (reset password, etc.)
-PyJWT==2.8.0                 # JWT opcional (APIs)
-python-dotenv==1.0.1         # lee .env en desarrollo
+itsdangerous==2.2.0
+PyJWT==2.8.0
+python-dotenv==1.0.1
 
 ########## BASE DE DATOS ##########
 Flask-SQLAlchemy==3.1.1
 SQLAlchemy==2.0.29
-alembic==1.13.2              # migraciones
-psycopg2-binary==2.9.9       # Postgres (Render)
+alembic==1.13.2
+psycopg2-binary==2.9.9
 
-########## HTTP / APIS (PRINTFUL, ETC.) ##########
+########## HTTP / APIs ##########
 requests==2.31.0
 httpx==0.27.0
 
 ########## ARCHIVOS / IMÁGENES ##########
 Pillow==10.2.0
-python-magic==0.4.27         # detección de tipo de archivo (seguridad básica)
+python-magic==0.4.27
 
 ########## SEGURIDAD / CABECERAS ##########
 cryptography==42.0.5
-Flask-Talisman==1.1.0        # CSP, HSTS, etc. (opcional, se configura en app)
+Flask-Talisman==1.1.0
 
 ########## CACHÉ / OPTIMIZACIÓN ##########
 Flask-Caching==2.1.0
@@ -59,8 +59,7 @@ python-dateutil==2.8.2
 simplejson==3.19.2
 
 ########## ESTÁTICOS EN PRODUCCIÓN ##########
-whitenoise==6.7.0            # servir /static de forma eficiente junto a gunicorn
+whitenoise==6.7.0
 
-########## MERCADO PAGO (LISTO PARA CONECTAR) ##########
-# SDK oficial de Mercado Pago para crear preferencias de pago
+########## MERCADO PAGO ##########
 mercadopago>=2.0.0,<3.0.0
