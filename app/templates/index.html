@@ -11,7 +11,7 @@
     .hero-main {
         position: relative;
         overflow: hidden;
-        min-height: calc(100vh - 4rem); /* casi pantalla completa sin el header */
+        min-height: 100vh;              /* hero a pantalla completa */
         display: flex;
         align-items: flex-end;
         background-color: #020617;
@@ -24,21 +24,25 @@
         inset: 0;
         background-image: url("{{ url_for('static', filename='img/hero/skyline_hero_master.png') }}");
         background-size: cover;
-        background-position: center top;
+        background-position: center;    /* se centra el logo y las prendas */
         background-repeat: no-repeat;
-        background-color: #020617; /* fallback mientras carga */
+        background-color: #020617;      /* fallback mientras carga */
         transform: translateZ(0);
     }
 
-    /* Capa de overlay galaxia para leer mejor el texto */
+    /* Overlay galaxia MUCHO más suave para que se vea el diseño */
     .hero-main-overlay {
         position: absolute;
         inset: 0;
         background:
-            radial-gradient(circle at 10% 5%, rgba(56,189,248,0.28), transparent 55%),
-            radial-gradient(circle at 85% 15%, rgba(129,140,248,0.32), transparent 60%),
-            linear-gradient(to bottom, rgba(15,23,42,0.1) 0%, rgba(2,6,23,0.85) 70%, rgba(2,6,23,1) 100%);
-        mix-blend-mode: normal;
+            radial-gradient(circle at 10% 5%, rgba(56,189,248,0.20), transparent 55%),
+            radial-gradient(circle at 85% 15%, rgba(129,140,248,0.25), transparent 60%),
+            linear-gradient(
+                to bottom,
+                rgba(2,6,23,0.20) 0%,
+                rgba(2,6,23,0.55) 65%,
+                rgba(2,6,23,0.80) 100%
+            );
         pointer-events: none;
     }
 
@@ -78,7 +82,6 @@
     }
 
     @media (max-width: 639px) {
-        /* un poco más de respiro sobre el carrusel en cel */
         [data-hero-text] {
             margin-bottom: 1.5rem;
         }
@@ -545,7 +548,6 @@
         </a>
     </div>
 
-    {# fallback si no viene nada desde el backend #}
     {% set default_products = [
         {"id": 1, "name": "Hoodie Skyline Negro", "price": 1490, "category": "Hoodie", "image": url_for('static', filename='img/skyline_team.jpg')},
         {"id": 2, "name": "Remera Skyline Blanca", "price": 990, "category": "Remera", "image": url_for('static', filename='img/skyline_team.jpg')},
@@ -559,7 +561,6 @@
                 <a href="{{ url_for('main.product_detail', product_id=product.id) if product.id is defined else '#' }}"
                    class="group bg-slate-900/85 border border-slate-700 rounded-2xl overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-1 transition duration-300 flex flex-col"
                    aria-label="Ver detalles de {{ product.name }}"
-
                    data-product-card>
                     <div class="aspect-square bg-slate-900 overflow-hidden">
                         <img src="{{ product.image }}"
@@ -672,7 +673,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-    // Animaciones suaves con GSAP
     gsap.from('[data-hero-text]', {
         opacity: 0,
         y: 40,
