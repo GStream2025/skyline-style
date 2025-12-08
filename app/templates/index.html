@@ -8,26 +8,139 @@
        HERO PORTADA SKYLINE STYLE
        ============================= */
 
-    .hero-hero-bg {
-        background-color: #020617; /* fallback si tarda en cargar la imagen */
-    }
-
     .hero-main {
         position: relative;
         overflow: hidden;
-        min-height: calc(100vh - 3.5rem);
+        min-height: calc(100vh - 4rem); /* casi pantalla completa sin el header */
         display: flex;
         align-items: flex-end;
+        background-color: #020617;
+        color: #e5e7eb;
     }
 
+    /* Fondo principal del mockup */
+    .hero-hero-bg {
+        position: absolute;
+        inset: 0;
+        background-image: url("{{ url_for('static', filename='img/hero/skyline_hero_master.png') }}");
+        background-size: cover;
+        background-position: center top;
+        background-repeat: no-repeat;
+        background-color: #020617; /* fallback mientras carga */
+        transform: translateZ(0);
+    }
+
+    /* Capa de overlay galaxia para leer mejor el texto */
     .hero-main-overlay {
+        position: absolute;
+        inset: 0;
         background:
-            radial-gradient(circle at 10% 0%, rgba(56,189,248,0.32), transparent 55%),
-            radial-gradient(circle at 80% 15%, rgba(129,140,248,0.36), transparent 60%),
-            linear-gradient(to bottom right, rgba(15,23,42,0.95), rgba(2,6,23,0.96));
+            radial-gradient(circle at 10% 5%, rgba(56,189,248,0.28), transparent 55%),
+            radial-gradient(circle at 85% 15%, rgba(129,140,248,0.32), transparent 60%),
+            linear-gradient(to bottom, rgba(15,23,42,0.1) 0%, rgba(2,6,23,0.85) 70%, rgba(2,6,23,1) 100%);
+        mix-blend-mode: normal;
+        pointer-events: none;
     }
 
-    /* Cards glass del carrusel inferior */
+    /* Contenedor de contenido del hero */
+    .hero-main-inner {
+        position: relative;
+        z-index: 10;
+        width: 100%;
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 0 1rem 1.75rem;
+    }
+
+    @media (min-width: 768px) {
+        .hero-main-inner {
+            padding-bottom: 3rem;
+        }
+    }
+
+    /* Texto principal debajo del logo del mockup */
+    [data-hero-text] {
+        max-width: 640px;
+        margin-left: auto;
+        margin-right: auto;
+        text-align: center;
+        text-shadow: 0 18px 40px rgba(15,23,42,0.9);
+    }
+
+    [data-hero-text] p {
+        font-size: .9rem;
+    }
+
+    @media (min-width: 768px) {
+        [data-hero-text] p {
+            font-size: 1rem;
+        }
+    }
+
+    @media (max-width: 639px) {
+        /* un poco más de respiro sobre el carrusel en cel */
+        [data-hero-text] {
+            margin-bottom: 1.5rem;
+        }
+    }
+
+    /* =============================
+       BOTONES PRINCIPALES HERO
+       ============================= */
+
+    .btn-primary-glow {
+        border-radius: 999px;
+        background: linear-gradient(135deg, #38bdf8, #6366f1);
+        color: #020617;
+        box-shadow:
+            0 18px 45px rgba(56,189,248,0.7),
+            0 0 40px rgba(56,189,248,0.65);
+        border: none;
+        transition:
+            transform .18s ease,
+            box-shadow .18s ease,
+            background .18s ease,
+            filter .18s ease;
+        padding: 0.65rem 1.9rem;
+    }
+
+    .btn-primary-glow:hover {
+        transform: translateY(-2px);
+        box-shadow:
+            0 24px 60px rgba(56,189,248,0.85),
+            0 0 55px rgba(129,140,248,0.9);
+        background: linear-gradient(135deg, #38bdf8, #4f46e5);
+        filter: brightness(1.05);
+    }
+
+    .btn-ghost-soft {
+        border-radius: 999px;
+        border-width: 1px;
+        border-style: solid;
+        padding: 0.6rem 1.6rem;
+        font-size: 0.85rem;
+        font-weight: 500;
+        background: rgba(15,23,42,0.88);
+        box-shadow: 0 16px 35px rgba(15,23,42,0.9);
+        color: #e5e7eb;
+        transition:
+            background .18s ease,
+            border-color .18s ease,
+            transform .18s ease,
+            color .18s ease;
+    }
+
+    .btn-ghost-soft:hover {
+        transform: translateY(-2px);
+        border-color: rgba(191,219,254,0.95);
+        background: rgba(15,23,42,0.96);
+        color: #f9fafb;
+    }
+
+    /* =============================
+       CARDS HERO INFERIOR
+       ============================= */
+
     .hero-card {
         flex: 0 0 44%;
         max-width: 220px;
@@ -41,16 +154,13 @@
     }
 
     .hero-card-inner {
-        background: linear-gradient(
-            145deg,
-            rgba(15, 23, 42, 0.96),
-            rgba(15, 23, 42, 0.9)
-        );
+        background: radial-gradient(circle at top left, rgba(56,189,248,0.22), transparent 55%),
+                    rgba(15,23,42,0.98);
         border-radius: 1.25rem;
         padding: 0.6rem 0.7rem 0.75rem;
         border: 1px solid rgba(51, 65, 85, 0.95);
         box-shadow:
-            0 22px 46px rgba(15, 23, 42, 0.95),
+            0 22px 46px rgba(15, 23, 42, 0.96),
             0 0 32px rgba(15, 23, 42, 0.9);
         transition:
             transform 0.22s ease,
@@ -61,40 +171,45 @@
 
     .hero-card-inner:hover {
         transform: translateY(-4px);
-        border-color: rgba(56, 189, 248, 0.85);
+        border-color: rgba(56, 189, 248, 0.9);
         box-shadow:
             0 26px 60px rgba(15, 23, 42, 0.98),
-            0 0 40px rgba(56, 189, 248, 0.6);
-        background: linear-gradient(
-            150deg,
-            rgba(15, 23, 42, 0.99),
-            rgba(8, 47, 73, 0.98)
-        );
+            0 0 40px rgba(56, 189, 248, 0.7);
+        background: radial-gradient(circle at top left, rgba(56,189,248,0.34), transparent 55%),
+                    rgba(8,47,73,0.98);
     }
 
     /* Stats mini del hero */
     [data-stat] dt {
         letter-spacing: 0.04em;
+        text-shadow: 0 8px 22px rgba(15,23,42,0.95);
     }
 
-    /* Tarjetas elevadas (colecciones) */
+    /* =============================
+       CARDS COLECCIONES
+       ============================= */
+
     .card-elevated {
         border-radius: 1.4rem;
         border: 1px solid rgba(148,163,184,0.45);
-        background: radial-gradient(circle at top left, rgba(56,189,248,0.16), transparent 55%),
-                    rgba(15,23,42,0.96);
+        background:
+            radial-gradient(circle at top left, rgba(56,189,248,0.16), transparent 55%),
+            rgba(15,23,42,0.97);
         box-shadow:
-            0 22px 50px rgba(15,23,42,0.9),
+            0 22px 50px rgba(15,23,42,0.92),
             0 0 0 1px rgba(15,23,42,1);
-        transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease;
+        transition:
+            transform .22s ease,
+            box-shadow .22s ease,
+            border-color .22s ease;
     }
 
     .card-elevated:hover {
         transform: translateY(-4px);
         border-color: rgba(56,189,248,0.9);
         box-shadow:
-            0 28px 70px rgba(15,23,42,0.95),
-            0 0 0 1px rgba(59,130,246,0.9);
+            0 28px 70px rgba(15,23,42,0.96),
+            0 0 0 1px rgba(59,130,246,0.95);
     }
 
     /* Pills / tags */
@@ -129,43 +244,10 @@
         border-radius: 999px;
     }
 
-    /* Botones principales (por si no están en custom.css) */
-    .btn-primary-glow {
-        border-radius: 999px;
-        background: linear-gradient(135deg, #38bdf8, #6366f1);
-        color: #020617;
-        box-shadow:
-            0 18px 45px rgba(56,189,248,0.6),
-            0 0 35px rgba(56,189,248,0.7);
-        border: none;
-        transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
-    }
+    /* =============================
+       CARDS RECOMENDACIONES
+       ============================= */
 
-    .btn-primary-glow:hover {
-        transform: translateY(-2px);
-        box-shadow:
-            0 24px 60px rgba(56,189,248,0.75),
-            0 0 45px rgba(129,140,248,0.8);
-        background: linear-gradient(135deg, #38bdf8, #4f46e5);
-    }
-
-    .btn-ghost-soft {
-        border-radius: 999px;
-        border-width: 1px;
-        border-style: solid;
-        padding: 0.6rem 1.5rem;
-        font-size: 0.85rem;
-        font-weight: 500;
-        box-shadow: 0 16px 35px rgba(15,23,42,0.9);
-        transition: background .18s ease, border-color .18s ease, transform .18s ease;
-    }
-
-    .btn-ghost-soft:hover {
-        transform: translateY(-2px);
-        border-color: rgba(148,163,184,0.9);
-    }
-
-    /* Cards de recomendaciones (testimonios) */
     .rec-card {
         border-radius: 1.4rem;
         background:
@@ -220,20 +302,16 @@
 {% block content %}
 
 <!-- ===========================
-     HERO FULLSCREEN: IGUAL AL MOCKUP
+     HERO FULLSCREEN
 =========================== -->
-<section class="relative hero-main">
+<section class="hero-main">
     <!-- Fondo con la imagen 3D -->
-    <div class="absolute inset-0">
-        <div class="absolute inset-0 bg-cover bg-center hero-hero-bg"
-             style="background-image: url('{{ url_for('static', filename='img/hero/skyline_hero_master.png') }}');">
-        </div>
-        <!-- overlay para mejor lectura de texto -->
-        <div class="absolute inset-0 hero-main-overlay mix-blend-normal"></div>
-    </div>
+    <div class="hero-hero-bg"></div>
+    <!-- overlay para mejor lectura de texto -->
+    <div class="hero-main-overlay"></div>
 
     <!-- CONTENIDO -->
-    <div class="relative z-10 w-full max-w-6xl mx-auto px-4 pb-8 md:pb-10 lg:pb-12">
+    <div class="hero-main-inner">
         <!-- Texto principal centrado (como debajo del logo) -->
         <div class="max-w-xl mx-auto text-center mb-6 md:mb-8" data-hero-text>
             <p class="text-sm md:text-base text-slate-100/95">
@@ -350,15 +428,15 @@
 
         <!-- MINI STATS DEBAJO DEL HERO (como refuerzo de marca) -->
         <dl class="grid grid-cols-3 gap-4 pt-6 text-xs text-slate-300 max-w-xl mx-auto" aria-label="Datos rápidos de Skyline Style">
-            <div class="space-y-1" data-stat>
+            <div class="space-y-1 text-center md:text-left" data-stat>
                 <dt class="text-base font-semibold text-sky-200">+20</dt>
                 <dd>Diseños exclusivos</dd>
             </div>
-            <div class="space-y-1" data-stat>
+            <div class="space-y-1 text-center md:text-left" data-stat>
                 <dt class="text-base font-semibold text-sky-200">XS – 5XL</dt>
                 <dd>Para todos los cuerpos</dd>
             </div>
-            <div class="space-y-1" data-stat>
+            <div class="space-y-1 text-center md:text-left" data-stat>
                 <dt class="text-base font-semibold text-sky-200">100%</dt>
                 <dd>Identidad Skyline</dd>
             </div>
@@ -481,6 +559,7 @@
                 <a href="{{ url_for('main.product_detail', product_id=product.id) if product.id is defined else '#' }}"
                    class="group bg-slate-900/85 border border-slate-700 rounded-2xl overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-1 transition duration-300 flex flex-col"
                    aria-label="Ver detalles de {{ product.name }}"
+
                    data-product-card>
                     <div class="aspect-square bg-slate-900 overflow-hidden">
                         <img src="{{ product.image }}"
