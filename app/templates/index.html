@@ -11,9 +11,9 @@
     .hero-main {
         position: relative;
         overflow: hidden;
-        min-height: min(100vh, 860px);  /* altura muy parecida al mockup */
+        min-height: clamp(640px, 100vh, 880px); /* muy parecido al mockup */
         display: flex;
-        align-items: center;            /* centramos el bloque como en el diseño */
+        align-items: center;
         background-color: #020617;
         color: #e5e7eb;
         isolation: isolate;
@@ -25,7 +25,7 @@
         inset: 0;
         background-image: url("{{ url_for('static', filename='img/hero/skyline_hero_master.png') }}");
         background-size: cover;
-        background-position: center top;  /* respeta mejor el acomodo del logo y prendas */
+        background-position: center top;
         background-repeat: no-repeat;
         background-color: #020617;
         transform: translateZ(0);
@@ -33,7 +33,7 @@
         filter: brightness(1.1) contrast(1.06) saturate(1.08);
     }
 
-    /* Vignette suave para centrar la atención SIN tapar el centro */
+    /* Vignette suave para centrar la atención sin tapar el centro */
     .hero-main::before {
         content: "";
         position: absolute;
@@ -47,7 +47,7 @@
         z-index: 1;
     }
 
-    /* Overlay galaxia muy suave (solo refuerza bordes) */
+    /* Overlay galaxia muy suave (bordes, no tapa el SKYLINE) */
     .hero-main-overlay {
         position: absolute;
         inset: 0;
@@ -56,16 +56,16 @@
             radial-gradient(circle at 85% 15%, rgba(129,140,248,0.22), transparent 60%),
             linear-gradient(
                 to bottom,
-                rgba(2,6,23,0.12) 0%,
+                rgba(2,6,23,0.10) 0%,
                 rgba(2,6,23,0.45) 60%,
-                rgba(2,6,23,0.78) 100%
+                rgba(2,6,23,0.80) 100%
             );
         pointer-events: none;
         z-index: 2;
         mix-blend-mode: normal;
     }
 
-    /* Contenedor de contenido del hero */
+    /* Contenedor del contenido del hero */
     .hero-main-inner {
         position: relative;
         z-index: 10;
@@ -77,7 +77,7 @@
 
     @media (min-width: 768px) {
         .hero-main-inner {
-            padding-top: 6rem;      /* alinea texto con la mitad del SKYLINE */
+            padding-top: 6rem;   /* se alinea con la mitad del SKYLINE */
             padding-bottom: 3rem;
         }
     }
@@ -91,17 +91,29 @@
         }
     }
 
-    /* Texto principal debajo del logo del mockup */
+    /* Bloque de texto en el centro, con panel glass muy suave */
+    .hero-text-panel {
+        max-width: 720px;
+        margin: 0 auto 1.75rem auto;
+        padding: 0.85rem 1.6rem;
+        border-radius: 999px;
+        background:
+            radial-gradient(circle at 0% 0%, rgba(56,189,248,0.32), transparent 60%),
+            radial-gradient(circle at 100% 100%, rgba(129,140,248,0.32), transparent 60%),
+            rgba(15,23,42,0.78);
+        border: 1px solid rgba(148,163,184,0.55);
+        box-shadow:
+            0 18px 45px rgba(15,23,42,0.90),
+            0 0 0 1px rgba(15,23,42,0.92);
+        backdrop-filter: blur(18px) saturate(160%);
+        -webkit-backdrop-filter: blur(18px) saturate(160%);
+    }
+
     [data-hero-text] {
-        max-width: 640px;
-        margin-left: auto;
-        margin-right: auto;
         text-align: center;
         text-shadow:
             0 18px 40px rgba(15,23,42,0.95),
             0 0 40px rgba(15,23,42,0.75);
-        position: relative;
-        top: -0.4rem; /* ajuste fino para que quede justo donde está en el mockup */
     }
 
     [data-hero-text] p {
@@ -110,9 +122,9 @@
     }
 
     @media (max-width: 639px) {
-        [data-hero-text] {
+        .hero-text-panel {
             margin-bottom: 1.4rem;
-            top: 0;
+            padding-inline: 1.2rem;
         }
     }
 
@@ -125,8 +137,8 @@
         background: linear-gradient(135deg, #38bdf8, #6366f1);
         color: #020617;
         box-shadow:
-            0 18px 45px rgba(56,189,248,0.7),
-            0 0 40px rgba(56,189,248,0.65);
+            0 18px 45px rgba(56,189,248,0.78),
+            0 0 40px rgba(56,189,248,0.72);
         border: none;
         transition:
             transform .18s ease,
@@ -142,10 +154,10 @@
     .btn-primary-glow:hover {
         transform: translateY(-2px);
         box-shadow:
-            0 24px 60px rgba(56,189,248,0.85),
-            0 0 55px rgba(129,140,248,0.9);
+            0 24px 60px rgba(56,189,248,0.9),
+            0 0 55px rgba(129,140,248,0.95);
         background: linear-gradient(135deg, #38bdf8, #4f46e5);
-        filter: brightness(1.05);
+        filter: brightness(1.06);
     }
 
     .btn-ghost-soft {
@@ -171,7 +183,7 @@
     .btn-ghost-soft:hover {
         transform: translateY(-2px);
         border-color: rgba(191,219,254,0.95);
-        background: rgba(15,23,42,0.96);
+        background: rgba(15,23,42,0.98);
         color: #f9fafb;
     }
 
@@ -273,29 +285,6 @@
             0 0 0 1px rgba(59,130,246,0.95);
     }
 
-    /* Pills / tags */
-    .tag-pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.3rem;
-        padding: 0.2rem 0.55rem;
-        border-radius: 999px;
-        border: 1px solid rgba(148,163,184,0.6);
-        background: rgba(15,23,42,0.96);
-    }
-
-    .tag-pill--accent {
-        display: inline-flex;
-        align-items: center;
-        padding: 0.2rem 0.7rem;
-        border-radius: 999px;
-        border: 1px solid rgba(56,189,248,0.8);
-        background: linear-gradient(120deg, rgba(56,189,248,0.25), rgba(37,99,235,0.3));
-        font-weight: 500;
-        font-size: 0.7rem;
-        color: #e0f2fe;
-    }
-
     .badge-round {
         display: inline-flex;
         align-items: center;
@@ -383,8 +372,9 @@
     <div class="hero-main-overlay"></div>
 
     <div class="hero-main-inner">
-        <div class="max-w-xl mx-auto text-center mb-6 md:mb-8" data-hero-text>
-            <p class="text-sm md:text-base text-slate-100/95">
+        <!-- Texto principal en panel glass -->
+        <div class="hero-text-panel" data-hero-text>
+            <p class="text-slate-100/95">
                 Descubrí ropa urbana <span class="font-semibold">premium</span>:
                 <span class="font-semibold">buzos, remeras, gorras</span> y mucho más.
                 Diseños con identidad fuerte, pensados para todos los cuerpos y para verse increíbles
@@ -392,6 +382,7 @@
             </p>
         </div>
 
+        <!-- BOTONES PRINCIPALES -->
         <div class="flex flex-wrap items-center justify-center gap-3 mb-7 md:mb-9 hero-ctas" data-hero-ctas>
             <a href="{{ url_for('main.shop') }}"
                class="btn-primary-glow inline-flex items-center justify-center gap-2 px-6 py-2.5 text-sm md:text-[15px] font-semibold"
