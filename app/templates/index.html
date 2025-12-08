@@ -12,7 +12,7 @@
         position: relative;
         overflow: hidden;
 
-        /* 🔹 Más alto para que entren logo + slogan + contenido */
+        /* Alto tipo mockup */
         min-height: min(100vh, 930px);
 
         display: flex;
@@ -28,8 +28,8 @@
         inset: 0;
         background-image: url("{{ url_for('static', filename='img/hero/skyline_hero_master.png') }}");
 
-        /* 🔹 Se ve completo y bien encuadrado */
-        background-size: cover;
+        /* 🔹 Ahora se ve TODA la imagen (logo + slogan) sin recortar */
+        background-size: contain;
         background-position: center top;
         background-repeat: no-repeat;
 
@@ -79,8 +79,9 @@
         max-width: 1120px;
         margin: 0 auto;
 
-        /* 🔹 Bajamos el contenido para dejar ver logo + slogan */
-        padding: clamp(11rem, 20vh, 13rem) 1rem clamp(3.5rem, 7vh, 4.3rem);
+        /* 🔹 Empujamos fuerte el contenido hacia abajo
+               para NO tapar el texto ni el slogan del mockup */
+        padding: clamp(17rem, 42vh, 21rem) 1rem clamp(3.8rem, 7vh, 4.5rem);
     }
 
     @media (min-width: 768px) {
@@ -92,10 +93,10 @@
     @media (max-width: 640px) {
         .hero-main {
             min-height: 100vh;
-    }
+        }
         .hero-main-inner {
-            padding-top: 7rem;      /* más espacio para logo+slogan en mobile */
-            padding-bottom: 3.4rem;
+            padding-top: 10rem;      /* más espacio para logo+slogan en mobile */
+            padding-bottom: 3.6rem;
         }
     }
 
@@ -225,8 +226,8 @@
 
     /* separa bien las cards del logo gigante */
     .hero-band {
-        /* 🔹 Más distancia: queda por debajo del slogan blanco del mockup */
-        margin-top: clamp(4.5rem, 9vh, 5.5rem);
+        /* Mantiene una buena separación del logo del mockup */
+        margin-top: clamp(3.8rem, 7vh, 4.5rem);
     }
 
     /* Stats mini del hero */
@@ -274,7 +275,7 @@
         .hero-review-pill {
             display: inline-flex;
         }
-        /* 🔹 Mucho más abajo, no pisan texto del mockup */
+        /* Bien abajo, sin pisar texto del mockup */
         .hero-review-pill--1 { left: 8%;  bottom: 3.2rem; }
         .hero-review-pill--2 { left: 42%; bottom: 3.8rem; animation-delay: 1.4s; }
         .hero-review-pill--3 { right: 9%; bottom: 3.0rem; animation-delay: 2.1s; }
@@ -642,7 +643,7 @@
 <!-- =======================
      DESTACADOS
 ======================= -->
-<section class="max-w-6xl mx-auto px-4 pb-12">
+<section class="max-w-6xl mx_auto px-4 pb-12">
     <div class="flex items-center justify-between mb-4 md:mb-6">
         <h2 class="text-xl md:text-2xl font-semibold text-slate-50">
             Productos destacados
