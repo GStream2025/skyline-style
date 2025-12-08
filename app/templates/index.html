@@ -11,9 +11,12 @@
     .hero-main {
         position: relative;
         overflow: hidden;
-        min-height: min(100vh, 880px);   /* altura tipo mockup */
+
+        /* 🔹 Más alto para que entren logo + slogan + contenido */
+        min-height: min(100vh, 930px);
+
         display: flex;
-        align-items: flex-end;           /* todo el contenido abajo, logo libre */
+        align-items: flex-end; /* contenido abajo, logo libre */
         background-color: #020617;
         color: #e5e7eb;
         isolation: isolate;
@@ -24,13 +27,16 @@
         position: absolute;
         inset: 0;
         background-image: url("{{ url_for('static', filename='img/hero/skyline_hero_master.png') }}");
+
+        /* 🔹 Se ve completo y bien encuadrado */
         background-size: cover;
         background-position: center top;
         background-repeat: no-repeat;
+
         background-color: #020617;
         transform: translateZ(0);
         will-change: transform;
-        filter: brightness(1.1) contrast(1.06) saturate(1.08);
+        filter: brightness(1.05) contrast(1.04) saturate(1.06);
     }
 
     /* Vignette suave para centrar la atención SIN tapar el centro */
@@ -41,8 +47,8 @@
         background:
             radial-gradient(circle at top center,
                 rgba(15,23,42,0) 0%,
-                rgba(15,23,42,0.18) 55%,
-                rgba(2,6,23,0.70) 100%);
+                rgba(15,23,42,0.10) 55%,
+                rgba(2,6,23,0.72) 100%);
         pointer-events: none;
         z-index: 1;
     }
@@ -56,9 +62,9 @@
             radial-gradient(circle at 85% 15%, rgba(129,140,248,0.22), transparent 60%),
             linear-gradient(
                 to bottom,
-                rgba(2,6,23,0.10) 0%,
-                rgba(2,6,23,0.42) 60%,
-                rgba(2,6,23,0.82) 100%
+                rgba(2,6,23,0.08) 0%,
+                rgba(2,6,23,0.38) 60%,
+                rgba(2,6,23,0.80) 100%
             );
         pointer-events: none;
         z-index: 2;
@@ -72,7 +78,9 @@
         width: 100%;
         max-width: 1120px;
         margin: 0 auto;
-        padding: clamp(5rem, 9vh, 5.8rem) 1rem clamp(3.1rem, 6vh, 3.8rem);
+
+        /* 🔹 Bajamos el contenido para dejar ver logo + slogan */
+        padding: clamp(11rem, 20vh, 13rem) 1rem clamp(3.5rem, 7vh, 4.3rem);
     }
 
     @media (min-width: 768px) {
@@ -83,11 +91,11 @@
 
     @media (max-width: 640px) {
         .hero-main {
-            min-height: 92vh;
-        }
+            min-height: 100vh;
+    }
         .hero-main-inner {
-            padding-top: 4.5rem;
-            padding-bottom: 3rem;
+            padding-top: 7rem;      /* más espacio para logo+slogan en mobile */
+            padding-bottom: 3.4rem;
         }
     }
 
@@ -217,7 +225,8 @@
 
     /* separa bien las cards del logo gigante */
     .hero-band {
-        margin-top: clamp(2.7rem, 5vh, 3.3rem);
+        /* 🔹 Más distancia: queda por debajo del slogan blanco del mockup */
+        margin-top: clamp(4.5rem, 9vh, 5.5rem);
     }
 
     /* Stats mini del hero */
@@ -265,9 +274,10 @@
         .hero-review-pill {
             display: inline-flex;
         }
-        .hero-review-pill--1 { left: 8%;  bottom: 9.8rem; }
-        .hero-review-pill--2 { left: 42%; bottom: 11rem; animation-delay: 1.4s; }
-        .hero-review-pill--3 { right: 9%; bottom: 9.2rem; animation-delay: 2.1s; }
+        /* 🔹 Mucho más abajo, no pisan texto del mockup */
+        .hero-review-pill--1 { left: 8%;  bottom: 3.2rem; }
+        .hero-review-pill--2 { left: 42%; bottom: 3.8rem; animation-delay: 1.4s; }
+        .hero-review-pill--3 { right: 9%; bottom: 3.0rem; animation-delay: 2.1s; }
     }
 
     @keyframes floatReview {
