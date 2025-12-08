@@ -11,11 +11,12 @@
     .hero-main {
         position: relative;
         overflow: hidden;
-        min-height: 100vh;              /* hero a pantalla completa */
+        min-height: min(100vh, 900px);      /* pantalla completa sin pasarse en monitores altos */
         display: flex;
         align-items: flex-end;
         background-color: #020617;
         color: #e5e7eb;
+        isolation: isolate;
     }
 
     /* Fondo principal del mockup */
@@ -24,10 +25,23 @@
         inset: 0;
         background-image: url("{{ url_for('static', filename='img/hero/skyline_hero_master.png') }}");
         background-size: cover;
-        background-position: center;    /* se centra el logo y las prendas */
+        background-position: center;
         background-repeat: no-repeat;
-        background-color: #020617;      /* fallback mientras carga */
+        background-color: #020617;   /* fallback mientras carga */
         transform: translateZ(0);
+        will-change: transform;
+        filter: brightness(1.12) contrast(1.06) saturate(1.08);
+    }
+
+    /* Vignette suave para centrar la atención */
+    .hero-main::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+            radial-gradient(circle at top center, rgba(15,23,42,0) 0%, rgba(15,23,42,0.25) 65%, rgba(2,6,23,0.75) 100%);
+        pointer-events: none;
+        z-index: 1;
     }
 
     /* Overlay galaxia MUCHO más suave para que se vea el diseño */
@@ -40,10 +54,12 @@
             linear-gradient(
                 to bottom,
                 rgba(2,6,23,0.20) 0%,
-                rgba(2,6,23,0.55) 65%,
+                rgba(2,6,23,0.50) 62%,
                 rgba(2,6,23,0.80) 100%
             );
         pointer-events: none;
+        z-index: 2;
+        mix-blend-mode: normal;
     }
 
     /* Contenedor de contenido del hero */
@@ -53,12 +69,22 @@
         width: 100%;
         max-width: 1120px;
         margin: 0 auto;
-        padding: 0 1rem 1.75rem;
+        padding: 5rem 1rem 1.75rem;
     }
 
     @media (min-width: 768px) {
         .hero-main-inner {
+            padding-top: 6rem;        /* baja un poco el texto para alinearse al mockup */
             padding-bottom: 3rem;
+        }
+    }
+
+    @media (max-width: 640px) {
+        .hero-main {
+            min-height: 92vh;
+        }
+        .hero-main-inner {
+            padding-top: 4.5rem;
         }
     }
 
@@ -68,7 +94,9 @@
         margin-left: auto;
         margin-right: auto;
         text-align: center;
-        text-shadow: 0 18px 40px rgba(15,23,42,0.9);
+        text-shadow:
+            0 18px 40px rgba(15,23,42,0.95),
+            0 0 40px rgba(15,23,42,0.75);
     }
 
     [data-hero-text] p {
@@ -105,6 +133,9 @@
             background .18s ease,
             filter .18s ease;
         padding: 0.65rem 1.9rem;
+        outline: 2px solid transparent;
+        outline-offset: 3px;
+        white-space: nowrap;
     }
 
     .btn-primary-glow:hover {
@@ -131,6 +162,9 @@
             border-color .18s ease,
             transform .18s ease,
             color .18s ease;
+        outline: 2px solid transparent;
+        outline-offset: 3px;
+        white-space: nowrap;
     }
 
     .btn-ghost-soft:hover {
@@ -138,6 +172,14 @@
         border-color: rgba(191,219,254,0.95);
         background: rgba(15,23,42,0.96);
         color: #f9fafb;
+    }
+
+    .btn-primary-glow:focus-visible,
+    .btn-ghost-soft:focus-visible {
+        outline-color: rgba(56,189,248,0.95);
+        box-shadow:
+            0 0 0 2px rgba(15,23,42,1),
+            0 0 0 4px rgba(56,189,248,0.95);
     }
 
     /* =============================
@@ -148,12 +190,22 @@
         flex: 0 0 44%;
         max-width: 220px;
         text-decoration: none;
+        scroll-snap-align: start;
     }
 
     @media (min-width: 640px) {
         .hero-card {
             flex-basis: 23%;
         }
+    }
+
+    .hero-cards-row {
+        display: flex;
+        gap: 0.75rem;
+        padding-inline: 0.25rem;
+        min-width: 100%;
+        scroll-snap-type: x mandatory;
+        -webkit-overflow-scrolling: touch;
     }
 
     .hero-card-inner {
@@ -170,6 +222,11 @@
             box-shadow 0.22s ease,
             border-color 0.22s ease,
             background 0.22s ease;
+    }
+
+    .hero-card-inner img {
+        object-fit: cover;
+        object-position: center;
     }
 
     .hero-card-inner:hover {
@@ -299,6 +356,19 @@
         font-size: 0.75rem;
         color: #facc15;
     }
+
+    /* =============================
+       PREFERENCIA REDUCED-MOTION
+       ============================= */
+    @media (prefers-reduced-motion: reduce) {
+        .btn-primary-glow,
+        .btn-ghost-soft,
+        .hero-card-inner,
+        .card-elevated,
+        .rec-card {
+            transition: none !important;
+        }
+    }
 </style>
 {% endblock %}
 
@@ -355,7 +425,7 @@
             </div>
 
             <div class="overflow-x-auto -mx-1 pb-1">
-                <div class="flex gap-3 px-1 min-w-full md:min-w-0">
+                <div class="hero-cards-row">
 
                     <!-- Card: Buzos -->
                     <a href="{{ url_for('main.shop') }}?categoria=buzos"
@@ -673,6 +743,13 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
+    const prefersReducedMotion = window.matchMedia &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (prefersReducedMotion || typeof gsap === "undefined") {
+        return;
+    }
+
     gsap.from('[data-hero-text]', {
         opacity: 0,
         y: 40,
