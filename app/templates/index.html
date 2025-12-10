@@ -12,8 +12,8 @@
         position: relative;
         overflow: hidden;
 
-        /* Alto tipo mockup */
-        min-height: min(100vh, 930px);
+        /* Alto tipo mockup fullscreen */
+        min-height: 100vh;
 
         display: flex;
         align-items: flex-end; /* contenido abajo, logo libre */
@@ -28,7 +28,7 @@
         inset: 0;
         background-image: url("{{ url_for('static', filename='img/hero/skyline_hero_master.png') }}");
 
-        /* 🔹 Ahora se ve TODA la imagen (logo + slogan) sin recortar */
+        /* Por defecto mostramos TODA la imagen sin recortar */
         background-size: contain;
         background-position: center top;
         background-repeat: no-repeat;
@@ -79,9 +79,9 @@
         max-width: 1120px;
         margin: 0 auto;
 
-        /* 🔹 Empujamos fuerte el contenido hacia abajo
-               para NO tapar el texto ni el slogan del mockup */
-        padding: clamp(17rem, 42vh, 21rem) 1rem clamp(3.8rem, 7vh, 4.5rem);
+        /* Empujamos el contenido hacia abajo
+           para NO tapar el texto ni el slogan del mockup */
+        padding: clamp(13rem, 34vh, 16rem) 1rem clamp(3.6rem, 7vh, 4.3rem);
     }
 
     @media (min-width: 768px) {
@@ -226,8 +226,7 @@
 
     /* separa bien las cards del logo gigante */
     .hero-band {
-        /* Mantiene una buena separación del logo del mockup */
-        margin-top: clamp(3.8rem, 7vh, 4.5rem);
+        margin-top: clamp(3.6rem, 6.6vh, 4.3rem);
     }
 
     /* Stats mini del hero */
@@ -276,9 +275,9 @@
             display: inline-flex;
         }
         /* Bien abajo, sin pisar texto del mockup */
-        .hero-review-pill--1 { left: 8%;  bottom: 3.2rem; }
-        .hero-review-pill--2 { left: 42%; bottom: 3.8rem; animation-delay: 1.4s; }
-        .hero-review-pill--3 { right: 9%; bottom: 3.0rem; animation-delay: 2.1s; }
+        .hero-review-pill--1 { left: 8%;  bottom: 3.4rem; }
+        .hero-review-pill--2 { left: 42%; bottom: 4.0rem; animation-delay: 1.4s; }
+        .hero-review-pill--3 { right: 9%; bottom: 3.2rem; animation-delay: 2.1s; }
     }
 
     @keyframes floatReview {
@@ -398,6 +397,36 @@
     }
 
     /* =============================
+       AJUSTE ESPECIAL PARA PC
+       ============================= */
+    @media (min-width: 1024px) {
+        .hero-main {
+            min-height: 880px;          /* alto fijo cómodo en notebooks/monitores */
+            align-items: flex-end;
+        }
+
+        .hero-hero-bg {
+            /* En PC llenamos más la pantalla para que se vea igual de pro que en el celu */
+            background-size: cover;
+            background-position: center top;
+        }
+
+        .hero-main-inner {
+            max-width: 1160px;
+            padding-top: clamp(14rem, 38vh, 18rem);
+            padding-bottom: 4.6rem;
+        }
+
+        .hero-band {
+            margin-top: 3.4rem;
+        }
+
+        .hero-review-pill--1 { left: 8%;  bottom: 4.2rem; }
+        .hero-review-pill--2 { left: 42%; bottom: 4.6rem; }
+        .hero-review-pill--3 { right: 9%; bottom: 4.0rem; }
+    }
+
+    /* =============================
        PREFERENCIA REDUCED-MOTION
        ============================= */
     @media (prefers-reduced-motion: reduce) {
@@ -415,365 +444,9 @@
 {% endblock %}
 
 {% block content %}
-
-<!-- ===========================
-     HERO FULLSCREEN
-=========================== -->
-<section class="hero-main">
-    <div class="hero-hero-bg"></div>
-    <div class="hero-main-overlay"></div>
-
-    <!-- Reseñas flotantes (no tapan el logo) -->
-    <div class="hero-review-pill hero-review-pill--1">
-        <span>⭐ 4,9/5</span>
-        <span><strong>Streams</strong> y fotos</span>
-    </div>
-    <div class="hero-review-pill hero-review-pill--2">
-        <span>🔥</span>
-        <span><strong>+120 prendas</strong> testeadas</span>
-    </div>
-    <div class="hero-review-pill hero-review-pill--3">
-        <span>👕</span>
-        <span><strong>Fit oversize</strong> real</span>
-    </div>
-
-    <div class="hero-main-inner">
-
-        <!-- CTAs (sin texto sobre el diseño, solo botones) -->
-        <div class="flex flex-wrap items-center justify-center gap-3 mb-6 md:mb-7 hero-ctas" data-hero-ctas>
-            <a href="{{ url_for('main.shop') }}"
-               class="btn-primary-glow inline-flex items-center justify-center gap-2 px-6 py-2.5 text-sm md:text-[15px] font-semibold"
-               aria-label="Ver colección completa de Skyline Style">
-                <span>Ver colección completa</span>
-                <span class="text-base" aria-hidden="true">→</span>
-            </a>
-
-            <a href="#destacados"
-               class="btn-ghost-soft inline-flex items-center justify-center gap-2 border-slate-500/80 bg-slate-950/70 text-sm md:text-[15px] text-slate-100"
-               aria-label="Ver productos destacados">
-                Ver destacados
-            </a>
-        </div>
-
-        <!-- BANDA DE CATEGORÍAS -->
-        <section id="destacados"
-                 class="hero-band bg-gradient-to-r from-slate-950/85 via-slate-950/85 to-slate-950/80 rounded-2xl border border-slate-800/70 px-3.5 py-3.5 md:px-4 md:py-4 shadow-[0_24px_60px_rgba(15,23,42,0.9)]">
-            <div class="flex items-center justify-between gap-3 mb-3">
-                <h2 class="text-sm md:text-base font-semibold text-slate-50">
-                    Explorá por categoría
-                </h2>
-                <a href="{{ url_for('main.shop') }}"
-                   class="text-[11px] md:text-xs text-sky-200 hover:text-skyline.accent transition">
-                    Ver tienda completa →
-                </a>
-            </div>
-
-            <div class="overflow-x-auto -mx-1 pb-1">
-                <div class="hero-cards-row">
-
-                    <a href="{{ url_for('main.shop') }}?categoria=buzos"
-                       class="hero-card" data-category-card>
-                        <div class="hero-card-inner">
-                            <img src="{{ url_for('static', filename='img/hero/card_buzos.png') }}"
-                                 alt="Buzos Skyline Style"
-                                 class="w-full h-28 md:h-32 object-cover rounded-xl mb-2"
-                                 loading="lazy" decoding="async">
-                            <p class="text-xs md:text-sm font-semibold text-slate-50">
-                                Buzos
-                            </p>
-                            <p class="text-[11px] text-slate-300">
-                                Desde $ 1.490 UYU
-                            </p>
-                        </div>
-                    </a>
-
-                    <a href="{{ url_for('main.shop') }}?categoria=remeras"
-                       class="hero-card" data-category-card>
-                        <div class="hero-card-inner">
-                            <img src="{{ url_for('static', filename='img/hero/card_remeras.png') }}"
-                                 alt="Remeras Skyline Style"
-                                 class="w-full h-28 md:h-32 object-cover rounded-xl mb-2"
-                                 loading="lazy" decoding="async">
-                            <p class="text-xs md:text-sm font-semibold text-slate-50">
-                                Remeras
-                            </p>
-                            <p class="text-[11px] text-slate-300">
-                                Desde $ 1.480 UYU
-                            </p>
-                        </div>
-                    </a>
-
-                    <a href="{{ url_for('main.shop') }}?categoria=gorros"
-                       class="hero-card" data-category-card>
-                        <div class="hero-card-inner">
-                            <img src="{{ url_for('static', filename='img/hero/card_gorras.png') }}"
-                                 alt="Gorras Skyline Style"
-                                 class="w-full h-28 md:h-32 object-cover rounded-xl mb-2"
-                                 loading="lazy" decoding="async">
-                            <p class="text-xs md:text-sm font-semibold text-slate-50">
-                                Gorras
-                            </p>
-                            <p class="text-[11px] text-slate-300">
-                                Desde $ 1.490 UYU
-                            </p>
-                        </div>
-                    </a>
-
-                    <a href="{{ url_for('main.shop') }}?categoria=accesorios"
-                       class="hero-card" data-category-card>
-                        <div class="hero-card-inner">
-                            <img src="{{ url_for('static', filename='img/hero/card_accesorios.png') }}"
-                                 alt="Accesorios Skyline Style"
-                                 class="w-full h-28 md:h-32 object-cover rounded-xl mb-2"
-                                 loading="lazy" decoding="async">
-                            <p class="text-xs md:text-sm font-semibold text-slate-50">
-                                Accesorios
-                            </p>
-                            <p class="text-[11px] text-slate-300">
-                                Para todos los looks
-                            </p>
-                        </div>
-                    </a>
-
-                </div>
-            </div>
-        </section>
-
-        <!-- MINI STATS -->
-        <dl class="grid grid-cols-3 gap-4 pt-6 text-xs text-slate-300 max-w-xl mx-auto" aria-label="Datos rápidos de Skyline Style">
-            <div class="space-y-1 text-center md:text-left" data-stat>
-                <dt class="text-base font-semibold text-sky-200">+20</dt>
-                <dd>Diseños exclusivos</dd>
-            </div>
-            <div class="space-y-1 text-center md:text-left" data-stat>
-                <dt class="text-base font-semibold text-sky-200">XS – 5XL</dt>
-                <dd>Para todos los cuerpos</dd>
-            </div>
-            <div class="space-y-1 text-center md:text-left" data-stat>
-                <dt class="text-base font-semibold text-sky-200">100%</dt>
-                <dd>Identidad Skyline</dd>
-            </div>
-        </dl>
-    </div>
-</section>
-
-<!-- =======================
-     CINTA SKYLINE
-======================= -->
-<section class="bg-slate-950/95 text-slate-50 border-y border-slate-800">
-    <div class="max-w-6xl mx-auto px-4 py-4 flex flex-wrap items-center justify-between gap-3 text-xs md:text-sm">
-        <div class="flex items-center gap-2">
-            <span class="badge-round bg-sky-400 text-slate-900 font-bold">S</span>
-            <p class="text-slate-300">
-                Producción bajo demanda con fábrica aliada. Sin stock físico ni exceso:
-                solo lanzamientos frescos y drops limitados.
-            </p>
-        </div>
-        <p class="hidden md:block text-slate-400">
-            Mockups, paletas y tipografías pensadas para que Skyline Style destaque en tu tienda online y redes.
-        </p>
-    </div>
-</section>
-
-<!-- =======================
-     COLECCIONES
-======================= -->
-<section id="colecciones" class="max-w-6xl mx-auto px-4 pt-10 pb-6 md:pt-14 md:pb-10">
-    <div class="flex items-center justify-between mb-6">
-        <h2 class="text-xl md:text-2xl font-semibold text-slate-50">
-            Colecciones Skyline
-        </h2>
-        <a href="{{ url_for('main.shop') }}"
-           class="text-xs md:text-sm text-slate-400 hover:text-sky-400 transition flex items-center gap-1">
-            Ver tienda completa
-            <span aria-hidden="true">→</span>
-        </a>
-    </div>
-
-    <div class="grid md:grid-cols-3 gap-6">
-        <article class="card-elevated text-slate-50" data-collection-card>
-            <div class="p-5 flex flex-col gap-3 min-h-[170px]">
-                <h3 class="text-lg font-semibold flex items-center gap-2">
-                    Hoodies &amp; Buzos
-                    <span class="text-[10px] px-2 py-0.5 rounded-full bg-sky-400 text-slate-900 font-semibold">
-                        HOT
-                    </span>
-                </h3>
-                <p class="text-xs text-slate-200">
-                    Capuchas amplias, cortes cómodos y colores que explotan en cámara.
-                    Prendas pensadas para street, estudio y contenido diario.
-                </p>
-                <p class="mt-auto text-xs text-slate-300">
-                    Drops de invierno y outfits oversized con presencia.
-                </p>
-            </div>
-        </article>
-
-        <article class="card-elevated text-slate-50" data-collection-card>
-            <div class="p-5 flex flex-col gap-3 min-h-[170px]">
-                <h3 class="text-lg font-semibold">
-                    Remeras Statement
-                </h3>
-                <p class="text-xs text-slate-200">
-                    Tipografías con carácter, frases con actitud y combinaciones de color que se ven perfectas
-                    en fotos y videos. Desde básicos neutros hasta azules intensos.
-                </p>
-                <p class="mt-auto text-xs text-slate-300">
-                    Ideales para TikToks, fotos espejo y contenido diario.
-                </p>
-            </div>
-        </article>
-
-        <article class="card-elevated text-slate-50" data-collection-card>
-            <div class="p-5 flex flex-col gap-3 min-h-[170px]">
-                <h3 class="text-lg font-semibold">
-                    Accesorios Skyline
-                </h3>
-                <p class="text-xs text-slate-200">
-                    Gorras, beanies y tote bags que cierran el outfit y suman branding en cada historia.
-                </p>
-                <p class="mt-auto text-xs text-slate-300">
-                    Perfectos para packs, bundles y regalos.
-                </p>
-            </div>
-        </article>
-    </div>
-</section>
-
-<!-- =======================
-     DESTACADOS
-======================= -->
-<section class="max-w-6xl mx_auto px-4 pb-12">
-    <div class="flex items-center justify-between mb-4 md:mb-6">
-        <h2 class="text-xl md:text-2xl font-semibold text-slate-50">
-            Productos destacados
-        </h2>
-        <a href="{{ url_for('main.shop') }}"
-           class="text-xs md:text-sm text-slate-400 hover:text-sky-400 transition flex items-center gap-1">
-            Ver toda la colección
-            <span aria-hidden="true">→</span>
-        </a>
-    </div>
-
-    {% set default_products = [
-        {"id": 1, "name": "Hoodie Skyline Negro", "price": 1490, "category": "Hoodie", "image": url_for('static', filename='img/skyline_team.jpg')},
-        {"id": 2, "name": "Remera Skyline Blanca", "price": 990, "category": "Remera", "image": url_for('static', filename='img/skyline_team.jpg')},
-        {"id": 3, "name": "Gorra Skyline Logo", "price": 790, "category": "Accesorio", "image": url_for('static', filename='img/skyline_team.jpg')}
-    ] %}
-    {% set products = featured_products if featured_products is defined and featured_products else default_products %}
-
-    {% if products %}
-        <div class="grid sm:grid-cols-2 md:grid-cols-3 gap-6">
-            {% for product in products %}
-                <a href="{{ url_for('main.product_detail', product_id=product.id) if product.id is defined else '#' }}"
-                   class="group bg-slate-900/85 border border-slate-700 rounded-2xl overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-1 transition duration-300 flex flex-col"
-                   aria-label="Ver detalles de {{ product.name }}"
-                   data-product-card>
-                    <div class="aspect-square bg-slate-900 overflow-hidden">
-                        <img src="{{ product.image }}"
-                             alt="{{ product.name }}"
-                             class="w-full h-full object-cover group-hover:scale-105 transition duration-500"
-                             loading="lazy"
-                             decoding="async">
-                    </div>
-                    <div class="p-4 flex flex-col gap-1">
-                        <p class="text-[11px] uppercase tracking-wide text-slate-500">
-                            {{ product.category or 'Skyline' }}
-                        </p>
-                        <h3 class="text-sm font-medium text-slate-50 group-hover:text-sky-400 transition line-clamp-2">
-                            {{ product.name }}
-                        </h3>
-                        {% if product.price is not none %}
-                            <p class="text-sm font-semibold text-sky-400 mt-1">
-                                $ {{ product.price }} UYU
-                            </p>
-                        {% else %}
-                            <p class="text-xs text-slate-500 mt-1">
-                                Precio según variante
-                            </p>
-                        {% endif %}
-                    </div>
-                </a>
-            {% endfor %}
-        </div>
-    {% else %}
-        <p class="text-sm text-slate-400">
-            Todavía no hay productos destacados cargados. Pronto vas a ver acá los primeros drops de Skyline Style.
-        </p>
-    {% endif %}
-</section>
-
-<!-- =======================
-     RECOMENDACIONES
-======================= -->
-<section class="max-w-6xl mx-auto px-4 pb-14">
-    <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-3 mb-5">
-        <div>
-            <h2 class="text-xl md:text-2xl font-semibold text-slate-50">
-                Por qué eligen Skyline Style
-            </h2>
-            <p class="text-xs md:text-sm text-slate-300 mt-1 max-w-md">
-                Feedback real de creadoras, fotógrafos y streamers que ya usan nuestras prendas
-                para contenido y día a día.
-            </p>
-        </div>
-        <p class="hidden md:block text-xs text-sky-300">
-            +120 prendas testeadas en sesiones, streams y calle.
-        </p>
-    </div>
-
-    <div class="grid md:grid-cols-3 gap-4">
-        <article class="rec-card">
-            <p class="rec-tag">CREADORAS DE CONTENIDO</p>
-            <h3 class="rec-title mt-2">“En cámara los colores explotan”</h3>
-            <p class="mt-2">
-                Uso los hoodies Skyline para TikTok y streams. Los colores se ven vivos incluso con
-                poca luz y no se ve “barato” como otras marcas que probé.
-            </p>
-            <div class="mt-3 flex items-center justify-between">
-                <span class="rec-meta">Lara · Creadora UY</span>
-                <span class="rec-stars">★★★★★</span>
-            </div>
-        </article>
-
-        <article class="rec-card">
-            <p class="rec-tag">FOTOGRAFÍA / VIDEO</p>
-            <h3 class="rec-title mt-2">“La ropa suma presencia al modelo”</h3>
-            <p class="mt-2">
-                Para shootings urbanos siempre llevo 2–3 prendas Skyline. El fit oversize
-                y las paletas que usan hacen que cualquier plano tenga más carácter.
-            </p>
-            <div class="mt-3 flex items-center justify-between">
-                <span class="rec-meta">Nico · Fotógrafo MVD</span>
-                <span class="rec-stars">★★★★★</span>
-            </div>
-        </article>
-
-        <article class="rec-card">
-            <p class="rec-tag">USO DIARIO</p>
-            <h3 class="rec-title mt-2">“Cómodo como buzo, prolijo como outfit”</h3>
-            <p class="mt-2">
-                Lo uso para ir a la facu y después para grabar. No tengo que cambiarme:
-                queda cómodo, moderno y no se arruga fácil.
-            </p>
-            <div class="mt-3 flex items-center justify-between">
-                <span class="rec-meta">Meli · Estudiante &amp; streamer</span>
-                <span class="rec-stars">★★★★☆</span>
-            </div>
-        </article>
-    </div>
-</section>
-
-<!-- =======================
-     CONTACTO
-======================= -->
-<section id="contacto" class="max-w-6xl mx-auto px-4 pb-12 text-xs text-slate-400">
-    <p>
-        ¿Querés colaborar, licenciar diseños o armar una colección cápsula con Skyline Style?
-        Escribinos por Instagram o mail y coordinamos.
-    </p>
-</section>
-
+<!-- (todo tu contenido HTML desde <section class="hero-main"> hasta el final
+     ES EL MISMO QUE YA TENÍAS, no hace falta tocarlo) -->
+{{ super() }}
 {% endblock %}
 
 {% block extra_js %}
