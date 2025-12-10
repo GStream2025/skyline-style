@@ -9,10 +9,16 @@
     <meta name="theme-color" content="#0b1120">
     <meta name="robots" content="index,follow">
 
-    <!-- Open Graph básico -->
+    <!-- SEO / Open Graph -->
+    <link rel="canonical" href="{{ request.url_root.rstrip('/') }}">
     <meta property="og:title" content="Skyline Style · Streetwear con actitud">
     <meta property="og:description" content="Drops limitados, diseños urbanos y prendas para todos los cuerpos.">
     <meta property="og:type" content="website">
+    <meta property="og:url" content="{{ request.url }}">
+    <meta property="og:image" content="{{ url_for('static', filename='img/og_skyline.jpg') }}">
+
+    <!-- Favicon básico -->
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}">
 
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -83,17 +89,23 @@
 {% set current = request.endpoint or '' %}
 {% set is_admin = session.get('is_admin') %}
 
+<!-- Enlace de salto rápido para accesibilidad -->
+<a href="#main-content"
+   class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:px-3 focus:py-2 focus:rounded-lg focus:bg-slate-900 focus:text-skyline.accent focus:shadow-lg">
+    Ir al contenido principal
+</a>
+
 <!-- ============================
       HEADER PRINCIPAL
 ============================= -->
 <header id="main-header" class="fixed top-0 inset-x-0 z-40 animate-fadeup">
-    <div class="bg-gradient-to-b from-slate-950/95 via-slate-950/92 to-slate-950/80 backdrop-blur-xl border-b border-slate-800/60 transition-shadow">
-        <div class="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
+    <div class="bg-gradient-to-b from-slate-950/95 via-slate-950/92 to-slate-950/80 backdrop-blur-xl border-b border-slate-800/60 transition-shadow duration-200">
+        <div class="max-w-6xl mx-auto px-4 h-14 md:h-16 flex items-center justify-between gap-3">
 
             <!-- Logo / Home -->
             <a href="{{ url_for('main.index') }}"
                class="flex items-center gap-2 group focus:outline-none focus-visible:ring-2 focus-visible:ring-skyline.accent focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 rounded-xl">
-                <span class="h-8 w-8 rounded-xl bg-slate-900 text-slate-50 font-semibold text-sm flex items-center justify-center shadow-glow group-hover:scale-105 transition-transform">
+                <span class="h-8 w-8 md:h-9 md:w-9 rounded-xl bg-slate-900 text-slate-50 font-semibold text-sm flex items-center justify-center shadow-glow group-hover:scale-105 transition-transform">
                     SS
                 </span>
                 <div class="leading-tight">
@@ -107,35 +119,35 @@
             </a>
 
             <!-- NAV Desktop -->
-            <nav class="hidden md:flex items-center gap-5 text-xs md:text-sm">
+            <nav class="hidden md:flex items-center gap-6 text-xs md:text-sm" aria-label="Navegación principal">
                 <a href="{{ url_for('main.shop') }}"
-                   class="nav-link {{ 'text-skyline.accent2' if current=='main.shop' else 'text-slate-300' }}"
+                   class="nav-link {{ 'text-skyline.accent2' if current=='main.shop' else 'text-slate-300 hover:text-slate-50' }}"
                    {% if current == 'main.shop' %}aria-current="page"{% endif %}>
                     Tienda
                 </a>
 
                 <a href="{{ url_for('main.index') }}#destacados"
-                   class="nav-link {{ 'text-skyline.accent2' if current=='main.index' else 'text-slate-300' }}"
+                   class="nav-link {{ 'text-skyline.accent2' if current=='main.index' else 'text-slate-300 hover:text-slate-50' }}"
                    {% if current == 'main.index' %}aria-current="page"{% endif %}>
                     Destacados
                 </a>
 
                 <a href="{{ url_for('main.about') }}"
-                   class="nav-link {{ 'text-skyline.accent2' if current=='main.about' else 'text-slate-300' }}"
+                   class="nav-link {{ 'text-skyline.accent2' if current=='main.about' else 'text-slate-300 hover:text-slate-50' }}"
                    {% if current == 'main.about' %}aria-current="page"{% endif %}>
                     La marca
                 </a>
 
                 {% if is_admin %}
                     <a href="{{ url_for('admin.dashboard') }}"
-                       class="nav-link {{ 'text-skyline.accent2' if current and current.startswith('admin.') else 'text-amber-300' }}"
+                       class="nav-link {{ 'text-skyline.accent2' if current and current.startswith('admin.') else 'text-amber-300 hover:text-amber-200' }}"
                        {% if current and current.startswith('admin.') %}aria-current="page"{% endif %}>
                         Panel admin
                     </a>
                 {% endif %}
 
                 <a href="{{ url_for('auth.login') }}"
-                   class="nav-link {{ 'text-skyline.accent2' if current=='admin.login' or current=='auth.login' else 'text-slate-300' }}">
+                   class="nav-link {{ 'text-skyline.accent2' if current in ['admin.login', 'auth.login'] else 'text-slate-300 hover:text-slate-50' }}">
                     Ingresar
                 </a>
             </nav>
@@ -160,7 +172,11 @@
             <!-- Botón hamburguesa -->
             <button id="mobile-toggle"
                     class="md:hidden h-9 w-9 rounded-full border border-slate-700/60 bg-slate-950/80 flex items-center justify-center text-slate-100 hover:bg-slate-900 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-skyline.accent focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
-                    type="button" aria-label="Abrir menú de navegación" aria-expanded="false">
+                    type="button"
+                    aria-label="Abrir menú de navegación"
+                    aria-expanded="false"
+                    aria-controls="mobile-menu"
+                    data-open="false">
                 <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M4 12h16M4 17h16"/>
                 </svg>
@@ -170,7 +186,8 @@
         <!-- NAV Mobile -->
         <div id="mobile-menu"
              class="absolute top-14 right-4 w-64 opacity-0 scale-y-0 origin-top transition-all duration-200 pointer-events-none md:hidden">
-            <nav class="bg-slate-950/98 backdrop-blur-2xl rounded-2xl border border-slate-800/80 shadow-menu p-3 text-sm">
+            <nav class="bg-slate-950/98 backdrop-blur-2xl rounded-2xl border border-slate-800/80 shadow-menu p-3 text-sm"
+                 aria-label="Navegación móvil">
                 <a class="mobile-item" href="{{ url_for('main.shop') }}">Tienda</a>
                 <a class="mobile-item" href="{{ url_for('main.index') }}#destacados">Destacados</a>
                 <a class="mobile-item" href="{{ url_for('main.about') }}">La marca</a>
@@ -194,7 +211,7 @@
 <!-- ===================================
      CONTENIDO PRINCIPAL + FLASHES
 =================================== -->
-<main class="pt-16">
+<main id="main-content" class="pt-16 md:pt-20">
     <!-- Mensajes flash globales -->
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
@@ -252,7 +269,7 @@
 =================================== -->
 <script>
 document.addEventListener("DOMContentLoaded", () => {
-    const header      = document.getElementById("main-header");
+    const header       = document.getElementById("main-header");
     const mobileToggle = document.getElementById("mobile-toggle");
     const mobileMenu   = document.getElementById("mobile-menu");
 
@@ -268,18 +285,20 @@ document.addEventListener("DOMContentLoaded", () => {
         mobileMenu.classList.remove("scale-y-0", "opacity-0", "pointer-events-none");
         mobileMenu.classList.add("scale-y-100", "opacity-100");
         mobileToggle.setAttribute("aria-expanded", "true");
+        mobileToggle.dataset.open = "true";
     };
 
     const closeMenu = () => {
         mobileMenu.classList.remove("scale-y-100", "opacity-100");
         mobileMenu.classList.add("scale-y-0", "opacity-0", "pointer-events-none");
         mobileToggle.setAttribute("aria-expanded", "false");
+        mobileToggle.dataset.open = "false";
     };
 
     // Toggle del menú mobile
     mobileToggle.addEventListener("click", (event) => {
         event.stopPropagation();
-        const isOpen = mobileMenu.classList.contains("scale-y-100");
+        const isOpen = mobileToggle.dataset.open === "true";
         if (isOpen) {
             closeMenu();
         } else {
@@ -289,7 +308,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Cerrar al hacer click fuera
     document.addEventListener("click", (event) => {
-        if (!mobileMenu.classList.contains("scale-y-100")) return;
+        if (mobileToggle.dataset.open !== "true") return;
         if (!mobileMenu.contains(event.target) && !mobileToggle.contains(event.target)) {
             closeMenu();
         }
