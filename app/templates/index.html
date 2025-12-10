@@ -5,41 +5,37 @@
 {% block extra_head %}
 <style>
     /* =============================
-       HERO PORTADA SKYLINE STYLE
+       HERO PRINCIPAL SKYLINE STYLE
        ============================= */
 
     .hero-main {
         position: relative;
         overflow: hidden;
-
-        /* Alto tipo mockup fullscreen */
-        min-height: 100vh;
+        min-height: min(100vh, 920px);
 
         display: flex;
-        align-items: flex-end; /* contenido abajo, logo libre */
-        background-color: #020617;
+        align-items: flex-end;
+        justify-content: center;
+
         color: #e5e7eb;
         isolation: isolate;
     }
 
-    /* Fondo principal del mockup */
-    .hero-hero-bg {
+    /* Fondo con el mockup completo (SIEMPRE visible) */
+    .hero-bg {
         position: absolute;
         inset: 0;
         background-image: url("{{ url_for('static', filename='img/hero/skyline_hero_master.png') }}");
-
-        /* Por defecto mostramos TODA la imagen sin recortar */
-        background-size: contain;
-        background-position: center top;
         background-repeat: no-repeat;
-
+        background-position: center top;
+        background-size: contain; /* muestra el mockup entero sin cortar */
         background-color: #020617;
+        filter: brightness(1.05) contrast(1.05) saturate(1.07);
         transform: translateZ(0);
         will-change: transform;
-        filter: brightness(1.05) contrast(1.04) saturate(1.06);
     }
 
-    /* Vignette suave para centrar la atención SIN tapar el centro */
+    /* Vignette suave para que el logo / slogan sigan limpios */
     .hero-main::before {
         content: "";
         position: absolute;
@@ -48,140 +44,115 @@
             radial-gradient(circle at top center,
                 rgba(15,23,42,0) 0%,
                 rgba(15,23,42,0.10) 55%,
-                rgba(2,6,23,0.72) 100%);
-        pointer-events: none;
+                rgba(2,6,23,0.78) 100%);
         z-index: 1;
+        pointer-events: none;
     }
 
-    /* Overlay galaxia muy suave (solo refuerza bordes) */
-    .hero-main-overlay {
+    /* Overlay galaxia suave que refuerza bordes */
+    .hero-overlay {
         position: absolute;
         inset: 0;
         background:
-            radial-gradient(circle at 10% 5%, rgba(56,189,248,0.18), transparent 55%),
-            radial-gradient(circle at 85% 15%, rgba(129,140,248,0.22), transparent 60%),
-            linear-gradient(
-                to bottom,
-                rgba(2,6,23,0.08) 0%,
-                rgba(2,6,23,0.38) 60%,
-                rgba(2,6,23,0.80) 100%
-            );
-        pointer-events: none;
-        z-index: 2;
+            radial-gradient(circle at 10% 5%, rgba(56,189,248,0.2), transparent 55%),
+            radial-gradient(circle at 85% 15%, rgba(129,140,248,0.26), transparent 60%),
+            linear-gradient(to bottom,
+                rgba(15,23,42,0.05) 0%,
+                rgba(15,23,42,0.35) 55%,
+                rgba(15,23,42,0.85) 100%);
         mix-blend-mode: normal;
+        z-index: 2;
+        pointer-events: none;
     }
 
-    /* Contenedor de contenido del hero (solo parte de abajo) */
-    .hero-main-inner {
+    /* Contenedor del contenido (parte de abajo) */
+    .hero-inner {
         position: relative;
         z-index: 10;
         width: 100%;
         max-width: 1120px;
         margin: 0 auto;
-
-        /* Empujamos el contenido hacia abajo
-           para NO tapar el texto ni el slogan del mockup */
-        padding: clamp(13rem, 34vh, 16rem) 1rem clamp(3.6rem, 7vh, 4.3rem);
+        padding:
+            clamp(17rem, 40vh, 21rem) 1rem
+            clamp(3.6rem, 7vh, 4.6rem);
     }
 
     @media (min-width: 768px) {
-        .hero-main-inner {
-            padding-inline: 1.5rem;
-        }
+        .hero-inner { padding-inline: 1.5rem; }
     }
 
     @media (max-width: 640px) {
         .hero-main {
             min-height: 100vh;
         }
-        .hero-main-inner {
-            padding-top: 10rem;      /* más espacio para logo+slogan en mobile */
-            padding-bottom: 3.6rem;
+        .hero-inner {
+            padding-top: 10rem;   /* deja espacio para logo + slogan */
+            padding-bottom: 3.4rem;
         }
     }
 
     /* =============================
-       BOTONES PRINCIPALES HERO
+       BOTONES HERO
        ============================= */
 
-    .btn-primary-glow {
+    .btn-primary-hero {
         border-radius: 999px;
         background: linear-gradient(135deg, #38bdf8, #6366f1);
         color: #020617;
+        padding: 0.7rem 2rem;
+        font-size: 0.9rem;
+        font-weight: 600;
         box-shadow:
-            0 18px 45px rgba(56,189,248,0.7),
-            0 0 40px rgba(56,189,248,0.65);
+            0 18px 45px rgba(56,189,248,0.75),
+            0 0 40px rgba(56,189,248,0.7);
         border: none;
         transition:
             transform .18s ease,
             box-shadow .18s ease,
-            background .18s ease,
-            filter .18s ease;
-        padding: 0.7rem 2rem;
-        outline: 2px solid transparent;
-        outline-offset: 3px;
+            filter .18s ease,
+            background .18s ease;
         white-space: nowrap;
     }
 
-    .btn-primary-glow:hover {
+    .btn-primary-hero:hover {
         transform: translateY(-2px);
-        box-shadow:
-            0 24px 60px rgba(56,189,248,0.85),
-            0 0 55px rgba(129,140,248,0.9);
-        background: linear-gradient(135deg, #38bdf8, #4f46e5);
         filter: brightness(1.05);
+        background: linear-gradient(135deg, #38bdf8, #4f46e5);
+        box-shadow:
+            0 24px 60px rgba(56,189,248,0.9),
+            0 0 55px rgba(129,140,248,0.9);
     }
 
-    .btn-ghost-soft {
+    .btn-ghost-hero {
         border-radius: 999px;
-        border-width: 1px;
-        border-style: solid;
+        border: 1px solid rgba(148,163,184,0.85);
         padding: 0.65rem 1.7rem;
         font-size: 0.85rem;
         font-weight: 500;
         background: rgba(15,23,42,0.9);
-        box-shadow: 0 16px 35px rgba(15,23,42,0.9);
+        box-shadow: 0 18px 40px rgba(15,23,42,0.9);
         color: #e5e7eb;
-        transition:
-            background .18s ease,
-            border-color .18s ease,
-            transform .18s ease,
-            color .18s ease;
-        outline: 2px solid transparent;
-        outline-offset: 3px;
         white-space: nowrap;
+        transition:
+            transform .18s ease,
+            border-color .18s ease,
+            background .18s ease,
+            color .18s ease;
     }
 
-    .btn-ghost-soft:hover {
+    .btn-ghost-hero:hover {
         transform: translateY(-2px);
-        border-color: rgba(191,219,254,0.95);
+        border-color: rgba(191,219,254,1);
         background: rgba(15,23,42,0.96);
         color: #f9fafb;
     }
 
-    .btn-primary-glow:focus-visible,
-    .btn-ghost-soft:focus-visible {
-        outline-color: rgba(56,189,248,0.95);
-        box-shadow:
-            0 0 0 2px rgba(15,23,42,1),
-            0 0 0 4px rgba(56,189,248,0.95);
-    }
-
     /* =============================
-       CARDS HERO INFERIOR
+       CARDS HERO (categorías)
        ============================= */
 
-    .hero-card {
-        flex: 0 0 44%;
-        max-width: 220px;
-        text-decoration: none;
-        scroll-snap-align: start;
-    }
-
-    @media (min-width: 640px) {
-        .hero-card {
-            flex-basis: 23%;
-        }
+    .hero-band {
+        margin-top: clamp(3.6rem, 7vh, 4.4rem);
     }
 
     .hero-cards-row {
@@ -193,15 +164,29 @@
         -webkit-overflow-scrolling: touch;
     }
 
+    .hero-card {
+        flex: 0 0 44%;
+        max-width: 220px;
+        scroll-snap-align: start;
+        text-decoration: none;
+    }
+
+    @media (min-width: 640px) {
+        .hero-card { flex-basis: 23%; }
+    }
+
     .hero-card-inner {
-        background: radial-gradient(circle at top left, rgba(56,189,248,0.22), transparent 55%),
-                    rgba(15,23,42,0.98);
+        background:
+            radial-gradient(circle at top left,
+                rgba(56,189,248,0.22),
+                transparent 55%),
+            rgba(15,23,42,0.98);
         border-radius: 1.25rem;
         padding: 0.6rem 0.7rem 0.75rem;
-        border: 1px solid rgba(51, 65, 85, 0.95);
+        border: 1px solid rgba(51,65,85,0.95);
         box-shadow:
-            0 22px 46px rgba(15, 23, 42, 0.96),
-            0 0 32px rgba(15, 23, 42, 0.9);
+            0 22px 46px rgba(15,23,42,0.96),
+            0 0 32px rgba(15,23,42,0.9);
         transition:
             transform 0.22s ease,
             box-shadow 0.22s ease,
@@ -209,34 +194,21 @@
             background 0.22s ease;
     }
 
-    .hero-card-inner img {
-        object-fit: cover;
-        object-position: center;
-    }
-
     .hero-card-inner:hover {
         transform: translateY(-4px);
-        border-color: rgba(56, 189, 248, 0.9);
+        border-color: rgba(56,189,248,0.9);
+        background:
+            radial-gradient(circle at top left,
+                rgba(56,189,248,0.34),
+                transparent 55%),
+            rgba(8,47,73,0.98);
         box-shadow:
-            0 26px 60px rgba(15, 23, 42, 0.98),
-            0 0 40px rgba(56, 189, 248, 0.7);
-        background: radial-gradient(circle at top left, rgba(56,189,248,0.34), transparent 55%),
-                    rgba(8,47,73,0.98);
-    }
-
-    /* separa bien las cards del logo gigante */
-    .hero-band {
-        margin-top: clamp(3.6rem, 6.6vh, 4.3rem);
-    }
-
-    /* Stats mini del hero */
-    [data-stat] dt {
-        letter-spacing: 0.04em;
-        text-shadow: 0 8px 22px rgba(15,23,42,0.95);
+            0 26px 60px rgba(15,23,42,0.98),
+            0 0 40px rgba(56,189,248,0.7);
     }
 
     /* =============================
-       PILLS DE RESEÑAS FLOTANTES
+       RESEÑAS FLOTANTES
        ============================= */
 
     .hero-review-pill {
@@ -257,12 +229,8 @@
         backdrop-filter: blur(16px);
         -webkit-backdrop-filter: blur(16px);
         animation: floatReview 9s ease-in-out infinite;
-        pointer-events: none;
         white-space: nowrap;
-    }
-
-    .hero-review-pill span:first-child {
-        font-size: 0.8rem;
+        pointer-events: none;
     }
 
     .hero-review-pill strong {
@@ -271,29 +239,28 @@
     }
 
     @media (min-width: 900px) {
-        .hero-review-pill {
-            display: inline-flex;
-        }
-        /* Bien abajo, sin pisar texto del mockup */
-        .hero-review-pill--1 { left: 8%;  bottom: 3.4rem; }
-        .hero-review-pill--2 { left: 42%; bottom: 4.0rem; animation-delay: 1.4s; }
-        .hero-review-pill--3 { right: 9%; bottom: 3.2rem; animation-delay: 2.1s; }
+        .hero-review-pill { display: inline-flex; }
+        .hero-review-pill--1 { left: 8%;  bottom: 3.1rem; }
+        .hero-review-pill--2 { left: 42%; bottom: 3.8rem; animation-delay: 1.4s; }
+        .hero-review-pill--3 { right: 9%; bottom: 3.0rem; animation-delay: 2.1s; }
     }
 
     @keyframes floatReview {
-        0%, 100% { transform: translateY(0); }
-        50%      { transform: translateY(-6px); }
+        0%,100% { transform: translateY(0); }
+        50%     { transform: translateY(-6px); }
     }
 
     /* =============================
-       CARDS COLECCIONES
+       CARDS COLECCIONES & RESEÑAS
        ============================= */
 
-    .card-elevated {
+    .card-elevated-home {
         border-radius: 1.4rem;
         border: 1px solid rgba(148,163,184,0.45);
         background:
-            radial-gradient(circle at top left, rgba(56,189,248,0.16), transparent 55%),
+            radial-gradient(circle at top left,
+                rgba(56,189,248,0.16),
+                transparent 55%),
             rgba(15,23,42,0.97);
         box-shadow:
             0 22px 50px rgba(15,23,42,0.92),
@@ -304,48 +271,13 @@
             border-color .22s ease;
     }
 
-    .card-elevated:hover {
+    .card-elevated-home:hover {
         transform: translateY(-4px);
         border-color: rgba(56,189,248,0.9);
         box-shadow:
             0 28px 70px rgba(15,23,42,0.96),
             0 0 0 1px rgba(59,130,246,0.95);
     }
-
-    .tag-pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.3rem;
-        padding: 0.2rem 0.55rem;
-        border-radius: 999px;
-        border: 1px solid rgba(148,163,184,0.6);
-        background: rgba(15,23,42,0.96);
-    }
-
-    .tag-pill--accent {
-        display: inline-flex;
-        align-items: center;
-        padding: 0.2rem 0.7rem;
-        border-radius: 999px;
-        border: 1px solid rgba(56,189,248,0.8);
-        background: linear-gradient(120deg, rgba(56,189,248,0.25), rgba(37,99,235,0.3));
-        font-weight: 500;
-        font-size: 0.7rem;
-        color: #e0f2fe;
-    }
-
-    .badge-round {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 1.6rem;
-        height: 1.6rem;
-        border-radius: 999px;
-    }
-
-    /* =============================
-       CARDS RECOMENDACIONES
-       ============================= */
 
     .rec-card {
         border-radius: 1.4rem;
@@ -362,7 +294,10 @@
         font-size: 0.82rem;
         line-height: 1.6;
         color: #cbd5f5;
-        transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease;
+        transition:
+            transform .22s ease,
+            box-shadow .22s ease,
+            border-color .22s ease;
     }
 
     .rec-card:hover {
@@ -372,145 +307,160 @@
             0 26px 60px rgba(15,23,42,0.9),
             0 0 0 1px rgba(59,130,246,0.9);
     }
-
-    .rec-tag {
-        font-size: 0.72rem;
-        letter-spacing: 0.18em;
-        text-transform: uppercase;
-        color: #93c5fd;
-    }
-
-    .rec-title {
-        font-size: 0.9rem;
-        font-weight: 600;
-        color: #e5e7eb;
-    }
-
-    .rec-meta {
-        font-size: 0.74rem;
-        color: #9ca3af;
-    }
-
-    .rec-stars {
-        font-size: 0.75rem;
-        color: #facc15;
-    }
-
-    /* =============================
-       AJUSTE ESPECIAL PARA PC
-       ============================= */
-    @media (min-width: 1024px) {
-        .hero-main {
-            min-height: 880px;          /* alto fijo cómodo en notebooks/monitores */
-            align-items: flex-end;
-        }
-
-        .hero-hero-bg {
-            /* En PC llenamos más la pantalla para que se vea igual de pro que en el celu */
-            background-size: cover;
-            background-position: center top;
-        }
-
-        .hero-main-inner {
-            max-width: 1160px;
-            padding-top: clamp(14rem, 38vh, 18rem);
-            padding-bottom: 4.6rem;
-        }
-
-        .hero-band {
-            margin-top: 3.4rem;
-        }
-
-        .hero-review-pill--1 { left: 8%;  bottom: 4.2rem; }
-        .hero-review-pill--2 { left: 42%; bottom: 4.6rem; }
-        .hero-review-pill--3 { right: 9%; bottom: 4.0rem; }
-    }
-
-    /* =============================
-       PREFERENCIA REDUCED-MOTION
-       ============================= */
-    @media (prefers-reduced-motion: reduce) {
-        .btn-primary-glow,
-        .btn-ghost-soft,
-        .hero-card-inner,
-        .card-elevated,
-        .rec-card,
-        .hero-review-pill {
-            transition: none !important;
-            animation: none !important;
-        }
-    }
 </style>
 {% endblock %}
 
 {% block content %}
-<!-- (todo tu contenido HTML desde <section class="hero-main"> hasta el final
-     ES EL MISMO QUE YA TENÍAS, no hace falta tocarlo) -->
-{{ super() }}
-{% endblock %}
 
-{% block extra_js %}
-<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
-<script>
-document.addEventListener('DOMContentLoaded', () => {
-    const prefersReducedMotion = window.matchMedia &&
-        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+<!-- ===========================
+     HERO PRINCIPAL
+=========================== -->
+<section class="hero-main">
+    <div class="hero-bg"></div>
+    <div class="hero-overlay"></div>
 
-    if (prefersReducedMotion || typeof gsap === "undefined") {
-        return;
-    }
+    <!-- Pills reseñas -->
+    <div class="hero-review-pill hero-review-pill--1">
+        <span>⭐ 4,9/5</span>
+        <span><strong>Streams</strong> y fotos</span>
+    </div>
+    <div class="hero-review-pill hero-review-pill--2">
+        <span>🔥</span>
+        <span><strong>+120 prendas</strong> testeadas</span>
+    </div>
+    <div class="hero-review-pill hero-review-pill--3">
+        <span>👕</span>
+        <span><strong>Fit oversize</strong> real</span>
+    </div>
 
-    gsap.from('[data-hero-ctas]', {
-        opacity: 0,
-        y: 30,
-        duration: 0.8,
-        ease: 'power3.out'
-    });
+    <div class="hero-inner">
+        <!-- CTAs -->
+        <div class="flex flex-wrap items-center justify-center gap-3 mb-6 md:mb-7">
+            <a href="{{ url_for('main.shop') }}"
+               class="btn-primary-hero inline-flex items-center justify-center gap-2"
+               aria-label="Ver colección completa Skyline Style">
+                <span>Ver colección completa</span>
+                <span class="text-base" aria-hidden="true">→</span>
+            </a>
 
-    gsap.from('[data-category-card]', {
-        opacity: 0,
-        y: 20,
-        stagger: 0.08,
-        delay: 0.15,
-        duration: 0.7,
-        ease: 'power3.out'
-    });
+            <a href="#destacados"
+               class="btn-ghost-hero inline-flex items-center justify-center gap-2"
+               aria-label="Ver productos destacados">
+                Ver destacados
+            </a>
+        </div>
 
-    gsap.from('[data-stat]', {
-        opacity: 0,
-        y: 15,
-        stagger: 0.08,
-        delay: 0.3,
-        duration: 0.6,
-        ease: 'power3.out'
-    });
+        <!-- Banda categorías -->
+        <section id="destacados"
+                 class="hero-band bg-slate-950/85 rounded-2xl border border-slate-800/70 px-3.5 py-3.5 md:px-4 md:py-4 shadow-[0_24px_60px_rgba(15,23,42,0.9)]">
+            <div class="flex items-center justify-between gap-3 mb-3">
+                <h2 class="text-sm md:text-base font-semibold text-slate-50">
+                    Explorá por categoría
+                </h2>
+                <a href="{{ url_for('main.shop') }}"
+                   class="text-[11px] md:text-xs text-sky-200 hover:text-skyline.accent transition">
+                    Ver tienda completa →
+                </a>
+            </div>
 
-    gsap.from('[data-collection-card]', {
-        opacity: 0,
-        y: 25,
-        stagger: 0.12,
-        delay: 0.25,
-        duration: 0.7,
-        ease: 'power3.out'
-    });
+            <div class="overflow-x-auto -mx-1 pb-1">
+                <div class="hero-cards-row">
 
-    gsap.from('[data-product-card]', {
-        opacity: 0,
-        y: 25,
-        stagger: 0.08,
-        delay: 0.35,
-        duration: 0.6,
-        ease: 'power3.out'
-    });
+                    <a href="{{ url_for('main.shop') }}?categoria=buzos"
+                       class="hero-card">
+                        <div class="hero-card-inner">
+                            <img src="{{ url_for('static', filename='img/hero/card_buzos.png') }}"
+                                 alt="Buzos Skyline Style"
+                                 class="w-full h-28 md:h-32 object-cover rounded-xl mb-2"
+                                 loading="lazy">
+                            <p class="text-xs md:text-sm font-semibold text-slate-50">
+                                Buzos
+                            </p>
+                            <p class="text-[11px] text-slate-300">
+                                Desde $ 1.490 UYU
+                            </p>
+                        </div>
+                    </a>
 
-    gsap.from('.rec-card', {
-        opacity: 0,
-        y: 20,
-        stagger: 0.12,
-        delay: 0.4,
-        duration: 0.7,
-        ease: 'power3.out'
-    });
-});
-</script>
-{% endblock %}
+                    <a href="{{ url_for('main.shop') }}?categoria=remeras"
+                       class="hero-card">
+                        <div class="hero-card-inner">
+                            <img src="{{ url_for('static', filename='img/hero/card_remeras.png') }}"
+                                 alt="Remeras Skyline Style"
+                                 class="w-full h-28 md:h-32 object-cover rounded-xl mb-2"
+                                 loading="lazy">
+                            <p class="text-xs md:text-sm font-semibold text-slate-50">
+                                Remeras
+                            </p>
+                            <p class="text-[11px] text-slate-300">
+                                Desde $ 1.480 UYU
+                            </p>
+                        </div>
+                    </a>
+
+                    <a href="{{ url_for('main.shop') }}?categoria=gorros"
+                       class="hero-card">
+                        <div class="hero-card-inner">
+                            <img src="{{ url_for('static', filename='img/hero/card_gorras.png') }}"
+                                 alt="Gorras Skyline Style"
+                                 class="w-full h-28 md:h-32 object-cover rounded-xl mb-2"
+                                 loading="lazy">
+                            <p class="text-xs md:text-sm font-semibold text-slate-50">
+                                Gorras
+                            </p>
+                            <p class="text-[11px] text-slate-300">
+                                Desde $ 1.490 UYU
+                            </p>
+                        </div>
+                    </a>
+
+                    <a href="{{ url_for('main.shop') }}?categoria=accesorios"
+                       class="hero-card">
+                        <div class="hero-card-inner">
+                            <img src="{{ url_for('static', filename='img/hero/card_accesorios.png') }}"
+                                 alt="Accesorios Skyline Style"
+                                 class="w-full h-28 md:h-32 object-cover rounded-xl mb-2"
+                                 loading="lazy">
+                            <p class="text-xs md:text-sm font-semibold text-slate-50">
+                                Accesorios
+                            </p>
+                            <p class="text-[11px] text-slate-300">
+                                Para todos los looks
+                            </p>
+                        </div>
+                    </a>
+
+                </div>
+            </div>
+        </section>
+
+        <!-- Mini stats -->
+        <dl class="grid grid-cols-3 gap-4 pt-6 text-xs text-slate-300 max-w-xl mx-auto" aria-label="Datos rápidos Skyline Style">
+            <div class="space-y-1 text-center md:text-left">
+                <dt class="text-base font-semibold text-sky-200">+20</dt>
+                <dd>Diseños exclusivos</dd>
+            </div>
+            <div class="space-y-1 text-center md:text-left">
+                <dt class="text-base font-semibold text-sky-200">XS – 5XL</dt>
+                <dd>Para todos los cuerpos</dd>
+            </div>
+            <div class="space-y-1 text-center md:text-left">
+                <dt class="text-base font-semibold text-sky-200">100%</dt>
+                <dd>Identidad Skyline</dd>
+            </div>
+        </dl>
+    </div>
+</section>
+
+<!-- =======================
+     EL RESTO DE LA HOME
+     (colecciones, destacados, reseñas)
+======================= -->
+
+<section id="colecciones" class="max-w-6xl mx-auto px-4 pt-10 pb-6 md:pt-14 md:pb-10">
+    <div class="flex items-center justify-between mb-6">
+        <h2 class="text-xl md:text-2xl font-semibold text-slate-50">
+            Colecciones Skyline
+        </h2>
+        <a href="{{ url_for('main.shop') }}"
+          
