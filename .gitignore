@@ -1,0 +1,21 @@
+# Entornos virtuales
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Flask / local
+instance/
+*.log
+
+# VSCode
+.vscode/
+
+# Windows
+Thumbs.db
+.DS_Store
