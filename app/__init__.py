@@ -4,70 +4,63 @@ from __future__ import annotations
 import os
 import sys
 from pathlib import Path
-from typing import Type, Optional
+from typing import Optional
 
-from flask import Flask
+from flask import Flask, jsonify, request
 from dotenv import load_dotenv
 from loguru import logger
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from flask_sqlalchemy import SQLAlchemy
 
-# ----------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # 0) EXTENSIONES GLOBALES
-# ----------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 db = SQLAlchemy()
 
-# ----------------------------------------------------------------------
-# 1) CONFIGURACIÓN FLEXIBLE
-# ----------------------------------------------------------------------
-CONFIG_MAP = {}
-DEFAULT_CONFIG_CLASS: Optional[Type] = None
+# Extensiones opcionales (no obligatorias)
+compress = None
+Minify = None
+talisman = None
 
-try:
-    # config = {'development': X, 'production': Y}
-    from app.config import config as CONFIG_MAP
-except Exception:
-    CONFIG_MAP = {}
-
-try:
-    from app.config import Config as DEFAULT_CONFIG_CLASS
-except Exception:
-    DEFAULT_CONFIG_CLASS = None
-
-
-# ----------------------------------------------------------------------
-# 2) EXTENSIONES OPCIONALES (solo si están instaladas)
-# ----------------------------------------------------------------------
 try:
     from flask_compress import Compress
     compress = Compress()
 except ImportError:
-    compress = None
+    pass
 
 try:
     from flask_minify import Minify
 except ImportError:
-    Minify = None
+    pass
+
+try:
+    from flask_talisman import Talisman
+    talisman = Talisman
+except ImportError:
+    talisman = None
 
 
-# ----------------------------------------------------------------------
-# 3) PATHS BASE
-# ----------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# 1) PATHS
+# -----------------------------------------------------------------------------
 MODULE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = MODULE_DIR.parent
 
 
-# ----------------------------------------------------------------------
-# 4) FACTORY PRINCIPAL
-# ----------------------------------------------------------------------
-def create_app(env_name: str | None = None) -> Flask:
+# -----------------------------------------------------------------------------
+# 2) FACTORY PRINCIPAL
+# -----------------------------------------------------------------------------
+def create_app(env_name: Optional[str] = None) -> Flask:
     _load_env()
     _configure_logging()
 
-    env = _detect_env(env_name)
-    config_obj = _select_config(env)
+    from app.config import get_config
 
-    logger.info("🚀 Iniciando Skyline Style Store… (modo: {})", env)
+    config_class = get_config()
+    env = config_class.ENV
+
+    logger.info("🚀 Iniciando Skyline Style Store (env: {})", env)
 
     app = Flask(
         __name__,
@@ -75,128 +68,56 @@ def create_app(env_name: str | None = None) -> Flask:
         template_folder="templates",
     )
 
-    # -------------------------
-    # CONFIG
-    # -------------------------
-    if config_obj:
-        app.config.from_object(config_obj)
-        logger.debug("Configuración cargada: {}", config_obj)
-    else:
-        logger.warning("⚠ No se encontró configuración válida.")
+    # -------------------------------------------------------------------------
+    # CONFIGURACIÓN
+    # -------------------------------------------------------------------------
+    app.config.from_object(config_class)
 
-    # -------------------------
+    # -------------------------------------------------------------------------
+    # PROXY FIX (Render / HTTPS correcto)
+    # -------------------------------------------------------------------------
+    if app.config.get("TRUST_PROXY_HEADERS", False):
+        app.wsgi_app = ProxyFix(
+            app.wsgi_app,
+            x_for=1,
+            x_proto=1,
+            x_host=1,
+            x_port=1,
+        )
+        logger.debug("ProxyFix habilitado (Render / reverse proxy)")
+
+    # -------------------------------------------------------------------------
     # EXTENSIONES
-    # -------------------------
+    # -------------------------------------------------------------------------
     _init_extensions(app)
 
-    # -------------------------
+    # -------------------------------------------------------------------------
     # BLUEPRINTS
-    # -------------------------
+    # -------------------------------------------------------------------------
     _register_blueprints(app)
 
-    # -------------------------
+    # -------------------------------------------------------------------------
     # ERRORES
-    # -------------------------
+    # -------------------------------------------------------------------------
     _register_error_handlers(app)
 
-    logger.success("🔥 Skyline Style Store cargada sin errores!")
+    # -------------------------------------------------------------------------
+    # HEALTHCHECK (Render)
+    # -------------------------------------------------------------------------
+    _register_healthcheck(app)
+
+    logger.success("🔥 Skyline Style Store lista y operativa")
     return app
 
 
-# ----------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # HELPERS INTERNOS
-# ----------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 def _load_env():
     env_path = PROJECT_ROOT / ".env"
     if env_path.exists():
         load_dotenv(env_path)
-        logger.debug("Archivo .env cargado desde {}", env_path)
-    else:
-        logger.debug("No existe .env; se usan variables del sistema.")
-
-
-def _detect_env(explicit_env: str | None = None) -> str:
-    if explicit_env:
-        return explicit_env.lower()
-
-    env = os.getenv("FLASK_ENV", "production").lower()
-    return env if env in {"development", "production"} else "production"
-
-
-def _select_config(env: str):
-    if CONFIG_MAP:
-        cfg = CONFIG_MAP.get(env)
-        return cfg or next(iter(CONFIG_MAP.values()))
-
-    return DEFAULT_CONFIG_CLASS
-
-
-def _init_extensions(app: Flask):
-    """
-    Inicialización mínima y 100% compatible con Render.
-    Sin Flask-Migrate (NO se usa y causaba error).
-    """
-    db.init_app(app)
-    logger.debug("SQLAlchemy inicializado (sin migraciones)")
-
-    if compress:
-        compress.init_app(app)
-        logger.debug("Flask-Compress habilitado (gzip/br)")
-
-    if Minify and not app.debug:
-        Minify(app=app, html=True, js=True, cssless=True)
-        logger.debug("Flask-Minify activo (producción)")
-
-
-def _register_blueprints(app: Flask):
-    # MAIN
-    from app.routes.main_routes import main_bp
-    app.register_blueprint(main_bp)
-    logger.debug("Blueprint main_bp registrado")
-
-    # AUTH
-    try:
-        from app.routes.auth_routes import auth_bp
-        app.register_blueprint(auth_bp)
-        logger.debug("Blueprint auth_bp registrado")
-    except Exception as exc:
-        logger.warning("auth_bp no disponible: {}", exc)
-
-    # PRINTFUL
-    try:
-        from app.routes.printful_routes import printful_bp
-        app.register_blueprint(printful_bp)
-        logger.debug("Blueprint printful_bp registrado")
-    except Exception as exc:
-        logger.warning("printful_bp no disponible: {}", exc)
-
-    # ADMIN
-    try:
-        from app.routes_admin import admin_bp
-        app.register_blueprint(admin_bp)
-        logger.debug("Blueprint admin_bp registrado")
-    except Exception as exc:
-        logger.warning("Admin panel no disponible: {}", exc)
-
-
-def _register_error_handlers(app: Flask):
-    from flask import render_template
-
-    @app.errorhandler(404)
-    def not_found(error):
-        logger.warning("404: {}", error)
-        try:
-            return render_template("error.html", code=404, message="Página no encontrada."), 404
-        except Exception:
-            return "404 Not Found", 404
-
-    @app.errorhandler(500)
-    def internal_error(error):
-        logger.error("500: {}", error)
-        try:
-            return render_template("error.html", code=500, message="Error interno."), 500
-        except Exception:
-            return "500 Error interno", 500
+        logger.debug(".env cargado desde {}", env_path)
 
 
 def _configure_logging():
@@ -208,5 +129,88 @@ def _configure_logging():
         level=log_level,
         backtrace=False,
         diagnose=False,
-        format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level}</level> | <cyan>{message}</cyan>",
+        format=(
+            "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | "
+            "<level>{level: <8}</level> | "
+            "<cyan>{message}</cyan>"
+        ),
     )
+
+
+def _init_extensions(app: Flask):
+    # -------------------------
+    # DATABASE
+    # -------------------------
+    db.init_app(app)
+    logger.debug("SQLAlchemy inicializado")
+
+    # -------------------------
+    # COMPRESS
+    # -------------------------
+    if compress and app.config.get("ENABLE_COMPRESS", False):
+        compress.init_app(app)
+        logger.debug("Flask-Compress habilitado")
+
+    # -------------------------
+    # MINIFY (solo prod)
+    # -------------------------
+    if Minify and app.config.get("ENABLE_MINIFY", False) and not app.debug:
+        Minify(app=app, html=True, js=True, cssless=True)
+        logger.debug("Flask-Minify activo")
+
+    # -------------------------
+    # TALISMAN (seguridad HTTPS)
+    # -------------------------
+    if talisman and app.config.get("ENABLE_TALISMAN", False):
+        talisman(
+            app,
+            force_https=app.config.get("FORCE_HTTPS", True),
+            content_security_policy=app.config.get("CONTENT_SECURITY_POLICY"),
+        )
+        logger.debug("Flask-Talisman activo (HTTPS + CSP)")
+
+
+def _register_blueprints(app: Flask):
+    def safe_register(import_path: str, bp_name: str):
+        try:
+            module = __import__(import_path, fromlist=[bp_name])
+            bp = getattr(module, bp_name)
+            app.register_blueprint(bp)
+            logger.debug("Blueprint {} registrado", bp_name)
+        except Exception as exc:
+            logger.warning("No se pudo registrar {}: {}", bp_name, exc)
+
+    safe_register("app.routes.main_routes", "main_bp")
+    safe_register("app.routes.auth_routes", "auth_bp")
+    safe_register("app.routes.printful_routes", "printful_bp")
+    safe_register("app.routes_admin", "admin_bp")
+
+
+def _register_error_handlers(app: Flask):
+    from flask import render_template
+
+    @app.errorhandler(404)
+    def not_found(error):
+        logger.warning("404 {} {}", request.method, request.path)
+        try:
+            return render_template("error.html", code=404, message="Página no encontrada"), 404
+        except Exception:
+            return jsonify(error="Not Found"), 404
+
+    @app.errorhandler(500)
+    def internal_error(error):
+        logger.error("500 {}", error)
+        try:
+            return render_template("error.html", code=500, message="Error interno del servidor"), 500
+        except Exception:
+            return jsonify(error="Internal Server Error"), 500
+
+
+def _register_healthcheck(app: Flask):
+    @app.route("/health", methods=["GET"])
+    def health():
+        return jsonify(
+            status="ok",
+            app="skyline-style",
+            env=app.config.get("FLASK_ENV", "production"),
+        ), 200
