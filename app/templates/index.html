@@ -1,466 +1,352 @@
 {% extends "base.html" %}
-
 {% block title %}Skyline Style · Streetwear con actitud{% endblock %}
 
 {% block extra_head %}
 <style>
-    /* =============================
-       HERO PRINCIPAL SKYLINE STYLE
-       ============================= */
+/* ==========================================================
+   SKYLINE STYLE · HERO PREMIUM (PRO)
+   - Responsive + accesible + smooth scroll row
+   - Motion-safe (prefers-reduced-motion)
+   - No depende de Tailwind (clases propias)
+========================================================== */
 
-    .hero-main {
-        position: relative;
-        overflow: hidden;
-        min-height: min(100vh, 920px);
+/* ---------- TOKENS ---------- */
+:root{
+  --bg: #020617;
+  --panel: rgba(15,23,42,.92);
+  --border: rgba(148,163,184,.40);
+  --text: #e5e7eb;
+  --muted: rgba(226,232,240,.78);
+  --cyan: #38bdf8;
+  --indigo: #6366f1;
+  --shadow: 0 24px 60px rgba(2,6,23,.55);
+  --shadow-strong: 0 28px 70px rgba(2,6,23,.75);
+  --radius-xl: 1.25rem;
+}
 
-        display: flex;
-        align-items: flex-end;
-        justify-content: center;
+/* ---------- HERO WRAPPER ---------- */
+.hero-main{
+  position: relative;
+  min-height: min(100vh, 920px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+  isolation: isolate;
+}
 
-        color: #e5e7eb;
-        isolation: isolate;
-    }
+/* Imagen master */
+.hero-bg{
+  position: absolute;
+  inset: 0;
+  background-image: url("{{ url_for('static', filename='img/hero/skyline_hero_master.png') }}");
+  background-repeat: no-repeat;
+  background-position: center top;
+  background-size: contain;
+  filter: brightness(1.06) contrast(1.05) saturate(1.08);
+  transform: translateZ(0);
+  z-index: 0;
+}
 
-    /* Fondo con el mockup completo (SIEMPRE visible) */
-    .hero-bg {
-        position: absolute;
-        inset: 0;
-        background-image: url("{{ url_for('static', filename='img/hero/skyline_hero_master.png') }}");
-        background-repeat: no-repeat;
-        background-position: center top;
-        background-size: contain; /* muestra el mockup entero sin cortar */
-        background-color: #020617;
-        filter: brightness(1.05) contrast(1.05) saturate(1.07);
-        transform: translateZ(0);
-        will-change: transform;
-    }
+/* Vignette + depth */
+.hero-main::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  z-index:1;
+  background:
+    radial-gradient(circle at top center, rgba(2,6,23,0) 0%, rgba(2,6,23,.18) 56%, rgba(2,6,23,.92) 100%);
+  pointer-events:none;
+}
 
-    /* Vignette suave para que el logo / slogan sigan limpios */
-    .hero-main::before {
-        content: "";
-        position: absolute;
-        inset: 0;
-        background:
-            radial-gradient(circle at top center,
-                rgba(15,23,42,0) 0%,
-                rgba(15,23,42,0.10) 55%,
-                rgba(2,6,23,0.78) 100%);
-        z-index: 1;
-        pointer-events: none;
-    }
+/* Overlay con luz */
+.hero-overlay{
+  position:absolute;
+  inset:0;
+  z-index:2;
+  background:
+    radial-gradient(circle at 15% 8%, rgba(56,189,248,.18), transparent 55%),
+    radial-gradient(circle at 85% 18%, rgba(129,140,248,.22), transparent 60%),
+    linear-gradient(to bottom, rgba(2,6,23,0.06) 0%, rgba(2,6,23,.38) 60%, rgba(2,6,23,.90) 100%);
+  pointer-events:none;
+}
 
-    /* Overlay galaxia suave que refuerza bordes */
-    .hero-overlay {
-        position: absolute;
-        inset: 0;
-        background:
-            radial-gradient(circle at 10% 5%, rgba(56,189,248,0.2), transparent 55%),
-            radial-gradient(circle at 85% 15%, rgba(129,140,248,0.26), transparent 60%),
-            linear-gradient(to bottom,
-                rgba(15,23,42,0.05) 0%,
-                rgba(15,23,42,0.35) 55%,
-                rgba(15,23,42,0.85) 100%);
-        mix-blend-mode: normal;
-        z-index: 2;
-        pointer-events: none;
-    }
+/* ---------- CONTENT ZONE ---------- */
+.hero-inner{
+  position:relative;
+  z-index:10;
+  width:100%;
+  max-width:1120px;
+  margin:0 auto;
+  padding: clamp(15.5rem, 38vh, 21rem) 1rem clamp(3.2rem, 6vh, 4.4rem);
+}
 
-    /* Contenedor del contenido (parte de abajo) */
-    .hero-inner {
-        position: relative;
-        z-index: 10;
-        width: 100%;
-        max-width: 1120px;
-        margin: 0 auto;
-        padding:
-            clamp(17rem, 40vh, 21rem) 1rem
-            clamp(3.6rem, 7vh, 4.6rem);
-    }
+@media (min-width:768px){
+  .hero-inner{ padding-left: 1.5rem; padding-right: 1.5rem; }
+}
+@media (max-width:640px){
+  .hero-inner{ padding-top: 10rem; }
+}
 
-    @media (min-width: 768px) {
-        .hero-inner { padding-inline: 1.5rem; }
-    }
+/* ---------- CTA ---------- */
+.hero-cta{
+  display:flex;
+  flex-wrap:wrap;
+  gap:.75rem;
+  align-items:center;
+  justify-content:center;
+  margin-bottom:1.3rem;
+}
 
-    @media (max-width: 640px) {
-        .hero-main {
-            min-height: 100vh;
-        }
-        .hero-inner {
-            padding-top: 10rem;   /* deja espacio para logo + slogan */
-            padding-bottom: 3.4rem;
-        }
-    }
+.btn-primary-hero,
+.btn-ghost-hero{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:.5rem;
+  text-decoration:none;
+  user-select:none;
+  white-space:nowrap;
+  border-radius:999px;
+  transition: transform .18s ease, box-shadow .18s ease, filter .18s ease, background .18s ease, border-color .18s ease;
+  outline: none;
+}
 
-    /* =============================
-       BOTONES HERO
-       ============================= */
+.btn-primary-hero{
+  background: linear-gradient(135deg, var(--cyan), var(--indigo));
+  color: #020617;
+  padding: .78rem 2.15rem;
+  font-weight: 800;
+  font-size: .95rem;
+  box-shadow: 0 18px 48px rgba(56,189,248,.55), 0 0 50px rgba(99,102,241,.35);
+  border: 0;
+}
+.btn-primary-hero:hover{
+  transform: translateY(-2px) scale(1.02);
+  filter: brightness(1.03);
+  box-shadow: 0 26px 68px rgba(56,189,248,.65), 0 0 64px rgba(99,102,241,.45);
+}
+.btn-primary-hero:focus-visible{
+  box-shadow: 0 0 0 3px rgba(56,189,248,.45), 0 26px 68px rgba(56,189,248,.65);
+}
 
-    .btn-primary-hero {
-        border-radius: 999px;
-        background: linear-gradient(135deg, #38bdf8, #6366f1);
-        color: #020617;
-        padding: 0.7rem 2rem;
-        font-size: 0.9rem;
-        font-weight: 600;
-        box-shadow:
-            0 18px 45px rgba(56,189,248,0.75),
-            0 0 40px rgba(56,189,248,0.7);
-        border: none;
-        transition:
-            transform .18s ease,
-            box-shadow .18s ease,
-            filter .18s ease,
-            background .18s ease;
-        white-space: nowrap;
-    }
+.btn-ghost-hero{
+  border: 1px solid rgba(148,163,184,.75);
+  padding: .72rem 1.85rem;
+  background: rgba(15,23,42,.88);
+  color: var(--text);
+  box-shadow: 0 18px 48px rgba(2,6,23,.55);
+}
+.btn-ghost-hero:hover{
+  transform: translateY(-2px);
+  border-color: rgba(147,197,253,1);
+  background: rgba(15,23,42,.96);
+}
+.btn-ghost-hero:focus-visible{
+  box-shadow: 0 0 0 3px rgba(147,197,253,.30), 0 18px 48px rgba(2,6,23,.55);
+}
 
-    .btn-primary-hero:hover {
-        transform: translateY(-2px);
-        filter: brightness(1.05);
-        background: linear-gradient(135deg, #38bdf8, #4f46e5);
-        box-shadow:
-            0 24px 60px rgba(56,189,248,0.9),
-            0 0 55px rgba(129,140,248,0.9);
-    }
+/* En mobile, botones más cómodos */
+@media (max-width:520px){
+  .btn-primary-hero, .btn-ghost-hero{ width:100%; }
+  .hero-cta{ width:100%; }
+}
 
-    .btn-ghost-hero {
-        border-radius: 999px;
-        border: 1px solid rgba(148,163,184,0.85);
-        padding: 0.65rem 1.7rem;
-        font-size: 0.85rem;
-        font-weight: 500;
-        background: rgba(15,23,42,0.9);
-        box-shadow: 0 18px 40px rgba(15,23,42,0.9);
-        color: #e5e7eb;
-        white-space: nowrap;
-        transition:
-            transform .18s ease,
-            border-color .18s ease,
-            background .18s ease,
-            color .18s ease;
-    }
+/* ---------- BAND / CATEGORÍAS ---------- */
+.hero-band{
+  margin-top: clamp(2.6rem, 5vh, 4.1rem);
+  background: rgba(2,6,23,.55);
+  border: 1px solid rgba(51,65,85,.55);
+  border-radius: var(--radius-xl);
+  padding: .9rem .9rem 1rem;
+  box-shadow: var(--shadow);
+}
 
-    .btn-ghost-hero:hover {
-        transform: translateY(-2px);
-        border-color: rgba(191,219,254,1);
-        background: rgba(15,23,42,0.96);
-        color: #f9fafb;
-    }
+/* Barra con fade en laterales */
+.hero-row-wrap{
+  position:relative;
+}
+.hero-row-wrap::before,
+.hero-row-wrap::after{
+  content:"";
+  position:absolute;
+  top:0; bottom:0;
+  width: 48px;
+  z-index: 5;
+  pointer-events:none;
+}
+.hero-row-wrap::before{
+  left:0;
+  background: linear-gradient(to right, rgba(2,6,23,.95), rgba(2,6,23,0));
+}
+.hero-row-wrap::after{
+  right:0;
+  background: linear-gradient(to left, rgba(2,6,23,.95), rgba(2,6,23,0));
+}
 
-    /* =============================
-       CARDS HERO (categorías)
-       ============================= */
+/* Row scrolleable pro */
+.hero-cards-row{
+  display:flex;
+  gap:.9rem;
+  overflow-x:auto;
+  padding: .35rem .35rem .55rem;
+  scroll-snap-type:x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148,163,184,.35) transparent;
+}
+.hero-cards-row::-webkit-scrollbar{ height: 10px; }
+.hero-cards-row::-webkit-scrollbar-thumb{
+  background: rgba(148,163,184,.25);
+  border-radius: 999px;
+}
+.hero-cards-row::-webkit-scrollbar-track{ background: transparent; }
 
-    .hero-band {
-        margin-top: clamp(3.6rem, 7vh, 4.4rem);
-    }
+.hero-card{
+  flex: 0 0 44%;
+  max-width: 240px;
+  scroll-snap-align: start;
+  text-decoration:none;
+  color: inherit;
+}
+@media (min-width:640px){
+  .hero-card{ flex-basis: 23%; }
+}
 
-    .hero-cards-row {
-        display: flex;
-        gap: 0.75rem;
-        padding-inline: 0.25rem;
-        min-width: 100%;
-        scroll-snap-type: x mandatory;
-        -webkit-overflow-scrolling: touch;
-    }
+.hero-card-inner{
+  background:
+    radial-gradient(circle at top left, rgba(56,189,248,.22), transparent 55%),
+    rgba(15,23,42,.96);
+  border-radius: 1.35rem;
+  padding: .75rem;
+  border: 1px solid rgba(51,65,85,.85);
+  box-shadow: 0 24px 56px rgba(2,6,23,.65);
+  transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease, background .22s ease;
+}
+.hero-card-inner:hover{
+  transform: translateY(-4px);
+  border-color: rgba(56,189,248,.95);
+  box-shadow: var(--shadow-strong);
+  background:
+    radial-gradient(circle at top left, rgba(56,189,248,.30), transparent 55%),
+    rgba(8,47,73,.96);
+}
 
-    .hero-card {
-        flex: 0 0 44%;
-        max-width: 220px;
-        scroll-snap-align: start;
-        text-decoration: none;
-    }
+.hero-card-img{
+  width:100%;
+  height: 7.2rem;
+  object-fit: cover;
+  border-radius: 1rem;
+  display:block;
+  margin-bottom:.55rem;
+  border: 1px solid rgba(148,163,184,.18);
+}
+@media (min-width:768px){
+  .hero-card-img{ height: 8.2rem; }
+}
 
-    @media (min-width: 640px) {
-        .hero-card { flex-basis: 23%; }
-    }
+.hero-card-title{
+  font-weight: 800;
+  letter-spacing: .2px;
+  color: #f8fafc;
+  text-transform: capitalize;
+  font-size: .95rem;
+}
+.hero-card-sub{
+  margin-top:.1rem;
+  font-size: .78rem;
+  color: rgba(226,232,240,.75);
+}
 
-    .hero-card-inner {
-        background:
-            radial-gradient(circle at top left,
-                rgba(56,189,248,0.22),
-                transparent 55%),
-            rgba(15,23,42,0.98);
-        border-radius: 1.25rem;
-        padding: 0.6rem 0.7rem 0.75rem;
-        border: 1px solid rgba(51,65,85,0.95);
-        box-shadow:
-            0 22px 46px rgba(15,23,42,0.96),
-            0 0 32px rgba(15,23,42,0.9);
-        transition:
-            transform 0.22s ease,
-            box-shadow 0.22s ease,
-            border-color 0.22s ease,
-            background 0.22s ease;
-    }
+/* ---------- FLOATING REVIEWS ---------- */
+.hero-review{
+  position:absolute;
+  z-index:11;
+  display:none;
+  gap:.5rem;
+  align-items:center;
+  padding: .58rem .95rem;
+  background: rgba(15,23,42,.72);
+  border-radius: 999px;
+  border: 1px solid rgba(148,163,184,.35);
+  box-shadow: 0 18px 40px rgba(2,6,23,.65);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  font-size: .78rem;
+  color: rgba(248,250,252,.92);
+  pointer-events:none;
+  animation: float 8s ease-in-out infinite;
+}
+.hero-review strong{ color: #e0f2fe; font-weight: 800; }
 
-    .hero-card-inner:hover {
-        transform: translateY(-4px);
-        border-color: rgba(56,189,248,0.9);
-        background:
-            radial-gradient(circle at top left,
-                rgba(56,189,248,0.34),
-                transparent 55%),
-            rgba(8,47,73,0.98);
-        box-shadow:
-            0 26px 60px rgba(15,23,42,0.98),
-            0 0 40px rgba(56,189,248,0.7);
-    }
+@media (min-width:900px){
+  .hero-review{ display:flex; }
+  .r1{ left:8%;  bottom:3.2rem; }
+  .r2{ left:42%; bottom:3.8rem; animation-delay:1.4s; }
+  .r3{ right:8%; bottom:3.1rem; animation-delay:2.1s; }
+}
 
-    /* =============================
-       RESEÑAS FLOTANTES
-       ============================= */
+@keyframes float{
+  0%,100%{ transform: translateY(0); }
+  50%{ transform: translateY(-6px); }
+}
 
-    .hero-review-pill {
-        position: absolute;
-        z-index: 11;
-        display: none;
-        align-items: center;
-        gap: 0.55rem;
-        padding: 0.55rem 0.9rem;
-        border-radius: 999px;
-        background: rgba(15,23,42,0.92);
-        border: 1px solid rgba(148,163,184,0.55);
-        box-shadow:
-            0 16px 32px rgba(15,23,42,0.95),
-            0 0 0 1px rgba(30,64,175,0.65);
-        font-size: 0.75rem;
-        color: #e5e7eb;
-        backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px);
-        animation: floatReview 9s ease-in-out infinite;
-        white-space: nowrap;
-        pointer-events: none;
-    }
-
-    .hero-review-pill strong {
-        font-weight: 600;
-        color: #e0f2fe;
-    }
-
-    @media (min-width: 900px) {
-        .hero-review-pill { display: inline-flex; }
-        .hero-review-pill--1 { left: 8%;  bottom: 3.1rem; }
-        .hero-review-pill--2 { left: 42%; bottom: 3.8rem; animation-delay: 1.4s; }
-        .hero-review-pill--3 { right: 9%; bottom: 3.0rem; animation-delay: 2.1s; }
-    }
-
-    @keyframes floatReview {
-        0%,100% { transform: translateY(0); }
-        50%     { transform: translateY(-6px); }
-    }
-
-    /* =============================
-       CARDS COLECCIONES & RESEÑAS
-       ============================= */
-
-    .card-elevated-home {
-        border-radius: 1.4rem;
-        border: 1px solid rgba(148,163,184,0.45);
-        background:
-            radial-gradient(circle at top left,
-                rgba(56,189,248,0.16),
-                transparent 55%),
-            rgba(15,23,42,0.97);
-        box-shadow:
-            0 22px 50px rgba(15,23,42,0.92),
-            0 0 0 1px rgba(15,23,42,1);
-        transition:
-            transform .22s ease,
-            box-shadow .22s ease,
-            border-color .22s ease;
-    }
-
-    .card-elevated-home:hover {
-        transform: translateY(-4px);
-        border-color: rgba(56,189,248,0.9);
-        box-shadow:
-            0 28px 70px rgba(15,23,42,0.96),
-            0 0 0 1px rgba(59,130,246,0.95);
-    }
-
-    .rec-card {
-        border-radius: 1.4rem;
-        background:
-            radial-gradient(circle at top left,
-                rgba(56,189,248,0.18),
-                transparent 55%),
-            rgba(15,23,42,0.96);
-        border: 1px solid rgba(148,163,184,0.45);
-        box-shadow:
-            0 20px 45px rgba(15,23,42,0.85),
-            0 0 0 1px rgba(30,64,175,0.65);
-        padding: 1.3rem 1.4rem;
-        font-size: 0.82rem;
-        line-height: 1.6;
-        color: #cbd5f5;
-        transition:
-            transform .22s ease,
-            box-shadow .22s ease,
-            border-color .22s ease;
-    }
-
-    .rec-card:hover {
-        transform: translateY(-4px);
-        border-color: rgba(56,189,248,0.9);
-        box-shadow:
-            0 26px 60px rgba(15,23,42,0.9),
-            0 0 0 1px rgba(59,130,246,0.9);
-    }
+/* ---------- REDUCIR ANIMACIONES SI EL USER LO PIDE ---------- */
+@media (prefers-reduced-motion: reduce){
+  .hero-review{ animation: none !important; }
+  .btn-primary-hero, .btn-ghost-hero, .hero-card-inner{ transition: none !important; }
+}
 </style>
 {% endblock %}
 
 {% block content %}
+<section class="hero-main" aria-label="Hero Skyline Style">
+  <div class="hero-bg" aria-hidden="true"></div>
+  <div class="hero-overlay" aria-hidden="true"></div>
 
-<!-- ===========================
-     HERO PRINCIPAL
-=========================== -->
-<section class="hero-main">
-    <div class="hero-bg"></div>
-    <div class="hero-overlay"></div>
+  <!-- Floating social proof -->
+  <div class="hero-review r1">⭐ <strong>4.9</strong> · Clientes reales</div>
+  <div class="hero-review r2">🔥 <strong>+120</strong> prendas testeadas</div>
+  <div class="hero-review r3">👕 <strong>Oversize</strong> auténtico</div>
 
-    <!-- Pills reseñas -->
-    <div class="hero-review-pill hero-review-pill--1">
-        <span>⭐ 4,9/5</span>
-        <span><strong>Streams</strong> y fotos</span>
-    </div>
-    <div class="hero-review-pill hero-review-pill--2">
-        <span>🔥</span>
-        <span><strong>+120 prendas</strong> testeadas</span>
-    </div>
-    <div class="hero-review-pill hero-review-pill--3">
-        <span>👕</span>
-        <span><strong>Fit oversize</strong> real</span>
+  <div class="hero-inner">
+    <div class="hero-cta">
+      <a href="{{ url_for('main.shop') }}" class="btn-primary-hero" aria-label="Ver colección completa">
+        Ver colección completa <span aria-hidden="true">→</span>
+      </a>
+      <a href="#destacados" class="btn-ghost-hero" aria-label="Ir a destacados">
+        Ver destacados
+      </a>
     </div>
 
-    <div class="hero-inner">
-        <!-- CTAs -->
-        <div class="flex flex-wrap items-center justify-center gap-3 mb-6 md:mb-7">
-            <a href="{{ url_for('main.shop') }}"
-               class="btn-primary-hero inline-flex items-center justify-center gap-2"
-               aria-label="Ver colección completa Skyline Style">
-                <span>Ver colección completa</span>
-                <span class="text-base" aria-hidden="true">→</span>
+    <section id="destacados" class="hero-band" aria-label="Explorá por categoría">
+      <div class="hero-row-wrap">
+        <div class="hero-cards-row" role="list">
+          {% for cat, img, price in [
+            ('buzos','card_buzos.png','Desde $ 1.490 UYU'),
+            ('remeras','card_remeras.png','Desde $ 1.480 UYU'),
+            ('gorros','card_gorras.png','Desde $ 1.490 UYU'),
+            ('accesorios','card_accesorios.png','Para todos los looks')
+          ] %}
+            <a href="{{ url_for('main.shop') }}?categoria={{ cat }}" class="hero-card" role="listitem" aria-label="Ver categoría {{ cat }}">
+              <div class="hero-card-inner">
+                <img
+                  src="{{ url_for('static', filename='img/hero/' ~ img) }}"
+                  alt="Categoría {{ cat }}"
+                  class="hero-card-img"
+                  loading="lazy"
+                  decoding="async"
+                >
+                <div class="hero-card-title">{{ cat }}</div>
+                <div class="hero-card-sub">{{ price }}</div>
+              </div>
             </a>
-
-            <a href="#destacados"
-               class="btn-ghost-hero inline-flex items-center justify-center gap-2"
-               aria-label="Ver productos destacados">
-                Ver destacados
-            </a>
+          {% endfor %}
         </div>
-
-        <!-- Banda categorías -->
-        <section id="destacados"
-                 class="hero-band bg-slate-950/85 rounded-2xl border border-slate-800/70 px-3.5 py-3.5 md:px-4 md:py-4 shadow-[0_24px_60px_rgba(15,23,42,0.9)]">
-            <div class="flex items-center justify-between gap-3 mb-3">
-                <h2 class="text-sm md:text-base font-semibold text-slate-50">
-                    Explorá por categoría
-                </h2>
-                <a href="{{ url_for('main.shop') }}"
-                   class="text-[11px] md:text-xs text-sky-200 hover:text-skyline.accent transition">
-                    Ver tienda completa →
-                </a>
-            </div>
-
-            <div class="overflow-x-auto -mx-1 pb-1">
-                <div class="hero-cards-row">
-
-                    <a href="{{ url_for('main.shop') }}?categoria=buzos"
-                       class="hero-card">
-                        <div class="hero-card-inner">
-                            <img src="{{ url_for('static', filename='img/hero/card_buzos.png') }}"
-                                 alt="Buzos Skyline Style"
-                                 class="w-full h-28 md:h-32 object-cover rounded-xl mb-2"
-                                 loading="lazy">
-                            <p class="text-xs md:text-sm font-semibold text-slate-50">
-                                Buzos
-                            </p>
-                            <p class="text-[11px] text-slate-300">
-                                Desde $ 1.490 UYU
-                            </p>
-                        </div>
-                    </a>
-
-                    <a href="{{ url_for('main.shop') }}?categoria=remeras"
-                       class="hero-card">
-                        <div class="hero-card-inner">
-                            <img src="{{ url_for('static', filename='img/hero/card_remeras.png') }}"
-                                 alt="Remeras Skyline Style"
-                                 class="w-full h-28 md:h-32 object-cover rounded-xl mb-2"
-                                 loading="lazy">
-                            <p class="text-xs md:text-sm font-semibold text-slate-50">
-                                Remeras
-                            </p>
-                            <p class="text-[11px] text-slate-300">
-                                Desde $ 1.480 UYU
-                            </p>
-                        </div>
-                    </a>
-
-                    <a href="{{ url_for('main.shop') }}?categoria=gorros"
-                       class="hero-card">
-                        <div class="hero-card-inner">
-                            <img src="{{ url_for('static', filename='img/hero/card_gorras.png') }}"
-                                 alt="Gorras Skyline Style"
-                                 class="w-full h-28 md:h-32 object-cover rounded-xl mb-2"
-                                 loading="lazy">
-                            <p class="text-xs md:text-sm font-semibold text-slate-50">
-                                Gorras
-                            </p>
-                            <p class="text-[11px] text-slate-300">
-                                Desde $ 1.490 UYU
-                            </p>
-                        </div>
-                    </a>
-
-                    <a href="{{ url_for('main.shop') }}?categoria=accesorios"
-                       class="hero-card">
-                        <div class="hero-card-inner">
-                            <img src="{{ url_for('static', filename='img/hero/card_accesorios.png') }}"
-                                 alt="Accesorios Skyline Style"
-                                 class="w-full h-28 md:h-32 object-cover rounded-xl mb-2"
-                                 loading="lazy">
-                            <p class="text-xs md:text-sm font-semibold text-slate-50">
-                                Accesorios
-                            </p>
-                            <p class="text-[11px] text-slate-300">
-                                Para todos los looks
-                            </p>
-                        </div>
-                    </a>
-
-                </div>
-            </div>
-        </section>
-
-        <!-- Mini stats -->
-        <dl class="grid grid-cols-3 gap-4 pt-6 text-xs text-slate-300 max-w-xl mx-auto" aria-label="Datos rápidos Skyline Style">
-            <div class="space-y-1 text-center md:text-left">
-                <dt class="text-base font-semibold text-sky-200">+20</dt>
-                <dd>Diseños exclusivos</dd>
-            </div>
-            <div class="space-y-1 text-center md:text-left">
-                <dt class="text-base font-semibold text-sky-200">XS – 5XL</dt>
-                <dd>Para todos los cuerpos</dd>
-            </div>
-            <div class="space-y-1 text-center md:text-left">
-                <dt class="text-base font-semibold text-sky-200">100%</dt>
-                <dd>Identidad Skyline</dd>
-            </div>
-        </dl>
-    </div>
+      </div>
+    </section>
+  </div>
 </section>
-
-<!-- =======================
-     EL RESTO DE LA HOME
-     (colecciones, destacados, reseñas)
-======================= -->
-
-<section id="colecciones" class="max-w-6xl mx-auto px-4 pt-10 pb-6 md:pt-14 md:pb-10">
-    <div class="flex items-center justify-between mb-6">
-        <h2 class="text-xl md:text-2xl font-semibold text-slate-50">
-            Colecciones Skyline
-        </h2>
-        <a href="{{ url_for('main.shop') }}"
-          
+{% endblock %}
