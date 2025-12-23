@@ -5,274 +5,944 @@
 {% block extra_head %}
 <style>
 /* ==========================================================
-   SKYLINE STORE — CLEAR PREMIUM HERO (FINAL)
-   Tienda profesional · Dropshipping · Marca propia
+   SKYLINE STORE — INDEX REVOLUTION PRO (LIGHT · PREMIUM)
+   - moderno + elegante + vivo
+   - coherente con fondo claro premium
+   - secciones completas y funcionales
+   - accesible + motion-safe
 ========================================================== */
 
 /* ---------- TOKENS ---------- */
 :root{
-  --bg: #f8fafc;
-  --panel: #ffffff;
-  --panel-soft: rgba(255,255,255,.85);
-  --border: rgba(15,23,42,.08);
-  --text: #0f172a;
-  --muted: rgba(15,23,42,.65);
-  --primary: #2563eb;
-  --primary-soft: #38bdf8;
-  --shadow-sm: 0 8px 22px rgba(2,6,23,.08);
-  --shadow-md: 0 18px 44px rgba(2,6,23,.12);
-  --radius-xl: 1.25rem;
-  --ring: 0 0 0 3px rgba(37,99,235,.25);
+  --bg0:#f7f8fb;
+  --bg1:#ffffff;
+  --ink:#0b1220;
+  --muted: rgba(11,18,32,.68);
+  --muted2: rgba(11,18,32,.55);
+  --border: rgba(15,23,42,.10);
+
+  /* vivos, modernos (sin “neón barato”) */
+  --a:#2563eb;  /* blue */
+  --b:#06b6d4;  /* cyan */
+  --c:#f59e0b;  /* amber */
+  --d:#22c55e;  /* green */
+  --p:#a855f7;  /* purple accent */
+
+  --glass: rgba(255,255,255,.78);
+  --glass2: rgba(255,255,255,.92);
+
+  --shadow1: 0 12px 28px rgba(2,6,23,.10);
+  --shadow2: 0 24px 70px rgba(2,6,23,.14);
+
+  --r1: 1.1rem;
+  --r2: 1.55rem;
+  --r3: 2.1rem;
+
+  --ring: 0 0 0 3px rgba(37,99,235,.22);
+  --grid: 1200px;
 }
 
-/* ---------- BASE ---------- */
-.hero-main{
-  position: relative;
-  min-height: min(100vh, 880px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+/* ---------- BASE / LAYOUT ---------- */
+.container{
+  width:100%;
+  max-width: var(--grid);
+  margin:0 auto;
+  padding: 0 1.1rem;
+}
+.section{
+  padding: clamp(3.2rem, 6vw, 5rem) 0;
+}
+
+/* ---------- TYPO ---------- */
+.badge{
+  display:inline-flex;
+  align-items:center;
+  gap:.55rem;
+  width: fit-content;
+  padding:.42rem .86rem;
+  border-radius:999px;
+  border: 1px solid rgba(37,99,235,.18);
+  background: linear-gradient(180deg, rgba(255,255,255,.92), rgba(255,255,255,.72));
+  box-shadow: 0 10px 20px rgba(2,6,23,.06);
+  font-weight:950;
+  font-size:.82rem;
+  color: rgba(37,99,235,.96);
+}
+.badge::before{
+  content:"";
+  width:10px;height:10px;border-radius:999px;
+  background: radial-gradient(circle at 30% 30%, #60a5fa, #2563eb);
+  box-shadow: 0 0 0 4px rgba(37,99,235,.12);
+}
+
+.h2{
+  font-size: clamp(1.58rem, 2.6vw, 2.15rem);
+  line-height:1.12;
+  font-weight: 980;
+  letter-spacing: -.65px;
+  margin:.8rem 0 0;
+  color: var(--ink);
+}
+.p{
+  margin:.75rem 0 0;
+  color: var(--muted);
+  line-height:1.75;
+  font-size: 1.02rem;
+}
+
+/* ---------- BUTTONS ---------- */
+.btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:.55rem;
+  border-radius:999px;
+  padding:.92rem 2.25rem;
+  font-weight: 980;
+  border:1px solid transparent;
+  text-decoration:none;
+  transition: transform .18s ease, box-shadow .18s ease, filter .18s ease, border-color .18s ease;
+  user-select:none;
+}
+.btn:hover{ transform: translateY(-2px); filter:saturate(1.05); }
+.btn:focus-visible{ outline:none; box-shadow: var(--ring), var(--shadow1); }
+
+.btn-primary{
+  position:relative;
+  color:#fff;
+  background: linear-gradient(135deg, var(--a), var(--b));
+  box-shadow: var(--shadow2);
+}
+.btn-primary::after{
+  content:"";
+  position:absolute; inset:0;
+  border-radius:999px;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,.34) 40%, transparent 70%);
+  transform: translateX(-60%);
+  opacity:0;
+}
+@media (prefers-reduced-motion: no-preference){
+  .btn-primary:hover::after{ opacity:.9; animation: shine .9s ease forwards; }
+  @keyframes shine{ to{ transform: translateX(70%); opacity:0; } }
+}
+.btn-secondary{
+  color: var(--ink);
+  background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(255,255,255,.72));
+  border-color: rgba(15,23,42,.12);
+  box-shadow: var(--shadow1);
+}
+.btn-secondary:hover{ border-color: rgba(37,99,235,.28); }
+
+.btn-mini{ padding:.74rem 1.15rem; font-size:.92rem; }
+.btn-ghost{
+  background: rgba(255,255,255,.78);
+  border:1px solid rgba(15,23,42,.12);
+  color: var(--ink);
+}
+.btn-ghost:hover{ border-color: rgba(37,99,235,.22); }
+
+/* ==========================================================
+   HERO
+========================================================== */
+.hero{
+  position:relative;
+  min-height: min(100vh, 980px);
+  display:flex;
+  align-items:center;
+  overflow:hidden;
   background:
-    linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
-  color: var(--text);
-  overflow: hidden;
+    radial-gradient(1400px 900px at 12% 10%, rgba(37,99,235,.16), transparent 56%),
+    radial-gradient(1300px 800px at 88% 18%, rgba(245,158,11,.14), transparent 62%),
+    radial-gradient(1000px 700px at 55% 92%, rgba(34,197,94,.12), transparent 58%),
+    linear-gradient(180deg, var(--bg1) 0%, var(--bg0) 100%);
+  color: var(--ink);
+}
+
+.hero::after{
+  content:"";
+  position:absolute; inset:0;
+  pointer-events:none;
+  opacity:.07;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23n)' opacity='.85'/%3E%3C/svg%3E");
+  mix-blend-mode:multiply;
+  z-index:0;
 }
 
 .hero-bg{
   position:absolute;
-  inset:0;
-  background:
-    radial-gradient(circle at 15% 15%, rgba(37,99,235,.10), transparent 55%),
-    radial-gradient(circle at 85% 10%, rgba(56,189,248,.12), transparent 60%);
+  inset:-10%;
   z-index:0;
+  filter: blur(42px) saturate(1.2);
+  opacity:.95;
+}
+.hero-bg .blob{
+  position:absolute;
+  border-radius:999px;
+  transform: translateZ(0);
+  will-change: transform;
+}
+.hero-bg .b1{ width:540px;height:540px; left:-90px; top:-70px;
+  background: radial-gradient(circle at 30% 30%, rgba(37,99,235,.40), transparent 60%);
+}
+.hero-bg .b2{ width:540px;height:540px; right:-130px; top:-55px;
+  background: radial-gradient(circle at 45% 35%, rgba(245,158,11,.30), transparent 62%);
+}
+.hero-bg .b3{ width:560px;height:560px; left:30%; bottom:-250px;
+  background: radial-gradient(circle at 40% 40%, rgba(34,197,94,.24), transparent 64%);
+}
+@media (prefers-reduced-motion: no-preference){
+  .hero-bg .b1{ animation: float1 10s ease-in-out infinite; }
+  .hero-bg .b2{ animation: float2 12s ease-in-out infinite; }
+  .hero-bg .b3{ animation: float3 14s ease-in-out infinite; }
+  @keyframes float1{ 0%,100%{transform:translate(0,0)} 50%{transform:translate(18px,12px)} }
+  @keyframes float2{ 0%,100%{transform:translate(0,0)} 50%{transform:translate(-18px,10px)} }
+  @keyframes float3{ 0%,100%{transform:translate(0,0)} 50%{transform:translate(12px,-16px)} }
 }
 
 .hero-inner{
-  position: relative;
+  position:relative;
   z-index:2;
   width:100%;
-  max-width:1180px;
-  margin:0 auto;
-  padding: clamp(5rem, 10vh, 7rem) 1.25rem 4.5rem;
+  padding: clamp(5.2rem, 10vh, 7.4rem) 0 4.2rem;
 }
 
-/* ---------- GRID ---------- */
 .hero-grid{
   display:grid;
   grid-template-columns: 1fr;
-  gap: clamp(2rem, 4vw, 3rem);
-}
-@media (min-width: 900px){
-  .hero-grid{
-    grid-template-columns: 1.05fr .95fr;
-    align-items: center;
-  }
-}
-
-/* ---------- HEADLINE ---------- */
-.hero-head{
-  display:flex;
-  flex-direction:column;
-  gap:.85rem;
-}
-
-.hero-kicker{
-  display:inline-flex;
+  gap: clamp(1.8rem, 4vw, 3.2rem);
   align-items:center;
-  gap:.4rem;
-  padding:.35rem .7rem;
-  border-radius:999px;
-  background: rgba(37,99,235,.08);
-  color: var(--primary);
-  font-weight:700;
-  font-size:.82rem;
-  width: fit-content;
+}
+@media (min-width: 980px){
+  .hero-grid{ grid-template-columns: 1.08fr .92fr; }
 }
 
 .hero-title{
-  font-size: clamp(2.2rem, 4.5vw, 3.2rem);
-  line-height:1.05;
-  font-weight:900;
-  letter-spacing:-.6px;
+  font-size: clamp(2.35rem, 4.9vw, 3.65rem);
+  line-height:1.03;
+  font-weight: 990;
+  letter-spacing:-.95px;
+  margin:.75rem 0 0;
 }
-
+.hero-title .grad{
+  background: linear-gradient(135deg,
+    rgba(11,18,32,1) 0%,
+    rgba(11,18,32,1) 36%,
+    rgba(37,99,235,.98) 70%,
+    rgba(6,182,212,.98) 100%);
+  -webkit-background-clip:text;
+  background-clip:text;
+  color: transparent;
+}
 .hero-sub{
-  max-width: 44rem;
-  font-size:1.05rem;
-  line-height:1.6;
+  margin: .9rem 0 0;
+  max-width: 52rem;
   color: var(--muted);
+  font-size: 1.06rem;
+  line-height:1.75;
 }
 
-/* ---------- CTA ---------- */
 .hero-cta{
   display:flex;
   flex-wrap:wrap;
   gap:.75rem;
-  margin-top:1.2rem;
+  margin-top:1.35rem;
 }
 
-.btn-primary{
-  background: linear-gradient(135deg, var(--primary), var(--primary-soft));
-  color:#fff;
-  padding:.85rem 2.2rem;
-  border-radius:999px;
-  font-weight:800;
-  border:none;
-  box-shadow: var(--shadow-md);
-  transition:.2s ease;
-}
-.btn-primary:hover{
-  transform: translateY(-2px);
-}
-
-.btn-secondary{
-  background:#fff;
-  color:var(--text);
-  border:1px solid var(--border);
-  padding:.8rem 1.9rem;
-  border-radius:999px;
-  font-weight:600;
-}
-.btn-secondary:hover{
-  border-color: var(--primary);
-}
-
-.btn-primary:focus-visible,
-.btn-secondary:focus-visible{
-  box-shadow: var(--ring);
-}
-
-/* ---------- TRUST BADGES ---------- */
 .hero-chips{
   display:flex;
   flex-wrap:wrap;
+  gap:.55rem;
+  margin-top:1.05rem;
+}
+.chip{
+  display:inline-flex;
+  align-items:center;
   gap:.5rem;
-  margin-top:1.1rem;
-}
-.hero-chip{
-  padding:.4rem .75rem;
+  padding:.46rem .86rem;
   border-radius:999px;
-  background:#fff;
-  border:1px solid var(--border);
+  border:1px solid rgba(15,23,42,.10);
+  background: rgba(255,255,255,.78);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 10px 22px rgba(2,6,23,.06);
   font-size:.78rem;
-  color:var(--muted);
+  color: rgba(11,18,32,.74);
+}
+.chip::before{ content:"✓"; font-weight: 990; color: rgba(34,197,94,.95); }
+
+/* ---------- HERO RIGHT PANEL (CATEGORIES) ---------- */
+.panel{
+  position:relative;
+  border-radius: var(--r3);
+  background: linear-gradient(180deg, rgba(255,255,255,.92), rgba(255,255,255,.72));
+  border: 1px solid rgba(15,23,42,.10);
+  box-shadow: var(--shadow2);
+  padding: 1.05rem;
+  overflow:hidden;
+  backdrop-filter: blur(14px);
+}
+.panel::before{
+  content:"";
+  position:absolute; inset:-2px;
+  background: linear-gradient(135deg,
+    rgba(37,99,235,.18),
+    rgba(6,182,212,.16),
+    rgba(245,158,11,.14),
+    rgba(168,85,247,.12));
+  opacity:.60;
+  filter: blur(18px);
+  z-index:0;
+}
+.panel-inner{ position:relative; z-index:1; }
+
+.panel-head{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:1rem;
+  margin-bottom:.7rem;
+}
+.panel-title{
+  font-weight: 990;
+  letter-spacing:-.2px;
+  font-size: .98rem;
+}
+.panel-hint{
+  color: rgba(11,18,32,.55);
+  font-weight:950;
+  font-size:.82rem;
 }
 
-/* ---------- CATEGORIES ---------- */
-.hero-band{
-  background: var(--panel);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-sm);
-  padding:1rem;
-}
-
-.hero-band-title{
-  font-size:.95rem;
-  font-weight:800;
-  margin-bottom:.5rem;
-}
-
-.hero-row{
+.scroller{
   display:flex;
   gap:.9rem;
   overflow-x:auto;
   scroll-snap-type:x mandatory;
+  padding-bottom:.35rem;
+  -webkit-overflow-scrolling: touch;
 }
+.scroller::-webkit-scrollbar{ height: 10px; }
+.scroller::-webkit-scrollbar-thumb{ background: rgba(15,23,42,.16); border-radius: 999px; }
+.scroller::-webkit-scrollbar-track{ background: transparent; }
 
-.hero-card{
-  flex:0 0 48%;
-  max-width:240px;
+.cat{
+  position:relative;
+  flex:0 0 54%;
+  max-width: 270px;
   scroll-snap-align:start;
-  background:#fff;
-  border-radius:1rem;
-  border:1px solid var(--border);
-  box-shadow: var(--shadow-sm);
-  transition:.25s ease;
+  border-radius: 1.2rem;
+  border:1px solid rgba(15,23,42,.10);
+  background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(255,255,255,.72));
+  box-shadow: var(--shadow1);
+  padding:.74rem;
+  text-decoration:none;
+  color: inherit;
+  transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+  overflow:hidden;
 }
-.hero-card:hover{
-  transform: translateY(-4px);
-  box-shadow: var(--shadow-md);
+.cat::after{
+  content:"";
+  position:absolute;
+  inset:-40% -60%;
+  background:
+    radial-gradient(circle at 30% 30%, rgba(37,99,235,.18), transparent 60%),
+    radial-gradient(circle at 70% 60%, rgba(245,158,11,.12), transparent 62%),
+    radial-gradient(circle at 55% 40%, rgba(168,85,247,.10), transparent 65%);
+  opacity:.65;
+  transform: rotate(12deg);
+  pointer-events:none;
+}
+.cat:hover{
+  transform: translateY(-6px);
+  box-shadow: var(--shadow2);
+  border-color: rgba(37,99,235,.22);
 }
 
-.hero-card img{
+.cat img{
   width:100%;
-  height:7.5rem;
-  object-fit:cover;
-  border-radius:.85rem;
-  margin-bottom:.4rem;
+  height: 8.2rem;
+  object-fit: cover;
+  border-radius: 1rem;
+  border:1px solid rgba(15,23,42,.10);
+  box-shadow: 0 10px 18px rgba(2,6,23,.08);
+  background:#fff;
+  margin-bottom:.6rem;
+}
+.cat-title{ font-weight: 990; font-size: .96rem; letter-spacing:-.2px; position:relative; z-index:1; }
+.cat-sub{ font-size: .8rem; color: rgba(11,18,32,.66); margin-top:.14rem; position:relative; z-index:1; }
+
+/* ==========================================================
+   FEATURED PRODUCTS
+========================================================== */
+.grid3{
+  display:grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  margin-top: 1.25rem;
+}
+@media (min-width: 860px){
+  .grid3{ grid-template-columns: repeat(3, 1fr); }
 }
 
-.hero-card-title{
-  font-weight:700;
-  font-size:.9rem;
+.product{
+  border-radius: var(--r2);
+  border:1px solid rgba(15,23,42,.10);
+  background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(255,255,255,.74));
+  box-shadow: var(--shadow1);
+  overflow:hidden;
+  transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
 }
-.hero-card-sub{
-  font-size:.78rem;
-  color:var(--muted);
+.product:hover{ transform: translateY(-6px); box-shadow: var(--shadow2); border-color: rgba(37,99,235,.18); }
+
+.product-media{
+  position:relative;
+  background:
+    radial-gradient(1200px 420px at 20% 20%, rgba(37,99,235,.14), transparent 55%),
+    radial-gradient(900px 420px at 85% 20%, rgba(245,158,11,.12), transparent 58%),
+    #fff;
+  height: 190px;
+  display:block;
 }
+.product-media img{
+  width:100%; height:100%;
+  object-fit: cover;
+  display:block;
+}
+.product-body{ padding: .98rem 1.02rem 1.05rem; }
+.product-top{
+  display:flex; align-items:center; justify-content:space-between; gap:.8rem;
+}
+
+.tag{
+  display:inline-flex; align-items:center; gap:.45rem;
+  padding:.32rem .65rem;
+  border-radius:999px;
+  font-weight:980;
+  font-size:.75rem;
+  border:1px solid rgba(15,23,42,.10);
+  background: rgba(255,255,255,.80);
+}
+.tag.hot{ border-color: rgba(245,158,11,.25); }
+.tag.new{ border-color: rgba(37,99,235,.22); }
+.tag.best{ border-color: rgba(34,197,94,.22); }
+
+.price{ font-weight: 990; letter-spacing:-.2px; }
+.product-title{
+  margin:.65rem 0 .3rem;
+  font-weight: 990;
+  letter-spacing:-.35px;
+}
+.product-desc{
+  margin:0;
+  color: var(--muted);
+  line-height:1.65;
+  font-size:.96rem;
+}
+.product-actions{
+  display:flex; gap:.6rem; flex-wrap:wrap;
+  margin-top:.9rem;
+}
+
+/* ==========================================================
+   BENEFITS
+========================================================== */
+.benefits{
+  margin-top: 1.25rem;
+  display:grid;
+  grid-template-columns: 1fr;
+  gap: .95rem;
+}
+@media (min-width: 900px){
+  .benefits{ grid-template-columns: repeat(4, 1fr); }
+}
+.benefit{
+  border-radius: var(--r2);
+  border:1px solid rgba(15,23,42,.10);
+  background: rgba(255,255,255,.78);
+  backdrop-filter: blur(12px);
+  box-shadow: var(--shadow1);
+  padding: 1rem 1rem 1.1rem;
+}
+.benefit .ico{
+  width:42px;height:42px;border-radius: 14px;
+  display:grid; place-items:center;
+  background: linear-gradient(135deg, rgba(37,99,235,.18), rgba(6,182,212,.14));
+  border:1px solid rgba(37,99,235,.14);
+  margin-bottom:.55rem;
+  font-weight: 990;
+}
+.benefit h3{
+  margin:.15rem 0 .25rem;
+  font-size: .99rem;
+  font-weight: 990;
+  letter-spacing:-.2px;
+}
+.benefit p{
+  margin:0;
+  color: var(--muted);
+  line-height:1.65;
+  font-size:.95rem;
+}
+
+/* ==========================================================
+   REVIEWS
+========================================================== */
+.reviews{
+  margin-top: 1.25rem;
+  display:grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+@media (min-width: 900px){
+  .reviews{ grid-template-columns: repeat(3, 1fr); }
+}
+.review{
+  border-radius: var(--r2);
+  border:1px solid rgba(15,23,42,.10);
+  background: linear-gradient(180deg, rgba(255,255,255,.95), rgba(255,255,255,.76));
+  box-shadow: var(--shadow1);
+  padding: 1.05rem 1.05rem 1rem;
+  position:relative;
+  overflow:hidden;
+}
+.review::before{
+  content:"";
+  position:absolute; inset:-30% -40%;
+  background:
+    radial-gradient(circle at 30% 30%, rgba(37,99,235,.16), transparent 62%),
+    radial-gradient(circle at 80% 40%, rgba(245,158,11,.12), transparent 62%);
+  opacity:.55;
+  transform: rotate(8deg);
+}
+.review .inner{ position:relative; z-index:1; }
+.stars{ letter-spacing:1px; font-weight: 990; }
+.review p{
+  margin:.55rem 0 .85rem;
+  color: var(--muted);
+  line-height:1.75;
+}
+.person{
+  display:flex; align-items:center; gap:.7rem;
+}
+.avatar{
+  width:42px;height:42px;border-radius: 14px;
+  background: linear-gradient(135deg, rgba(168,85,247,.18), rgba(6,182,212,.14));
+  border:1px solid rgba(15,23,42,.10);
+}
+.person b{ display:block; font-weight: 990; }
+.person span{ display:block; color: var(--muted2); font-size:.88rem; }
+
+/* ==========================================================
+   CTA + NEWSLETTER
+========================================================== */
+.cta-band{
+  border-radius: var(--r3);
+  border:1px solid rgba(15,23,42,.10);
+  background: linear-gradient(135deg,
+    rgba(37,99,235,.16),
+    rgba(6,182,212,.14),
+    rgba(245,158,11,.12),
+    rgba(34,197,94,.12));
+  box-shadow: var(--shadow2);
+  padding: 1.25rem;
+  overflow:hidden;
+  position:relative;
+}
+.cta-band::after{
+  content:"";
+  position:absolute; inset:-30%;
+  background: radial-gradient(circle at 30% 30%, rgba(255,255,255,.52), transparent 60%);
+  filter: blur(20px);
+  opacity:.6;
+}
+.cta-band .row{
+  position:relative;
+  z-index:1;
+  display:flex;
+  flex-direction:column;
+  gap:.9rem;
+}
+@media (min-width: 900px){
+  .cta-band .row{
+    flex-direction:row;
+    align-items:center;
+    justify-content:space-between;
+    gap:1.2rem;
+  }
+}
+.cta-band h3{
+  margin:0;
+  font-size: 1.26rem;
+  font-weight: 990;
+  letter-spacing:-.45px;
+}
+.cta-band p{ margin:.25rem 0 0; color: rgba(11,18,32,.72); }
+
+.form{
+  display:flex;
+  flex-wrap:wrap;
+  gap:.6rem;
+  margin-top:.35rem;
+}
+.input{
+  min-width: 240px;
+  flex:1;
+  padding:.9rem 1rem;
+  border-radius: 999px;
+  border:1px solid rgba(15,23,42,.14);
+  background: rgba(255,255,255,.88);
+  box-shadow: 0 10px 18px rgba(2,6,23,.06);
+}
+.input:focus-visible{ outline:none; box-shadow: var(--ring); }
+.helper{
+  margin:.55rem 0 0;
+  color: var(--muted2);
+  font-size:.92rem;
+}
+
+/* ==========================================================
+   QUICK LINKS / EXTRA
+========================================================== */
+.quick{
+  display:grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  margin-top: 1.25rem;
+}
+@media (min-width: 900px){
+  .quick{ grid-template-columns: 1.15fr .85fr; align-items:start; }
+}
+.box{
+  border-radius: var(--r2);
+  border:1px solid rgba(15,23,42,.10);
+  background: rgba(255,255,255,.78);
+  box-shadow: var(--shadow1);
+  padding: 1rem;
+}
+.links{
+  display:grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap:.55rem 1rem;
+  margin-top:.9rem;
+}
+.links a{
+  color: rgba(11,18,32,.82);
+  text-decoration:none;
+  font-weight:980;
+  font-size:.95rem;
+}
+.links a:hover{ text-decoration: underline; }
 
 /* ---------- ACCESSIBILITY ---------- */
 @media (prefers-reduced-motion: reduce){
-  *{ animation:none!important; transition:none!important; }
+  *{ animation:none!important; transition:none!important; scroll-behavior:auto!important; }
 }
 </style>
 {% endblock %}
 
 {% block content %}
-<section class="hero-main">
-  <div class="hero-bg"></div>
+<!-- =========================
+     HERO
+========================== -->
+<section class="hero" aria-label="Hero Skyline Store">
+  <div class="hero-bg" aria-hidden="true">
+    <div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
+  </div>
 
   <div class="hero-inner">
-    <div class="hero-grid">
+    <div class="container">
+      <div class="hero-grid">
 
-      <!-- LEFT -->
-      <header class="hero-head">
-        <div class="hero-kicker">Skyline Store · Online</div>
+        <!-- LEFT -->
+        <header>
+          <div class="badge">Skyline Store · Online</div>
 
-        <h1 class="hero-title">
-          Moda urbana & productos premium<br>
-          en un solo lugar
-        </h1>
+          <h1 class="hero-title">
+            <span class="grad">Skyline Store</span><br>
+            Moda urbana & dropshipping premium
+          </h1>
 
-        <p class="hero-sub">
-          Marca propia + dropshipping seleccionado.
-          Comprá con confianza, diseño limpio y experiencia profesional.
-        </p>
+          <p class="hero-sub">
+            Una tienda curada: productos Skyline + selección dropshipping.
+            Estilo, calidad y experiencia pro — en un solo lugar.
+          </p>
 
-        <div class="hero-cta">
-          <a href="{{ url_for('main.shop') }}" class="btn-primary">Ver tienda</a>
-          <a href="#categorias" class="btn-secondary">Explorar categorías</a>
-        </div>
+          <div class="hero-cta">
+            <a href="{{ url_for('main.shop') }}" class="btn btn-primary" aria-label="Ir a la tienda">
+              Ver tienda →
+            </a>
+            <a href="#categorias" class="btn btn-secondary" aria-label="Explorar categorías">
+              Explorar categorías
+            </a>
+          </div>
 
-        <div class="hero-chips">
-          <span class="hero-chip">Pagos seguros</span>
-          <span class="hero-chip">Productos verificados</span>
-          <span class="hero-chip">Envíos rápidos</span>
-          <span class="hero-chip">Atención real</span>
-        </div>
-      </header>
+          <div class="hero-chips" aria-label="Confianza y beneficios">
+            <span class="chip">Pagos seguros</span>
+            <span class="chip">Productos verificados</span>
+            <span class="chip">Envíos rápidos</span>
+            <span class="chip">Atención real</span>
+          </div>
+        </header>
 
-      <!-- RIGHT -->
-      <aside id="categorias" class="hero-band">
-        <div class="hero-band-title">Categorías destacadas</div>
+        <!-- RIGHT: CATEGORIES -->
+        <aside id="categorias" class="panel" aria-label="Categorías destacadas">
+          <div class="panel-inner">
+            <div class="panel-head">
+              <div class="panel-title">Categorías destacadas</div>
+              <div class="panel-hint">deslizá →</div>
+            </div>
 
-        <div class="hero-row">
-          {% for cat, img, price in [
-            ('buzos','card_buzos.png','Desde $1.490'),
-            ('remeras','card_remeras.png','Desde $1.480'),
-            ('gorros','card_gorras.png','Desde $1.490'),
-            ('accesorios','card_accesorios.png','Para todos')
-          ] %}
-          <a href="{{ url_for('main.shop') }}?categoria={{ cat }}" class="hero-card">
-            <img src="{{ url_for('static', filename='img/hero/' ~ img) }}" alt="{{ cat }}">
-            <div class="hero-card-title">{{ cat|capitalize }}</div>
-            <div class="hero-card-sub">{{ price }}</div>
-          </a>
-          {% endfor %}
-        </div>
-      </aside>
+            <div class="scroller">
+              {% for cat, img, price in [
+                ('buzos','card_buzos.png','Desde $1.490'),
+                ('remeras','card_remeras.png','Desde $1.480'),
+                ('gorros','card_gorras.png','Desde $1.490'),
+                ('accesorios','card_accesorios.png','Para todos')
+              ] %}
+              <a href="{{ url_for('main.shop') }}?categoria={{ cat }}" class="cat">
+                <img
+                  src="{{ url_for('static', filename='img/hero/' ~ img) }}"
+                  alt="{{ cat|capitalize }}"
+                  onerror="this.style.display='none'; this.parentElement.innerHTML += '<div style=&quot;font-weight:990;color:rgba(11,18,32,.72);padding:.35rem .25rem .15rem;&quot;>{{ cat|capitalize }}</div><div style=&quot;color:rgba(11,18,32,.60);font-size:.82rem;padding:0 .25rem .65rem;&quot;{{ price }}</div>';"
+                >
+                <div class="cat-title">{{ cat|capitalize }}</div>
+                <div class="cat-sub">{{ price }}</div>
+              </a>
+              {% endfor %}
+            </div>
+          </div>
+        </aside>
 
+      </div>
     </div>
   </div>
 </section>
+
+<!-- =========================
+     FEATURED PRODUCTS
+========================== -->
+<section class="section" id="destacados" aria-label="Productos destacados">
+  <div class="container">
+    <div class="badge">Selección curada</div>
+    <h2 class="h2">Destacados del momento</h2>
+    <p class="p">Lo más buscado y lo nuevo. Entrá, elegí y comprá sin vueltas.</p>
+
+    {% set featured = [
+      {
+        "tag":"Nuevo","tag_cls":"new",
+        "title":"Hoodie Skyline Essential",
+        "desc":"Calce premium + estilo limpio, ideal para todos los días.",
+        "price":"$1.990",
+        "img":"featured_hoodie.jpg",
+        "href": url_for('main.shop') ~ "?categoria=buzos"
+      },
+      {
+        "tag":"Hot","tag_cls":"hot",
+        "title":"Remera Skyline Street",
+        "desc":"Liviana, urbana y combinable. La base de cualquier outfit.",
+        "price":"$1.480",
+        "img":"featured_remera.jpg",
+        "href": url_for('main.shop') ~ "?categoria=remeras"
+      },
+      {
+        "tag":"Top","tag_cls":"best",
+        "title":"Gorra Skyline Classic",
+        "desc":"Minimal, pro y con actitud. Cierra el look.",
+        "price":"$1.490",
+        "img":"featured_gorra.jpg",
+        "href": url_for('main.shop') ~ "?categoria=gorros"
+      }
+    ] %}
+
+    <div class="grid3">
+      {% for p in featured %}
+      <article class="product">
+        <div class="product-media">
+          <img
+            src="{{ url_for('static', filename='img/hero/' ~ p.img) }}"
+            alt="{{ p.title }}"
+            onerror="this.style.display='none'; this.parentElement.style.display='grid'; this.parentElement.style.placeItems='center'; this.parentElement.innerHTML='<div style=&quot;font-weight:990;color:rgba(11,18,32,.72);padding:1rem;text-align:center&quot;>Agregá una imagen en<br><b>static/img/hero/{{ p.img }}</b></div>';"
+          >
+        </div>
+        <div class="product-body">
+          <div class="product-top">
+            <span class="tag {{ p.tag_cls }}">{{ p.tag }}</span>
+            <span class="price">{{ p.price }}</span>
+          </div>
+          <div class="product-title">{{ p.title }}</div>
+          <p class="product-desc">{{ p.desc }}</p>
+
+          <div class="product-actions">
+            <a class="btn btn-primary btn-mini" href="{{ p.href }}">Ver en tienda</a>
+            <a class="btn btn-ghost btn-mini" href="#newsletter">Recibir drops</a>
+          </div>
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+<!-- =========================
+     BENEFITS
+========================== -->
+<section class="section" id="beneficios" aria-label="Beneficios Skyline Store">
+  <div class="container">
+    <div class="badge">Experiencia premium</div>
+    <h2 class="h2">Comprar acá se siente mejor</h2>
+    <p class="p">Detalles que suman: confianza, rapidez y selección real.</p>
+
+    <div class="benefits">
+      <div class="benefit">
+        <div class="ico">🔒</div>
+        <h3>Pagos seguros</h3>
+        <p>Checkout confiable y procesos claros.</p>
+      </div>
+      <div class="benefit">
+        <div class="ico">✅</div>
+        <h3>Curado real</h3>
+        <p>Elegimos productos con criterio, no catálogo infinito sin filtro.</p>
+      </div>
+      <div class="benefit">
+        <div class="ico">🚚</div>
+        <h3>Envíos rápidos</h3>
+        <p>Opciones ágiles y seguimiento cuando aplica.</p>
+      </div>
+      <div class="benefit">
+        <div class="ico">💬</div>
+        <h3>Atención humana</h3>
+        <p>Te respondemos de verdad. Sin bots raros.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =========================
+     REVIEWS
+========================== -->
+<section class="section" id="reviews" aria-label="Opiniones de clientes">
+  <div class="container">
+    <div class="badge">Social proof</div>
+    <h2 class="h2">Lo que dicen cuando compran</h2>
+    <p class="p">Confianza construida en experiencia y estética.</p>
+
+    <div class="reviews">
+      <div class="review">
+        <div class="inner">
+          <div class="stars">★★★★★</div>
+          <p>“Llegó rápido y el diseño se ve premium. La web es re cómoda.”</p>
+          <div class="person">
+            <div class="avatar" aria-hidden="true"></div>
+            <div><b>Agus</b><span>Montevideo</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="review">
+        <div class="inner">
+          <div class="stars">★★★★★</div>
+          <p>“Me encantó la selección, no es el típico catálogo sin sentido.”</p>
+          <div class="person">
+            <div class="avatar" aria-hidden="true"></div>
+            <div><b>Martina</b><span>Canelones</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="review">
+        <div class="inner">
+          <div class="stars">★★★★★</div>
+          <p>“La estética es otra cosa. Se nota que está pensado para vender.”</p>
+          <div class="person">
+            <div class="avatar" aria-hidden="true"></div>
+            <div><b>Facu</b><span>Maldonado</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =========================
+     CTA + NEWSLETTER (FUNCIONAL)
+========================== -->
+<section class="section" id="newsletter" aria-label="Newsletter y drops">
+  <div class="container">
+    <div class="cta-band">
+      <div class="row">
+        <div>
+          <h3>Recibí drops, ofertas y lanzamientos</h3>
+          <p>1 mail por semana. Sin spam. Te avisamos cuando sale lo bueno.</p>
+        </div>
+
+        <form class="form" onsubmit="return SkylineNewsletter.save(event)">
+          <input class="input" type="email" name="email" required placeholder="Tu email (ej: gaby@gmail.com)" aria-label="Email">
+          <button class="btn btn-primary" type="submit">Suscribirme</button>
+        </form>
+      </div>
+      <p class="helper" id="newsletter-msg" role="status" aria-live="polite"></p>
+    </div>
+
+    <div class="quick">
+      <div class="box">
+        <h2 class="h2" style="font-size:1.35rem;margin:0;">Explorá rápido</h2>
+        <p class="p" style="margin-top:.55rem;">Entrá directo a lo que querés, sin perder tiempo.</p>
+
+        <div class="links">
+          <a href="{{ url_for('main.shop') }}?categoria=buzos">Buzos</a>
+          <a href="{{ url_for('main.shop') }}?categoria=remeras">Remeras</a>
+          <a href="{{ url_for('main.shop') }}?categoria=gorros">Gorros</a>
+          <a href="{{ url_for('main.shop') }}?categoria=accesorios">Accesorios</a>
+          <a href="{{ url_for('main.shop') }}">Todo el catálogo</a>
+          <a href="{{ url_for('main.profile') }}">Mi perfil</a>
+        </div>
+      </div>
+
+      <div class="box">
+        <h2 class="h2" style="font-size:1.35rem;margin:0;">Acción rápida</h2>
+        <p class="p" style="margin-top:.55rem;">¿Listo para ver lo nuevo? Dale una vuelta a la tienda.</p>
+
+        <div style="margin-top:.9rem; display:flex; gap:.6rem; flex-wrap:wrap;">
+          <a class="btn btn-secondary btn-mini" href="{{ url_for('main.shop') }}">Ver tienda</a>
+          <a class="btn btn-ghost btn-mini" href="#reviews">Ver reseñas</a>
+        </div>
+
+        <p class="helper" style="margin-top:.85rem;">
+          Tip: agregá WhatsApp / Instagram en el footer global (base.html) para convertir más.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+/* ==========================================================
+   Newsletter funcional sin backend:
+   - guarda email en localStorage
+   - mensaje accesible (aria-live)
+   - listo para luego reemplazar por POST al servidor
+========================================================== */
+const SkylineNewsletter = {
+  key: "skyline_newsletter_email",
+  save(e){
+    e.preventDefault();
+    const form = e.target;
+    const msg = document.getElementById("newsletter-msg");
+    const email = (new FormData(form).get("email") || "").toString().trim();
+
+    if(!email || !email.includes("@")){
+      msg.textContent = "Poné un email válido 🙂";
+      return false;
+    }
+
+    try{
+      localStorage.setItem(this.key, email);
+      msg.textContent = "Listo ✅ Te avisamos en el próximo drop.";
+      form.reset();
+    }catch(err){
+      msg.textContent = "No pude guardar el email en este navegador. Probá de nuevo.";
+    }
+    return false;
+  }
+};
+</script>
 {% endblock %}
