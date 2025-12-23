@@ -1,93 +1,106 @@
+{# templates/index.html #}
 {% extends "base.html" %}
-{% block title %}Skyline Style · Streetwear con actitud{% endblock %}
+{% block title %}Skyline Store · Moda urbana & dropshipping premium{% endblock %}
 
 {% block extra_head %}
 <style>
 /* ==========================================================
-   SKYLINE STYLE · HERO PREMIUM (PRO)
-   - Responsive + accesible + smooth scroll row
-   - Motion-safe (prefers-reduced-motion)
-   - No depende de Tailwind (clases propias)
+   SKYLINE STORE — CLEAR PREMIUM HERO (FINAL)
+   Tienda profesional · Dropshipping · Marca propia
 ========================================================== */
 
 /* ---------- TOKENS ---------- */
 :root{
-  --bg: #020617;
-  --panel: rgba(15,23,42,.92);
-  --border: rgba(148,163,184,.40);
-  --text: #e5e7eb;
-  --muted: rgba(226,232,240,.78);
-  --cyan: #38bdf8;
-  --indigo: #6366f1;
-  --shadow: 0 24px 60px rgba(2,6,23,.55);
-  --shadow-strong: 0 28px 70px rgba(2,6,23,.75);
+  --bg: #f8fafc;
+  --panel: #ffffff;
+  --panel-soft: rgba(255,255,255,.85);
+  --border: rgba(15,23,42,.08);
+  --text: #0f172a;
+  --muted: rgba(15,23,42,.65);
+  --primary: #2563eb;
+  --primary-soft: #38bdf8;
+  --shadow-sm: 0 8px 22px rgba(2,6,23,.08);
+  --shadow-md: 0 18px 44px rgba(2,6,23,.12);
   --radius-xl: 1.25rem;
+  --ring: 0 0 0 3px rgba(37,99,235,.25);
 }
 
-/* ---------- HERO WRAPPER ---------- */
+/* ---------- BASE ---------- */
 .hero-main{
   position: relative;
-  min-height: min(100vh, 920px);
+  min-height: min(100vh, 880px);
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
-  background: var(--bg);
+  background:
+    linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
   color: var(--text);
   overflow: hidden;
-  isolation: isolate;
 }
 
-/* Imagen master */
 .hero-bg{
-  position: absolute;
-  inset: 0;
-  background-image: url("{{ url_for('static', filename='img/hero/skyline_hero_master.png') }}");
-  background-repeat: no-repeat;
-  background-position: center top;
-  background-size: contain;
-  filter: brightness(1.06) contrast(1.05) saturate(1.08);
-  transform: translateZ(0);
-  z-index: 0;
-}
-
-/* Vignette + depth */
-.hero-main::before{
-  content:"";
   position:absolute;
   inset:0;
-  z-index:1;
   background:
-    radial-gradient(circle at top center, rgba(2,6,23,0) 0%, rgba(2,6,23,.18) 56%, rgba(2,6,23,.92) 100%);
-  pointer-events:none;
+    radial-gradient(circle at 15% 15%, rgba(37,99,235,.10), transparent 55%),
+    radial-gradient(circle at 85% 10%, rgba(56,189,248,.12), transparent 60%);
+  z-index:0;
 }
 
-/* Overlay con luz */
-.hero-overlay{
-  position:absolute;
-  inset:0;
-  z-index:2;
-  background:
-    radial-gradient(circle at 15% 8%, rgba(56,189,248,.18), transparent 55%),
-    radial-gradient(circle at 85% 18%, rgba(129,140,248,.22), transparent 60%),
-    linear-gradient(to bottom, rgba(2,6,23,0.06) 0%, rgba(2,6,23,.38) 60%, rgba(2,6,23,.90) 100%);
-  pointer-events:none;
-}
-
-/* ---------- CONTENT ZONE ---------- */
 .hero-inner{
-  position:relative;
-  z-index:10;
+  position: relative;
+  z-index:2;
   width:100%;
-  max-width:1120px;
+  max-width:1180px;
   margin:0 auto;
-  padding: clamp(15.5rem, 38vh, 21rem) 1rem clamp(3.2rem, 6vh, 4.4rem);
+  padding: clamp(5rem, 10vh, 7rem) 1.25rem 4.5rem;
 }
 
-@media (min-width:768px){
-  .hero-inner{ padding-left: 1.5rem; padding-right: 1.5rem; }
+/* ---------- GRID ---------- */
+.hero-grid{
+  display:grid;
+  grid-template-columns: 1fr;
+  gap: clamp(2rem, 4vw, 3rem);
 }
-@media (max-width:640px){
-  .hero-inner{ padding-top: 10rem; }
+@media (min-width: 900px){
+  .hero-grid{
+    grid-template-columns: 1.05fr .95fr;
+    align-items: center;
+  }
+}
+
+/* ---------- HEADLINE ---------- */
+.hero-head{
+  display:flex;
+  flex-direction:column;
+  gap:.85rem;
+}
+
+.hero-kicker{
+  display:inline-flex;
+  align-items:center;
+  gap:.4rem;
+  padding:.35rem .7rem;
+  border-radius:999px;
+  background: rgba(37,99,235,.08);
+  color: var(--primary);
+  font-weight:700;
+  font-size:.82rem;
+  width: fit-content;
+}
+
+.hero-title{
+  font-size: clamp(2.2rem, 4.5vw, 3.2rem);
+  line-height:1.05;
+  font-weight:900;
+  letter-spacing:-.6px;
+}
+
+.hero-sub{
+  max-width: 44rem;
+  font-size:1.05rem;
+  line-height:1.6;
+  color: var(--muted);
 }
 
 /* ---------- CTA ---------- */
@@ -95,258 +108,171 @@
   display:flex;
   flex-wrap:wrap;
   gap:.75rem;
-  align-items:center;
-  justify-content:center;
-  margin-bottom:1.3rem;
+  margin-top:1.2rem;
 }
 
-.btn-primary-hero,
-.btn-ghost-hero{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  gap:.5rem;
-  text-decoration:none;
-  user-select:none;
-  white-space:nowrap;
+.btn-primary{
+  background: linear-gradient(135deg, var(--primary), var(--primary-soft));
+  color:#fff;
+  padding:.85rem 2.2rem;
   border-radius:999px;
-  transition: transform .18s ease, box-shadow .18s ease, filter .18s ease, background .18s ease, border-color .18s ease;
-  outline: none;
+  font-weight:800;
+  border:none;
+  box-shadow: var(--shadow-md);
+  transition:.2s ease;
 }
-
-.btn-primary-hero{
-  background: linear-gradient(135deg, var(--cyan), var(--indigo));
-  color: #020617;
-  padding: .78rem 2.15rem;
-  font-weight: 800;
-  font-size: .95rem;
-  box-shadow: 0 18px 48px rgba(56,189,248,.55), 0 0 50px rgba(99,102,241,.35);
-  border: 0;
-}
-.btn-primary-hero:hover{
-  transform: translateY(-2px) scale(1.02);
-  filter: brightness(1.03);
-  box-shadow: 0 26px 68px rgba(56,189,248,.65), 0 0 64px rgba(99,102,241,.45);
-}
-.btn-primary-hero:focus-visible{
-  box-shadow: 0 0 0 3px rgba(56,189,248,.45), 0 26px 68px rgba(56,189,248,.65);
-}
-
-.btn-ghost-hero{
-  border: 1px solid rgba(148,163,184,.75);
-  padding: .72rem 1.85rem;
-  background: rgba(15,23,42,.88);
-  color: var(--text);
-  box-shadow: 0 18px 48px rgba(2,6,23,.55);
-}
-.btn-ghost-hero:hover{
+.btn-primary:hover{
   transform: translateY(-2px);
-  border-color: rgba(147,197,253,1);
-  background: rgba(15,23,42,.96);
-}
-.btn-ghost-hero:focus-visible{
-  box-shadow: 0 0 0 3px rgba(147,197,253,.30), 0 18px 48px rgba(2,6,23,.55);
 }
 
-/* En mobile, botones más cómodos */
-@media (max-width:520px){
-  .btn-primary-hero, .btn-ghost-hero{ width:100%; }
-  .hero-cta{ width:100%; }
+.btn-secondary{
+  background:#fff;
+  color:var(--text);
+  border:1px solid var(--border);
+  padding:.8rem 1.9rem;
+  border-radius:999px;
+  font-weight:600;
+}
+.btn-secondary:hover{
+  border-color: var(--primary);
 }
 
-/* ---------- BAND / CATEGORÍAS ---------- */
+.btn-primary:focus-visible,
+.btn-secondary:focus-visible{
+  box-shadow: var(--ring);
+}
+
+/* ---------- TRUST BADGES ---------- */
+.hero-chips{
+  display:flex;
+  flex-wrap:wrap;
+  gap:.5rem;
+  margin-top:1.1rem;
+}
+.hero-chip{
+  padding:.4rem .75rem;
+  border-radius:999px;
+  background:#fff;
+  border:1px solid var(--border);
+  font-size:.78rem;
+  color:var(--muted);
+}
+
+/* ---------- CATEGORIES ---------- */
 .hero-band{
-  margin-top: clamp(2.6rem, 5vh, 4.1rem);
-  background: rgba(2,6,23,.55);
-  border: 1px solid rgba(51,65,85,.55);
+  background: var(--panel);
   border-radius: var(--radius-xl);
-  padding: .9rem .9rem 1rem;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-sm);
+  padding:1rem;
 }
 
-/* Barra con fade en laterales */
-.hero-row-wrap{
-  position:relative;
-}
-.hero-row-wrap::before,
-.hero-row-wrap::after{
-  content:"";
-  position:absolute;
-  top:0; bottom:0;
-  width: 48px;
-  z-index: 5;
-  pointer-events:none;
-}
-.hero-row-wrap::before{
-  left:0;
-  background: linear-gradient(to right, rgba(2,6,23,.95), rgba(2,6,23,0));
-}
-.hero-row-wrap::after{
-  right:0;
-  background: linear-gradient(to left, rgba(2,6,23,.95), rgba(2,6,23,0));
+.hero-band-title{
+  font-size:.95rem;
+  font-weight:800;
+  margin-bottom:.5rem;
 }
 
-/* Row scrolleable pro */
-.hero-cards-row{
+.hero-row{
   display:flex;
   gap:.9rem;
   overflow-x:auto;
-  padding: .35rem .35rem .55rem;
   scroll-snap-type:x mandatory;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(148,163,184,.35) transparent;
 }
-.hero-cards-row::-webkit-scrollbar{ height: 10px; }
-.hero-cards-row::-webkit-scrollbar-thumb{
-  background: rgba(148,163,184,.25);
-  border-radius: 999px;
-}
-.hero-cards-row::-webkit-scrollbar-track{ background: transparent; }
 
 .hero-card{
-  flex: 0 0 44%;
-  max-width: 240px;
-  scroll-snap-align: start;
-  text-decoration:none;
-  color: inherit;
+  flex:0 0 48%;
+  max-width:240px;
+  scroll-snap-align:start;
+  background:#fff;
+  border-radius:1rem;
+  border:1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  transition:.25s ease;
 }
-@media (min-width:640px){
-  .hero-card{ flex-basis: 23%; }
-}
-
-.hero-card-inner{
-  background:
-    radial-gradient(circle at top left, rgba(56,189,248,.22), transparent 55%),
-    rgba(15,23,42,.96);
-  border-radius: 1.35rem;
-  padding: .75rem;
-  border: 1px solid rgba(51,65,85,.85);
-  box-shadow: 0 24px 56px rgba(2,6,23,.65);
-  transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease, background .22s ease;
-}
-.hero-card-inner:hover{
+.hero-card:hover{
   transform: translateY(-4px);
-  border-color: rgba(56,189,248,.95);
-  box-shadow: var(--shadow-strong);
-  background:
-    radial-gradient(circle at top left, rgba(56,189,248,.30), transparent 55%),
-    rgba(8,47,73,.96);
+  box-shadow: var(--shadow-md);
 }
 
-.hero-card-img{
+.hero-card img{
   width:100%;
-  height: 7.2rem;
-  object-fit: cover;
-  border-radius: 1rem;
-  display:block;
-  margin-bottom:.55rem;
-  border: 1px solid rgba(148,163,184,.18);
-}
-@media (min-width:768px){
-  .hero-card-img{ height: 8.2rem; }
+  height:7.5rem;
+  object-fit:cover;
+  border-radius:.85rem;
+  margin-bottom:.4rem;
 }
 
 .hero-card-title{
-  font-weight: 800;
-  letter-spacing: .2px;
-  color: #f8fafc;
-  text-transform: capitalize;
-  font-size: .95rem;
+  font-weight:700;
+  font-size:.9rem;
 }
 .hero-card-sub{
-  margin-top:.1rem;
-  font-size: .78rem;
-  color: rgba(226,232,240,.75);
+  font-size:.78rem;
+  color:var(--muted);
 }
 
-/* ---------- FLOATING REVIEWS ---------- */
-.hero-review{
-  position:absolute;
-  z-index:11;
-  display:none;
-  gap:.5rem;
-  align-items:center;
-  padding: .58rem .95rem;
-  background: rgba(15,23,42,.72);
-  border-radius: 999px;
-  border: 1px solid rgba(148,163,184,.35);
-  box-shadow: 0 18px 40px rgba(2,6,23,.65);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  font-size: .78rem;
-  color: rgba(248,250,252,.92);
-  pointer-events:none;
-  animation: float 8s ease-in-out infinite;
-}
-.hero-review strong{ color: #e0f2fe; font-weight: 800; }
-
-@media (min-width:900px){
-  .hero-review{ display:flex; }
-  .r1{ left:8%;  bottom:3.2rem; }
-  .r2{ left:42%; bottom:3.8rem; animation-delay:1.4s; }
-  .r3{ right:8%; bottom:3.1rem; animation-delay:2.1s; }
-}
-
-@keyframes float{
-  0%,100%{ transform: translateY(0); }
-  50%{ transform: translateY(-6px); }
-}
-
-/* ---------- REDUCIR ANIMACIONES SI EL USER LO PIDE ---------- */
+/* ---------- ACCESSIBILITY ---------- */
 @media (prefers-reduced-motion: reduce){
-  .hero-review{ animation: none !important; }
-  .btn-primary-hero, .btn-ghost-hero, .hero-card-inner{ transition: none !important; }
+  *{ animation:none!important; transition:none!important; }
 }
 </style>
 {% endblock %}
 
 {% block content %}
-<section class="hero-main" aria-label="Hero Skyline Style">
-  <div class="hero-bg" aria-hidden="true"></div>
-  <div class="hero-overlay" aria-hidden="true"></div>
-
-  <!-- Floating social proof -->
-  <div class="hero-review r1">⭐ <strong>4.9</strong> · Clientes reales</div>
-  <div class="hero-review r2">🔥 <strong>+120</strong> prendas testeadas</div>
-  <div class="hero-review r3">👕 <strong>Oversize</strong> auténtico</div>
+<section class="hero-main">
+  <div class="hero-bg"></div>
 
   <div class="hero-inner">
-    <div class="hero-cta">
-      <a href="{{ url_for('main.shop') }}" class="btn-primary-hero" aria-label="Ver colección completa">
-        Ver colección completa <span aria-hidden="true">→</span>
-      </a>
-      <a href="#destacados" class="btn-ghost-hero" aria-label="Ir a destacados">
-        Ver destacados
-      </a>
-    </div>
+    <div class="hero-grid">
 
-    <section id="destacados" class="hero-band" aria-label="Explorá por categoría">
-      <div class="hero-row-wrap">
-        <div class="hero-cards-row" role="list">
+      <!-- LEFT -->
+      <header class="hero-head">
+        <div class="hero-kicker">Skyline Store · Online</div>
+
+        <h1 class="hero-title">
+          Moda urbana & productos premium<br>
+          en un solo lugar
+        </h1>
+
+        <p class="hero-sub">
+          Marca propia + dropshipping seleccionado.
+          Comprá con confianza, diseño limpio y experiencia profesional.
+        </p>
+
+        <div class="hero-cta">
+          <a href="{{ url_for('main.shop') }}" class="btn-primary">Ver tienda</a>
+          <a href="#categorias" class="btn-secondary">Explorar categorías</a>
+        </div>
+
+        <div class="hero-chips">
+          <span class="hero-chip">Pagos seguros</span>
+          <span class="hero-chip">Productos verificados</span>
+          <span class="hero-chip">Envíos rápidos</span>
+          <span class="hero-chip">Atención real</span>
+        </div>
+      </header>
+
+      <!-- RIGHT -->
+      <aside id="categorias" class="hero-band">
+        <div class="hero-band-title">Categorías destacadas</div>
+
+        <div class="hero-row">
           {% for cat, img, price in [
-            ('buzos','card_buzos.png','Desde $ 1.490 UYU'),
-            ('remeras','card_remeras.png','Desde $ 1.480 UYU'),
-            ('gorros','card_gorras.png','Desde $ 1.490 UYU'),
-            ('accesorios','card_accesorios.png','Para todos los looks')
+            ('buzos','card_buzos.png','Desde $1.490'),
+            ('remeras','card_remeras.png','Desde $1.480'),
+            ('gorros','card_gorras.png','Desde $1.490'),
+            ('accesorios','card_accesorios.png','Para todos')
           ] %}
-            <a href="{{ url_for('main.shop') }}?categoria={{ cat }}" class="hero-card" role="listitem" aria-label="Ver categoría {{ cat }}">
-              <div class="hero-card-inner">
-                <img
-                  src="{{ url_for('static', filename='img/hero/' ~ img) }}"
-                  alt="Categoría {{ cat }}"
-                  class="hero-card-img"
-                  loading="lazy"
-                  decoding="async"
-                >
-                <div class="hero-card-title">{{ cat }}</div>
-                <div class="hero-card-sub">{{ price }}</div>
-              </div>
-            </a>
+          <a href="{{ url_for('main.shop') }}?categoria={{ cat }}" class="hero-card">
+            <img src="{{ url_for('static', filename='img/hero/' ~ img) }}" alt="{{ cat }}">
+            <div class="hero-card-title">{{ cat|capitalize }}</div>
+            <div class="hero-card-sub">{{ price }}</div>
+          </a>
           {% endfor %}
         </div>
-      </div>
-    </section>
+      </aside>
+
+    </div>
   </div>
 </section>
 {% endblock %}

@@ -1,325 +1,271 @@
+{# templates/shop.html — Skyline Store (Light Elegant Commerce) #}
 {% extends "base.html" %}
-
-{% block title %}Tienda Skyline Style{% endblock %}
+{% block title %}Tienda · Skyline Style{% endblock %}
 
 {% block extra_head %}
 <style>
-    /* ---------- Efectos para cards ---------- */
-    .card-hover {
-        transition:
-            transform 0.35s ease,
-            box-shadow 0.35s ease,
-            border-color 0.25s ease,
-            background-color 0.25s ease;
-    }
-    .card-hover:hover {
-        transform: translateY(-6px) scale(1.015);
-        box-shadow: 0 20px 30px -10px rgba(15,23,42,0.18);
-        border-color: rgba(251,191,36,0.8); /* amber-400 */
-        background-color: #fefce8;          /* amber-50 */
-    }
+/* ==========================================================
+   SKYLINE STYLE · SHOP — LIGHT ELEGANT PRO
+   Diseño claro, profesional y orientado a conversión
+========================================================== */
 
-    /* Pills de filtros / categorías */
-    .filter-pill {
-        display: inline-flex;
-        align-items: center;
-        gap: .35rem;
-        border-radius: 9999px;
-        padding: .45rem 1.1rem;
-        border: 1px solid #e2e8f0; /* slate-200 */
-        font-size: .75rem;
-        line-height: 1;
-        color: #0f172a;
-        background: rgba(248,250,252,0.9);
-        cursor: pointer;
-        white-space: nowrap;
-        transition:
-            background-color .25s ease,
-            border-color .25s ease,
-            color .25s ease,
-            transform .2s ease;
-    }
-    .filter-pill:hover {
-        border-color: #fbbf24;  /* amber-400 */
-        color: #b45309;         /* amber-700 */
-        transform: translateY(-1px);
-        background: #fffbeb;    /* amber-50 */
-    }
-    .filter-pill.is-active {
-        border-color: #f97316;  /* orange-500 */
-        background: #fffbeb;
-        color: #9a3412;
-        font-weight: 600;
-    }
+/* ---------- TOKENS ---------- */
+:root{
+  --bg:#ffffff;
+  --panel:#f8fafc;
+  --panel-2:#f1f5f9;
+  --border:#e2e8f0;
+  --text:#0f172a;
+  --muted:#64748b;
+  --brand:#2563eb;
+  --brand-soft:#eff6ff;
+  --accent:#f59e0b;
+  --radius-xl:1.25rem;
+  --radius-lg:1rem;
+  --shadow-sm:0 6px 18px rgba(15,23,42,.06);
+  --shadow-md:0 18px 40px rgba(15,23,42,.10);
+}
 
-    /* Scroll horizontal para filtros en mobile */
-    .filters-scroll {
-        display: flex;
-        gap: .5rem;
-        padding-bottom: .25rem;
-        overflow-x: auto;
-        scrollbar-width: thin;
-    }
-    .filters-scroll::-webkit-scrollbar {
-        height: 4px;
-    }
-    .filters-scroll::-webkit-scrollbar-thumb {
-        background: rgba(148,163,184,0.5);
-        border-radius: 9999px;
-    }
+/* ---------- LAYOUT ---------- */
+.shop-wrap{
+  max-width:1200px;
+  margin:0 auto;
+  padding:3rem 1rem 5rem;
+}
+
+@media(min-width:768px){
+  .shop-wrap{ padding:4rem 1.5rem 6rem; }
+}
+
+/* ---------- HEADER ---------- */
+.shop-header{
+  margin-bottom:2.5rem;
+}
+.shop-kicker{
+  font-size:.7rem;
+  font-weight:700;
+  letter-spacing:.18em;
+  text-transform:uppercase;
+  color:var(--brand);
+}
+.shop-title{
+  font-size:clamp(2rem,4vw,2.6rem);
+  font-weight:900;
+  letter-spacing:-.4px;
+  color:var(--text);
+}
+.shop-sub{
+  margin-top:.6rem;
+  max-width:42rem;
+  font-size:1rem;
+  line-height:1.55;
+  color:var(--muted);
+}
+
+/* ---------- FILTERS ---------- */
+.filters-bar{
+  display:flex;
+  gap:.6rem;
+  flex-wrap:wrap;
+  margin:2rem 0 2.5rem;
+}
+.filters-scroll{
+  display:flex;
+  gap:.6rem;
+  overflow-x:auto;
+  padding-bottom:.25rem;
+}
+.filter-pill{
+  border-radius:999px;
+  padding:.55rem 1.25rem;
+  font-size:.75rem;
+  font-weight:600;
+  border:1px solid var(--border);
+  background:#fff;
+  color:#334155;
+  cursor:pointer;
+  transition:all .22s ease;
+  white-space:nowrap;
+}
+.filter-pill:hover{
+  border-color:var(--brand);
+  color:var(--brand);
+  background:var(--brand-soft);
+}
+.filter-pill.is-active{
+  background:var(--brand);
+  color:#fff;
+  border-color:var(--brand);
+}
+
+/* ---------- GRID ---------- */
+.shop-section{
+  margin-bottom:4rem;
+}
+.shop-section-title{
+  font-size:1.25rem;
+  font-weight:800;
+  color:var(--text);
+  margin-bottom:1.25rem;
+}
+
+.shop-grid{
+  display:grid;
+  gap:1.5rem;
+}
+@media(min-width:640px){
+  .shop-grid{ grid-template-columns:repeat(2,1fr); }
+}
+@media(min-width:1024px){
+  .shop-grid{ grid-template-columns:repeat(3,1fr); }
+}
+
+/* ---------- PRODUCT CARD ---------- */
+.product-card{
+  background:#fff;
+  border:1px solid var(--border);
+  border-radius:var(--radius-xl);
+  overflow:hidden;
+  box-shadow:var(--shadow-sm);
+  transition:transform .28s ease, box-shadow .28s ease, border-color .28s ease;
+  display:flex;
+  flex-direction:column;
+}
+.product-card:hover{
+  transform:translateY(-6px);
+  box-shadow:var(--shadow-md);
+  border-color:#c7d2fe;
+}
+.product-media{
+  aspect-ratio:1/1;
+  background:var(--panel);
+  overflow:hidden;
+}
+.product-media img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  transition:transform .6s ease;
+}
+.product-card:hover img{
+  transform:scale(1.06);
+}
+.product-body{
+  padding:1rem 1.1rem 1.25rem;
+  display:flex;
+  flex-direction:column;
+  gap:.35rem;
+}
+.product-cat{
+  font-size:.65rem;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--muted);
+}
+.product-title{
+  font-size:.95rem;
+  font-weight:700;
+  color:var(--text);
+  line-height:1.35;
+}
+.product-price{
+  margin-top:.25rem;
+  font-size:.95rem;
+  font-weight:800;
+  color:var(--brand);
+}
+
+/* ---------- EMPTY ---------- */
+.shop-empty{
+  margin-top:3rem;
+  font-size:.9rem;
+  color:var(--muted);
+}
+
+/* ---------- MOTION SAFE ---------- */
+@media (prefers-reduced-motion: reduce){
+  *{
+    transition:none!important;
+    animation:none!important;
+  }
+}
 </style>
 {% endblock %}
 
 {% block content %}
 
-{# ==========================
-   Config de categorías global
-   ========================== #}
-{% set order = ["buzos", "remeras", "gorros", "camperas", "otros"] %}
+{% set order = ["buzos","remeras","gorros","camperas","otros"] %}
 {% set labels = {
-    "buzos": "Buzos / Hoodies",
-    "remeras": "Remeras",
-    "gorros": "Gorros",
-    "camperas": "Camperas",
-    "otros": "Otros"
+  "buzos":"Buzos / Hoodies",
+  "remeras":"Remeras",
+  "gorros":"Gorros",
+  "camperas":"Camperas",
+  "otros":"Otros"
 } %}
 
-{# ==========================
-   Macro para card de producto
-   ========================== #}
 {% macro product_card(product, cat) %}
-    {% set category_key = (cat or 'otros')|lower %}
-    {% set category_label = labels.get(category_key, category_key)|default(category_key)|capitalize %}
-
-    <a href="{{ url_for('main.product_detail', product_id=product.id) }}"
-       class="group bg-white border border-slate-200 rounded-2xl overflow-hidden card-hover flex flex-col"
-       data-product-card
-       data-product-category="{{ category_key }}"
-       data-product-id="{{ product.id }}">
-        <div class="aspect-square bg-slate-100 overflow-hidden">
-            <img src="{{ product.image }}"
-                 alt="{{ product.name or 'Producto Skyline Style' }}"
-                 loading="lazy"
-                 decoding="async"
-                 referrerpolicy="no-referrer"
-                 class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
-        </div>
-        <div class="p-4 flex flex-col gap-1">
-            <p class="text-[11px] uppercase tracking-wide text-slate-400">
-                {{ category_label }}
-            </p>
-            <h3 class="text-sm font-semibold text-slate-900 group-hover:text-amber-600 transition line-clamp-2">
-                {{ product.name }}
-            </h3>
-            <p class="text-sm font-semibold text-amber-500 mt-1">
-                $ {{ product.price }} UYU
-            </p>
-        </div>
-    </a>
+<a href="{{ url_for('main.product_detail', product_id=product.id) }}"
+   class="product-card"
+   data-product-category="{{ cat }}">
+  <div class="product-media">
+    <img src="{{ product.image }}"
+         alt="{{ product.name }}"
+         loading="lazy"
+         decoding="async">
+  </div>
+  <div class="product-body">
+    <span class="product-cat">{{ labels.get(cat, cat) }}</span>
+    <h3 class="product-title">{{ product.name }}</h3>
+    <div class="product-price">$ {{ product.price }} UYU</div>
+  </div>
+</a>
 {% endmacro %}
 
-<section class="max-w-6xl mx-auto px-4 pt-10 pb-16">
+<section class="shop-wrap">
 
-    <!-- ========== Header tienda ========== -->
-    <div class="flex flex-wrap items-start justify-between gap-4 mb-8">
-        <div class="max-w-xl">
-            <p class="text-xs font-semibold tracking-[0.2em] uppercase text-amber-500">
-                Nueva colección
-            </p>
-            <h1 class="text-3xl md:text-4xl font-bold text-slate-900 tracking-tight mt-1">
-                Tienda Skyline
-            </h1>
-            <p class="text-sm md:text-base text-slate-500 mt-2">
-                Diseños exclusivos, drops limitados y streetwear listo para usar en la vida real.
-            </p>
-        </div>
+  <header class="shop-header">
+    <div class="shop-kicker">Skyline Style Store</div>
+    <h1 class="shop-title">Tienda oficial</h1>
+    <p class="shop-sub">
+      Productos seleccionados, dropshipping confiable y diseño pensado para durar.
+      Comprá con seguridad, estilo y envío directo.
+    </p>
+  </header>
 
-        <!-- Filtros por categoría -->
-        <div class="w-full md:w-auto">
-            <div class="filters-scroll" data-category-filters>
-                <button type="button" class="filter-pill is-active" data-filter-target="todos">
-                    <span>Todos</span>
-                </button>
-                <button type="button" class="filter-pill" data-filter-target="buzos">
-                    <span>Buzos / Hoodies</span>
-                </button>
-                <button type="button" class="filter-pill" data-filter-target="remeras">
-                    <span>Remeras</span>
-                </button>
-                <button type="button" class="filter-pill" data-filter-target="gorros">
-                    <span>Gorros</span>
-                </button>
-                <button type="button" class="filter-pill" data-filter-target="camperas">
-                    <span>Camperas</span>
-                </button>
-                <button type="button" class="filter-pill" data-filter-target="otros">
-                    <span>Otros</span>
-                </button>
-            </div>
+  <div class="filters-bar filters-scroll" data-category-filters>
+    {% for key,label in labels.items() %}
+      <button class="filter-pill {{ 'is-active' if loop.first }}"
+              data-filter-target="{{ key }}">
+        {{ label }}
+      </button>
+    {% endfor %}
+  </div>
+
+  {% if grouped_products %}
+    {% for cat in order if grouped_products.get(cat) %}
+      <section class="shop-section" data-category-section="{{ cat }}">
+        <h2 class="shop-section-title">
+          {{ labels.get(cat, cat) }}
+        </h2>
+        <div class="shop-grid">
+          {% for product in grouped_products[cat] %}
+            {{ product_card(product, cat) }}
+          {% endfor %}
         </div>
+      </section>
+    {% endfor %}
+  {% elif products %}
+    <div class="shop-grid">
+      {% for product in products %}
+        {{ product_card(product, product.category|default('otros')) }}
+      {% endfor %}
     </div>
-
-    {# ======================================================
-       MODO 1: backend manda grouped_products (dict por categoría)
-       ======================================================= #}
-    {% if grouped_products is defined and grouped_products %}
-        <!-- Sección Todos -->
-        <div id="cat-todos" class="mb-12" data-category-section="todos">
-            <div class="flex items-center justify-between mb-4">
-                <h2 class="text-xl md:text-2xl font-semibold text-slate-900">
-                    Todos los productos
-                </h2>
-                <p class="text-xs md:text-sm text-slate-500">
-                    Vista general de toda la colección Skyline Style.
-                </p>
-            </div>
-
-            {% set has_any = false %}
-            <div class="grid sm:grid-cols-2 md:grid-cols-3 gap-6" data-shop-grid>
-                {% for cat in order %}
-                    {% if grouped_products.get(cat) %}
-                        {% for product in grouped_products[cat] %}
-                            {% set has_any = true %}
-                            {{ product_card(product, cat) }}
-                        {% endfor %}
-                    {% endif %}
-                {% endfor %}
-            </div>
-
-            {% if not has_any %}
-                <p class="text-sm text-slate-400 mt-4">
-                    Todavía no hay productos cargados en la tienda. Volvé pronto ✨
-                </p>
-            {% endif %}
-        </div>
-
-        <!-- Secciones por categoría -->
-        {% for cat in order %}
-            {% if grouped_products.get(cat) %}
-                <div id="cat-{{ cat }}" class="mb-12" data-category-section="{{ cat }}">
-                    <div class="flex items-center justify-between mb-4">
-                        <h2 class="text-xl md:text-2xl font-semibold text-slate-900">
-                            {{ labels.get(cat, cat)|default(cat)|capitalize }}
-                        </h2>
-                    </div>
-
-                    <div class="grid sm:grid-cols-2 md:grid-cols-3 gap-6" data-shop-grid>
-                        {% for product in grouped_products[cat] %}
-                            {{ product_card(product, cat) }}
-                        {% endfor %}
-                    </div>
-                </div>
-            {% endif %}
-        {% endfor %}
-
-    {# ======================================================
-       MODO 2: compatibilidad – si solo viene "products"
-       ======================================================= #}
-    {% else %}
-        <div id="cat-todos" class="mb-12" data-category-section="todos">
-            <div class="flex items-center justify-between mb-4">
-                <h2 class="text-xl md:text-2xl font-semibold text-slate-900">
-                    Todos los productos
-                </h2>
-            </div>
-
-            {% if products %}
-                <div class="grid sm:grid-cols-2 md:grid-cols-3 gap-6" data-shop-grid>
-                    {% for product in products %}
-                        {% set cat = (product.category|default('otros')|lower) %}
-                        {{ product_card(product, cat) }}
-                    {% endfor %}
-                </div>
-            {% else %}
-                <p class="text-sm text-slate-400 mt-4">
-                    Todavía no hay productos cargados en la tienda. Volvé pronto ✨
-                </p>
-            {% endif %}
-        </div>
-    {% endif %}
+  {% else %}
+    <p class="shop-empty">
+      Todavía no hay productos disponibles.
+    </p>
+  {% endif %}
 
 </section>
-
-{% endblock %}
-
-{% block extra_js %}
-<!-- GSAP animation -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"
-        integrity="sha512-M9ozN7d7S4v5mB1ecXG6oTgVkv3xW0y2ZxE1lWrR0dwF4tBONqCRR8cN0M6hIPHyL7NwMnaBsGf9g8eB2w1uHQ=="
-        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script>
-    document.addEventListener('DOMContentLoaded', () => {
-        const grids   = document.querySelectorAll('[data-shop-grid]');
-        const sections = document.querySelectorAll('[data-category-section]');
-        const pills   = document.querySelectorAll('[data-category-filters] .filter-pill');
-
-        if (!grids.length || !sections.length || !pills.length || typeof gsap === 'undefined') {
-            return;
-        }
-
-        // -------- Animación inicial de las cards --------
-        function animateCards(grid) {
-            if (!grid) return;
-            const cards = grid.querySelectorAll('[data-product-card]');
-            if (!cards.length) return;
-
-            gsap.from(cards, {
-                opacity: 0,
-                y: 24,
-                stagger: 0.05,
-                duration: 0.45,
-                ease: 'power3.out'
-            });
-        }
-
-        grids.forEach(animateCards);
-
-        // -------- Filtros por categoría --------
-        function setActivePill(target) {
-            pills.forEach(pill => {
-                pill.classList.toggle('is-active', pill.dataset.filterTarget === target);
-            });
-        }
-
-        function filterSections(target) {
-            sections.forEach(sec => {
-                const key = sec.dataset.categorySection;
-                if (!key) return;
-
-                if (target === 'todos' || key === target) {
-                    sec.style.display = '';
-                } else {
-                    sec.style.display = 'none';
-                }
-            });
-
-            // Animar la primera sección visible después de filtrar
-            const firstVisibleSection = Array.from(sections).find(
-                sec => sec.style.display !== 'none'
-            );
-            if (firstVisibleSection) {
-                const grid = firstVisibleSection.querySelector('[data-shop-grid]');
-                animateCards(grid);
-
-                firstVisibleSection.scrollIntoView({
-                    behavior: 'smooth',
-                    block: 'start'
-                });
-            }
-        }
-
-        pills.forEach(pill => {
-            pill.addEventListener('click', (event) => {
-                event.preventDefault();
-                const target = pill.dataset.filterTarget || 'todos';
-                setActivePill(target);
-                filterSections(target);
-            });
-        });
-
-        // Estado inicial
-        setActivePill('todos');
-        filterSections('todos');
-    });
-</script>
 {% endblock %}
