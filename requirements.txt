@@ -1,74 +1,42 @@
-# -*- coding: utf-8 -*-
-##############################################
-# SKYLINE STYLE · BACKEND PRO (FINAL)
-# Python 3.12 · Render / VPS / Windows Ready
-##############################################
+# ==============================================
+# Skyline Store — Requirements (PRO)
+# Python: 3.12
+# ==============================================
 
-########## CORE WEB ##########
+# --- Core Web ---
 Flask>=3.0,<4.0
 Werkzeug>=3.0,<4.0
 gunicorn>=21.2,<23.0
 
-########## TEMPLATES / PERFORMANCE ##########
+# --- Templates / Assets ---
 Jinja2>=3.1,<4.0
-Flask-Compress>=1.13,<2.0
-Flask-Minify>=0.42,<1.0
+Flask-Compress>=1.14,<2.0
+Flask-Minify>=0.43,<1.0
 whitenoise>=6.7,<7.0
 
-########## SECURITY / HEADERS ##########
+# --- Security / Headers ---
 Flask-Talisman>=1.1,<2.0
-cryptography>=42.0,<43.0
+itsdangerous>=2.2,<3.0
 
-########## FORMS / VALIDATION ##########
+# --- HTTP / APIs ---
+requests>=2.31,<3.0
+httpx>=0.27,<1.0
+
+# --- Cache ---
+Flask-Caching>=2.3,<3.0
+cachelib>=0.10,<1.0
+
+# --- Env / Logging ---
+python-dotenv>=1.0,<2.0
+loguru>=0.7,<1.0
+
+# --- Optional: Forms / Validation (si usás login/register con WTForms) ---
 Flask-WTF>=1.2,<2.0
 WTForms>=3.1,<4.0
 email-validator>=2.1,<3.0
 
-########## AUTH / USERS ##########
-Flask-Login>=0.6,<1.0
-Flask-Bcrypt>=1.0,<2.0
-itsdangerous>=2.1,<3.0
-PyJWT>=2.8,<3.0
-python-dotenv>=1.0,<2.0
-
-########## DATABASE ##########
-Flask-SQLAlchemy>=3.1,<4.0
-SQLAlchemy>=2.0,<3.0
-alembic>=1.13,<2.0
-
-# PostgreSQL seguro (NO compila, NO rompe)
-psycopg2-binary>=2.9.9,<3.0
-
-########## HTTP / APIs ##########
-requests>=2.31,<3.0
-httpx>=0.27,<1.0
-
-########## FILES / IMAGES ##########
+# --- Optional: Images (si procesás imágenes) ---
 Pillow>=10.0,<11.0
 
-# Evita errores de python-magic en Windows
-python-magic-bin>=0.4.14; platform_system=="Windows"
-python-magic>=0.4.27; platform_system!="Windows"
-
-########## CACHE / OPTIMIZATION ##########
-Flask-Caching>=2.1,<3.0
-cachelib>=0.9,<1.0
-
-########## LOGGING (PRO) ##########
-loguru>=0.7,<1.0
-rich>=13.7,<14.0
-
-########## EMAIL ##########
-Flask-Mail>=0.9,<1.0
-
-########## UTILITIES ##########
-python-dateutil>=2.8,<3.0
-simplejson>=3.19,<4.0
-
-########## PRODUCTION EXTRAS (RECOMENDADO) ##########
-flask-cors>=4.0,<6.0
-Flask-Limiter>=3.8,<4.0
-pydantic>=2.7,<3.0
-
-########## MERCADO PAGO ##########
+# --- Optional: Mercado Pago (si lo usás) ---
 mercadopago>=2.0,<3.0
