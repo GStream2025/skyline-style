@@ -5,44 +5,49 @@ services:
     region: oregon
     plan: free
     branch: master
+    autoDeploy: true
 
     buildCommand: |
       python -m pip install --upgrade pip setuptools wheel
       pip install --no-cache-dir -r requirements.txt
 
+    # ⚡ Mejor entrypoint (estándar para Flask + Gunicorn)
     startCommand: |
-      gunicorn run:app --bind 0.0.0.0:$PORT --log-level info --workers 2 --threads 4 --timeout 120
-
-    autoDeploy: true
+      gunicorn wsgi:app \
+        --bind 0.0.0.0:$PORT \
+        --workers 2 \
+        --threads 4 \
+        --timeout 120 \
+        --access-logfile - \
+        --error-logfile - \
+        --log-level info
 
     envVars:
       # Python runtime
       - key: PYTHON_VERSION
         value: 3.12.9
 
-      # Flask / App
+      # Flask
       - key: FLASK_ENV
         value: production
-      - key: HOST
-        value: 0.0.0.0
-      - key: PORT
-        value: 10000
 
       # Seguridad
       - key: SECRET_KEY
         sync: false
 
-      # Printful
-      - key: PRINTFUL_KEY
+      # ✅ Printful (alineado con tu código)
+      - key: PRINTFUL_API_KEY
         sync: false
       - key: PRINTFUL_STORE_ID
         sync: false
+      - key: PRINTFUL_CACHE_TTL
+        value: "300"
 
-      # Database (Render la setea sola si agregás Postgres)
+      # DB (opcional)
       - key: DATABASE_URL
         sync: false
 
-      # Mercado Pago (si usás)
+      # Mercado Pago (opcional)
       - key: MP_ACCESS_TOKEN
         sync: false
       - key: MP_PUBLIC_KEY

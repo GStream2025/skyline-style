@@ -1,327 +1,359 @@
 <!doctype html>
 <html lang="es" class="scroll-smooth">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
 
-    <title>{% block title %}Skyline Style · Streetwear con actitud{% endblock %}</title>
-    <meta name="description" content="Skyline Style es una marca de streetwear con actitud, color e inclusión. Drops limitados y prendas pensadas para todos los cuerpos.">
-    <meta name="theme-color" content="#0b1120">
-    <meta name="robots" content="index,follow">
+  <title>{% block title %}Skyline Store · Todo lo urbano, en un solo lugar{% endblock %}</title>
+  <meta name="description" content="{% block meta_description %}Skyline Store: moda urbana, accesorios y dropshipping curado. Experiencia premium y compras sin fricción.{% endblock %}">
+  <meta name="theme-color" content="#f8fafc">
+  <meta name="robots" content="index,follow">
 
-    <!-- SEO / Open Graph -->
-    <link rel="canonical" href="{{ request.url_root.rstrip('/') }}">
-    <meta property="og:title" content="Skyline Style · Streetwear con actitud">
-    <meta property="og:description" content="Drops limitados, diseños urbanos y prendas para todos los cuerpos.">
-    <meta property="og:type" content="website">
-    <meta property="og:url" content="{{ request.url }}">
-    <meta property="og:image" content="{{ url_for('static', filename='img/og_skyline.jpg') }}">
+  <!-- Canonical -->
+  <link rel="canonical" href="{{ request.url_root.rstrip('/') }}">
 
-    <!-- Favicon básico -->
-    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}">
+  <!-- Open Graph -->
+  <meta property="og:title" content="{% block og_title %}Skyline Store · Todo lo urbano, en un solo lugar{% endblock %}">
+  <meta property="og:description" content="{% block og_description %}Moda urbana + dropshipping curado. Encontrá de todo, pero bien elegido.{% endblock %}">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="{{ request.url }}">
+  <meta property="og:image" content="{{ url_for('static', filename='img/og_skyline.jpg') }}">
 
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}">
 
-    <!-- Configuración extendida de Tailwind -->
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    fontFamily: {
-                        sans: ["Inter", "system-ui", "sans-serif"],
-                    },
-                    colors: {
-                        skyline: {
-                            dark: "#020617",
-                            soft: "#0b1120",
-                            softer: "#0f172a",
-                            accent: "#38bdf8",
-                            accent2: "#60a5fa",
-                            danger: "#fb7185",
-                        }
-                    },
-                    backgroundImage: {
-                        "skyline-gradient":
-                            "radial-gradient(circle at 0% 0%, rgba(56,189,248,0.25), transparent 60%)," +
-                            "radial-gradient(circle at 100% 0%, rgba(129,140,248,0.25), transparent 65%)," +
-                            "linear-gradient(135deg, #020617 0%, #020617 45%, #020617 100%)"
-                    },
-                    boxShadow: {
-                        header: "0 18px 45px rgba(3,7,18,0.85)",
-                        menu: "0 20px 45px rgba(0,0,0,0.60)",
-                        glow: "0 0 28px rgba(56,189,248,0.45)",
-                        card: "0 22px 45px rgba(15,23,42,0.85)",
-                    },
-                    keyframes: {
-                        blob: {
-                            "0%,100%": { transform: "translate(0,0) scale(1)" },
-                            "33%": { transform: "translate(12px,-18px) scale(1.06)" },
-                            "66%": { transform: "translate(-16px,14px) scale(0.96)" }
-                        },
-                        fadeUp: {
-                            "0%": { opacity: 0, transform: "translateY(16px)" },
-                            "100%": { opacity: 1, transform: "translateY(0)" },
-                        }
-                    },
-                    animation: {
-                        blob: "blob 18s infinite ease-in-out",
-                        fadeup: "fadeUp .65s ease-out forwards"
-                    }
-                }
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Tailwind Config (LIGHT + PREMIUM + VIVO) -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ["Inter","system-ui","sans-serif"] },
+          colors: {
+            ink: {
+              900: "#0b1220",
+              700: "#1f2937",
+              600: "#334155",
+            },
+            soft: {
+              50: "#f8fafc",
+              100: "#f1f5f9",
+              200: "#e2e8f0",
+            },
+            brand: {
+              blue: "#2563eb",
+              cyan: "#06b6d4",
+              amber: "#f59e0b",
+              green: "#22c55e",
+              violet:"#a855f7"
             }
+          },
+          boxShadow: {
+            glass: "0 18px 55px rgba(2,6,23,.10)",
+            soft: "0 14px 30px rgba(2,6,23,.08)",
+            lift: "0 24px 70px rgba(2,6,23,.14)"
+          },
+          borderRadius: {
+            xl2: "1.25rem",
+            xl3: "1.75rem"
+          },
+          keyframes: {
+            fadeUp: {
+              "0%": { opacity: 0, transform: "translateY(14px)" },
+              "100%": { opacity: 1, transform: "translateY(0)" },
+            },
+            pop: {
+              "0%": { transform: "scale(.98)", opacity: .2 },
+              "100%": { transform: "scale(1)", opacity: 1 }
+            }
+          },
+          animation: {
+            fadeUp: "fadeUp .55s ease-out both",
+            pop: "pop .18s ease-out both"
+          }
         }
-    </script>
+      }
+    }
+  </script>
 
-    <!-- Fuente Inter -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 
-    <!-- CSS adicional del proyecto -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
+  <!-- (Opcional) CSS propio -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
 
-    {% block extra_head %}{% endblock %}
+  <style>
+    /* Fondo global claro y premium (coherente con tu hero nuevo) */
+    body{
+      background:
+        radial-gradient(1100px 700px at 12% 8%, rgba(37,99,235,.12), transparent 55%),
+        radial-gradient(900px 520px at 90% 10%, rgba(245,158,11,.10), transparent 60%),
+        radial-gradient(900px 520px at 60% 95%, rgba(34,197,94,.10), transparent 58%),
+        linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    }
+
+    /* Accesibilidad: reduce motion */
+    @media (prefers-reduced-motion: reduce){
+      *{ animation:none!important; transition:none!important; scroll-behavior:auto!important; }
+    }
+  </style>
+
+  {% block extra_head %}{% endblock %}
 </head>
 
-<body class="min-h-screen bg-skyline-dark text-slate-100 font-sans bg-skyline-gradient antialiased selection:bg-skyline.accent/40 selection:text-slate-950">
+<body class="min-h-screen text-ink-900 font-sans antialiased selection:bg-[rgba(37,99,235,.20)] selection:text-ink-900">
 
 {% set current = request.endpoint or '' %}
 {% set is_admin = session.get('is_admin') %}
 
-<!-- Enlace de salto rápido para accesibilidad -->
+<!-- Skip link -->
 <a href="#main-content"
-   class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:px-3 focus:py-2 focus:rounded-lg focus:bg-slate-900 focus:text-skyline.accent focus:shadow-lg">
-    Ir al contenido principal
+   class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[999]
+          focus:px-3 focus:py-2 focus:rounded-xl focus:bg-white focus:text-ink-900 focus:shadow-glass">
+  Ir al contenido principal
 </a>
 
-<!-- ============================
-      HEADER PRINCIPAL
-============================= -->
-<header id="main-header" class="fixed top-0 inset-x-0 z-40 animate-fadeup">
-    <div class="bg-gradient-to-b from-slate-950/95 via-slate-950/92 to-slate-950/80 backdrop-blur-xl border-b border-slate-800/60 transition-shadow duration-200">
-        <div class="max-w-6xl mx-auto px-4 h-14 md:h-16 flex items-center justify-between gap-3">
+<!-- =========================
+     HEADER (GLASS · LIGHT)
+========================== -->
+<header id="main-header" class="fixed top-0 inset-x-0 z-50">
+  <div class="mx-auto max-w-6xl px-4">
+    <div class="mt-3 rounded-2xl border border-soft-200/80 bg-white/70 backdrop-blur-xl shadow-glass">
+      <div class="h-14 md:h-16 flex items-center justify-between gap-3 px-3 md:px-4">
 
-            <!-- Logo / Home -->
-            <a href="{{ url_for('main.index') }}"
-               class="flex items-center gap-2 group focus:outline-none focus-visible:ring-2 focus-visible:ring-skyline.accent focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 rounded-xl">
-                <span class="h-8 w-8 md:h-9 md:w-9 rounded-xl bg-slate-900 text-slate-50 font-semibold text-sm flex items-center justify-center shadow-glow group-hover:scale-105 transition-transform">
-                    SS
-                </span>
-                <div class="leading-tight">
-                    <p class="text-sm md:text-base font-semibold tracking-tight text-white">
-                        Skyline Style
-                    </p>
-                    <p class="text-[10px] uppercase tracking-[0.18em] text-slate-400">
-                        Streetwear
-                    </p>
-                </div>
+        <!-- Logo -->
+        <a href="{{ url_for('main.home') }}"
+           class="flex items-center gap-2 rounded-xl px-2 py-1
+                  focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(37,99,235,.35)]">
+          <span class="h-9 w-9 rounded-xl grid place-items-center font-black text-[12px] text-white
+                       bg-gradient-to-br from-brand-blue to-brand-cyan shadow-soft">
+            SS
+          </span>
+          <div class="leading-tight">
+            <p class="text-sm md:text-base font-extrabold tracking-tight text-ink-900">Skyline Store</p>
+            <p class="text-[10px] uppercase tracking-[0.18em] text-slate-500">Streetwear</p>
+          </div>
+        </a>
+
+        <!-- NAV Desktop -->
+        <nav class="hidden md:flex items-center gap-6 text-sm font-semibold" aria-label="Navegación principal">
+          <a href="{{ url_for('main.shop') }}"
+             class="{{ 'text-brand-blue' if current=='main.shop' else 'text-slate-600 hover:text-ink-900' }} transition"
+             {% if current=='main.shop' %}aria-current="page"{% endif %}>
+            Tienda
+          </a>
+
+          <a href="{{ url_for('main.home') }}#destacados"
+             class="text-slate-600 hover:text-ink-900 transition">
+            Destacados
+          </a>
+
+          <a href="{{ url_for('main.about') }}"
+             class="{{ 'text-brand-blue' if current=='main.about' else 'text-slate-600 hover:text-ink-900' }} transition"
+             {% if current=='main.about' %}aria-current="page"{% endif %}>
+            La marca
+          </a>
+
+          {% if is_admin %}
+            <a href="{{ url_for('admin.dashboard') }}"
+               class="{{ 'text-brand-blue' if current and current.startswith('admin.') else 'text-amber-600 hover:text-amber-700' }} transition">
+              Panel admin
             </a>
+          {% endif %}
 
-            <!-- NAV Desktop -->
-            <nav class="hidden md:flex items-center gap-6 text-xs md:text-sm" aria-label="Navegación principal">
-                <a href="{{ url_for('main.shop') }}"
-                   class="nav-link {{ 'text-skyline.accent2' if current=='main.shop' else 'text-slate-300 hover:text-slate-50' }}"
-                   {% if current == 'main.shop' %}aria-current="page"{% endif %}>
-                    Tienda
-                </a>
+          <a href="{{ url_for('auth.login') }}"
+             class="{{ 'text-brand-blue' if current in ['auth.login','admin.login'] else 'text-slate-600 hover:text-ink-900' }} transition">
+            Ingresar
+          </a>
+        </nav>
 
-                <a href="{{ url_for('main.index') }}#destacados"
-                   class="nav-link {{ 'text-skyline.accent2' if current=='main.index' else 'text-slate-300 hover:text-slate-50' }}"
-                   {% if current == 'main.index' %}aria-current="page"{% endif %}>
-                    Destacados
-                </a>
+        <!-- CTA -->
+        <div class="hidden sm:flex items-center gap-2">
+          {% if is_admin %}
+            <form action="{{ url_for('admin.logout') }}" method="get">
+              <button type="submit"
+                      class="px-3 py-1.5 rounded-full border border-soft-200 bg-white/70
+                             text-[12px] font-semibold text-slate-700 hover:bg-white transition">
+                Cerrar sesión
+              </button>
+            </form>
+          {% endif %}
 
-                <a href="{{ url_for('main.about') }}"
-                   class="nav-link {{ 'text-skyline.accent2' if current=='main.about' else 'text-slate-300 hover:text-slate-50' }}"
-                   {% if current == 'main.about' %}aria-current="page"{% endif %}>
-                    La marca
-                </a>
-
-                {% if is_admin %}
-                    <a href="{{ url_for('admin.dashboard') }}"
-                       class="nav-link {{ 'text-skyline.accent2' if current and current.startswith('admin.') else 'text-amber-300 hover:text-amber-200' }}"
-                       {% if current and current.startswith('admin.') %}aria-current="page"{% endif %}>
-                        Panel admin
-                    </a>
-                {% endif %}
-
-                <a href="{{ url_for('auth.login') }}"
-                   class="nav-link {{ 'text-skyline.accent2' if current in ['admin.login', 'auth.login'] else 'text-slate-300 hover:text-slate-50' }}">
-                    Ingresar
-                </a>
-            </nav>
-
-            <!-- CTA Desktop -->
-            <div class="hidden sm:flex items-center gap-3">
-                {% if is_admin %}
-                    <form action="{{ url_for('admin.logout') }}" method="get">
-                        <button type="submit"
-                                class="px-3 py-1.5 rounded-full border border-slate-600/70 text-[11px] font-medium text-slate-200 hover:bg-slate-900 transition">
-                            Cerrar sesión
-                        </button>
-                    </form>
-                {% endif %}
-
-                <a href="{{ url_for('main.shop') }}"
-                   class="px-3.5 py-1.5 rounded-full bg-skyline.accent text-slate-950 text-xs md:text-sm font-medium shadow-glow hover:bg-skyline.accent2 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-skyline.accent2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950">
-                    Ver colección
-                </a>
-            </div>
-
-            <!-- Botón hamburguesa -->
-            <button id="mobile-toggle"
-                    class="md:hidden h-9 w-9 rounded-full border border-slate-700/60 bg-slate-950/80 flex items-center justify-center text-slate-100 hover:bg-slate-900 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-skyline.accent focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
-                    type="button"
-                    aria-label="Abrir menú de navegación"
-                    aria-expanded="false"
-                    aria-controls="mobile-menu"
-                    data-open="false">
-                <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24" aria-hidden="true">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M4 12h16M4 17h16"/>
-                </svg>
-            </button>
+          <a href="{{ url_for('main.shop') }}"
+             class="px-4 py-2 rounded-full text-[13px] font-extrabold text-white
+                    bg-gradient-to-r from-brand-blue to-brand-cyan shadow-soft hover:shadow-lift transition
+                    focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(37,99,235,.35)]">
+            Ver colección
+          </a>
         </div>
 
-        <!-- NAV Mobile -->
-        <div id="mobile-menu"
-             class="absolute top-14 right-4 w-64 opacity-0 scale-y-0 origin-top transition-all duration-200 pointer-events-none md:hidden">
-            <nav class="bg-slate-950/98 backdrop-blur-2xl rounded-2xl border border-slate-800/80 shadow-menu p-3 text-sm"
-                 aria-label="Navegación móvil">
-                <a class="mobile-item" href="{{ url_for('main.shop') }}">Tienda</a>
-                <a class="mobile-item" href="{{ url_for('main.index') }}#destacados">Destacados</a>
-                <a class="mobile-item" href="{{ url_for('main.about') }}">La marca</a>
+        <!-- Mobile toggle -->
+        <button id="mobile-toggle"
+                class="md:hidden h-10 w-10 rounded-full border border-soft-200 bg-white/70
+                       grid place-items-center text-slate-700 hover:bg-white transition
+                       focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(37,99,235,.35)]"
+                type="button"
+                aria-label="Abrir menú"
+                aria-expanded="false"
+                aria-controls="mobile-menu"
+                data-open="false">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M4 12h16M4 17h16"/>
+          </svg>
+        </button>
+      </div>
 
-                {% if is_admin %}
-                    <a class="mobile-item" href="{{ url_for('admin.dashboard') }}">Panel admin</a>
-                    <a class="mobile-item text-slate-400" href="{{ url_for('admin.logout') }}">Cerrar sesión</a>
-                {% endif %}
+      <!-- Mobile menu -->
+      <div id="mobile-menu"
+           class="hidden md:hidden px-3 pb-3">
+        <nav class="rounded-2xl border border-soft-200 bg-white/80 backdrop-blur-xl shadow-soft p-3 text-sm font-semibold">
+          <a class="block px-3 py-2 rounded-xl hover:bg-soft-100 transition" href="{{ url_for('main.shop') }}">Tienda</a>
+          <a class="block px-3 py-2 rounded-xl hover:bg-soft-100 transition" href="{{ url_for('main.home') }}#destacados">Destacados</a>
+          <a class="block px-3 py-2 rounded-xl hover:bg-soft-100 transition" href="{{ url_for('main.about') }}">La marca</a>
 
-                <a class="mobile-item" href="{{ url_for('auth.login') }}">Ingresar</a>
+          {% if is_admin %}
+            <a class="block px-3 py-2 rounded-xl hover:bg-soft-100 transition text-amber-700" href="{{ url_for('admin.dashboard') }}">Panel admin</a>
+            <a class="block px-3 py-2 rounded-xl hover:bg-soft-100 transition text-slate-600" href="{{ url_for('admin.logout') }}">Cerrar sesión</a>
+          {% endif %}
 
-                <a href="{{ url_for('main.shop') }}"
-                   class="mt-2 block text-center px-3 py-2 rounded-full bg-skyline.accent text-slate-950 text-xs font-medium hover:bg-skyline.accent2">
-                    Ver colección
-                </a>
-            </nav>
-        </div>
+          <a class="block px-3 py-2 rounded-xl hover:bg-soft-100 transition" href="{{ url_for('auth.login') }}">Ingresar</a>
+
+          <a href="{{ url_for('main.shop') }}"
+             class="mt-2 block text-center px-3 py-2 rounded-full font-extrabold text-white
+                    bg-gradient-to-r from-brand-blue to-brand-cyan shadow-soft hover:shadow-lift transition">
+            Ver colección
+          </a>
+        </nav>
+      </div>
+
     </div>
+  </div>
 </header>
 
-<!-- ===================================
-     CONTENIDO PRINCIPAL + FLASHES
-=================================== -->
-<main id="main-content" class="pt-16 md:pt-20">
-    <!-- Mensajes flash globales -->
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            <div class="max-w-6xl mx-auto px-4 mt-3 space-y-2">
-                {% for category, message in messages %}
-                    {% set base = 'bg-slate-900/90 border-slate-700 text-slate-100' %}
-                    {% if category == 'success' %}
-                        {% set base = 'bg-emerald-900/70 border-emerald-500/70 text-emerald-50' %}
-                    {% elif category == 'danger' %}
-                        {% set base = 'bg-rose-900/75 border-rose-500/70 text-rose-50' %}
-                    {% elif category == 'warning' %}
-                        {% set base = 'bg-amber-900/75 border-amber-500/70 text-amber-50' %}
-                    {% elif category == 'info' %}
-                        {% set base = 'bg-sky-900/75 border-sky-500/70 text-sky-50' %}
-                    {% endif %}
-                    <div class="text-xs md:text-[13px] border px-3 py-2 rounded-lg {{ base }}">
-                        {{ message }}
-                    </div>
-                {% endfor %}
-            </div>
-        {% endif %}
-    {% endwith %}
+<!-- =========================
+     MAIN + FLASHES
+========================== -->
+<main id="main-content" class="pt-24 md:pt-28">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="max-w-6xl mx-auto px-4 mt-3 space-y-2 animate-fadeUp">
+        {% for category, message in messages %}
+          {% set base = 'bg-white/85 border-soft-200 text-slate-800' %}
+          {% set icon = 'ℹ️' %}
+          {% if category in ['success'] %}
+            {% set base = 'bg-emerald-50 border-emerald-200 text-emerald-900' %}
+            {% set icon = '✅' %}
+          {% elif category in ['danger','error'] %}
+            {% set base = 'bg-rose-50 border-rose-200 text-rose-900' %}
+            {% set icon = '❌' %}
+          {% elif category in ['warning'] %}
+            {% set base = 'bg-amber-50 border-amber-200 text-amber-900' %}
+            {% set icon = '⚠️' %}
+          {% endif %}
+          <div class="border rounded-xl px-3 py-2 text-sm {{ base }}">
+            <span class="mr-2">{{ icon }}</span>{{ message }}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
 
-    {% block content %}{% endblock %}
+  {% block content %}{% endblock %}
 </main>
 
-<!-- ===================================
-     FOOTER
-=================================== -->
-<footer class="border-t border-slate-800/70 mt-10 bg-slate-950/90 backdrop-blur">
-    <div class="max-w-6xl mx-auto px-4 py-6 text-[11px] md:text-xs text-slate-400 flex flex-wrap items-center justify-between gap-3">
-        <div class="flex flex-wrap items-center gap-2 sm:gap-3">
-            <span>© {{ current_year|default(2025) }} Skyline Style. Todos los derechos reservados.</span>
-            <span class="hidden sm:block text-slate-600">·</span>
-            <a href="{{ url_for('main.about') }}" class="hover:text-skyline.accent transition">Sobre la marca</a>
-            <a href="#" class="hover:text-skyline.accent transition">Términos &amp; condiciones</a>
-        </div>
-        <span class="text-slate-500">Hecho con ❤️ por Gaby.</span>
+<!-- =========================
+     FOOTER (LIGHT)
+========================== -->
+<footer class="mt-14 border-t border-soft-200/80 bg-white/55 backdrop-blur">
+  <div class="max-w-6xl mx-auto px-4 py-7 text-xs text-slate-500 flex flex-wrap items-center justify-between gap-3">
+    <div class="flex flex-wrap items-center gap-3">
+      <span>© {{ current_year|default(2025) }} Skyline Store. Todos los derechos reservados.</span>
+      <span class="hidden sm:block text-slate-300">·</span>
+      <a href="{{ url_for('main.about') }}" class="hover:text-ink-900 transition">Sobre la marca</a>
+      <a href="#" class="hover:text-ink-900 transition">Términos &amp; condiciones</a>
     </div>
+    <span class="text-slate-400">Hecho con ❤️ por Gaby.</span>
+  </div>
 </footer>
 
-<!-- BOTÓN VOLVER AL INICIO -->
-<a href="{{ url_for('main.index') }}"
-   class="fixed bottom-5 right-5 z-40 inline-flex items-center gap-2 px-3.5 py-2 rounded-full
-          bg-slate-950/95 border border-slate-700 text-slate-100 text-xs md:text-sm font-medium
-          shadow-menu hover:bg-slate-900 hover:-translate-y-0.5 transition-all focus:outline-none
-          focus-visible:ring-2 focus-visible:ring-skyline.accent focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950">
-    <span class="text-base">←</span>
-    <span class="hidden sm:inline">Volver al inicio</span>
-    <span class="sm:hidden">Inicio</span>
+<!-- Back to top (solo aparece con scroll) -->
+<a id="backtop" href="{{ url_for('main.home') }}"
+   class="hidden fixed bottom-5 right-5 z-40 items-center gap-2 px-3.5 py-2 rounded-full
+          bg-white/85 border border-soft-200 text-slate-800 text-sm font-bold
+          shadow-soft hover:shadow-lift hover:-translate-y-0.5 transition
+          focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(37,99,235,.35)]">
+  <span class="text-base">↑</span>
+  <span class="hidden sm:inline">Volver arriba</span>
+  <span class="sm:hidden">Arriba</span>
 </a>
 
-<!-- ===================================
-     JS: Scroll header + Menú mobile
-=================================== -->
+<!-- =========================
+     JS: Header shadow + Mobile menu + ESC close + Backtop
+========================== -->
 <script>
 document.addEventListener("DOMContentLoaded", () => {
-    const header       = document.getElementById("main-header");
-    const mobileToggle = document.getElementById("mobile-toggle");
-    const mobileMenu   = document.getElementById("mobile-menu");
+  const header = document.getElementById("main-header");
+  const toggle = document.getElementById("mobile-toggle");
+  const menu   = document.getElementById("mobile-menu");
+  const back   = document.getElementById("backtop");
 
-    if (!header || !mobileToggle || !mobileMenu) return;
+  const setShadow = () => {
+    if (!header) return;
+    header.style.filter = window.scrollY > 6 ? "drop-shadow(0 18px 35px rgba(2,6,23,.10))" : "none";
+  };
+  window.addEventListener("scroll", setShadow);
+  setShadow();
 
-    // Sombra del header al hacer scroll
-    window.addEventListener("scroll", () => {
-        const scrolled = window.scrollY > 6;
-        header.classList.toggle("shadow-header", scrolled);
+  const setBackTop = () => {
+    if (!back) return;
+    if (window.scrollY > 420) back.classList.remove("hidden"), back.classList.add("inline-flex");
+    else back.classList.add("hidden"), back.classList.remove("inline-flex");
+  };
+  window.addEventListener("scroll", setBackTop);
+  setBackTop();
+
+  const openMenu = () => {
+    if (!menu || !toggle) return;
+    menu.classList.remove("hidden");
+    menu.classList.add("animate-pop");
+    toggle.setAttribute("aria-expanded", "true");
+    toggle.dataset.open = "true";
+  };
+
+  const closeMenu = () => {
+    if (!menu || !toggle) return;
+    menu.classList.add("hidden");
+    toggle.setAttribute("aria-expanded", "false");
+    toggle.dataset.open = "false";
+  };
+
+  if (toggle){
+    toggle.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const isOpen = toggle.dataset.open === "true";
+      isOpen ? closeMenu() : openMenu();
     });
+  }
 
-    const openMenu = () => {
-        mobileMenu.classList.remove("scale-y-0", "opacity-0", "pointer-events-none");
-        mobileMenu.classList.add("scale-y-100", "opacity-100");
-        mobileToggle.setAttribute("aria-expanded", "true");
-        mobileToggle.dataset.open = "true";
-    };
+  document.addEventListener("click", (e) => {
+    if (!toggle || toggle.dataset.open !== "true") return;
+    if (menu && !menu.contains(e.target) && !toggle.contains(e.target)) closeMenu();
+  });
 
-    const closeMenu = () => {
-        mobileMenu.classList.remove("scale-y-100", "opacity-100");
-        mobileMenu.classList.add("scale-y-0", "opacity-0", "pointer-events-none");
-        mobileToggle.setAttribute("aria-expanded", "false");
-        mobileToggle.dataset.open = "false";
-    };
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeMenu();
+  });
 
-    // Toggle del menú mobile
-    mobileToggle.addEventListener("click", (event) => {
-        event.stopPropagation();
-        const isOpen = mobileToggle.dataset.open === "true";
-        if (isOpen) {
-            closeMenu();
-        } else {
-            openMenu();
-        }
-    });
-
-    // Cerrar al hacer click fuera
-    document.addEventListener("click", (event) => {
-        if (mobileToggle.dataset.open !== "true") return;
-        if (!mobileMenu.contains(event.target) && !mobileToggle.contains(event.target)) {
-            closeMenu();
-        }
-    });
-
-    // Cerrar al navegar desde el menú mobile
-    mobileMenu.querySelectorAll("a").forEach(link => {
-        link.addEventListener("click", () => closeMenu());
-    });
+  if (menu){
+    menu.querySelectorAll("a").forEach(a => a.addEventListener("click", () => closeMenu()));
+  }
 });
 </script>
 
 {% block extra_js %}{% endblock %}
-
 </body>
 </html>
