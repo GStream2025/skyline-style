@@ -2,18 +2,19 @@
 run.py — Entry point de Skyline Store (Producción + Desarrollo)
 
 ✅ Carga .env SOLO en local (no en producción).
-✅ Configura logging profesional con loguru.
+✅ Logging profesional con loguru (stdout/stderr friendly).
 ✅ Valida env vars críticas y avisa con claridad.
 ✅ Expone `app` para Gunicorn: gunicorn run:app
 ✅ Compatible con Render (PORT dinámico).
-✅ Evita errores silenciosos y mejora trazabilidad.
+✅ Errores claros si falla create_app().
 """
 
 from __future__ import annotations
 
 import os
 import sys
-from typing import Iterable, List, Tuple
+import platform
+from typing import Iterable, List
 
 from dotenv import load_dotenv
 from loguru import logger
@@ -22,46 +23,49 @@ from loguru import logger
 # =============================================================================
 # Helpers
 # =============================================================================
-
 def _is_truthy(value: str | None) -> bool:
     return (value or "").strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
 def _env(key: str, default: str | None = None) -> str | None:
     val = os.getenv(key)
-    if val is None:
-        return default
-    return val
+    return default if val is None else val
+
+
+def _running_on_render() -> bool:
+    # Render suele setear estas env vars
+    return bool(os.getenv("RENDER")) or bool(os.getenv("RENDER_SERVICE_ID"))
 
 
 def _load_dotenv_if_local() -> str:
     """
-    Carga .env SOLO cuando estamos en entorno local.
-    Render/producción ya inyecta env vars por panel.
+    Carga .env SOLO en local.
+    En Render NO se debe cargar .env por seguridad.
     """
     base_dir = os.path.abspath(os.path.dirname(__file__))
     dotenv_path = os.path.join(base_dir, ".env")
 
-    # Heurística: si existe .env y NO estamos en Render, lo cargamos.
-    # Render suele setear RENDER=true (no siempre), pero esta es buena práctica.
-    is_render = _is_truthy(os.getenv("RENDER")) or bool(os.getenv("RENDER_SERVICE_ID"))
-    if os.path.exists(dotenv_path) and not is_render:
+    if os.path.exists(dotenv_path) and not _running_on_render():
         load_dotenv(dotenv_path)
-        return f".env cargado (local): {dotenv_path}"
+        return f".env cargado (LOCAL): {dotenv_path}"
 
-    if os.path.exists(dotenv_path) and is_render:
-        return "Detectado entorno Render: .env presente pero NO se carga (seguridad)."
+    if os.path.exists(dotenv_path) and _running_on_render():
+        return "Render detectado: .env existe pero NO se carga (seguridad)."
 
-    return "No se encontró .env (o no se carga). Usando variables del sistema/Render."
+    return "No se encontró .env (o no se carga). Usando env vars del sistema/Render."
 
 
 def _setup_logger(debug: bool) -> None:
+    """
+    Render muestra mejor logs por stdout/stderr.
+    """
     logger.remove()
     logger.add(
         sys.stderr,
         level="DEBUG" if debug else "INFO",
         backtrace=True,
         diagnose=debug,
+        enqueue=True,
         format=(
             "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | "
             "<level>{level: <8}</level> | "
@@ -72,56 +76,52 @@ def _setup_logger(debug: bool) -> None:
 
 
 def _check_env(required: Iterable[str], optional: Iterable[str]) -> None:
-    missing_required = [k for k in required if not os.getenv(k)]
+    missing_required = [k for k in required if not (os.getenv(k) or "").strip()]
     if missing_required:
         for k in missing_required:
             logger.warning(
-                "Falta variable obligatoria: '{}' — Configúrala en Render (Environment) o en .env local.",
+                "Falta variable OBLIGATORIA: '{}' — setéala en Render (Environment) o en tu .env local.",
                 k,
             )
 
     for k in optional:
-        if not os.getenv(k):
+        if not (os.getenv(k) or "").strip():
             logger.debug("Variable opcional no definida: '{}'", k)
 
 
 # =============================================================================
 # 1) Cargar .env (solo local)
 # =============================================================================
-
 dotenv_msg = _load_dotenv_if_local()
 
 
 # =============================================================================
-# 2) Configuración de entorno
+# 2) Entorno
 # =============================================================================
-
-# Mejor práctica: FLASK_ENV ya está deprecado en Flask moderno, pero lo soportamos igual.
 ENV = (_env("FLASK_ENV", "production") or "production").lower()
 DEBUG = ENV == "development" or _is_truthy(os.getenv("DEBUG"))
 
-# Render asigna PORT automáticamente. No hardcodees 10000 en producción.
 HOST = _env("HOST", "0.0.0.0") or "0.0.0.0"
 PORT = int(_env("PORT", "5000") or "5000")
 
 _setup_logger(DEBUG)
 
-logger.info("Iniciando Skyline Store · run.py")
-logger.info("ENV: {} | DEBUG: {} | HOST: {} | PORT: {}", ENV, DEBUG, HOST, PORT)
+logger.info("🚀 Iniciando Skyline Store")
+logger.info("ENV={} DEBUG={} HOST={} PORT={}", ENV, DEBUG, HOST, PORT)
+logger.info("Python={} | Platform={}", sys.version.split()[0], platform.platform())
 logger.info(dotenv_msg)
 
 
 # =============================================================================
 # 3) Validación de env vars
 # =============================================================================
-
-# Claves críticas
 REQUIRED_ENV_VARS: List[str] = [
     "SECRET_KEY",
 ]
 
-# Printful: tu app usa PRINTFUL_API_KEY (según tu main_routes.py)
+# Aceptamos ambos nombres para no romper: PRINTFUL_KEY o PRINTFUL_API_KEY
 OPTIONAL_ENV_VARS: List[str] = [
+    "PRINTFUL_KEY",
     "PRINTFUL_API_KEY",
     "PRINTFUL_STORE_ID",
     "PRINTFUL_CACHE_TTL",
@@ -132,40 +132,36 @@ OPTIONAL_ENV_VARS: List[str] = [
 
 _check_env(REQUIRED_ENV_VARS, OPTIONAL_ENV_VARS)
 
-# Aviso si hay mezcla rara
 if DEBUG and ENV == "production":
-    logger.warning("DEBUG está activo con FLASK_ENV=production. Recomendado apagar DEBUG en producción.")
+    logger.warning("⚠️ DEBUG activo con FLASK_ENV=production. Recomendado apagar DEBUG en producción.")
 
 
 # =============================================================================
 # 4) Crear Flask app (factory)
 # =============================================================================
-
 try:
     from app import create_app
 except Exception as import_error:  # noqa: BLE001
     logger.exception(
-        "No se pudo importar create_app desde app/__init__.py. "
-        "Verificá que exista create_app() y que no haya imports circulares."
+        "❌ No se pudo importar create_app desde app/__init__.py.\n"
+        "Causas típicas:\n"
+        " - Falta una dependencia en requirements.txt\n"
+        " - Imports circulares\n"
+        " - Nombre de paquete/carpeta incorrecto\n"
     )
-    raise import_error
+    raise
 
 try:
     app = create_app()
-    logger.info("✅ App creada correctamente (create_app()).")
+    logger.success("✅ App creada correctamente (create_app).")
 except Exception as app_error:  # noqa: BLE001
     logger.exception("❌ Error creando la app con create_app().")
-    raise app_error
+    raise
 
 
 # =============================================================================
-# 5) Debug local (python run.py)
+# 5) Dev local (python run.py)
 # =============================================================================
-
 if __name__ == "__main__":
-    logger.info("Servidor local: http://{}:{}/", HOST, PORT)
-    try:
-        app.run(host=HOST, port=PORT, debug=DEBUG)
-    except Exception as run_error:  # noqa: BLE001
-        logger.exception("Error ejecutando servidor local.")
-        raise run_error
+    logger.info("🧪 Servidor local: http://{}:{}/", HOST, PORT)
+    app.run(host=HOST, port=PORT, debug=DEBUG)
