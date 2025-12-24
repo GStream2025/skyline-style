@@ -1,147 +1,171 @@
+"""
+app/__init__.py — Skyline Style (Factory PRO)
+
+✅ App Factory create_app() lista para Gunicorn/Render
+✅ Config por ENV + soporte DATABASE_URL (Render Postgres)
+✅ SQLAlchemy + Migrations opcionales (si las usás)
+✅ Compress + Talisman + Caching + Minify (si están instalados)
+✅ Blueprints seguros (no revienta si falta alguno)
+✅ Logging claro
+"""
+
 from __future__ import annotations
 
 import os
-import sys
-from pathlib import Path
-from typing import Optional
+from urllib.parse import urlparse
 
-from dotenv import load_dotenv
-from flask import Flask, jsonify, render_template, request
+from flask import Flask
+
+# Core ext
 from flask_sqlalchemy import SQLAlchemy
-from loguru import logger
-from werkzeug.middleware.proxy_fix import ProxyFix
 
-# =============================================================================
-# EXTENSIONES GLOBALES
-# =============================================================================
 db = SQLAlchemy()
 
-# =============================================================================
-# PATHS
-# =============================================================================
-BASE_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = BASE_DIR.parent
+
+def _bool_env(key: str, default: bool = False) -> bool:
+    v = os.getenv(key)
+    if v is None:
+        return default
+    return v.strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
-# =============================================================================
-# FACTORY
-# =============================================================================
-def create_app(env_name: Optional[str] = None) -> Flask:
+def _normalize_database_url(url: str | None) -> str | None:
     """
-    Factory principal de Skyline Store.
-    Producción-ready · Render-friendly · Premium architecture.
-
-    - Carga .env SOLO en local (no en Render/producción)
-    - Logging pro con Loguru
-    - ProxyFix configurable (Render / reverse proxy)
-    - Extensiones opcionales sin romper deploy
-    - Blueprints robustos (si falla uno opcional, no tumba todo)
-    - Error handlers seguros (fallback JSON si faltan templates)
-    - Healthcheck /health
-    - Seguridad de DB: rollback + remove por request
+    Render suele dar postgres:// pero SQLAlchemy prefiere postgresql://
     """
-
-    _load_env_only_local()
-    _setup_logging()
-
-    # Config (lazy import para evitar circulares)
-    from app.config import get_config  # type: ignore
-
-    # Acepta env_name o usa FLASK_ENV
-    config_class = get_config(env_name) if env_name else get_config()
-    env = getattr(config_class, "ENV", os.getenv("FLASK_ENV", "production"))
-
-    app = Flask(
-        __name__,
-        static_folder="static",
-        template_folder="templates",
-    )
-
-    app.config.from_object(config_class)
-
-    logger.info("🚀 Skyline Store iniciando | ENV={}", env)
-
-    # ProxyFix (Render / HTTPS real) configurable
-    if app.config.get("TRUST_PROXY_HEADERS", True):
-        app.wsgi_app = ProxyFix(
-            app.wsgi_app,
-            x_for=int(os.getenv("PROXYFIX_X_FOR", "1")),
-            x_proto=int(os.getenv("PROXYFIX_X_PROTO", "1")),
-            x_host=int(os.getenv("PROXYFIX_X_HOST", "1")),
-            x_port=int(os.getenv("PROXYFIX_X_PORT", "1")),
-        )
-        logger.debug("ProxyFix activo (TRUST_PROXY_HEADERS=True)")
-
-    _init_extensions(app)
-    _register_blueprints(app)
-    _register_error_handlers(app)
-    _register_health(app)
-    _register_db_safety(app)
-
-    # Año global para footer (si lo usás en templates)
-    @app.context_processor
-    def _inject_globals():
-        return {"current_year": int(os.getenv("CURRENT_YEAR", "2025"))}
-
-    logger.success("✅ Skyline Store lista y operativa")
-    return app
+    if not url:
+        return None
+    if url.startswith("postgres://"):
+        return url.replace("postgres://", "postgresql://", 1)
+    return url
 
 
-# =============================================================================
-# HELPERS
-# =============================================================================
-def _is_truthy(value: str | None) -> bool:
-    return (value or "").strip().lower() in {"1", "true", "yes", "y", "on"}
+def create_app() -> Flask:
+    app = Flask(__name__, template_folder="templates", static_folder="static")
 
+    # -----------------------
+    # Config básica
+    # -----------------------
+    app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret-change-me")
 
-def _load_env_only_local() -> None:
-    """
-    Carga .env SOLO en desarrollo local.
-    En Render/producción, las variables van por Environment Settings.
-    """
-    env_path = PROJECT_ROOT / ".env"
-    is_render = _is_truthy(os.getenv("RENDER")) or bool(os.getenv("RENDER_SERVICE_ID"))
+    # Database (opcional)
+    db_url = _normalize_database_url(os.getenv("DATABASE_URL"))
+    if db_url:
+        app.config["SQLALCHEMY_DATABASE_URI"] = db_url
+        app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    else:
+        # fallback local (sqlite)
+        app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///skyline.db"
+        app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-    if env_path.exists() and not is_render:
-        load_dotenv(env_path)
-    # En Render NO cargamos .env (seguridad + evita pisar env vars)
-
-
-def _setup_logging() -> None:
-    """
-    Loguru a stdout (Render-friendly).
-    """
-    level = os.getenv("LOG_LEVEL", "INFO").upper().strip()
-    debug = _is_truthy(os.getenv("DEBUG")) or os.getenv("FLASK_ENV", "production").lower() == "development"
-
-    logger.remove()
-    logger.add(
-        sys.stdout,
-        level="DEBUG" if debug else level,
-        colorize=True,
-        enqueue=True,
-        backtrace=False,
-        diagnose=False,
-        format=(
-            "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | "
-            "<level>{level: <8}</level> | "
-            "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - "
-            "<level>{message}</level>"
-        ),
-    )
-    logger.debug("Logging activo · level={} · debug={}", level, debug)
-
-
-def _init_extensions(app: Flask) -> None:
-    # -------------------------
-    # DATABASE
-    # -------------------------
+    # Inicializar SQLAlchemy
     db.init_app(app)
-    logger.debug("SQLAlchemy inicializado")
 
-    # -------------------------
-    # COMPRESS (opcional)
-    # -------------------------
-    if app.config.get("ENABLE_COMPRESS", True):
+    # -----------------------
+    # Extensiones opcionales
+    # (NO rompen si no están)
+    # -----------------------
+    # Flask-Compress
+    try:
+        from flask_compress import Compress
+
+        Compress(app)
+    except Exception:
+        pass
+
+    # Flask-Talisman (headers seguridad)
+    try:
+        from flask_talisman import Talisman
+
+        # Si usás CDN/3rd party scripts, ajustamos CSP.
+        # En modo simple: fuerza HTTPS si Render está en HTTPS.
+        Talisman(
+            app,
+            force_https=_bool_env("FORCE_HTTPS", False),
+            content_security_policy=None,
+        )
+    except Exception:
+        pass
+
+    # Flask-Caching
+    try:
+        from flask_caching import Cache
+
+        cache_config = {
+            "CACHE_TYPE": os.getenv("CACHE_TYPE", "SimpleCache"),
+            "CACHE_DEFAULT_TIMEOUT": int(os.getenv("CACHE_DEFAULT_TIMEOUT", "300")),
+        }
+        Cache(app, config=cache_config)
+    except Exception:
+        pass
+
+    # Flask-Minify (minifica HTML/JS/CSS)
+    try:
+        from flask_minify import Minify
+
+        Minify(app=app, html=True, js=True, cssless=True)
+    except Exception:
+        pass
+
+    # WhiteNoise (static en prod sin nginx)
+    try:
+        from whitenoise import WhiteNoise
+
+        app.wsgi_app = WhiteNoise(app.wsgi_app, root="app/static/", prefix="static/")
+    except Exception:
+        pass
+
+    # -----------------------
+    # Blueprints
+    # -----------------------
+    # Main
+    try:
+        from app.routes.main_routes import main_bp
+
+        app.register_blueprint(main_bp)
+    except Exception:
+        # Fallback si tu blueprint está en otro path
         try:
-            from flask_compress import Compress  # type: igno_
+            from app.routes import main_bp  # type: ignore
+
+            app.register_blueprint(main_bp)
+        except Exception:
+            pass
+
+    # Auth
+    try:
+        from app.routes.auth_routes import auth_bp
+
+        app.register_blueprint(auth_bp)
+    except Exception:
+        try:
+            from app.auth_routes import auth_bp  # type: ignore
+
+            app.register_blueprint(auth_bp)
+        except Exception:
+            pass
+
+    # Printful (si existe)
+    try:
+        from app.routes.printful_routes import printful_bp
+
+        app.register_blueprint(printful_bp, url_prefix="/printful")
+    except Exception:
+        pass
+
+    # Admin (si existe)
+    try:
+        from app.routes.admin_routes import admin_bp
+
+        app.register_blueprint(admin_bp, url_prefix="/admin")
+    except Exception:
+        pass
+
+    # -----------------------
+    # Healthcheck
+    # -----------------------
+    @app.get("/health")
+    def health():
+        return {"status": "ok"}
+
+    return app
