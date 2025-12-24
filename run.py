@@ -16,7 +16,6 @@ import sys
 import platform
 from typing import Iterable, List
 
-from dotenv import load_dotenv
 from loguru import logger
 
 
@@ -41,13 +40,23 @@ def _load_dotenv_if_local() -> str:
     """
     Carga .env SOLO en local.
     En Render NO se debe cargar .env por seguridad.
+    Además: si python-dotenv no está instalado, NO rompe.
     """
     base_dir = os.path.abspath(os.path.dirname(__file__))
     dotenv_path = os.path.join(base_dir, ".env")
 
     if os.path.exists(dotenv_path) and not _running_on_render():
-        load_dotenv(dotenv_path)
-        return f".env cargado (LOCAL): {dotenv_path}"
+        try:
+            from dotenv import load_dotenv  # import opcional
+            load_dotenv(dotenv_path)
+            return f".env cargado (LOCAL): {dotenv_path}"
+        except ModuleNotFoundError:
+            return (
+                "No se cargó .env porque falta la dependencia 'python-dotenv'. "
+                "Instalala en local con: pip install python-dotenv"
+            )
+        except Exception as e:  # noqa: BLE001
+            return f"No se pudo cargar .env por error: {e}"
 
     if os.path.exists(dotenv_path) and _running_on_render():
         return "Render detectado: .env existe pero NO se carga (seguridad)."
@@ -141,7 +150,7 @@ if DEBUG and ENV == "production":
 # =============================================================================
 try:
     from app import create_app
-except Exception as import_error:  # noqa: BLE001
+except Exception:  # noqa: BLE001
     logger.exception(
         "❌ No se pudo importar create_app desde app/__init__.py.\n"
         "Causas típicas:\n"
@@ -154,7 +163,7 @@ except Exception as import_error:  # noqa: BLE001
 try:
     app = create_app()
     logger.success("✅ App creada correctamente (create_app).")
-except Exception as app_error:  # noqa: BLE001
+except Exception:  # noqa: BLE001
     logger.exception("❌ Error creando la app con create_app().")
     raise
 
