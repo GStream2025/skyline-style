@@ -1,19 +1,31 @@
-﻿# =========================
-# Python / Flask
-# =========================
+﻿# =====================================================
+# SKYLINE STYLE — .gitignore (PRO / FINAL)
+# Python · Flask · Render · Production Ready
+# =====================================================
+
+# -----------------------------------------------------
+# PYTHON / BYTECODE
+# -----------------------------------------------------
 __pycache__/
 *.py[cod]
-*.class
+*$py.class
 *.pyo
 *.pyd
 *.so
 
-# Virtual environments
+# -----------------------------------------------------
+# VIRTUAL ENVIRONMENTS
+# -----------------------------------------------------
 .venv/
 venv/
 env/
+ENV/
+env.bak/
+venv.bak/
 
-# Python build / tooling
+# -----------------------------------------------------
+# BUILD / TOOLING
+# -----------------------------------------------------
 build/
 dist/
 *.egg-info/
@@ -21,32 +33,84 @@ dist/
 .mypy_cache/
 .ruff_cache/
 .coverage
+coverage.xml
 htmlcov/
 
-# =========================
-# Environment / secrets
-# =========================
+# -----------------------------------------------------
+# ENVIRONMENT / SECRETS (CRÍTICO)
+# -----------------------------------------------------
 .env
 .env.*
 !.env.example
 
-# =========================
-# OS / Editors
-# =========================
+# -----------------------------------------------------
+# LOGS
+# -----------------------------------------------------
+*.log
+logs/
+*.out
+
+# -----------------------------------------------------
+# OS / EDITORS
+# -----------------------------------------------------
 .DS_Store
 Thumbs.db
 desktop.ini
+
 .vscode/
 .idea/
+*.swp
+*.swo
 
-# =========================
-# Logs
-# =========================
-*.log
+# -----------------------------------------------------
+# NODE / FRONTEND (si en el futuro agregás)
+# -----------------------------------------------------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# =========================
-# Uploads temporales (si son user uploads)
-# Si tus imágenes son "assets oficiales", movelas a app/static/img/ y deja uploads vacío
-# =========================
-app/static/uploads/products/*
+# -----------------------------------------------------
+# ARCHIVOS PESADOS / BACKUPS
+# -----------------------------------------------------
+*.zip
+*.rar
+*.7z
+*.tar
+*.gz
+*.bak
+
+# -----------------------------------------------------
+# UPLOADS TEMPORALES (USUARIOS)
+# -----------------------------------------------------
+# Assets oficiales → app/static/img/
+# Uploads dinámicos → NO versionar
+app/static/uploads/*
+!app/static/uploads/.gitkeep
+!app/static/uploads/products/
 !app/static/uploads/products/.gitkeep
+
+# -----------------------------------------------------
+# CACHE / RUNTIME
+# -----------------------------------------------------
+instance/
+.cache/
+tmp/
+temp/
+
+# -----------------------------------------------------
+# DATABASE LOCAL (si usás sqlite en dev)
+# -----------------------------------------------------
+*.sqlite
+*.sqlite3
+skyline_local.db
+
+# -----------------------------------------------------
+# RENDER / DEPLOY
+# -----------------------------------------------------
+.env.render
+render.env
+
+# -----------------------------------------------------
+# FIN
+# -----------------------------------------------------
