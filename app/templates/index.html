@@ -1,24 +1,25 @@
-{# templates/index.html — SKYLINE STORE · INDEX ULTRA FINAL (NO ERRORS) #}
+{# templates/index.html — SKYLINE STORE · INDEX ULTRA PREMIUM (LIGHT · NO ERRORS) #}
 {% extends "base.html" %}
 {% block title %}Skyline Store · Moda urbana premium{% endblock %}
 
 {% block extra_head %}
 <style>
 /* ==========================================================
-   SKYLINE STORE — INDEX ULTRA FINAL (LIGHT · PREMIUM)
-   - copy sin dropshipping
-   - hero con fondo real + glass spotlight
-   - skeleton fallbacks seguros
-   - UX premium + accesible
+   SKYLINE STORE — INDEX ULTRA PREMIUM (LIGHT)
+   - Fondo más visible + definido (sin “neblina”)
+   - Panel categorías NO tapa el diseño (se baja y se vuelve más transparente)
+   - Animaciones premium (reveal, hover, shimmer, parallax suave)
+   - Accesible + motion-safe
 ========================================================== */
 
 /* ---------- TOKENS ---------- */
 :root{
-  --bg0:#f7f8fb;
+  --bg0:#f6f7fb;
   --bg1:#ffffff;
+
   --ink:#0b1220;
   --muted: rgba(11,18,32,.68);
-  --muted2: rgba(11,18,32,.55);
+  --muted2: rgba(11,18,32,.52);
 
   --a:#2563eb;  /* blue */
   --b:#06b6d4;  /* cyan */
@@ -26,17 +27,30 @@
   --d:#22c55e;  /* green */
   --p:#a855f7;  /* purple */
 
-  --glass: rgba(255,255,255,.78);
-  --glass2: rgba(255,255,255,.92);
+  --glass: rgba(255,255,255,.72);
+  --glass2: rgba(255,255,255,.90);
 
-  --shadow1: 0 12px 28px rgba(2,6,23,.10);
-  --shadow2: 0 24px 70px rgba(2,6,23,.14);
+  --shadow1: 0 14px 30px rgba(2,6,23,.10);
+  --shadow2: 0 28px 90px rgba(2,6,23,.14);
 
-  --r2: 1.55rem;
-  --r3: 2.1rem;
+  --r2: 1.45rem;
+  --r3: 2.05rem;
 
-  --ring: 0 0 0 3px rgba(37,99,235,.22);
-  --grid: 1200px;
+  --ring: 0 0 0 4px rgba(37,99,235,.18);
+  --grid: 1220px;
+
+  --ease: cubic-bezier(.2,.9,.2,1);
+}
+
+/* ---------- BASE ---------- */
+*{ box-sizing:border-box; }
+html{ scroll-behavior:smooth; }
+body{
+  background: radial-gradient(circle at 0% 0%, rgba(37,99,235,.07), transparent 42%),
+              radial-gradient(circle at 100% 0%, rgba(6,182,212,.06), transparent 40%),
+              radial-gradient(circle at 50% 100%, rgba(245,158,11,.06), transparent 45%),
+              linear-gradient(180deg, var(--bg1), var(--bg0));
+  color: var(--ink);
 }
 
 .container{
@@ -45,11 +59,11 @@
   margin:0 auto;
   padding: 0 1.1rem;
 }
-.section{ padding: clamp(3.2rem, 6vw, 5rem) 0; }
+.section{ padding: clamp(3.1rem, 6vw, 5rem) 0; }
 .sep{
   height:1px;
   background: linear-gradient(90deg, transparent, rgba(15,23,42,.10), transparent);
-  margin: clamp(2.4rem, 4vw, 3.2rem) 0;
+  margin: clamp(2.2rem, 4vw, 3rem) 0;
 }
 
 /* ---------- TYPO ---------- */
@@ -58,11 +72,11 @@
   align-items:center;
   gap:.55rem;
   width: fit-content;
-  padding:.42rem .86rem;
+  padding:.44rem .9rem;
   border-radius:999px;
-  border: 1px solid rgba(37,99,235,.18);
-  background: linear-gradient(180deg, rgba(255,255,255,.92), rgba(255,255,255,.72));
-  box-shadow: 0 10px 20px rgba(2,6,23,.06);
+  border: 1px solid rgba(37,99,235,.20);
+  background: linear-gradient(180deg, rgba(255,255,255,.92), rgba(255,255,255,.70));
+  box-shadow: 0 12px 20px rgba(2,6,23,.06);
   font-weight:950;
   font-size:.82rem;
   color: rgba(37,99,235,.96);
@@ -71,21 +85,20 @@
   content:"";
   width:10px;height:10px;border-radius:999px;
   background: radial-gradient(circle at 30% 30%, #60a5fa, #2563eb);
-  box-shadow: 0 0 0 4px rgba(37,99,235,.12);
+  box-shadow: 0 0 0 5px rgba(37,99,235,.12);
 }
 .h2{
-  font-size: clamp(1.58rem, 2.6vw, 2.15rem);
+  font-size: clamp(1.62rem, 2.75vw, 2.2rem);
   line-height:1.12;
-  font-weight: 980;
+  font-weight: 985;
   letter-spacing: -.65px;
-  margin:.8rem 0 0;
-  color: var(--ink);
+  margin:.85rem 0 0;
 }
 .p{
   margin:.75rem 0 0;
   color: var(--muted);
   line-height:1.75;
-  font-size: 1.02rem;
+  font-size: 1.03rem;
 }
 
 /* ---------- BUTTONS ---------- */
@@ -99,29 +112,27 @@
   font-weight: 980;
   border:1px solid transparent;
   text-decoration:none;
-  transition: transform .18s ease, box-shadow .18s ease, filter .18s ease, border-color .18s ease;
+  transition: transform .22s var(--ease), box-shadow .22s var(--ease), filter .22s var(--ease), border-color .22s var(--ease);
   user-select:none;
+  position:relative;
+  will-change: transform;
 }
-.btn:hover{ transform: translateY(-2px); filter:saturate(1.05); }
+.btn:hover{ transform: translateY(-3px); filter:saturate(1.08); }
+.btn:active{ transform: translateY(-1px) scale(.99); }
 .btn:focus-visible{ outline:none; box-shadow: var(--ring), var(--shadow1); }
 
 .btn-primary{
-  position:relative;
   color:#fff;
   background: linear-gradient(135deg, var(--a), var(--b));
   box-shadow: var(--shadow2);
+  overflow:hidden;
 }
 .btn-primary::after{
   content:"";
-  position:absolute; inset:0;
-  border-radius:999px;
-  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,.34) 40%, transparent 70%);
-  transform: translateX(-60%);
+  position:absolute; inset:-2px;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,.38) 45%, transparent 70%);
+  transform: translateX(-70%);
   opacity:0;
-}
-@media (prefers-reduced-motion: no-preference){
-  .btn-primary:hover::after{ opacity:.9; animation: shine .9s ease forwards; }
-  @keyframes shine{ to{ transform: translateX(70%); opacity:0; } }
 }
 .btn-secondary{
   color: var(--ink);
@@ -129,18 +140,27 @@
   border-color: rgba(15,23,42,.12);
   box-shadow: var(--shadow1);
 }
-.btn-secondary:hover{ border-color: rgba(37,99,235,.28); }
+.btn-secondary:hover{ border-color: rgba(37,99,235,.26); }
 
-.btn-mini{ padding:.74rem 1.15rem; font-size:.92rem; }
+.btn-mini{ padding:.76rem 1.15rem; font-size:.92rem; }
 .btn-ghost{
-  background: rgba(255,255,255,.78);
+  background: rgba(255,255,255,.72);
   border:1px solid rgba(15,23,42,.12);
   color: var(--ink);
+  box-shadow: 0 10px 18px rgba(2,6,23,.06);
 }
 .btn-ghost:hover{ border-color: rgba(37,99,235,.22); }
 
+@media (prefers-reduced-motion: no-preference){
+  .btn-primary:hover::after{ opacity:.9; animation: shine 1s var(--ease) forwards; }
+  @keyframes shine{ to{ transform: translateX(75%); opacity:0; } }
+}
+
 /* ==========================================================
-   HERO — fondo real + glass spotlight (mejora premium #1)
+   HERO — fondo definido + overlays localizados (NO neblina)
+   Idea clave:
+   - El overlay blanco NO cubre todo, solo la zona de texto.
+   - El panel se baja y se vuelve más translúcido en desktop.
 ========================================================== */
 .hero{
   position:relative;
@@ -149,73 +169,87 @@
   align-items:center;
   overflow:hidden;
 
+  /* Fondo: menos blanco arriba y SIN blur general */
   background:
-    radial-gradient(1400px 900px at 12% 10%, rgba(37,99,235,.16), transparent 56%),
-    radial-gradient(1300px 800px at 88% 18%, rgba(245,158,11,.14), transparent 62%),
-    radial-gradient(1000px 700px at 55% 92%, rgba(34,197,94,.12), transparent 58%),
-    linear-gradient(180deg, rgba(255,255,255,.88) 0%, rgba(247,248,251,.92) 100%),
+    radial-gradient(1200px 760px at 14% 8%, rgba(37,99,235,.13), transparent 58%),
+    radial-gradient(1000px 700px at 92% 14%, rgba(245,158,11,.12), transparent 62%),
+    radial-gradient(1100px 760px at 52% 95%, rgba(34,197,94,.10), transparent 60%),
+    /* capa sutil para que el fondo no “queme” */
+    linear-gradient(180deg, rgba(255,255,255,.50) 0%, rgba(246,247,251,.62) 100%),
     url("{{ url_for('static', filename='img/hero/fondo.png') }}");
   background-size: cover;
-  background-position: center;
+  /* 🔥 ajustá para que se vean bien los objetos del fondo */
+  background-position: 68% 52%;
   background-repeat: no-repeat;
-
   color: var(--ink);
 }
-.hero::before{
-  content:"";
-  position:absolute; inset:0;
-  pointer-events:none;
-  background: radial-gradient(900px 520px at 18% 35%, rgba(255,255,255,.68), transparent 62%);
-  opacity:.75;
-  z-index:0;
-}
+
+/* grano ultra sutil (calidad) */
 .hero::after{
   content:"";
   position:absolute; inset:0;
   pointer-events:none;
-  opacity:.055;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23n)' opacity='.85'/%3E%3C/svg%3E");
+  opacity:.045;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)' opacity='.8'/%3E%3C/svg%3E");
   mix-blend-mode:multiply;
   z-index:0;
 }
 
-/* blobs suaves */
+/* blobs animados suaves (no tapan el fondo) */
 .hero-bg{
   position:absolute;
-  inset:-10%;
+  inset:-12%;
   z-index:0;
-  filter: blur(42px) saturate(1.2);
-  opacity:.9;
+  filter: blur(46px) saturate(1.18);
+  opacity:.65;
+  pointer-events:none;
 }
 .hero-bg .blob{ position:absolute; border-radius:999px; transform: translateZ(0); will-change: transform; }
-.hero-bg .b1{ width:540px;height:540px; left:-90px; top:-70px;
-  background: radial-gradient(circle at 30% 30%, rgba(37,99,235,.40), transparent 60%); }
-.hero-bg .b2{ width:540px;height:540px; right:-130px; top:-55px;
-  background: radial-gradient(circle at 45% 35%, rgba(245,158,11,.30), transparent 62%); }
-.hero-bg .b3{ width:560px;height:560px; left:30%; bottom:-250px;
-  background: radial-gradient(circle at 40% 40%, rgba(34,197,94,.24), transparent 64%); }
+.hero-bg .b1{ width:560px;height:560px; left:-120px; top:-90px;
+  background: radial-gradient(circle at 30% 30%, rgba(37,99,235,.38), transparent 62%); }
+.hero-bg .b2{ width:560px;height:560px; right:-160px; top:-110px;
+  background: radial-gradient(circle at 45% 35%, rgba(245,158,11,.28), transparent 62%); }
+.hero-bg .b3{ width:620px;height:620px; left:28%; bottom:-320px;
+  background: radial-gradient(circle at 40% 40%, rgba(34,197,94,.22), transparent 66%); }
 
 @media (prefers-reduced-motion: no-preference){
-  .hero-bg .b1{ animation: float1 10s ease-in-out infinite; }
-  .hero-bg .b2{ animation: float2 12s ease-in-out infinite; }
-  .hero-bg .b3{ animation: float3 14s ease-in-out infinite; }
+  .hero-bg .b1{ animation: float1 12s ease-in-out infinite; }
+  .hero-bg .b2{ animation: float2 14s ease-in-out infinite; }
+  .hero-bg .b3{ animation: float3 16s ease-in-out infinite; }
   @keyframes float1{ 0%,100%{transform:translate(0,0)} 50%{transform:translate(18px,12px)} }
-  @keyframes float2{ 0%,100%{transform:translate(0,0)} 50%{transform:translate(-18px,10px)} }
-  @keyframes float3{ 0%,100%{transform:translate(0,0)} 50%{transform:translate(12px,-16px)} }
+  @keyframes float2{ 0%,100%{transform:translate(0,0)} 50%{transform:translate(-20px,14px)} }
+  @keyframes float3{ 0%,100%{transform:translate(0,0)} 50%{transform:translate(14px,-18px)} }
 }
 
 .hero-inner{ position:relative; z-index:2; width:100%; padding: clamp(5.2rem, 10vh, 7.4rem) 0 4.2rem; }
+
 .hero-grid{
   display:grid;
   grid-template-columns: 1fr;
-  gap: clamp(1.8rem, 4vw, 3.2rem);
+  gap: clamp(1.7rem, 4vw, 3rem);
   align-items:center;
 }
-@media (min-width: 980px){ .hero-grid{ grid-template-columns: 1.08fr .92fr; } }
+@media (min-width: 980px){
+  .hero-grid{ grid-template-columns: 1.08fr .92fr; }
+}
+
+/* Overlay SOLO bajo el texto (para que el fondo se vea definido) */
+.hero-left{
+  position:relative;
+}
+.hero-left::before{
+  content:"";
+  position:absolute;
+  inset:-1.2rem -1.1rem;
+  border-radius: 2rem;
+  background: radial-gradient(900px 460px at 24% 30%, rgba(255,255,255,.86), rgba(255,255,255,.46) 62%, rgba(255,255,255,.18) 82%, transparent 100%);
+  filter: blur(0px);
+  z-index:-1;
+}
 
 .hero-title{
-  font-size: clamp(2.35rem, 4.9vw, 3.65rem);
-  line-height:1.03;
+  font-size: clamp(2.4rem, 5vw, 3.75rem);
+  line-height:1.02;
   font-weight: 990;
   letter-spacing:-.95px;
   margin:.75rem 0 0;
@@ -234,44 +268,52 @@
   margin: .9rem 0 0;
   max-width: 52rem;
   color: rgba(11,18,32,.70);
-  font-size: 1.06rem;
+  font-size: 1.07rem;
   line-height:1.75;
 }
 
-/* ✅ mejora premium: “glass spotlight card” en el texto */
+/* glass spotlight card (más premium, pero SIN opacar fondo) */
 .hero-card{
   display:inline-block;
-  margin-top: .9rem;
-  padding: .85rem 1rem;
-  border-radius: 1.2rem;
-  background: linear-gradient(180deg, rgba(255,255,255,.85), rgba(255,255,255,.60));
+  margin-top: .95rem;
+  padding: .95rem 1.05rem;
+  border-radius: 1.35rem;
+  background: linear-gradient(180deg, rgba(255,255,255,.78), rgba(255,255,255,.56));
   border: 1px solid rgba(15,23,42,.10);
-  box-shadow: 0 18px 55px rgba(2,6,23,.10);
+  box-shadow: 0 24px 70px rgba(2,6,23,.12);
   backdrop-filter: blur(14px);
 }
-.hero-cta{ display:flex; flex-wrap:wrap; gap:.75rem; margin-top:1.15rem; }
-.hero-chips{ display:flex; flex-wrap:wrap; gap:.55rem; margin-top:1.05rem; }
+.hero-cta{ display:flex; flex-wrap:wrap; gap:.75rem; margin-top:1.1rem; }
+.hero-chips{ display:flex; flex-wrap:wrap; gap:.55rem; margin-top:1rem; }
+
 .chip{
   display:inline-flex; align-items:center; gap:.5rem;
   padding:.46rem .86rem; border-radius:999px;
   border:1px solid rgba(15,23,42,.10);
-  background: rgba(255,255,255,.78);
+  background: rgba(255,255,255,.68);
   backdrop-filter: blur(12px);
-  box-shadow: 0 10px 22px rgba(2,6,23,.06);
+  box-shadow: 0 12px 22px rgba(2,6,23,.06);
   font-size:.78rem; color: rgba(11,18,32,.74);
+  transition: transform .18s var(--ease), box-shadow .18s var(--ease);
 }
+.chip:hover{ transform: translateY(-2px); box-shadow: var(--shadow1); }
 .chip::before{ content:"✓"; font-weight: 990; color: rgba(34,197,94,.95); }
 
-/* ---------- RIGHT PANEL ---------- */
+/* ---------- RIGHT PANEL (no tapa el diseño) ---------- */
 .panel{
   position:relative;
   border-radius: var(--r3);
-  background: linear-gradient(180deg, rgba(255,255,255,.92), rgba(255,255,255,.72));
+  background: linear-gradient(180deg, rgba(255,255,255,.72), rgba(255,255,255,.52));
   border: 1px solid rgba(15,23,42,.10);
   box-shadow: var(--shadow2);
   padding: 1.05rem;
   overflow:hidden;
-  backdrop-filter: blur(14px);
+  backdrop-filter: blur(16px);
+  transform: translateY(10px);
+}
+@media (min-width:980px){
+  /* 👇 baja el panel para no cubrir el “centro” del fondo */
+  .panel{ transform: translateY(70px); }
 }
 .panel::before{
   content:"";
@@ -281,8 +323,15 @@
     rgba(6,182,212,.16),
     rgba(245,158,11,.14),
     rgba(168,85,247,.12));
-  opacity:.60;
+  opacity:.52;
   filter: blur(18px);
+  z-index:0;
+}
+.panel::after{
+  content:"";
+  position:absolute; inset:0;
+  background: radial-gradient(700px 320px at 20% 20%, rgba(255,255,255,.55), transparent 60%);
+  opacity:.55;
   z-index:0;
 }
 .panel-inner{ position:relative; z-index:1; }
@@ -305,74 +354,80 @@
 /* card categoría */
 .cat{
   position:relative;
-  flex:0 0 54%;
-  max-width: 270px;
+  flex:0 0 56%;
+  max-width: 280px;
   scroll-snap-align:start;
-  border-radius: 1.2rem;
+  border-radius: 1.25rem;
   border:1px solid rgba(15,23,42,.10);
-  background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(255,255,255,.72));
+  background: linear-gradient(180deg, rgba(255,255,255,.92), rgba(255,255,255,.68));
   box-shadow: var(--shadow1);
-  padding:.74rem;
+  padding:.78rem;
   text-decoration:none;
   color: inherit;
-  transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+  transition: transform .25s var(--ease), box-shadow .25s var(--ease), border-color .25s var(--ease);
   overflow:hidden;
+  transform: translateZ(0);
 }
 .cat::after{
   content:"";
-  position:absolute; inset:-40% -60%;
+  position:absolute; inset:-45% -70%;
   background:
-    radial-gradient(circle at 30% 30%, rgba(37,99,235,.18), transparent 60%),
-    radial-gradient(circle at 70% 60%, rgba(245,158,11,.12), transparent 62%),
-    radial-gradient(circle at 55% 40%, rgba(168,85,247,.10), transparent 65%);
-  opacity:.65;
+    radial-gradient(circle at 30% 30%, rgba(37,99,235,.16), transparent 60%),
+    radial-gradient(circle at 70% 60%, rgba(245,158,11,.11), transparent 62%),
+    radial-gradient(circle at 55% 40%, rgba(168,85,247,.09), transparent 65%);
+  opacity:.75;
   transform: rotate(12deg);
   pointer-events:none;
 }
-.cat:hover{ transform: translateY(-6px); box-shadow: var(--shadow2); border-color: rgba(37,99,235,.22); }
+.cat:hover{ transform: translateY(-8px); box-shadow: var(--shadow2); border-color: rgba(37,99,235,.20); }
 
-.cat img{
+.cat-media{
+  position:relative;
   width:100%;
-  height: 8.2rem;
-  object-fit: cover;
-  border-radius: 1rem;
+  height: 8.4rem;
+  border-radius: 1.05rem;
+  overflow:hidden;
   border:1px solid rgba(15,23,42,.10);
-  box-shadow: 0 10px 18px rgba(2,6,23,.08);
-  background:#fff;
-  margin-bottom:.6rem;
+  box-shadow: 0 12px 20px rgba(2,6,23,.08);
+  background: rgba(255,255,255,.85);
+  margin-bottom:.65rem;
 }
-
-/* ✅ mejora premium #3: skeleton */
-.skeleton{
-  display:none;
+.cat-media img{
   width:100%;
-  height: 8.2rem;
-  border-radius: 1rem;
-  border:1px solid rgba(15,23,42,.10);
+  height:100%;
+  object-fit: cover;
+  display:block;
+  transform: scale(1.01);
+  transition: transform .35s var(--ease), filter .35s var(--ease);
+}
+.cat:hover .cat-media img{ transform: scale(1.06); filter: saturate(1.06) contrast(1.02); }
+
+/* skeleton + fallback */
+.skeleton{
+  position:absolute; inset:0;
+  border-radius: 1.05rem;
   background:
     linear-gradient(90deg, rgba(226,232,240,.55) 0%, rgba(226,232,240,.25) 45%, rgba(226,232,240,.55) 100%);
   background-size: 200% 100%;
   animation: sk 1.2s ease-in-out infinite;
-  margin-bottom:.6rem;
 }
 @keyframes sk{ 0%{background-position:0% 0} 100%{background-position:200% 0} }
 
 .fallback{
   display:none;
   width:100%;
-  height: 8.2rem;
-  border-radius: 1rem;
-  border:1px dashed rgba(15,23,42,.20);
-  background: rgba(255,255,255,.65);
+  height: 8.4rem;
+  border-radius: 1.05rem;
+  border:1px dashed rgba(15,23,42,.22);
+  background: rgba(255,255,255,.70);
   place-items:center;
   text-align:center;
-  padding:.8rem;
-  margin-bottom:.6rem;
-  color: rgba(11,18,32,.70);
+  padding:.85rem;
+  color: rgba(11,18,32,.74);
 }
 
-.cat-title{ font-weight: 990; font-size: .96rem; letter-spacing:-.2px; position:relative; z-index:1; }
-.cat-sub{ font-size: .8rem; color: rgba(11,18,32,.66); margin-top:.14rem; position:relative; z-index:1; }
+.cat-title{ font-weight: 990; font-size: .98rem; letter-spacing:-.2px; position:relative; z-index:1; }
+.cat-sub{ font-size: .82rem; color: rgba(11,18,32,.66); margin-top:.14rem; position:relative; z-index:1; }
 
 /* ==========================================================
    FEATURED
@@ -386,15 +441,24 @@
   background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(255,255,255,.74));
   box-shadow: var(--shadow1);
   overflow:hidden;
-  transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+  transition: transform .25s var(--ease), box-shadow .25s var(--ease), border-color .25s var(--ease);
+  transform: translateZ(0);
 }
-.product:hover{ transform: translateY(-6px); box-shadow: var(--shadow2); border-color: rgba(37,99,235,.18); }
+.product:hover{ transform: translateY(-8px); box-shadow: var(--shadow2); border-color: rgba(37,99,235,.18); }
 
-.product-media{ position:relative; background:#fff; height:190px; display:block; }
-.product-media img{ width:100%; height:100%; object-fit:cover; display:block; }
-.product-media .fallback{ display:none; height:190px; margin:0; border:0; }
+.product-media{ position:relative; background:#fff; height:200px; display:block; overflow:hidden; }
+.product-media img{ width:100%; height:100%; object-fit:cover; display:block; transform: scale(1.01); transition: transform .5s var(--ease), filter .5s var(--ease); }
+.product:hover .product-media img{ transform: scale(1.07); filter: saturate(1.05) contrast(1.02); }
 
-.product-body{ padding: .98rem 1.02rem 1.05rem; }
+.product-media .media-skeleton{
+  position:absolute; inset:0;
+  background: linear-gradient(90deg, rgba(226,232,240,.55) 0%, rgba(226,232,240,.25) 45%, rgba(226,232,240,.55) 100%);
+  background-size: 200% 100%;
+  animation: sk 1.2s ease-in-out infinite;
+}
+.product-media .fallback{ display:none; position:absolute; inset:0; place-items:center; }
+
+.product-body{ padding: 1.05rem 1.05rem 1.1rem; }
 .product-top{ display:flex; align-items:center; justify-content:space-between; gap:.8rem; }
 
 .tag{
@@ -404,7 +468,7 @@
   font-weight:980;
   font-size:.75rem;
   border:1px solid rgba(15,23,42,.10);
-  background: rgba(255,255,255,.80);
+  background: rgba(255,255,255,.86);
 }
 .tag.hot{ border-color: rgba(245,158,11,.25); }
 .tag.new{ border-color: rgba(37,99,235,.22); }
@@ -414,22 +478,23 @@
 .product-title{ margin:.65rem 0 .3rem; font-weight: 990; letter-spacing:-.35px; }
 .product-desc{ margin:0; color: var(--muted); line-height:1.65; font-size:.96rem; }
 
-/* ✅ mejora premium #4: acciones */
 .product-actions{ display:flex; gap:.6rem; flex-wrap:wrap; margin-top:.9rem; }
+
+/* icon button premium */
 .icon-btn{
   display:inline-flex;
   align-items:center; justify-content:center;
-  width: 42px; height: 42px;
+  width: 44px; height: 44px;
   border-radius: 999px;
   border: 1px solid rgba(15,23,42,.12);
-  background: rgba(255,255,255,.78);
-  box-shadow: 0 10px 18px rgba(2,6,23,.06);
+  background: rgba(255,255,255,.72);
+  box-shadow: 0 12px 18px rgba(2,6,23,.07);
   cursor:pointer;
-  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+  transition: transform .22s var(--ease), box-shadow .22s var(--ease), border-color .22s var(--ease);
 }
-.icon-btn:hover{ transform: translateY(-2px); box-shadow: var(--shadow2); border-color: rgba(37,99,235,.22); }
+.icon-btn:hover{ transform: translateY(-3px); box-shadow: var(--shadow2); border-color: rgba(37,99,235,.22); }
 .icon-btn:focus-visible{ outline:none; box-shadow: var(--ring); }
-.icon-btn[data-on="true"]{ border-color: rgba(245,158,11,.28); }
+.icon-btn[data-on="true"]{ border-color: rgba(245,158,11,.30); }
 
 /* ==========================================================
    BENEFITS / REVIEWS / CTA
@@ -439,13 +504,15 @@
 .benefit{
   border-radius: var(--r2);
   border:1px solid rgba(15,23,42,.10);
-  background: rgba(255,255,255,.78);
-  backdrop-filter: blur(12px);
+  background: rgba(255,255,255,.74);
+  backdrop-filter: blur(14px);
   box-shadow: var(--shadow1);
   padding: 1rem 1rem 1.1rem;
+  transition: transform .22s var(--ease), box-shadow .22s var(--ease);
 }
+.benefit:hover{ transform: translateY(-6px); box-shadow: var(--shadow2); }
 .benefit .ico{
-  width:42px;height:42px;border-radius:14px;
+  width:44px;height:44px;border-radius:16px;
   display:grid; place-items:center;
   background: linear-gradient(135deg, rgba(37,99,235,.18), rgba(6,182,212,.14));
   border:1px solid rgba(37,99,235,.14);
@@ -460,19 +527,21 @@
 .review{
   border-radius: var(--r2);
   border:1px solid rgba(15,23,42,.10);
-  background: linear-gradient(180deg, rgba(255,255,255,.95), rgba(255,255,255,.76));
+  background: linear-gradient(180deg, rgba(255,255,255,.92), rgba(255,255,255,.72));
   box-shadow: var(--shadow1);
   padding: 1.05rem 1.05rem 1rem;
   position:relative;
   overflow:hidden;
+  transition: transform .22s var(--ease), box-shadow .22s var(--ease);
 }
+.review:hover{ transform: translateY(-6px); box-shadow: var(--shadow2); }
 .review::before{
   content:"";
   position:absolute; inset:-30% -40%;
   background:
-    radial-gradient(circle at 30% 30%, rgba(37,99,235,.16), transparent 62%),
-    radial-gradient(circle at 80% 40%, rgba(245,158,11,.12), transparent 62%);
-  opacity:.55;
+    radial-gradient(circle at 30% 30%, rgba(37,99,235,.14), transparent 62%),
+    radial-gradient(circle at 80% 40%, rgba(245,158,11,.10), transparent 62%);
+  opacity:.7;
   transform: rotate(8deg);
 }
 .review .inner{ position:relative; z-index:1; }
@@ -480,7 +549,7 @@
 .review p{ margin:.55rem 0 .85rem; color: var(--muted); line-height:1.75; }
 .person{ display:flex; align-items:center; gap:.7rem; }
 .avatar{
-  width:42px;height:42px;border-radius:14px;
+  width:44px;height:44px;border-radius:16px;
   background: linear-gradient(135deg, rgba(168,85,247,.18), rgba(6,182,212,.14));
   border:1px solid rgba(15,23,42,.10);
 }
@@ -505,7 +574,7 @@
   position:absolute; inset:-30%;
   background: radial-gradient(circle at 30% 30%, rgba(255,255,255,.52), transparent 60%);
   filter: blur(20px);
-  opacity:.6;
+  opacity:.65;
 }
 .cta-band .row{
   position:relative;
@@ -517,7 +586,7 @@
 @media (min-width:900px){
   .cta-band .row{ flex-direction:row; align-items:center; justify-content:space-between; gap:1.2rem; }
 }
-.cta-band h3{ margin:0; font-size: 1.26rem; font-weight: 990; letter-spacing:-.45px; }
+.cta-band h3{ margin:0; font-size: 1.28rem; font-weight: 990; letter-spacing:-.45px; }
 .cta-band p{ margin:.25rem 0 0; color: rgba(11,18,32,.72); }
 
 .form{ display:flex; flex-wrap:wrap; gap:.6rem; margin-top:.35rem; }
@@ -528,7 +597,7 @@
   border-radius:999px;
   border:1px solid rgba(15,23,42,.14);
   background: rgba(255,255,255,.88);
-  box-shadow: 0 10px 18px rgba(2,6,23,.06);
+  box-shadow: 0 12px 18px rgba(2,6,23,.06);
 }
 .input:focus-visible{ outline:none; box-shadow: var(--ring); }
 .helper{ margin:.55rem 0 0; color: var(--muted2); font-size:.92rem; }
@@ -538,10 +607,13 @@
 .box{
   border-radius: var(--r2);
   border:1px solid rgba(15,23,42,.10);
-  background: rgba(255,255,255,.78);
+  background: rgba(255,255,255,.74);
+  backdrop-filter: blur(14px);
   box-shadow: var(--shadow1);
   padding: 1rem;
+  transition: transform .22s var(--ease), box-shadow .22s var(--ease);
 }
+.box:hover{ transform: translateY(-6px); box-shadow: var(--shadow2); }
 .links{
   display:grid;
   grid-template-columns: repeat(2, 1fr);
@@ -549,22 +621,41 @@
   margin-top:.9rem;
 }
 .links a{
-  color: rgba(11,18,32,.82);
+  color: rgba(11,18,32,.86);
   text-decoration:none;
   font-weight:980;
   font-size:.95rem;
 }
 .links a:hover{ text-decoration: underline; }
 
+/* ==========================================================
+   REVEAL ANIMATIONS (IntersectionObserver)
+========================================================== */
+.reveal{
+  opacity:0;
+  transform: translateY(18px);
+  transition: opacity .7s var(--ease), transform .7s var(--ease);
+  will-change: opacity, transform;
+}
+.reveal.is-in{
+  opacity:1;
+  transform: translateY(0);
+}
+.reveal[data-delay="1"]{ transition-delay: .06s; }
+.reveal[data-delay="2"]{ transition-delay: .12s; }
+.reveal[data-delay="3"]{ transition-delay: .18s; }
+.reveal[data-delay="4"]{ transition-delay: .24s; }
+
+/* motion-safe */
 @media (prefers-reduced-motion: reduce){
   *{ animation:none!important; transition:none!important; scroll-behavior:auto!important; }
+  .reveal{ opacity:1!important; transform:none!important; }
+  .panel{ transform:none!important; }
 }
 </style>
 {% endblock %}
 
 {% block content %}
-
-{# ✅ URLs 100% seguros (NO usan current_app, NO rompen Jinja) #}
 {% set URL_SHOP = '/shop' %}
 {% set URL_PROFILE = '/profile' %}
 
@@ -578,7 +669,7 @@
       <div class="hero-grid">
 
         <!-- LEFT -->
-        <header>
+        <header class="hero-left reveal">
           <div class="badge">Skyline Store · Online</div>
 
           <h1 class="hero-title">
@@ -607,7 +698,7 @@
         </header>
 
         <!-- RIGHT -->
-        <aside id="categorias" class="panel" aria-label="Categorías destacadas">
+        <aside id="categorias" class="panel reveal" data-delay="2" aria-label="Categorías destacadas">
           <div class="panel-inner">
             <div class="panel-head">
               <div class="panel-title">Categorías destacadas</div>
@@ -624,20 +715,19 @@
             <div class="scroller">
               {% for c in cats %}
               <a href="{{ URL_SHOP }}?categoria={{ c.slug }}" class="cat">
-                <div class="skeleton" aria-hidden="true"></div>
-
-                <img
-                  src="{{ url_for('static', filename='img/hero/' ~ c.img) }}"
-                  alt="{{ c.slug|capitalize }}"
-                  loading="lazy"
-                  decoding="async"
-                  data-fallback-title="{{ c.slug|capitalize }}"
-                  onload="this.previousElementSibling.style.display='none';"
-                >
-
-                <div class="fallback" aria-hidden="true">
-                  <div style="font-weight:990;line-height:1.15;">{{ c.slug|capitalize }}</div>
-                  <div style="opacity:.78;font-size:.86rem;margin-top:.15rem;">{{ c.price }}</div>
+                <div class="cat-media">
+                  <div class="skeleton" aria-hidden="true"></div>
+                  <img
+                    src="{{ url_for('static', filename='img/hero/' ~ c.img) }}"
+                    alt="{{ c.slug|capitalize }}"
+                    loading="lazy"
+                    decoding="async"
+                    data-fallback-title="{{ c.slug|capitalize }}"
+                  >
+                  <div class="fallback" aria-hidden="true">
+                    <div style="font-weight:990;line-height:1.15;">{{ c.slug|capitalize }}</div>
+                    <div style="opacity:.78;font-size:.86rem;margin-top:.15rem;">{{ c.price }}</div>
+                  </div>
                 </div>
 
                 <div class="cat-title">{{ c.slug|capitalize }}</div>
@@ -656,9 +746,9 @@
 <!-- DESTACADOS -->
 <section class="section" id="destacados" aria-label="Productos destacados">
   <div class="container">
-    <div class="badge">Selección curada</div>
-    <h2 class="h2">Destacados del momento</h2>
-    <p class="p">Lo más buscado y lo nuevo. Entrá, elegí y comprá sin vueltas.</p>
+    <div class="badge reveal">Selección curada</div>
+    <h2 class="h2 reveal" data-delay="1">Destacados del momento</h2>
+    <p class="p reveal" data-delay="2">Lo más buscado y lo nuevo. Entrá, elegí y comprá sin vueltas.</p>
 
     {% set featured = [
       {"id":"hoodie","tag":"Nuevo","tag_cls":"new","title":"Hoodie Skyline Essential","desc":"Calce premium + estilo limpio, ideal para todos los días.","price":"$1.990","img":"featured_hoodie.jpg","href": URL_SHOP ~ "?categoria=buzos"},
@@ -668,8 +758,9 @@
 
     <div class="grid3">
       {% for p in featured %}
-      <article class="product">
+      <article class="product reveal" data-delay="{{ loop.index }}">
         <div class="product-media">
+          <div class="media-skeleton" aria-hidden="true"></div>
           <img
             src="{{ url_for('static', filename='img/hero/' ~ p.img) }}"
             alt="{{ p.title }}"
@@ -698,7 +789,6 @@
             <a class="btn btn-primary btn-mini" href="{{ p.href }}">Ver en tienda</a>
             <a class="btn btn-ghost btn-mini" href="#newsletter">Recibir novedades</a>
 
-            <!-- ✅ Favorito (localStorage) -->
             <button class="icon-btn" type="button" aria-label="Guardar en favoritos" data-fav="{{ p.id }}">
               ⭐
             </button>
@@ -715,15 +805,15 @@
 <!-- BENEFICIOS -->
 <section class="section" id="beneficios" aria-label="Beneficios Skyline Store">
   <div class="container">
-    <div class="badge">Experiencia premium</div>
-    <h2 class="h2">Comprar acá se siente mejor</h2>
-    <p class="p">Detalles que suman: confianza, rapidez y selección real.</p>
+    <div class="badge reveal">Experiencia premium</div>
+    <h2 class="h2 reveal" data-delay="1">Comprar acá se siente mejor</h2>
+    <p class="p reveal" data-delay="2">Detalles que suman: confianza, rapidez y selección real.</p>
 
     <div class="benefits">
-      <div class="benefit"><div class="ico">🔒</div><h3>Pagos seguros</h3><p>Checkout confiable y procesos claros.</p></div>
-      <div class="benefit"><div class="ico">✅</div><h3>Selección real</h3><p>Productos elegidos con criterio y calidad.</p></div>
-      <div class="benefit"><div class="ico">🚚</div><h3>Envíos rápidos</h3><p>Opciones ágiles y seguimiento cuando aplica.</p></div>
-      <div class="benefit"><div class="ico">💬</div><h3>Atención humana</h3><p>Te respondemos de verdad. Sin bots raros.</p></div>
+      <div class="benefit reveal" data-delay="1"><div class="ico">🔒</div><h3>Pagos seguros</h3><p>Checkout confiable y procesos claros.</p></div>
+      <div class="benefit reveal" data-delay="2"><div class="ico">✅</div><h3>Selección real</h3><p>Productos elegidos con criterio y calidad.</p></div>
+      <div class="benefit reveal" data-delay="3"><div class="ico">🚚</div><h3>Envíos rápidos</h3><p>Opciones ágiles y seguimiento cuando aplica.</p></div>
+      <div class="benefit reveal" data-delay="4"><div class="ico">💬</div><h3>Atención humana</h3><p>Te respondemos de verdad. Sin bots raros.</p></div>
     </div>
 
     <div class="sep" role="presentation"></div>
@@ -733,14 +823,14 @@
 <!-- REVIEWS -->
 <section class="section" id="reviews" aria-label="Opiniones de clientes">
   <div class="container">
-    <div class="badge">Social proof</div>
-    <h2 class="h2">Lo que dicen cuando compran</h2>
-    <p class="p">Confianza construida en experiencia y estética.</p>
+    <div class="badge reveal">Social proof</div>
+    <h2 class="h2 reveal" data-delay="1">Lo que dicen cuando compran</h2>
+    <p class="p reveal" data-delay="2">Confianza construida en experiencia y estética.</p>
 
     <div class="reviews">
-      <div class="review"><div class="inner"><div class="stars" aria-label="5 estrellas">★★★★★</div><p>“Llegó rápido y el diseño se ve premium. La web es re cómoda.”</p><div class="person"><div class="avatar" aria-hidden="true"></div><div><b>Agus</b><span>Montevideo</span></div></div></div></div>
-      <div class="review"><div class="inner"><div class="stars" aria-label="5 estrellas">★★★★★</div><p>“Me encantó la selección, no es el típico catálogo sin sentido.”</p><div class="person"><div class="avatar" aria-hidden="true"></div><div><b>Martina</b><span>Canelones</span></div></div></div></div>
-      <div class="review"><div class="inner"><div class="stars" aria-label="5 estrellas">★★★★★</div><p>“La estética es otra cosa. Se nota que está pensado para vender.”</p><div class="person"><div class="avatar" aria-hidden="true"></div><div><b>Facu</b><span>Maldonado</span></div></div></div></div>
+      <div class="review reveal" data-delay="1"><div class="inner"><div class="stars" aria-label="5 estrellas">★★★★★</div><p>“Llegó rápido y el diseño se ve premium. La web es re cómoda.”</p><div class="person"><div class="avatar" aria-hidden="true"></div><div><b>Agus</b><span>Montevideo</span></div></div></div></div>
+      <div class="review reveal" data-delay="2"><div class="inner"><div class="stars" aria-label="5 estrellas">★★★★★</div><p>“Me encantó la selección, no es el típico catálogo sin sentido.”</p><div class="person"><div class="avatar" aria-hidden="true"></div><div><b>Martina</b><span>Canelones</span></div></div></div></div>
+      <div class="review reveal" data-delay="3"><div class="inner"><div class="stars" aria-label="5 estrellas">★★★★★</div><p>“La estética es otra cosa. Se nota que está pensado para vender.”</p><div class="person"><div class="avatar" aria-hidden="true"></div><div><b>Facu</b><span>Maldonado</span></div></div></div></div>
     </div>
 
     <div class="sep" role="presentation"></div>
@@ -750,14 +840,14 @@
 <!-- NEWSLETTER -->
 <section class="section" id="newsletter" aria-label="Newsletter y novedades">
   <div class="container">
-    <div class="cta-band">
+    <div class="cta-band reveal">
       <div class="row">
         <div>
           <h3>Recibí novedades, ofertas y lanzamientos</h3>
           <p>1 mail por semana. Sin spam. Te avisamos cuando sale lo bueno.</p>
         </div>
 
-        <form class="form" onsubmit="return SkylineNewsletter.save(event)">
+        <form class="form" onsubmit="return Skyline.Newsletter.save(event)">
           <input class="input" type="email" name="email" required placeholder="Tu email (ej: gaby@gmail.com)" aria-label="Email">
           <button class="btn btn-primary" type="submit">Suscribirme</button>
         </form>
@@ -766,7 +856,7 @@
     </div>
 
     <div class="quick">
-      <div class="box">
+      <div class="box reveal" data-delay="1">
         <h2 class="h2" style="font-size:1.35rem;margin:0;">Explorá rápido</h2>
         <p class="p" style="margin-top:.55rem;">Entrá directo a lo que querés, sin perder tiempo.</p>
 
@@ -780,7 +870,7 @@
         </div>
       </div>
 
-      <div class="box">
+      <div class="box reveal" data-delay="2">
         <h2 class="h2" style="font-size:1.35rem;margin:0;">Acción rápida</h2>
         <p class="p" style="margin-top:.55rem;">¿Listo para ver lo nuevo? Dale una vuelta a la tienda.</p>
 
@@ -799,50 +889,59 @@
 
 <script>
 /* ==========================================================
-   Fallback seguro para imágenes:
-   - si falla: oculta img, muestra fallback (y skeleton si aplica)
+   SKYLINE (NO GLOBALS RAROS) + NO ERRORS
 ========================================================== */
+window.Skyline = window.Skyline || {};
+
+/* ---------- REVEAL (IntersectionObserver) ---------- */
+(function(){
+  const items = document.querySelectorAll(".reveal");
+  if(!items.length) return;
+
+  const io = new IntersectionObserver((entries)=>{
+    entries.forEach(e=>{
+      if(e.isIntersecting){
+        e.target.classList.add("is-in");
+        io.unobserve(e.target);
+      }
+    });
+  }, { root:null, threshold: 0.12 });
+
+  items.forEach(el => io.observe(el));
+})();
+
+/* ---------- IMAGES: skeleton + fallback seguro ---------- */
 (function(){
   const imgs = document.querySelectorAll("img[data-fallback-title]");
   imgs.forEach(img => {
-    // skeleton visible hasta que cargue
-    const sk = img.previousElementSibling;
-    if (sk && sk.classList && sk.classList.contains("skeleton")) {
-      sk.style.display = "block";
-    }
-    img.addEventListener("load", () => {
-      if (sk && sk.classList && sk.classList.contains("skeleton")) sk.style.display = "none";
-    }, { once:true });
+    const wrap = img.parentElement;
+    const sk = wrap ? wrap.querySelector(".skeleton, .media-skeleton") : null;
+    const fb = wrap ? wrap.querySelector(".fallback") : null;
 
-    img.addEventListener("error", () => {
-      const parent = img.parentElement;
-      if(!parent) return;
+    const done = () => { if(sk) sk.style.display = "none"; };
+    const fail = () => {
+      if(fb) fb.style.display = "grid";
+      if(img) img.style.display = "none";
+      done();
+    };
 
-      const fb = parent.querySelector(".fallback");
-      if (fb) fb.style.display = "grid";
+    img.addEventListener("load", done, { once:true });
+    img.addEventListener("error", fail, { once:true });
 
-      if (sk && sk.classList && sk.classList.contains("skeleton")) sk.style.display = "none";
-      img.style.display = "none";
-    }, { once:true });
+    // por si ya estaba en caché
+    if (img.complete && img.naturalWidth > 0) done();
   });
 })();
 
-/* ==========================================================
-   Favoritos (mejora premium #4):
-   - guarda ids en localStorage
-========================================================== */
+/* ---------- Favoritos (localStorage) ---------- */
 (function(){
   const key = "skyline_favs";
-  const read = () => {
-    try { return JSON.parse(localStorage.getItem(key) || "[]"); }
-    catch(e){ return []; }
-  };
-  const write = (arr) => {
-    try { localStorage.setItem(key, JSON.stringify(arr)); } catch(e){}
-  };
+  const read = () => { try { return JSON.parse(localStorage.getItem(key) || "[]"); } catch(e){ return []; } };
+  const write = (arr) => { try { localStorage.setItem(key, JSON.stringify(arr)); } catch(e){} };
 
   const favs = new Set(read());
   const btns = document.querySelectorAll("button[data-fav]");
+
   btns.forEach(btn => {
     const id = btn.getAttribute("data-fav");
     const sync = () => {
@@ -861,13 +960,8 @@
   });
 })();
 
-/* ==========================================================
-   Newsletter PRO (mejora premium #5):
-   - valida
-   - guarda mail
-   - recuerda si ya se suscribió
-========================================================== */
-const SkylineNewsletter = {
+/* ---------- Newsletter (localStorage) ---------- */
+Skyline.Newsletter = {
   key: "skyline_newsletter_email",
   init(){
     const msg = document.getElementById("newsletter-msg");
@@ -884,24 +978,48 @@ const SkylineNewsletter = {
     const form = e.target;
     const msg = document.getElementById("newsletter-msg");
     const email = (new FormData(form).get("email") || "").toString().trim();
-
     const ok = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
     if(!ok){
-      msg.textContent = "Poné un email válido 🙂";
+      if(msg) msg.textContent = "Poné un email válido 🙂";
       return false;
     }
-
     try{
       localStorage.setItem(this.key, email);
-      msg.textContent = "Listo ✅ Te avisamos cuando haya novedades.";
+      if(msg) msg.textContent = "Listo ✅ Te avisamos cuando haya novedades.";
       form.reset();
     }catch(err){
-      msg.textContent = "No pude guardar el email en este navegador. Probá de nuevo.";
+      if(msg) msg.textContent = "No pude guardar el email en este navegador. Probá de nuevo.";
     }
     return false;
   }
 };
-document.addEventListener("DOMContentLoaded", () => SkylineNewsletter.init());
-</script>
+document.addEventListener("DOMContentLoaded", () => Skyline.Newsletter.init());
 
+/* ---------- Parallax suave de blobs (NO pesado) ---------- */
+(function(){
+  const hero = document.querySelector(".hero");
+  const b1 = document.querySelector(".hero-bg .b1");
+  const b2 = document.querySelector(".hero-bg .b2");
+  const b3 = document.querySelector(".hero-bg .b3");
+  if(!hero || !b1 || !b2 || !b3) return;
+
+  // motion-safe
+  if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+  let raf = null;
+  hero.addEventListener("mousemove", (ev)=>{
+    const rect = hero.getBoundingClientRect();
+    const x = (ev.clientX - rect.left) / rect.width - 0.5; // -0.5..0.5
+    const y = (ev.clientY - rect.top) / rect.height - 0.5;
+
+    if(raf) cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(()=>{
+      b1.style.transform = `translate(${x * 18}px, ${y * 14}px)`;
+      b2.style.transform = `translate(${x * -16}px, ${y * 12}px)`;
+      b3.style.transform = `translate(${x * 10}px, ${y * -14}px)`;
+    });
+  }, { passive:true });
+})();
+</script>
 {% endblock %}
