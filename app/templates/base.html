@@ -4,40 +4,33 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 
-  <title>{% block title %}Skyline Store · Todo lo urbano, en un solo lugar{% endblock %}</title>
-  <meta name="description" content="{% block meta_description %}Skyline Store: moda urbana, accesorios y dropshipping curado. Experiencia premium y compras sin fricción.{% endblock %}">
+  <title>{% block title %}Skyline Store · Moda urbana y accesorios premium{% endblock %}</title>
+  <meta name="description" content="{% block meta_description %}Skyline Store: moda urbana, accesorios y productos cuidadosamente seleccionados. Experiencia premium y compras sin fricción.{% endblock %}">
   <meta name="theme-color" content="#f8fafc">
   <meta name="robots" content="index,follow,max-image-preview:large">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta name="color-scheme" content="light">
 
-  <!-- Canonical (seguro) -->
   <link rel="canonical" href="{{ (request.url_root.rstrip('/') ~ request.path) if request else '' }}">
 
   <!-- Open Graph -->
-  <meta property="og:title" content="{% block og_title %}Skyline Store · Todo lo urbano, en un solo lugar{% endblock %}">
-  <meta property="og:description" content="{% block og_description %}Moda urbana + dropshipping curado. Encontrá de todo, pero bien elegido.{% endblock %}">
+  <meta property="og:title" content="{% block og_title %}Skyline Store · Moda urbana y accesorios premium{% endblock %}">
+  <meta property="og:description" content="{% block og_description %}Moda urbana y accesorios seleccionados con criterio. Novedades y colección Skyline — todo en un solo lugar.{% endblock %}">
   <meta property="og:type" content="website">
   <meta property="og:url" content="{{ request.url if request else '' }}">
-  <meta property="og:image" content="/static/img/og_skyline.jpg">
+  <meta property="og:image" content="{{ url_for('static', filename='img/og_skyline.jpg') }}">
 
-  <!-- Twitter -->
   <meta name="twitter:card" content="summary_large_image">
 
-  <!-- Favicon -->
-  <link rel="icon" type="image/png" href="/static/img/favicon.png">
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}">
 
-  <!-- Preconnect: fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-
-  <!-- Inter -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 
-  <!-- Tailwind CSS CDN (OK para demo; ideal: compilar en producción) -->
+  <!-- Tailwind CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- Tailwind Config (LIGHT + PREMIUM) -->
   <script>
     tailwind.config = {
       theme: {
@@ -56,16 +49,20 @@
           borderRadius:{ xl2:"1.25rem", xl3:"1.75rem" },
           keyframes:{
             fadeUp:{ "0%":{opacity:0,transform:"translateY(14px)"}, "100%":{opacity:1,transform:"translateY(0)"} },
-            pop:{ "0%":{transform:"scale(.98)",opacity:.2}, "100%":{transform:"scale(1)",opacity:1} }
+            pop:{ "0%":{transform:"scale(.98)",opacity:.2}, "100%":{transform:"scale(1)",opacity:1} },
+            shimmer:{ "0%":{transform:"translateX(-60%)"}, "100%":{transform:"translateX(70%)"} }
           },
-          animation:{ fadeUp:"fadeUp .55s ease-out both", pop:"pop .18s ease-out both" }
+          animation:{
+            fadeUp:"fadeUp .55s ease-out both",
+            pop:"pop .18s ease-out both",
+            shimmer:"shimmer .9s ease forwards"
+          }
         }
       }
     }
   </script>
 
-  <!-- CSS propio -->
-  <link rel="stylesheet" href="/static/css/custom.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
 
   <style>
     body{
@@ -75,6 +72,58 @@
         radial-gradient(900px 520px at 60% 95%, rgba(34,197,94,.10), transparent 58%),
         linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
     }
+
+    /* ✅ Nav active indicator (pro) */
+    .navlink{
+      position:relative;
+      padding:.35rem .25rem;
+      border-radius:.75rem;
+    }
+    .navlink::after{
+      content:"";
+      position:absolute;
+      left:.25rem; right:.25rem; bottom:.1rem;
+      height:2px;
+      border-radius:999px;
+      background: linear-gradient(90deg, rgba(37,99,235,.0), rgba(37,99,235,.85), rgba(6,182,212,.75), rgba(37,99,235,.0));
+      transform: scaleX(0);
+      transform-origin:center;
+      transition: transform .18s ease;
+      opacity:.95;
+    }
+    .navlink:hover::after{ transform: scaleX(.65); }
+    .navlink.is-active{
+      background: rgba(37,99,235,.06);
+      color: #0b1220 !important;
+    }
+    .navlink.is-active::after{ transform: scaleX(1); }
+
+    /* ✅ Header scroll state */
+    .hdr-scrolled .hdr-shell{
+      border-color: rgba(226,232,240,.95);
+      background: rgba(255,255,255,.82);
+      backdrop-filter: blur(18px);
+      box-shadow: 0 18px 55px rgba(2,6,23,.10);
+    }
+
+    /* ✅ Announcement shimmer */
+    .announce{
+      position:relative;
+      overflow:hidden;
+    }
+    .announce::after{
+      content:"";
+      position:absolute; inset:0;
+      background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,.22) 45%, transparent 70%);
+      transform: translateX(-60%);
+      opacity:.0;
+      pointer-events:none;
+    }
+    .announce:hover::after{
+      opacity:.9;
+      animation: shimmer .9s ease forwards;
+    }
+
     @media (prefers-reduced-motion: reduce){
       *{ animation:none!important; transition:none!important; scroll-behavior:auto!important; }
     }
@@ -86,17 +135,17 @@
 <body class="min-h-screen text-ink-900 font-sans antialiased selection:bg-[rgba(37,99,235,.20)] selection:text-ink-900">
 
 {% set current = (request.endpoint or '') if request else '' %}
-{% set is_admin = session.get('is_admin') if session else false %}
+{% set is_admin = (session.get('is_admin') if session else False) %}
 
-{# =========================
-   RUTAS “SAFE” (no rompen si tus endpoints no existen)
-   Si después querés volver a url_for, lo hacemos cuando confirmes nombres exactos.
-========================= #}
+{# SAFE ROUTES #}
 {% set URL_HOME  = '/' %}
 {% set URL_SHOP  = '/shop' %}
 {% set URL_ABOUT = '/about' %}
-{% set URL_LOGIN = '/login' %}
 {% set URL_ADMIN = '/admin' %}
+{% set URL_LOGIN = '/admin/login' %}
+
+{# ✅ WhatsApp (cambiá al tuyo cuando quieras) #}
+{% set WHATSAPP_LINK = 'https://wa.me/0000000000' %}
 
 <!-- Skip link -->
 <a href="#main-content"
@@ -106,11 +155,26 @@
 </a>
 
 <!-- =========================
-     HEADER (GLASS · LIGHT)
+     HEADER (GLASS · LIGHT · ULTRA)
 ========================== -->
 <header id="main-header" class="fixed top-0 inset-x-0 z-50">
   <div class="mx-auto max-w-6xl px-4">
-    <div class="mt-3 rounded-2xl border border-soft-200/80 bg-white/70 backdrop-blur-xl shadow-glass">
+
+    <!-- ✅ 1) Announcement bar -->
+    <div class="mt-3 mb-2 hidden sm:block">
+      <div class="announce rounded-2xl border border-soft-200/80 bg-white/65 backdrop-blur-xl shadow-soft px-4 py-2 text-xs text-slate-600 flex items-center justify-between gap-3">
+        <div class="flex items-center gap-2">
+          <span class="inline-flex h-5 w-5 rounded-full bg-emerald-50 border border-emerald-200 items-center justify-center">✅</span>
+          <span><b class="text-slate-800">Novedades semanales</b> · Productos cuidadosamente seleccionados, estilo y calidad.</span>
+        </div>
+        <a href="{{ WHATSAPP_LINK }}" target="_blank" rel="noopener"
+           class="text-slate-700 hover:text-ink-900 font-extrabold transition">
+          Hablá por WhatsApp →
+        </a>
+      </div>
+    </div>
+
+    <div class="hdr-shell rounded-2xl border border-soft-200/80 bg-white/70 backdrop-blur-xl shadow-glass">
       <div class="h-14 md:h-16 flex items-center justify-between gap-3 px-3 md:px-4">
 
         <!-- Logo -->
@@ -130,31 +194,29 @@
         <!-- NAV Desktop -->
         <nav class="hidden md:flex items-center gap-6 text-sm font-semibold" aria-label="Navegación principal">
           <a href="{{ URL_SHOP }}"
-             class="text-slate-600 hover:text-ink-900 transition"
-             {% if current == 'main.shop' %}aria-current="page"{% endif %}>
+             class="navlink text-slate-600 hover:text-ink-900 transition {% if current == 'main.shop' %}is-active{% endif %}">
             Tienda
           </a>
 
           <a href="{{ URL_HOME }}#destacados"
-             class="text-slate-600 hover:text-ink-900 transition">
+             class="navlink text-slate-600 hover:text-ink-900 transition">
             Destacados
           </a>
 
           <a href="{{ URL_ABOUT }}"
-             class="text-slate-600 hover:text-ink-900 transition"
-             {% if current == 'main.about' %}aria-current="page"{% endif %}>
+             class="navlink text-slate-600 hover:text-ink-900 transition {% if current == 'main.about' %}is-active{% endif %}">
             La marca
           </a>
 
           {% if is_admin %}
-            <a href="{{ URL_ADMIN }}"
-               class="text-amber-700 hover:text-amber-800 transition">
+            <a href="{{ URL_ADMIN }}/productos"
+               class="navlink text-amber-700 hover:text-amber-800 transition">
               Panel admin
             </a>
           {% endif %}
 
           <a href="{{ URL_LOGIN }}"
-             class="text-slate-600 hover:text-ink-900 transition">
+             class="navlink text-slate-600 hover:text-ink-900 transition">
             Ingresar
           </a>
         </nav>
@@ -201,11 +263,17 @@
           <a class="block px-3 py-2 rounded-xl hover:bg-soft-100 transition" href="{{ URL_ABOUT }}">La marca</a>
 
           {% if is_admin %}
-            <a class="block px-3 py-2 rounded-xl hover:bg-soft-100 transition text-amber-700" href="{{ URL_ADMIN }}">Panel admin</a>
+            <a class="block px-3 py-2 rounded-xl hover:bg-soft-100 transition text-amber-700" href="{{ URL_ADMIN }}/productos">Panel admin</a>
             <a class="block px-3 py-2 rounded-xl hover:bg-soft-100 transition text-slate-600" href="{{ URL_ADMIN }}/logout">Cerrar sesión</a>
           {% endif %}
 
           <a class="block px-3 py-2 rounded-xl hover:bg-soft-100 transition" href="{{ URL_LOGIN }}">Ingresar</a>
+
+          <a href="{{ WHATSAPP_LINK }}" target="_blank" rel="noopener"
+             class="mt-2 block text-center px-3 py-2 rounded-full font-extrabold text-white
+                    bg-gradient-to-r from-emerald-500 to-emerald-600 shadow-soft hover:shadow-lift transition">
+            WhatsApp
+          </a>
 
           <a href="{{ URL_SHOP }}"
              class="mt-2 block text-center px-3 py-2 rounded-full font-extrabold text-white
@@ -222,7 +290,7 @@
 <!-- =========================
      MAIN + FLASHES
 ========================== -->
-<main id="main-content" class="pt-24 md:pt-28">
+<main id="main-content" class="pt-28 md:pt-32">
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
       <div class="max-w-6xl mx-auto px-4 mt-3 space-y-2 animate-fadeUp">
@@ -250,25 +318,20 @@
   {% block content %}{% endblock %}
 </main>
 
-<!-- =========================
-     FOOTER (LIGHT)
-========================== -->
-<footer class="mt-14 border-t border-soft-200/80 bg-white/55 backdrop-blur">
-  <div class="max-w-6xl mx-auto px-4 py-7 text-xs text-slate-500 flex flex-wrap items-center justify-between gap-3">
-    <div class="flex flex-wrap items-center gap-3">
-      <span>© {{ current_year|default(2025) }} Skyline Store. Todos los derechos reservados.</span>
-      <span class="hidden sm:block text-slate-300">·</span>
-      <a href="{{ URL_ABOUT }}" class="hover:text-ink-900 transition">Sobre la marca</a>
-      <a href="#" class="hover:text-ink-900 transition">Términos &amp; condiciones</a>
-    </div>
-    <span class="text-slate-400">Hecho con ❤️ por Gaby.</span>
-  </div>
-</footer>
+<!-- ✅ 4) WhatsApp floating (convertidor) -->
+<a href="{{ WHATSAPP_LINK }}" target="_blank" rel="noopener"
+   class="fixed bottom-5 left-5 z-40 inline-flex items-center gap-2 px-4 py-2 rounded-full
+          bg-white/90 border border-soft-200 text-slate-800 text-sm font-extrabold
+          shadow-soft hover:shadow-lift hover:-translate-y-0.5 transition
+          focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(34,197,94,.35)]">
+  <span class="text-base">💬</span>
+  <span class="hidden sm:inline">WhatsApp</span>
+</a>
 
 <!-- Back to top -->
 <a id="backtop" href="{{ URL_HOME }}"
    class="hidden fixed bottom-5 right-5 z-40 items-center gap-2 px-3.5 py-2 rounded-full
-          bg-white/85 border border-soft-200 text-slate-800 text-sm font-bold
+          bg-white/90 border border-soft-200 text-slate-800 text-sm font-extrabold
           shadow-soft hover:shadow-lift hover:-translate-y-0.5 transition
           focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(37,99,235,.35)]">
   <span class="text-base">↑</span>
@@ -276,8 +339,52 @@
   <span class="sm:hidden">Arriba</span>
 </a>
 
+<!-- ✅ 5) Footer premium -->
+<footer class="mt-14 border-t border-soft-200/80 bg-white/60 backdrop-blur">
+  <div class="max-w-6xl mx-auto px-4 py-10 grid gap-6 md:grid-cols-3 text-sm text-slate-600">
+    <div>
+      <div class="font-extrabold text-ink-900">Skyline Store</div>
+      <p class="mt-2 text-slate-600 leading-relaxed">
+        Moda urbana, accesorios y novedades cuidadosamente seleccionadas. Una experiencia simple, rápida y con estilo.
+      </p>
+    </div>
+
+    <div>
+      <div class="font-extrabold text-ink-900">Links rápidos</div>
+      <div class="mt-3 grid grid-cols-2 gap-2">
+        <a class="hover:text-ink-900 transition" href="{{ URL_SHOP }}">Tienda</a>
+        <a class="hover:text-ink-900 transition" href="{{ URL_HOME }}#destacados">Destacados</a>
+        <a class="hover:text-ink-900 transition" href="{{ URL_ABOUT }}">La marca</a>
+        <a class="hover:text-ink-900 transition" href="{{ URL_LOGIN }}">Ingresar</a>
+      </div>
+    </div>
+
+    <div>
+      <div class="font-extrabold text-ink-900">Contacto</div>
+      <div class="mt-3 space-y-2">
+        <a class="inline-flex items-center gap-2 hover:text-ink-900 transition" href="{{ WHATSAPP_LINK }}" target="_blank" rel="noopener">
+          <span>💬</span> WhatsApp
+        </a>
+        <a class="inline-flex items-center gap-2 hover:text-ink-900 transition" href="#" aria-label="Instagram">
+          <span>📷</span> Instagram
+        </a>
+        <a class="inline-flex items-center gap-2 hover:text-ink-900 transition" href="#" aria-label="TikTok">
+          <span>🎵</span> TikTok
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="border-t border-soft-200/70">
+    <div class="max-w-6xl mx-auto px-4 py-5 text-xs text-slate-500 flex flex-wrap items-center justify-between gap-3">
+      <span>© <span id="year"></span> Skyline Store. Todos los derechos reservados.</span>
+      <span class="text-slate-400">Hecho con ❤️ por Gaby.</span>
+    </div>
+  </div>
+</footer>
+
 <!-- =========================
-     JS: Header shadow + Mobile menu + ESC close + Backtop
+     JS: Header shadow + Mobile menu + ESC close + Backtop + Year
 ========================== -->
 <script>
 document.addEventListener("DOMContentLoaded", () => {
@@ -286,12 +393,17 @@ document.addEventListener("DOMContentLoaded", () => {
   const menu   = document.getElementById("mobile-menu");
   const back   = document.getElementById("backtop");
 
-  const setShadow = () => {
+  // year auto
+  const y = document.getElementById("year");
+  if (y) y.textContent = String(new Date().getFullYear());
+
+  const setScrollState = () => {
     if (!header) return;
-    header.style.filter = window.scrollY > 6 ? "drop-shadow(0 18px 35px rgba(2,6,23,.10))" : "none";
+    if (window.scrollY > 10) header.classList.add("hdr-scrolled");
+    else header.classList.remove("hdr-scrolled");
   };
-  window.addEventListener("scroll", setShadow, { passive:true });
-  setShadow();
+  window.addEventListener("scroll", setScrollState, { passive:true });
+  setScrollState();
 
   const setBackTop = () => {
     if (!back) return;
