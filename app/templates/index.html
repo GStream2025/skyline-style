@@ -10,7 +10,7 @@
    ✅ Fondo NÍTIDO 100% (sin blur / sin neblina / sin capas blancas globales)
    ✅ Nada tapando el fondo (NO panel categorías)
    ✅ Texto legible sin “tapar” diseño (overlay SOLO bajo el texto)
-   ✅ 3D premium + animaciones pro + motion-safe
+   ✅ Título 3D premium + slogan marketplace + animaciones pro + motion-safe
 ========================================================== */
 
 /* ---------- TOKENS ---------- */
@@ -73,27 +73,6 @@ body{
 }
 
 /* ---------- TYPO ---------- */
-.badge{
-  display:inline-flex;
-  align-items:center;
-  gap:.55rem;
-  width: fit-content;
-  padding:.46rem .92rem;
-  border-radius:999px;
-  border: 1px solid rgba(37,99,235,.20);
-  background: linear-gradient(180deg, rgba(255,255,255,.96), rgba(255,255,255,.86));
-  box-shadow: 0 12px 20px rgba(2,6,23,.06);
-  font-weight:950;
-  font-size:.82rem;
-  color: rgba(37,99,235,.98);
-}
-.badge::before{
-  content:"";
-  width:10px;height:10px;border-radius:999px;
-  background: radial-gradient(circle at 30% 30%, #60a5fa, #2563eb);
-  box-shadow: 0 0 0 5px rgba(37,99,235,.12);
-}
-
 .h2{
   font-size: clamp(1.62rem, 2.75vw, 2.2rem);
   line-height:1.12;
@@ -106,6 +85,38 @@ body{
   color: var(--muted);
   line-height:1.75;
   font-size: 1.03rem;
+}
+
+/* ==========================================================
+   MICRO BADGE — MARKETPLACE + BRAND (ULTRA PREMIUM)
+========================================================== */
+.brand-badge{
+  display:inline-flex;
+  align-items:center;
+  gap:.55rem;
+  padding:.46rem .95rem;
+  border-radius:999px;
+  background: linear-gradient(180deg, rgba(255,255,255,.96), rgba(255,255,255,.88));
+  border:1px solid rgba(15,23,42,.12);
+  box-shadow: 0 10px 22px rgba(2,6,23,.08), inset 0 1px 0 rgba(255,255,255,.55);
+  font-weight: 950;
+  font-size:.78rem;
+  letter-spacing:.08em;
+  text-transform: uppercase;
+  color: rgba(11,18,32,.82);
+}
+.brand-badge .dot{
+  width:8px; height:8px; border-radius:50%;
+  background: radial-gradient(circle at 30% 30%, #60a5fa, #2563eb);
+  box-shadow: 0 0 0 0 rgba(37,99,235,.45);
+}
+@media (prefers-reduced-motion: no-preference){
+  .brand-badge .dot{ animation: pulseDot 1.8s ease-out infinite; }
+  @keyframes pulseDot{
+    0%{ box-shadow: 0 0 0 0 rgba(37,99,235,.45); }
+    70%{ box-shadow: 0 0 0 10px rgba(37,99,235,0); }
+    100%{ box-shadow: 0 0 0 0 rgba(37,99,235,0); }
+  }
 }
 
 /* ---------- BUTTONS (3D premium) ---------- */
@@ -135,7 +146,6 @@ body{
   overflow:hidden;
 }
 .btn-primary::before{
-  /* “borde” 3D sutil */
   content:"";
   position:absolute; inset:0;
   border-radius:999px;
@@ -176,9 +186,6 @@ body{
 
 /* ==========================================================
    HERO — NÍTIDO 100% (SIN BLUR GLOBAL / SIN NEBLINA)
-   - Sin capa blanca global.
-   - Overlay SOLO debajo del texto.
-   - Fondo se aprecia completo y con color.
 ========================================================== */
 .hero{
   position:relative;
@@ -195,8 +202,6 @@ body{
   background-size: cover;
   background-position: 60% 52%;
   background-repeat: no-repeat;
-
-  /* Importante: NO blur, NO filter */
   filter:none;
   color: var(--ink);
 }
@@ -213,7 +218,7 @@ body{
   z-index:0;
 }
 
-/* Grano ultra sutil (calidad, sin borrar fondo) */
+/* Grano ultra sutil */
 .hero::after{
   content:"";
   position:absolute; inset:0;
@@ -259,15 +264,15 @@ body{
 
 .hero-grid{
   display:grid;
-  grid-template-columns: 1fr; /* ✅ SOLO TEXTO: sin panel que tape nada */
+  grid-template-columns: 1fr; /* ✅ SOLO TEXTO */
   gap: clamp(1.6rem, 4vw, 2.8rem);
   align-items:center;
 }
 
-/* Overlay SOLO bajo el texto (no afecta fondo completo) */
+/* Overlay SOLO bajo el texto */
 .hero-left{
   position:relative;
-  max-width: 760px;
+  max-width: 820px;
 }
 .hero-left::before{
   content:"";
@@ -279,38 +284,85 @@ body{
   z-index:-1;
 }
 
+/* ==========================================================
+   TITULO 3D — ULTRA VISUAL (SIN TAPAR FONDO)
+========================================================== */
 .hero-title{
-  font-size: clamp(2.45rem, 5vw, 3.85rem);
-  line-height:1.02;
-  font-weight: 1000;
-  letter-spacing:-1px;
   margin:.75rem 0 0;
+  line-height:1.01;
+  letter-spacing:-1.1px;
+  font-weight: 1000;
+  font-size: clamp(2.55rem, 5.2vw, 4.25rem);
 }
 
-/* grad + shine premium */
-.hero-title .grad{
+/* 3D word */
+.title-3d{
+  position:relative;
+  display:inline-block;
+  transform: translateZ(0);
+  isolation:isolate;
+  /* “volumen” con sombras múltiples */
+  text-shadow:
+    0 1px 0 rgba(255,255,255,.65),
+    0 10px 24px rgba(2,6,23,.18);
+}
+
+/* capa “extrusión” (detrás) */
+.title-3d::before{
+  content: attr(data-text);
+  position:absolute;
+  left:0; top:0;
+  transform: translate(7px, 7px);
+  z-index:-2;
+  color: rgba(11,18,32,.10);
+  text-shadow:
+    0 1px 0 rgba(255,255,255,.12),
+    0 18px 34px rgba(2,6,23,.22);
+  filter: saturate(1.02);
+}
+
+/* capa “borde” glossy (encima) */
+.title-3d::after{
+  content:"";
+  position:absolute;
+  inset:-8px -12px;
+  z-index:-1;
+  border-radius: 18px;
+  background: linear-gradient(90deg, rgba(255,255,255,.18), rgba(255,255,255,0));
+  opacity:.55;
+  pointer-events:none;
+  transform: skewX(-12deg);
+  mask-image: linear-gradient(180deg, #000, rgba(0,0,0,.2) 55%, transparent);
+}
+
+/* grad real del texto */
+.title-3d .grad{
   background: linear-gradient(135deg,
     rgba(11,18,32,1) 0%,
-    rgba(11,18,32,1) 34%,
+    rgba(11,18,32,1) 32%,
     rgba(37,99,235,.98) 70%,
     rgba(6,182,212,.98) 100%);
   -webkit-background-clip:text;
   background-clip:text;
   color: transparent;
-  position:relative;
 }
+
+/* shine del título (solo hover, motion-safe) */
 @media (prefers-reduced-motion: no-preference){
-  .hero-title .grad::after{
+  .title-3d .grad{
+    position:relative;
+  }
+  .title-3d .grad::after{
     content:"";
     position:absolute;
     inset:-10px -18px;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,.42), transparent);
-    transform: translateX(-60%) skewX(-10deg);
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.50), transparent);
+    transform: translateX(-65%) skewX(-10deg);
     opacity:0;
     pointer-events:none;
   }
-  .hero:hover .hero-title .grad::after{
-    opacity:.62;
+  .hero:hover .title-3d .grad::after{
+    opacity:.7;
     animation: textshine 1.15s var(--ease) forwards;
   }
   @keyframes textshine{
@@ -318,15 +370,41 @@ body{
   }
 }
 
-.hero-sub{
-  margin: .95rem 0 0;
-  max-width: 52rem;
-  color: rgba(11,18,32,.72);
-  font-size: 1.07rem;
-  line-height:1.75;
+/* Línea 2 (más moderna, marketplace vibes) */
+.hero-kicker{
+  margin:.55rem 0 0;
+  font-size: clamp(1.05rem, 1.55vw, 1.2rem);
+  font-weight: 950;
+  letter-spacing:-.2px;
+  color: rgba(11,18,32,.78);
+}
+.hero-kicker .hi{
+  background: linear-gradient(135deg, rgba(37,99,235,.16), rgba(6,182,212,.12));
+  border:1px solid rgba(37,99,235,.14);
+  padding:.28rem .55rem;
+  border-radius:999px;
+  box-shadow: 0 10px 18px rgba(2,6,23,.06);
 }
 
-/* Card sin blur (NO desenfoca fondo) */
+/* SLOGAN FINAL (Opción 1) */
+.slogan{
+  margin: .75rem 0 0;
+  max-width: 56rem;
+  color: rgba(11,18,32,.74);
+  font-size: 1.06rem;
+  line-height:1.7;
+  font-weight: 800;
+  letter-spacing:-.15px;
+}
+.slogan strong{
+  font-weight: 1000;
+  background: linear-gradient(135deg, rgba(37,99,235,.12), rgba(6,182,212,.10));
+  border:1px solid rgba(37,99,235,.12);
+  padding:.2rem .5rem;
+  border-radius:999px;
+}
+
+/* Card sin blur */
 .hero-card{
   display:inline-block;
   margin-top: .95rem;
@@ -347,6 +425,14 @@ body{
   pointer-events:none;
 }
 
+.hero-sub{
+  margin:0;
+  max-width: 52rem;
+  color: rgba(11,18,32,.72);
+  font-size: 1.07rem;
+  line-height:1.75;
+}
+
 .hero-cta{ display:flex; flex-wrap:wrap; gap:.75rem; margin-top:1.1rem; }
 .hero-chips{ display:flex; flex-wrap:wrap; gap:.55rem; margin-top:1rem; }
 
@@ -362,7 +448,7 @@ body{
 .chip:hover{ transform: translateY(-2px); box-shadow: var(--shadow1); }
 .chip::before{ content:"✓"; font-weight: 1000; color: rgba(34,197,94,.98); }
 
-/* categorías rápidas (NO panel, NO tapa fondo) */
+/* categorías rápidas */
 .hero-pills{
   display:flex; flex-wrap:wrap;
   gap:.55rem;
@@ -399,10 +485,7 @@ body{
   transition: opacity .7s var(--ease), transform .7s var(--ease);
   will-change: opacity, transform;
 }
-.reveal.is-in{
-  opacity:1;
-  transform: translateY(0);
-}
+.reveal.is-in{ opacity:1; transform: translateY(0); }
 .reveal[data-delay="1"]{ transition-delay: .06s; }
 .reveal[data-delay="2"]{ transition-delay: .12s; }
 .reveal[data-delay="3"]{ transition-delay: .18s; }
@@ -657,17 +740,33 @@ body{
       <div class="hero-grid">
 
         <header class="hero-left reveal">
-          <div class="badge">Skyline Store · Online</div>
+          <!-- ✅ micro badge “ecosistema” -->
+          <div class="brand-badge" aria-label="Skyline: Marketplace y marca">
+            <span class="dot" aria-hidden="true"></span>
+            <span>Marketplace + Brand</span>
+          </div>
 
+          <!-- ✅ título 3D ultra premium -->
           <h1 class="hero-title">
-            <span class="grad">Skyline Store</span><br>
-            Moda urbana & accesorios premium
+            <span class="title-3d" data-text="Skyline Store">
+              <span class="grad">Skyline Store</span>
+            </span>
           </h1>
 
+          <!-- ✅ “más que una tienda” (kicker moderno) -->
+          <div class="hero-kicker">
+            <span class="hi">Más que una tienda</span> · un ecosistema para tu estilo
+          </div>
+
+          <!-- ✅ SLOGAN FINAL (Opción 1) -->
+          <p class="slogan">
+            “Más que una tienda: <strong>tu marca</strong> + un <strong>marketplace completo</strong>”
+          </p>
+
           <div class="hero-card">
-            <p class="hero-sub" style="margin:0;">
-              Productos atentamente seleccionados: prendas urbanas, accesorios novedosos y mucho más.
-              Calidad, estilo y una experiencia simple para comprar.
+            <p class="hero-sub">
+              Miles de productos en un solo lugar: desde nuestra marca hasta una selección amplia y en crecimiento.
+              Una experiencia premium, simple y hecha para comprar sin vueltas.
             </p>
 
             <div class="hero-cta">
@@ -699,7 +798,11 @@ body{
 <!-- DESTACADOS -->
 <section class="section" id="destacados" aria-label="Productos destacados">
   <div class="container">
-    <div class="badge reveal">Selección curada</div>
+    <div class="brand-badge reveal" aria-label="Selección curada">
+      <span class="dot" aria-hidden="true"></span>
+      <span>Selección curada</span>
+    </div>
+
     <h2 class="h2 reveal" data-delay="1">Destacados del momento</h2>
     <p class="p reveal" data-delay="2">Lo más buscado y lo nuevo. Entrá, elegí y comprá sin vueltas.</p>
 
@@ -741,7 +844,6 @@ body{
           <div class="product-actions">
             <a class="btn btn-primary btn-mini" href="{{ p.href }}">Ver en tienda</a>
             <a class="btn btn-ghost btn-mini" href="#newsletter">Recibir novedades</a>
-
             <button class="icon-btn" type="button" aria-label="Guardar en favoritos" data-fav="{{ p.id }}">⭐</button>
           </div>
         </div>
@@ -756,7 +858,11 @@ body{
 <!-- BENEFICIOS -->
 <section class="section" id="beneficios" aria-label="Beneficios Skyline Store">
   <div class="container">
-    <div class="badge reveal">Experiencia premium</div>
+    <div class="brand-badge reveal" aria-label="Experiencia premium">
+      <span class="dot" aria-hidden="true"></span>
+      <span>Experiencia premium</span>
+    </div>
+
     <h2 class="h2 reveal" data-delay="1">Comprar acá se siente mejor</h2>
     <p class="p reveal" data-delay="2">Detalles que suman: confianza, rapidez y selección real.</p>
 
@@ -774,7 +880,11 @@ body{
 <!-- REVIEWS -->
 <section class="section" id="reviews" aria-label="Opiniones de clientes">
   <div class="container">
-    <div class="badge reveal">Social proof</div>
+    <div class="brand-badge reveal" aria-label="Social proof">
+      <span class="dot" aria-hidden="true"></span>
+      <span>Social proof</span>
+    </div>
+
     <h2 class="h2 reveal" data-delay="1">Lo que dicen cuando compran</h2>
     <p class="p reveal" data-delay="2">Confianza construida en experiencia y estética.</p>
 
