@@ -2,92 +2,72 @@
 <html lang="es" class="scroll-smooth">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 
   <title>{% block title %}Skyline Store · Todo lo urbano, en un solo lugar{% endblock %}</title>
   <meta name="description" content="{% block meta_description %}Skyline Store: moda urbana, accesorios y dropshipping curado. Experiencia premium y compras sin fricción.{% endblock %}">
   <meta name="theme-color" content="#f8fafc">
-  <meta name="robots" content="index,follow">
+  <meta name="robots" content="index,follow,max-image-preview:large">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta name="color-scheme" content="light">
 
-  <!-- Canonical -->
-  <link rel="canonical" href="{{ request.url_root.rstrip('/') }}">
+  <!-- Canonical (seguro) -->
+  <link rel="canonical" href="{{ (request.url_root.rstrip('/') ~ request.path) if request else '' }}">
 
   <!-- Open Graph -->
   <meta property="og:title" content="{% block og_title %}Skyline Store · Todo lo urbano, en un solo lugar{% endblock %}">
   <meta property="og:description" content="{% block og_description %}Moda urbana + dropshipping curado. Encontrá de todo, pero bien elegido.{% endblock %}">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="{{ request.url }}">
-  <meta property="og:image" content="{{ url_for('static', filename='img/og_skyline.jpg') }}">
+  <meta property="og:url" content="{{ request.url if request else '' }}">
+  <meta property="og:image" content="/static/img/og_skyline.jpg">
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image">
 
   <!-- Favicon -->
-  <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}">
+  <link rel="icon" type="image/png" href="/static/img/favicon.png">
 
-  <!-- Tailwind CSS CDN -->
+  <!-- Preconnect: fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+  <!-- Inter -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS CDN (OK para demo; ideal: compilar en producción) -->
   <script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- Tailwind Config (LIGHT + PREMIUM + VIVO) -->
+  <!-- Tailwind Config (LIGHT + PREMIUM) -->
   <script>
     tailwind.config = {
       theme: {
         extend: {
           fontFamily: { sans: ["Inter","system-ui","sans-serif"] },
           colors: {
-            ink: {
-              900: "#0b1220",
-              700: "#1f2937",
-              600: "#334155",
-            },
-            soft: {
-              50: "#f8fafc",
-              100: "#f1f5f9",
-              200: "#e2e8f0",
-            },
-            brand: {
-              blue: "#2563eb",
-              cyan: "#06b6d4",
-              amber: "#f59e0b",
-              green: "#22c55e",
-              violet:"#a855f7"
-            }
+            ink: { 900:"#0b1220", 700:"#1f2937", 600:"#334155" },
+            soft:{ 50:"#f8fafc", 100:"#f1f5f9", 200:"#e2e8f0" },
+            brand:{ blue:"#2563eb", cyan:"#06b6d4", amber:"#f59e0b", green:"#22c55e", violet:"#a855f7" }
           },
           boxShadow: {
-            glass: "0 18px 55px rgba(2,6,23,.10)",
-            soft: "0 14px 30px rgba(2,6,23,.08)",
-            lift: "0 24px 70px rgba(2,6,23,.14)"
+            glass:"0 18px 55px rgba(2,6,23,.10)",
+            soft:"0 14px 30px rgba(2,6,23,.08)",
+            lift:"0 24px 70px rgba(2,6,23,.14)"
           },
-          borderRadius: {
-            xl2: "1.25rem",
-            xl3: "1.75rem"
+          borderRadius:{ xl2:"1.25rem", xl3:"1.75rem" },
+          keyframes:{
+            fadeUp:{ "0%":{opacity:0,transform:"translateY(14px)"}, "100%":{opacity:1,transform:"translateY(0)"} },
+            pop:{ "0%":{transform:"scale(.98)",opacity:.2}, "100%":{transform:"scale(1)",opacity:1} }
           },
-          keyframes: {
-            fadeUp: {
-              "0%": { opacity: 0, transform: "translateY(14px)" },
-              "100%": { opacity: 1, transform: "translateY(0)" },
-            },
-            pop: {
-              "0%": { transform: "scale(.98)", opacity: .2 },
-              "100%": { transform: "scale(1)", opacity: 1 }
-            }
-          },
-          animation: {
-            fadeUp: "fadeUp .55s ease-out both",
-            pop: "pop .18s ease-out both"
-          }
+          animation:{ fadeUp:"fadeUp .55s ease-out both", pop:"pop .18s ease-out both" }
         }
       }
     }
   </script>
 
-  <!-- Inter -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-
-  <!-- (Opcional) CSS propio -->
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
+  <!-- CSS propio -->
+  <link rel="stylesheet" href="/static/css/custom.css">
 
   <style>
-    /* Fondo global claro y premium (coherente con tu hero nuevo) */
     body{
       background:
         radial-gradient(1100px 700px at 12% 8%, rgba(37,99,235,.12), transparent 55%),
@@ -95,8 +75,6 @@
         radial-gradient(900px 520px at 60% 95%, rgba(34,197,94,.10), transparent 58%),
         linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
     }
-
-    /* Accesibilidad: reduce motion */
     @media (prefers-reduced-motion: reduce){
       *{ animation:none!important; transition:none!important; scroll-behavior:auto!important; }
     }
@@ -107,8 +85,18 @@
 
 <body class="min-h-screen text-ink-900 font-sans antialiased selection:bg-[rgba(37,99,235,.20)] selection:text-ink-900">
 
-{% set current = request.endpoint or '' %}
-{% set is_admin = session.get('is_admin') %}
+{% set current = (request.endpoint or '') if request else '' %}
+{% set is_admin = session.get('is_admin') if session else false %}
+
+{# =========================
+   RUTAS “SAFE” (no rompen si tus endpoints no existen)
+   Si después querés volver a url_for, lo hacemos cuando confirmes nombres exactos.
+========================= #}
+{% set URL_HOME  = '/' %}
+{% set URL_SHOP  = '/shop' %}
+{% set URL_ABOUT = '/about' %}
+{% set URL_LOGIN = '/login' %}
+{% set URL_ADMIN = '/admin' %}
 
 <!-- Skip link -->
 <a href="#main-content"
@@ -126,7 +114,7 @@
       <div class="h-14 md:h-16 flex items-center justify-between gap-3 px-3 md:px-4">
 
         <!-- Logo -->
-        <a href="{{ url_for('main.home') }}"
+        <a href="{{ URL_HOME }}"
            class="flex items-center gap-2 rounded-xl px-2 py-1
                   focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(37,99,235,.35)]">
           <span class="h-9 w-9 rounded-xl grid place-items-center font-black text-[12px] text-white
@@ -141,32 +129,32 @@
 
         <!-- NAV Desktop -->
         <nav class="hidden md:flex items-center gap-6 text-sm font-semibold" aria-label="Navegación principal">
-          <a href="{{ url_for('main.shop') }}"
-             class="{{ 'text-brand-blue' if current=='main.shop' else 'text-slate-600 hover:text-ink-900' }} transition"
-             {% if current=='main.shop' %}aria-current="page"{% endif %}>
+          <a href="{{ URL_SHOP }}"
+             class="text-slate-600 hover:text-ink-900 transition"
+             {% if current == 'main.shop' %}aria-current="page"{% endif %}>
             Tienda
           </a>
 
-          <a href="{{ url_for('main.home') }}#destacados"
+          <a href="{{ URL_HOME }}#destacados"
              class="text-slate-600 hover:text-ink-900 transition">
             Destacados
           </a>
 
-          <a href="{{ url_for('main.about') }}"
-             class="{{ 'text-brand-blue' if current=='main.about' else 'text-slate-600 hover:text-ink-900' }} transition"
-             {% if current=='main.about' %}aria-current="page"{% endif %}>
+          <a href="{{ URL_ABOUT }}"
+             class="text-slate-600 hover:text-ink-900 transition"
+             {% if current == 'main.about' %}aria-current="page"{% endif %}>
             La marca
           </a>
 
           {% if is_admin %}
-            <a href="{{ url_for('admin.dashboard') }}"
-               class="{{ 'text-brand-blue' if current and current.startswith('admin.') else 'text-amber-600 hover:text-amber-700' }} transition">
+            <a href="{{ URL_ADMIN }}"
+               class="text-amber-700 hover:text-amber-800 transition">
               Panel admin
             </a>
           {% endif %}
 
-          <a href="{{ url_for('auth.login') }}"
-             class="{{ 'text-brand-blue' if current in ['auth.login','admin.login'] else 'text-slate-600 hover:text-ink-900' }} transition">
+          <a href="{{ URL_LOGIN }}"
+             class="text-slate-600 hover:text-ink-900 transition">
             Ingresar
           </a>
         </nav>
@@ -174,16 +162,14 @@
         <!-- CTA -->
         <div class="hidden sm:flex items-center gap-2">
           {% if is_admin %}
-            <form action="{{ url_for('admin.logout') }}" method="get">
-              <button type="submit"
-                      class="px-3 py-1.5 rounded-full border border-soft-200 bg-white/70
-                             text-[12px] font-semibold text-slate-700 hover:bg-white transition">
-                Cerrar sesión
-              </button>
-            </form>
+            <a href="{{ URL_ADMIN }}/logout"
+               class="px-3 py-1.5 rounded-full border border-soft-200 bg-white/70
+                      text-[12px] font-semibold text-slate-700 hover:bg-white transition">
+              Cerrar sesión
+            </a>
           {% endif %}
 
-          <a href="{{ url_for('main.shop') }}"
+          <a href="{{ URL_SHOP }}"
              class="px-4 py-2 rounded-full text-[13px] font-extrabold text-white
                     bg-gradient-to-r from-brand-blue to-brand-cyan shadow-soft hover:shadow-lift transition
                     focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(37,99,235,.35)]">
@@ -208,21 +194,20 @@
       </div>
 
       <!-- Mobile menu -->
-      <div id="mobile-menu"
-           class="hidden md:hidden px-3 pb-3">
+      <div id="mobile-menu" class="hidden md:hidden px-3 pb-3">
         <nav class="rounded-2xl border border-soft-200 bg-white/80 backdrop-blur-xl shadow-soft p-3 text-sm font-semibold">
-          <a class="block px-3 py-2 rounded-xl hover:bg-soft-100 transition" href="{{ url_for('main.shop') }}">Tienda</a>
-          <a class="block px-3 py-2 rounded-xl hover:bg-soft-100 transition" href="{{ url_for('main.home') }}#destacados">Destacados</a>
-          <a class="block px-3 py-2 rounded-xl hover:bg-soft-100 transition" href="{{ url_for('main.about') }}">La marca</a>
+          <a class="block px-3 py-2 rounded-xl hover:bg-soft-100 transition" href="{{ URL_SHOP }}">Tienda</a>
+          <a class="block px-3 py-2 rounded-xl hover:bg-soft-100 transition" href="{{ URL_HOME }}#destacados">Destacados</a>
+          <a class="block px-3 py-2 rounded-xl hover:bg-soft-100 transition" href="{{ URL_ABOUT }}">La marca</a>
 
           {% if is_admin %}
-            <a class="block px-3 py-2 rounded-xl hover:bg-soft-100 transition text-amber-700" href="{{ url_for('admin.dashboard') }}">Panel admin</a>
-            <a class="block px-3 py-2 rounded-xl hover:bg-soft-100 transition text-slate-600" href="{{ url_for('admin.logout') }}">Cerrar sesión</a>
+            <a class="block px-3 py-2 rounded-xl hover:bg-soft-100 transition text-amber-700" href="{{ URL_ADMIN }}">Panel admin</a>
+            <a class="block px-3 py-2 rounded-xl hover:bg-soft-100 transition text-slate-600" href="{{ URL_ADMIN }}/logout">Cerrar sesión</a>
           {% endif %}
 
-          <a class="block px-3 py-2 rounded-xl hover:bg-soft-100 transition" href="{{ url_for('auth.login') }}">Ingresar</a>
+          <a class="block px-3 py-2 rounded-xl hover:bg-soft-100 transition" href="{{ URL_LOGIN }}">Ingresar</a>
 
-          <a href="{{ url_for('main.shop') }}"
+          <a href="{{ URL_SHOP }}"
              class="mt-2 block text-center px-3 py-2 rounded-full font-extrabold text-white
                     bg-gradient-to-r from-brand-blue to-brand-cyan shadow-soft hover:shadow-lift transition">
             Ver colección
@@ -273,15 +258,15 @@
     <div class="flex flex-wrap items-center gap-3">
       <span>© {{ current_year|default(2025) }} Skyline Store. Todos los derechos reservados.</span>
       <span class="hidden sm:block text-slate-300">·</span>
-      <a href="{{ url_for('main.about') }}" class="hover:text-ink-900 transition">Sobre la marca</a>
+      <a href="{{ URL_ABOUT }}" class="hover:text-ink-900 transition">Sobre la marca</a>
       <a href="#" class="hover:text-ink-900 transition">Términos &amp; condiciones</a>
     </div>
     <span class="text-slate-400">Hecho con ❤️ por Gaby.</span>
   </div>
 </footer>
 
-<!-- Back to top (solo aparece con scroll) -->
-<a id="backtop" href="{{ url_for('main.home') }}"
+<!-- Back to top -->
+<a id="backtop" href="{{ URL_HOME }}"
    class="hidden fixed bottom-5 right-5 z-40 items-center gap-2 px-3.5 py-2 rounded-full
           bg-white/85 border border-soft-200 text-slate-800 text-sm font-bold
           shadow-soft hover:shadow-lift hover:-translate-y-0.5 transition
@@ -305,15 +290,15 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!header) return;
     header.style.filter = window.scrollY > 6 ? "drop-shadow(0 18px 35px rgba(2,6,23,.10))" : "none";
   };
-  window.addEventListener("scroll", setShadow);
+  window.addEventListener("scroll", setShadow, { passive:true });
   setShadow();
 
   const setBackTop = () => {
     if (!back) return;
-    if (window.scrollY > 420) back.classList.remove("hidden"), back.classList.add("inline-flex");
-    else back.classList.add("hidden"), back.classList.remove("inline-flex");
+    if (window.scrollY > 420) { back.classList.remove("hidden"); back.classList.add("inline-flex"); }
+    else { back.classList.add("hidden"); back.classList.remove("inline-flex"); }
   };
-  window.addEventListener("scroll", setBackTop);
+  window.addEventListener("scroll", setBackTop, { passive:true });
   setBackTop();
 
   const openMenu = () => {

@@ -1,15 +1,14 @@
-{# templates/index.html #}
+{# templates/index.html — SKYLINE STORE · INDEX ULTRA PRO #}
 {% extends "base.html" %}
 {% block title %}Skyline Store · Moda urbana & dropshipping premium{% endblock %}
 
 {% block extra_head %}
 <style>
 /* ==========================================================
-   SKYLINE STORE — INDEX REVOLUTION PRO (LIGHT · PREMIUM)
-   - moderno + elegante + vivo
-   - coherente con fondo claro premium
-   - secciones completas y funcionales
-   - accesible + motion-safe
+   SKYLINE STORE — INDEX ULTRA PRO (LIGHT · PREMIUM)
+   - limpio, moderno, vivo (sin neón)
+   - accesible + rápido
+   - sin errores de endpoints
 ========================================================== */
 
 /* ---------- TOKENS ---------- */
@@ -21,7 +20,6 @@
   --muted2: rgba(11,18,32,.55);
   --border: rgba(15,23,42,.10);
 
-  /* vivos, modernos (sin “neón barato”) */
   --a:#2563eb;  /* blue */
   --b:#06b6d4;  /* cyan */
   --c:#f59e0b;  /* amber */
@@ -42,7 +40,7 @@
   --grid: 1200px;
 }
 
-/* ---------- BASE / LAYOUT ---------- */
+/* ---------- BASE ---------- */
 .container{
   width:100%;
   max-width: var(--grid);
@@ -51,6 +49,11 @@
 }
 .section{
   padding: clamp(3.2rem, 6vw, 5rem) 0;
+}
+.sep{
+  height:1px;
+  background: linear-gradient(90deg, transparent, rgba(15,23,42,.10), transparent);
+  margin: clamp(2.4rem, 4vw, 3.2rem) 0;
 }
 
 /* ---------- TYPO ---------- */
@@ -157,17 +160,15 @@
     linear-gradient(180deg, var(--bg1) 0%, var(--bg0) 100%);
   color: var(--ink);
 }
-
 .hero::after{
   content:"";
   position:absolute; inset:0;
   pointer-events:none;
-  opacity:.07;
+  opacity:.06;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23n)' opacity='.85'/%3E%3C/svg%3E");
   mix-blend-mode:multiply;
   z-index:0;
 }
-
 .hero-bg{
   position:absolute;
   inset:-10%;
@@ -205,7 +206,6 @@
   width:100%;
   padding: clamp(5.2rem, 10vh, 7.4rem) 0 4.2rem;
 }
-
 .hero-grid{
   display:grid;
   grid-template-columns: 1fr;
@@ -215,7 +215,6 @@
 @media (min-width: 980px){
   .hero-grid{ grid-template-columns: 1.08fr .92fr; }
 }
-
 .hero-title{
   font-size: clamp(2.35rem, 4.9vw, 3.65rem);
   line-height:1.03;
@@ -240,14 +239,12 @@
   font-size: 1.06rem;
   line-height:1.75;
 }
-
 .hero-cta{
   display:flex;
   flex-wrap:wrap;
   gap:.75rem;
   margin-top:1.35rem;
 }
-
 .hero-chips{
   display:flex;
   flex-wrap:wrap;
@@ -269,7 +266,7 @@
 }
 .chip::before{ content:"✓"; font-weight: 990; color: rgba(34,197,94,.95); }
 
-/* ---------- HERO RIGHT PANEL (CATEGORIES) ---------- */
+/* ---------- RIGHT PANEL ---------- */
 .panel{
   position:relative;
   border-radius: var(--r3);
@@ -301,16 +298,8 @@
   gap:1rem;
   margin-bottom:.7rem;
 }
-.panel-title{
-  font-weight: 990;
-  letter-spacing:-.2px;
-  font-size: .98rem;
-}
-.panel-hint{
-  color: rgba(11,18,32,.55);
-  font-weight:950;
-  font-size:.82rem;
-}
+.panel-title{ font-weight: 990; letter-spacing:-.2px; font-size: .98rem; }
+.panel-hint{ color: rgba(11,18,32,.55); font-weight:950; font-size:.82rem; }
 
 .scroller{
   display:flex;
@@ -356,7 +345,6 @@
   box-shadow: var(--shadow2);
   border-color: rgba(37,99,235,.22);
 }
-
 .cat img{
   width:100%;
   height: 8.2rem;
@@ -367,11 +355,24 @@
   background:#fff;
   margin-bottom:.6rem;
 }
+.fallback{
+  display:none;
+  width:100%;
+  height: 8.2rem;
+  border-radius: 1rem;
+  border:1px dashed rgba(15,23,42,.20);
+  background: rgba(255,255,255,.65);
+  place-items:center;
+  text-align:center;
+  padding:.8rem;
+  margin-bottom:.6rem;
+  color: rgba(11,18,32,.70);
+}
 .cat-title{ font-weight: 990; font-size: .96rem; letter-spacing:-.2px; position:relative; z-index:1; }
 .cat-sub{ font-size: .8rem; color: rgba(11,18,32,.66); margin-top:.14rem; position:relative; z-index:1; }
 
 /* ==========================================================
-   FEATURED PRODUCTS
+   FEATURED
 ========================================================== */
 .grid3{
   display:grid;
@@ -382,7 +383,6 @@
 @media (min-width: 860px){
   .grid3{ grid-template-columns: repeat(3, 1fr); }
 }
-
 .product{
   border-radius: var(--r2);
   border:1px solid rgba(15,23,42,.10);
@@ -392,7 +392,6 @@
   transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
 }
 .product:hover{ transform: translateY(-6px); box-shadow: var(--shadow2); border-color: rgba(37,99,235,.18); }
-
 .product-media{
   position:relative;
   background:
@@ -407,10 +406,15 @@
   object-fit: cover;
   display:block;
 }
-.product-body{ padding: .98rem 1.02rem 1.05rem; }
-.product-top{
-  display:flex; align-items:center; justify-content:space-between; gap:.8rem;
+.product-media .fallback{
+  display:none;
+  height: 190px;
+  border-radius: 0;
+  margin:0;
+  border:0;
 }
+.product-body{ padding: .98rem 1.02rem 1.05rem; }
+.product-top{ display:flex; align-items:center; justify-content:space-between; gap:.8rem; }
 
 .tag{
   display:inline-flex; align-items:center; gap:.45rem;
@@ -426,24 +430,12 @@
 .tag.best{ border-color: rgba(34,197,94,.22); }
 
 .price{ font-weight: 990; letter-spacing:-.2px; }
-.product-title{
-  margin:.65rem 0 .3rem;
-  font-weight: 990;
-  letter-spacing:-.35px;
-}
-.product-desc{
-  margin:0;
-  color: var(--muted);
-  line-height:1.65;
-  font-size:.96rem;
-}
-.product-actions{
-  display:flex; gap:.6rem; flex-wrap:wrap;
-  margin-top:.9rem;
-}
+.product-title{ margin:.65rem 0 .3rem; font-weight: 990; letter-spacing:-.35px; }
+.product-desc{ margin:0; color: var(--muted); line-height:1.65; font-size:.96rem; }
+.product-actions{ display:flex; gap:.6rem; flex-wrap:wrap; margin-top:.9rem; }
 
 /* ==========================================================
-   BENEFITS
+   BENEFITS / REVIEWS / CTA
 ========================================================== */
 .benefits{
   margin-top: 1.25rem;
@@ -470,22 +462,9 @@
   margin-bottom:.55rem;
   font-weight: 990;
 }
-.benefit h3{
-  margin:.15rem 0 .25rem;
-  font-size: .99rem;
-  font-weight: 990;
-  letter-spacing:-.2px;
-}
-.benefit p{
-  margin:0;
-  color: var(--muted);
-  line-height:1.65;
-  font-size:.95rem;
-}
+.benefit h3{ margin:.15rem 0 .25rem; font-size: .99rem; font-weight: 990; letter-spacing:-.2px; }
+.benefit p{ margin:0; color: var(--muted); line-height:1.65; font-size:.95rem; }
 
-/* ==========================================================
-   REVIEWS
-========================================================== */
 .reviews{
   margin-top: 1.25rem;
   display:grid;
@@ -515,14 +494,8 @@
 }
 .review .inner{ position:relative; z-index:1; }
 .stars{ letter-spacing:1px; font-weight: 990; }
-.review p{
-  margin:.55rem 0 .85rem;
-  color: var(--muted);
-  line-height:1.75;
-}
-.person{
-  display:flex; align-items:center; gap:.7rem;
-}
+.review p{ margin:.55rem 0 .85rem; color: var(--muted); line-height:1.75; }
+.person{ display:flex; align-items:center; gap:.7rem; }
 .avatar{
   width:42px;height:42px;border-radius: 14px;
   background: linear-gradient(135deg, rgba(168,85,247,.18), rgba(6,182,212,.14));
@@ -531,9 +504,6 @@
 .person b{ display:block; font-weight: 990; }
 .person span{ display:block; color: var(--muted2); font-size:.88rem; }
 
-/* ==========================================================
-   CTA + NEWSLETTER
-========================================================== */
 .cta-band{
   border-radius: var(--r3);
   border:1px solid rgba(15,23,42,.10);
@@ -562,27 +532,12 @@
   gap:.9rem;
 }
 @media (min-width: 900px){
-  .cta-band .row{
-    flex-direction:row;
-    align-items:center;
-    justify-content:space-between;
-    gap:1.2rem;
-  }
+  .cta-band .row{ flex-direction:row; align-items:center; justify-content:space-between; gap:1.2rem; }
 }
-.cta-band h3{
-  margin:0;
-  font-size: 1.26rem;
-  font-weight: 990;
-  letter-spacing:-.45px;
-}
+.cta-band h3{ margin:0; font-size: 1.26rem; font-weight: 990; letter-spacing:-.45px; }
 .cta-band p{ margin:.25rem 0 0; color: rgba(11,18,32,.72); }
 
-.form{
-  display:flex;
-  flex-wrap:wrap;
-  gap:.6rem;
-  margin-top:.35rem;
-}
+.form{ display:flex; flex-wrap:wrap; gap:.6rem; margin-top:.35rem; }
 .input{
   min-width: 240px;
   flex:1;
@@ -593,15 +548,8 @@
   box-shadow: 0 10px 18px rgba(2,6,23,.06);
 }
 .input:focus-visible{ outline:none; box-shadow: var(--ring); }
-.helper{
-  margin:.55rem 0 0;
-  color: var(--muted2);
-  font-size:.92rem;
-}
+.helper{ margin:.55rem 0 0; color: var(--muted2); font-size:.92rem; }
 
-/* ==========================================================
-   QUICK LINKS / EXTRA
-========================================================== */
 .quick{
   display:grid;
   grid-template-columns: 1fr;
@@ -632,7 +580,7 @@
 }
 .links a:hover{ text-decoration: underline; }
 
-/* ---------- ACCESSIBILITY ---------- */
+/* ---------- MOTION SAFE ---------- */
 @media (prefers-reduced-motion: reduce){
   *{ animation:none!important; transition:none!important; scroll-behavior:auto!important; }
 }
@@ -640,6 +588,11 @@
 {% endblock %}
 
 {% block content %}
+
+{# ========= SAFE PATHS (no rompen si endpoints no existen) ========= #}
+{% set URL_SHOP = '/shop' %}
+{% set URL_PROFILE = '/profile' %}
+
 <!-- =========================
      HERO
 ========================== -->
@@ -667,12 +620,8 @@
           </p>
 
           <div class="hero-cta">
-            <a href="{{ url_for('main.shop') }}" class="btn btn-primary" aria-label="Ir a la tienda">
-              Ver tienda →
-            </a>
-            <a href="#categorias" class="btn btn-secondary" aria-label="Explorar categorías">
-              Explorar categorías
-            </a>
+            <a href="{{ URL_SHOP }}" class="btn btn-primary" aria-label="Ir a la tienda">Ver tienda →</a>
+            <a href="#categorias" class="btn btn-secondary" aria-label="Explorar categorías">Explorar categorías</a>
           </div>
 
           <div class="hero-chips" aria-label="Confianza y beneficios">
@@ -691,21 +640,30 @@
               <div class="panel-hint">deslizá →</div>
             </div>
 
+            {% set cats = [
+              {"slug":"buzos","img":"card_buzos.png","price":"Desde $1.490"},
+              {"slug":"remeras","img":"card_remeras.png","price":"Desde $1.480"},
+              {"slug":"gorros","img":"card_gorras.png","price":"Desde $1.490"},
+              {"slug":"accesorios","img":"card_accesorios.png","price":"Para todos"}
+            ] %}
+
             <div class="scroller">
-              {% for cat, img, price in [
-                ('buzos','card_buzos.png','Desde $1.490'),
-                ('remeras','card_remeras.png','Desde $1.480'),
-                ('gorros','card_gorras.png','Desde $1.490'),
-                ('accesorios','card_accesorios.png','Para todos')
-              ] %}
-              <a href="{{ url_for('main.shop') }}?categoria={{ cat }}" class="cat">
+              {% for c in cats %}
+              <a href="{{ URL_SHOP }}?categoria={{ c.slug }}" class="cat">
                 <img
-                  src="{{ url_for('static', filename='img/hero/' ~ img) }}"
-                  alt="{{ cat|capitalize }}"
-                  onerror="this.style.display='none'; this.parentElement.innerHTML += '<div style=&quot;font-weight:990;color:rgba(11,18,32,.72);padding:.35rem .25rem .15rem;&quot;>{{ cat|capitalize }}</div><div style=&quot;color:rgba(11,18,32,.60);font-size:.82rem;padding:0 .25rem .65rem;&quot;{{ price }}</div>';"
+                  src="/static/img/hero/{{ c.img }}"
+                  alt="{{ c.slug|capitalize }}"
+                  loading="lazy"
+                  decoding="async"
+                  data-fallback-title="{{ c.slug|capitalize }}"
+                  data-fallback-sub="{{ c.price }}"
                 >
-                <div class="cat-title">{{ cat|capitalize }}</div>
-                <div class="cat-sub">{{ price }}</div>
+                <div class="fallback" aria-hidden="true">
+                  <div style="font-weight:990;line-height:1.15;">{{ c.slug|capitalize }}</div>
+                  <div style="opacity:.78;font-size:.86rem;margin-top:.15rem;">{{ c.price }}</div>
+                </div>
+                <div class="cat-title">{{ c.slug|capitalize }}</div>
+                <div class="cat-sub">{{ c.price }}</div>
               </a>
               {% endfor %}
             </div>
@@ -727,30 +685,9 @@
     <p class="p">Lo más buscado y lo nuevo. Entrá, elegí y comprá sin vueltas.</p>
 
     {% set featured = [
-      {
-        "tag":"Nuevo","tag_cls":"new",
-        "title":"Hoodie Skyline Essential",
-        "desc":"Calce premium + estilo limpio, ideal para todos los días.",
-        "price":"$1.990",
-        "img":"featured_hoodie.jpg",
-        "href": url_for('main.shop') ~ "?categoria=buzos"
-      },
-      {
-        "tag":"Hot","tag_cls":"hot",
-        "title":"Remera Skyline Street",
-        "desc":"Liviana, urbana y combinable. La base de cualquier outfit.",
-        "price":"$1.480",
-        "img":"featured_remera.jpg",
-        "href": url_for('main.shop') ~ "?categoria=remeras"
-      },
-      {
-        "tag":"Top","tag_cls":"best",
-        "title":"Gorra Skyline Classic",
-        "desc":"Minimal, pro y con actitud. Cierra el look.",
-        "price":"$1.490",
-        "img":"featured_gorra.jpg",
-        "href": url_for('main.shop') ~ "?categoria=gorros"
-      }
+      {"tag":"Nuevo","tag_cls":"new","title":"Hoodie Skyline Essential","desc":"Calce premium + estilo limpio, ideal para todos los días.","price":"$1.990","img":"featured_hoodie.jpg","href": URL_SHOP ~ "?categoria=buzos"},
+      {"tag":"Hot","tag_cls":"hot","title":"Remera Skyline Street","desc":"Liviana, urbana y combinable. La base de cualquier outfit.","price":"$1.480","img":"featured_remera.jpg","href": URL_SHOP ~ "?categoria=remeras"},
+      {"tag":"Top","tag_cls":"best","title":"Gorra Skyline Classic","desc":"Minimal, pro y con actitud. Cierra el look.","price":"$1.490","img":"featured_gorra.jpg","href": URL_SHOP ~ "?categoria=gorros"}
     ] %}
 
     <div class="grid3">
@@ -758,16 +695,27 @@
       <article class="product">
         <div class="product-media">
           <img
-            src="{{ url_for('static', filename='img/hero/' ~ p.img) }}"
+            src="/static/img/hero/{{ p.img }}"
             alt="{{ p.title }}"
-            onerror="this.style.display='none'; this.parentElement.style.display='grid'; this.parentElement.style.placeItems='center'; this.parentElement.innerHTML='<div style=&quot;font-weight:990;color:rgba(11,18,32,.72);padding:1rem;text-align:center&quot;>Agregá una imagen en<br><b>static/img/hero/{{ p.img }}</b></div>';"
+            loading="lazy"
+            decoding="async"
+            data-fallback-title="{{ p.title }}"
+            data-fallback-sub="Agregá la imagen en static/img/hero/{{ p.img }}"
           >
+          <div class="fallback" aria-hidden="true">
+            <div style="font-weight:990;line-height:1.2;padding:1.1rem;text-align:center;">
+              {{ p.title }}<br>
+              <span style="opacity:.78;font-weight:800;font-size:.92rem;">Imagen faltante</span>
+            </div>
+          </div>
         </div>
+
         <div class="product-body">
           <div class="product-top">
             <span class="tag {{ p.tag_cls }}">{{ p.tag }}</span>
             <span class="price">{{ p.price }}</span>
           </div>
+
           <div class="product-title">{{ p.title }}</div>
           <p class="product-desc">{{ p.desc }}</p>
 
@@ -779,6 +727,8 @@
       </article>
       {% endfor %}
     </div>
+
+    <div class="sep" role="presentation"></div>
   </div>
 </section>
 
@@ -813,6 +763,8 @@
         <p>Te respondemos de verdad. Sin bots raros.</p>
       </div>
     </div>
+
+    <div class="sep" role="presentation"></div>
   </div>
 </section>
 
@@ -828,7 +780,7 @@
     <div class="reviews">
       <div class="review">
         <div class="inner">
-          <div class="stars">★★★★★</div>
+          <div class="stars" aria-label="5 estrellas">★★★★★</div>
           <p>“Llegó rápido y el diseño se ve premium. La web es re cómoda.”</p>
           <div class="person">
             <div class="avatar" aria-hidden="true"></div>
@@ -839,7 +791,7 @@
 
       <div class="review">
         <div class="inner">
-          <div class="stars">★★★★★</div>
+          <div class="stars" aria-label="5 estrellas">★★★★★</div>
           <p>“Me encantó la selección, no es el típico catálogo sin sentido.”</p>
           <div class="person">
             <div class="avatar" aria-hidden="true"></div>
@@ -850,7 +802,7 @@
 
       <div class="review">
         <div class="inner">
-          <div class="stars">★★★★★</div>
+          <div class="stars" aria-label="5 estrellas">★★★★★</div>
           <p>“La estética es otra cosa. Se nota que está pensado para vender.”</p>
           <div class="person">
             <div class="avatar" aria-hidden="true"></div>
@@ -859,11 +811,13 @@
         </div>
       </div>
     </div>
+
+    <div class="sep" role="presentation"></div>
   </div>
 </section>
 
 <!-- =========================
-     CTA + NEWSLETTER (FUNCIONAL)
+     CTA + NEWSLETTER
 ========================== -->
 <section class="section" id="newsletter" aria-label="Newsletter y drops">
   <div class="container">
@@ -888,12 +842,12 @@
         <p class="p" style="margin-top:.55rem;">Entrá directo a lo que querés, sin perder tiempo.</p>
 
         <div class="links">
-          <a href="{{ url_for('main.shop') }}?categoria=buzos">Buzos</a>
-          <a href="{{ url_for('main.shop') }}?categoria=remeras">Remeras</a>
-          <a href="{{ url_for('main.shop') }}?categoria=gorros">Gorros</a>
-          <a href="{{ url_for('main.shop') }}?categoria=accesorios">Accesorios</a>
-          <a href="{{ url_for('main.shop') }}">Todo el catálogo</a>
-          <a href="{{ url_for('main.profile') }}">Mi perfil</a>
+          <a href="{{ URL_SHOP }}?categoria=buzos">Buzos</a>
+          <a href="{{ URL_SHOP }}?categoria=remeras">Remeras</a>
+          <a href="{{ URL_SHOP }}?categoria=gorros">Gorros</a>
+          <a href="{{ URL_SHOP }}?categoria=accesorios">Accesorios</a>
+          <a href="{{ URL_SHOP }}">Todo el catálogo</a>
+          <a href="{{ URL_PROFILE }}">Mi perfil</a>
         </div>
       </div>
 
@@ -902,7 +856,7 @@
         <p class="p" style="margin-top:.55rem;">¿Listo para ver lo nuevo? Dale una vuelta a la tienda.</p>
 
         <div style="margin-top:.9rem; display:flex; gap:.6rem; flex-wrap:wrap;">
-          <a class="btn btn-secondary btn-mini" href="{{ url_for('main.shop') }}">Ver tienda</a>
+          <a class="btn btn-secondary btn-mini" href="{{ URL_SHOP }}">Ver tienda</a>
           <a class="btn btn-ghost btn-mini" href="#reviews">Ver reseñas</a>
         </div>
 
@@ -916,9 +870,28 @@
 
 <script>
 /* ==========================================================
+   Fallback seguro para imágenes (sin HTML raro en atributos)
+========================================================== */
+(function(){
+  const imgs = document.querySelectorAll("img[data-fallback-title]");
+  imgs.forEach(img => {
+    img.addEventListener("error", () => {
+      const parent = img.parentElement;
+      if(!parent) return;
+
+      const fb = parent.querySelector(".fallback");
+      if(fb){
+        fb.style.display = "grid";
+      }
+      img.style.display = "none";
+    }, { once:true });
+  });
+})();
+
+/* ==========================================================
    Newsletter funcional sin backend:
    - guarda email en localStorage
-   - mensaje accesible (aria-live)
+   - accesible (aria-live)
    - listo para luego reemplazar por POST al servidor
 ========================================================== */
 const SkylineNewsletter = {
@@ -945,4 +918,5 @@ const SkylineNewsletter = {
   }
 };
 </script>
+
 {% endblock %}

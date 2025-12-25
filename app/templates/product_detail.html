@@ -1,215 +1,271 @@
 {% extends "base.html" %}
 
-{% block title %}{{ product.name if product else 'Producto no encontrado' }} - Skyline Style{% endblock %}
+{% block title %}
+  {{ (product.name ~ ' - Skyline Style') if product else 'Producto no encontrado - Skyline Style' }}
+{% endblock %}
 
 {% block extra_head %}
 <style>
-    .pd-card-hover {
-        transition:
-            transform 0.35s ease,
-            box-shadow 0.35s ease,
-            background-color 0.25s ease,
-            border-color 0.25s ease;
-    }
-    .pd-card-hover:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 22px 40px -18px rgba(15,23,42,0.38);
-        background-color: #f8fafc; /* slate-50 */
-        border-color: rgba(148,163,184,0.4); /* slate-400/40 */
-    }
+  /* ==========================================================
+     PRODUCT DETAIL — ULTRA PRO (Light · Premium · Safe)
+  ========================================================== */
 
-    .pill-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: .25rem;
-        padding: .35rem .8rem;
-        border-radius: 9999px;
-        font-size: .68rem;
-        line-height: 1;
-        border: 1px solid rgba(148,163,184,0.35);
-        background: rgba(248,250,252,0.85);
-        color: #475569;
-        white-space: nowrap;
-    }
+  .pd-hover{
+    transition: transform .28s ease, box-shadow .28s ease, border-color .28s ease, background-color .2s ease;
+  }
+  .pd-hover:hover{
+    transform: translateY(-4px);
+    box-shadow: 0 22px 40px -18px rgba(15,23,42,.28);
+    border-color: rgba(37,99,235,.18);
+    background-color: rgba(248,250,252,.8);
+  }
 
-    .pill-badge-dot {
-        width: .4rem;
-        height: .4rem;
-        border-radius: 9999px;
-        background: #22c55e;
-    }
+  .pill-badge{
+    display:inline-flex;
+    align-items:center;
+    gap:.45rem;
+    padding:.38rem .82rem;
+    border-radius:9999px;
+    font-size:.72rem;
+    line-height:1;
+    border:1px solid rgba(15,23,42,.10);
+    background: rgba(255,255,255,.78);
+    color: rgba(15,23,42,.66);
+    white-space:nowrap;
+    backdrop-filter: blur(12px);
+  }
+  .pill-dot{
+    width:.42rem;height:.42rem;border-radius:9999px;
+    background:#22c55e;
+    box-shadow: 0 0 0 4px rgba(34,197,94,.12);
+  }
+
+  .pd-img-wrap{
+    position:relative;
+    overflow:hidden;
+    border-radius: 1.75rem;
+  }
+  .pd-img-fallback{
+    display:none;
+    position:absolute;
+    inset:0;
+    place-items:center;
+    text-align:center;
+    padding:1.2rem;
+    color: rgba(15,23,42,.72);
+    font-weight: 800;
+    background:
+      radial-gradient(900px 420px at 20% 20%, rgba(37,99,235,.12), transparent 55%),
+      radial-gradient(720px 420px at 85% 20%, rgba(245,158,11,.10), transparent 58%),
+      rgba(248,250,252,.9);
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ transition:none!important; animation:none!important; scroll-behavior:auto!important; }
+  }
 </style>
 {% endblock %}
 
 {% block content %}
 <section class="max-w-5xl mx-auto px-4 pt-10 pb-16">
 
-    {% if not product %}
-        <div class="bg-white rounded-2xl border border-slate-200 p-8 text-center">
-            <h1 class="text-xl font-semibold text-slate-900 mb-2">
-                Producto no encontrado
-            </h1>
-            <p class="text-sm text-slate-600">
-                Este producto no existe, fue movido o está temporalmente oculto.
-            </p>
-            <a href="{{ url_for('main.shop') }}"
-               class="mt-5 inline-flex px-6 py-2.5 rounded-full bg-slate-900 text-slate-50 text-sm font-medium hover:bg-slate-800 shadow-sm hover:shadow-md transition">
-                Volver a la tienda
-            </a>
+  {# ---------- Helpers seguros ---------- #}
+  {% set name = product.name if product and product.name else 'Producto' %}
+  {% set category = product.category if product and product.category else '' %}
+  {% set description = product.description if product and product.description else '' %}
+  {% set image_url = product.image if product and product.image else '' %}
+
+  {# Precio safe: si viene string/none, no rompe #}
+  {% set price_value = (product.price if product and product.price is not none else 0) %}
+  {% set price_float = (price_value|float) %}
+
+  {# Link carrito safe: si no existe endpoint, mandamos a shop #}
+  {% set cart_href = url_for('main.shop') %}
+  {% if 'main.cart' in (current_app.view_functions.keys()|list) %}
+    {% set cart_href = url_for('main.cart') %}
+  {% endif %}
+
+  {% if not product %}
+    <div class="bg-white rounded-2xl border border-slate-200 p-8 text-center">
+      <h1 class="text-xl font-semibold text-slate-900 mb-2">Producto no encontrado</h1>
+      <p class="text-sm text-slate-600">
+        Este producto no existe, fue movido o está temporalmente oculto.
+      </p>
+      <a href="{{ url_for('main.shop') }}"
+         class="mt-5 inline-flex px-6 py-2.5 rounded-full bg-slate-900 text-slate-50 text-sm font-medium hover:bg-slate-800 shadow-sm hover:shadow-md transition
+                focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/40">
+        Volver a la tienda
+      </a>
+    </div>
+
+  {% else %}
+
+    <!-- Breadcrumb -->
+    <nav class="flex items-center gap-2 text-[11px] md:text-xs text-slate-500 mb-6" aria-label="Breadcrumb">
+      <a href="{{ url_for('main.shop') }}" class="hover:text-amber-600 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/40 rounded">
+        Tienda
+      </a>
+      <span aria-hidden="true">/</span>
+      <span class="truncate max-w-[70%]" title="{{ name }}">{{ name }}</span>
+    </nav>
+
+    <div class="grid md:grid-cols-2 gap-8 md:gap-10 items-start">
+
+      <!-- MEDIA -->
+      <div class="space-y-4" data-product-media>
+        <div class="pd-img-wrap bg-slate-100 border border-slate-100 pd-hover">
+          <div class="w-full aspect-square sm:aspect-[4/5] bg-slate-100">
+            {% if image_url %}
+              <img id="pd-img"
+                   src="{{ image_url }}"
+                   alt="{{ name }}"
+                   loading="lazy"
+                   decoding="async"
+                   class="w-full h-full object-cover">
+              <div id="pd-fallback" class="pd-img-fallback">
+                Imagen no disponible<br>
+                <span style="opacity:.75;font-weight:800">Agregá una imagen al producto</span>
+              </div>
+            {% else %}
+              <div class="pd-img-fallback" style="display:grid">
+                Imagen no disponible<br>
+                <span style="opacity:.75;font-weight:800">Agregá una imagen al producto</span>
+              </div>
+            {% endif %}
+          </div>
         </div>
 
-    {% else %}
-
-        <!-- Migas / Volver -->
-        <nav class="flex items-center gap-2 text-[11px] md:text-xs text-slate-500 mb-6" aria-label="Breadcrumb">
-            <a href="{{ url_for('main.shop') }}" class="hover:text-amber-500 transition">
-                Tienda
-            </a>
-            <span>/</span>
-            <span class="truncate max-w-[60%]" title="{{ product.name }}">
-                {{ product.name }}
-            </span>
-        </nav>
-
-        <div class="grid md:grid-cols-2 gap-8 md:gap-10 items-start">
-
-            <!-- IMAGEN PRINCIPAL -->
-            <div class="space-y-4" data-product-media>
-                <div class="rounded-3xl overflow-hidden bg-slate-100 border border-slate-100 pd-card-hover">
-                    <div class="w-full aspect-square sm:aspect-[4/5] bg-slate-100">
-                        <img src="{{ product.image }}"
-                             alt="{{ product.name }}"
-                             loading="lazy"
-                             class="w-full h-full object-cover">
-                    </div>
-                </div>
-
-                <!-- Mini info visual -->
-                <div class="grid grid-cols-3 gap-3 text-[11px] text-slate-500">
-                    <div class="rounded-2xl border border-slate-100 bg-white/80 px-3 py-2">
-                        <p class="font-semibold text-slate-900 text-xs">Fit</p>
-                        <p>Unisex urbano</p>
-                    </div>
-                    <div class="rounded-2xl border border-slate-100 bg-white/80 px-3 py-2">
-                        <p class="font-semibold text-slate-900 text-xs">Talles</p>
-                        <p>XS a 5XL</p>
-                    </div>
-                    <div class="rounded-2xl border border-slate-100 bg-white/80 px-3 py-2">
-                        <p class="font-semibold text-slate-900 text-xs">Estilo</p>
-                        <p>Streetwear</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- INFO DEL PRODUCTO -->
-            <div class="space-y-5" data-product-info>
-                <div class="space-y-2">
-                    <p class="text-[11px] uppercase tracking-[0.18em] text-slate-400">
-                        {% if product.category %}
-                            {{ product.category|replace('_', ' ')|capitalize }}
-                        {% else %}
-                            Colección Skyline
-                        {% endif %}
-                    </p>
-
-                    <h1 class="text-2xl md:text-3xl font-semibold text-slate-900 leading-tight">
-                        {{ product.name }}
-                    </h1>
-                </div>
-
-                <div class="flex items-center gap-3">
-                    <p class="text-lg md:text-xl font-semibold text-amber-500">
-                        $ {{ "%.2f"|format(product.price|float) }} UYU
-                    </p>
-                    <span class="text-[11px] uppercase tracking-wide text-emerald-600 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-full">
-                        Drop activo
-                    </span>
-                </div>
-
-                <div class="space-y-3 text-sm text-slate-600">
-                    <p>
-                        {{ product.description or 'Parte de la colección Skyline Style: piezas pensadas para combinar fácil, aguantar el uso diario y destacar tanto en calle como en cámara.' }}
-                    </p>
-
-                    <ul class="list-disc list-inside space-y-1 text-xs md:text-sm text-slate-600">
-                        <li>Streetwear cómodo, con actitud e identidad propia.</li>
-                        <li>Cortes pensados para distintos tipos de cuerpo.</li>
-                        <li>Ideal para fotos, videos, streaming y uso diario.</li>
-                    </ul>
-                </div>
-
-                <!-- TAGS / INFO EXTRA -->
-                <div class="flex flex-wrap gap-2 text-[11px] text-slate-500">
-                    <span class="pill-badge">
-                        <span class="pill-badge-dot"></span>
-                        Producción bajo demanda
-                    </span>
-                    <span class="pill-badge">
-                        Unisex
-                    </span>
-                    <span class="pill-badge">
-                        Talles XS–5XL
-                    </span>
-                    <span class="pill-badge">
-                        Envío gestionado por Printful
-                    </span>
-                </div>
-
-                <!-- CTA -->
-                <div class="pt-3 flex flex-wrap items-center gap-3">
-                    <a href="{{ url_for('main.cart') }}"
-                       class="inline-flex items-center justify-center px-7 py-2.5 rounded-full bg-slate-900 text-slate-50 text-sm font-medium hover:bg-slate-800 shadow-sm hover:shadow-md transition">
-                        Agregar al carrito (demo)
-                    </a>
-
-                    <p class="text-[11px] text-slate-500 max-w-xs">
-                        Esta vista es demostrativa. Más adelante podés conectar el carrito con tu gateway de pago y la automatización completa de Printful.
-                    </p>
-                </div>
-
-                <!-- INFO TALLE / CUIDADO (TEXTOS DE MARCA) -->
-                <div class="pt-2 border-t border-slate-100 text-[11px] md:text-xs text-slate-500 space-y-1">
-                    <p>
-                        <span class="font-semibold text-slate-700">Tip de fit:</span>
-                        si estás entre dos talles y te gusta un look oversize, elegí el más grande. Si preferís ajuste clásico, quedate con tu talle habitual.
-                    </p>
-                    <p>
-                        <span class="font-semibold text-slate-700">Cuidados:</span>
-                        lavar con agua fría, del revés, y evitar planchar directo sobre el estampado para alargar la vida del diseño.
-                    </p>
-                </div>
-            </div>
+        <!-- Mini info -->
+        <div class="grid grid-cols-3 gap-3 text-[11px] text-slate-500">
+          <div class="rounded-2xl border border-slate-100 bg-white/80 px-3 py-2">
+            <p class="font-semibold text-slate-900 text-xs">Fit</p>
+            <p>Unisex urbano</p>
+          </div>
+          <div class="rounded-2xl border border-slate-100 bg-white/80 px-3 py-2">
+            <p class="font-semibold text-slate-900 text-xs">Talles</p>
+            <p>XS a 5XL</p>
+          </div>
+          <div class="rounded-2xl border border-slate-100 bg-white/80 px-3 py-2">
+            <p class="font-semibold text-slate-900 text-xs">Estilo</p>
+            <p>Streetwear</p>
+          </div>
         </div>
-    {% endif %}
+      </div>
+
+      <!-- INFO -->
+      <div class="space-y-5" data-product-info>
+
+        <div class="space-y-2">
+          <p class="text-[11px] uppercase tracking-[0.18em] text-slate-400">
+            {% if category %}
+              {{ category|replace('_',' ')|capitalize }}
+            {% else %}
+              Colección Skyline
+            {% endif %}
+          </p>
+
+          <h1 class="text-2xl md:text-3xl font-semibold text-slate-900 leading-tight">
+            {{ name }}
+          </h1>
+        </div>
+
+        <div class="flex items-center gap-3 flex-wrap">
+          <p class="text-lg md:text-xl font-semibold text-amber-600">
+            $ {{ "%.2f"|format(price_float) }} UYU
+          </p>
+          <span class="text-[11px] uppercase tracking-wide text-emerald-700 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-full">
+            Drop activo
+          </span>
+        </div>
+
+        <div class="space-y-3 text-sm text-slate-600">
+          <p>
+            {{ description or
+               'Parte de la colección Skyline Style: piezas pensadas para combinar fácil, aguantar el uso diario y destacar tanto en calle como en cámara.' }}
+          </p>
+
+          <ul class="list-disc list-inside space-y-1 text-xs md:text-sm text-slate-600">
+            <li>Streetwear cómodo, con actitud e identidad propia.</li>
+            <li>Cortes pensados para distintos tipos de cuerpo.</li>
+            <li>Ideal para fotos, videos, streaming y uso diario.</li>
+          </ul>
+        </div>
+
+        <!-- Badges -->
+        <div class="flex flex-wrap gap-2 text-[11px]">
+          <span class="pill-badge"><span class="pill-dot"></span>Producción bajo demanda</span>
+          <span class="pill-badge">Unisex</span>
+          <span class="pill-badge">Talles XS–5XL</span>
+          <span class="pill-badge">Envío gestionado por Printful</span>
+        </div>
+
+        <!-- CTA -->
+        <div class="pt-3 flex flex-wrap items-center gap-3">
+          <a href="{{ cart_href }}"
+             class="inline-flex items-center justify-center px-7 py-2.5 rounded-full bg-slate-900 text-slate-50 text-sm font-medium hover:bg-slate-800
+                    shadow-sm hover:shadow-md transition focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/20">
+            Agregar al carrito (demo)
+          </a>
+
+          <p class="text-[11px] text-slate-500 max-w-xs">
+            Vista demo. Después conectamos carrito + pagos + Printful automático.
+          </p>
+        </div>
+
+        <!-- Fit & Care -->
+        <div class="pt-2 border-t border-slate-100 text-[11px] md:text-xs text-slate-500 space-y-1">
+          <p>
+            <span class="font-semibold text-slate-700">Tip de fit:</span>
+            si estás entre dos talles y te gusta un look oversize, elegí el más grande.
+          </p>
+          <p>
+            <span class="font-semibold text-slate-700">Cuidados:</span>
+            lavar con agua fría, del revés, y evitar planchar sobre el estampado.
+          </p>
+        </div>
+
+      </div>
+    </div>
+
+  {% endif %}
 </section>
 {% endblock %}
 
 {% block extra_js %}
-<!-- GSAP para animación suave de detalle de producto -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 <script>
-    document.addEventListener('DOMContentLoaded', () => {
-        const media = document.querySelector('[data-product-media]');
-        const info = document.querySelector('[data-product-info]');
+/* ==========================================================
+   Product detail — Safe UX:
+   - fallback imagen
+   - micro-animación sin librerías (no rompe)
+========================================================== */
+(function(){
+  const img = document.getElementById("pd-img");
+  const fb  = document.getElementById("pd-fallback");
 
-        if (media) {
-            gsap.from(media, {
-                opacity: 0,
-                x: -24,
-                duration: 0.6,
-                ease: 'power3.out'
-            });
-        }
+  if(img && fb){
+    img.addEventListener("error", () => {
+      img.style.display = "none";
+      fb.style.display = "grid";
+    }, { once:true });
+  }
 
-        if (info) {
-            gsap.from(info, {
-                opacity: 0,
-                x: 24,
-                duration: 0.6,
-                delay: 0.08,
-                ease: 'power3.out'
-            });
-        }
+  // micro-animación (sin GSAP)
+  const media = document.querySelector("[data-product-media]");
+  const info  = document.querySelector("[data-product-info]");
+  const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  if(!reduce){
+    [media, info].forEach((el, i) => {
+      if(!el) return;
+      el.style.opacity = "0";
+      el.style.transform = "translateY(10px)";
+      setTimeout(() => {
+        el.style.transition = "opacity .5s ease, transform .5s ease";
+        el.style.opacity = "1";
+        el.style.transform = "translateY(0)";
+      }, 60 + i*80);
     });
+  }
+})();
 </script>
 {% endblock %}
