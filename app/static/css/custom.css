@@ -1,257 +1,221 @@
 /* ==========================================================
-   SKYLINE STYLE · ULTRA NIGHT EDITION V5
-   Rediseñado desde cero: profundo, elegante, moderno.
+   SKYLINE STYLE · ULTRA NIGHT EDITION V6
+   Premium · Nítido · Alto contraste · Producción real
    ========================================================== */
 
-/* ------------------------------
-   CORE RESET Y UX OPTIMIZADA
-------------------------------- */
-html {
-  scroll-behavior: smooth;
+/* ----------------------------------------------------------
+   DESIGN TOKENS · SISTEMA DE DISEÑO
+---------------------------------------------------------- */
+:root {
+  --ink-900: #020617;
+  --ink-800: #0b1120;
+  --ink-700: #0f172a;
+
+  --sky-400: #38bdf8;
+  --sky-500: #0ea5e9;
+  --sky-600: #2563eb;
+
+  --text-main: #e5e7eb;
+  --text-soft: #cbd5e1;
+  --text-muted: #94a3b8;
+
+  --glass-bg: rgba(15,23,42,0.88);
+  --glass-border: rgba(148,163,184,0.28);
+
+  --radius-xl: 1.6rem;
+  --radius-lg: 1.2rem;
+
+  --shadow-soft: 0 18px 40px rgba(0,0,0,.45);
+  --shadow-strong: 0 28px 70px rgba(0,0,0,.65);
+
+  --ease-out: cubic-bezier(.16,1,.3,1);
 }
+
+/* ----------------------------------------------------------
+   CORE RESET & BASE
+---------------------------------------------------------- */
+html { scroll-behavior: smooth; }
 
 body {
   min-height: 100vh;
   margin: 0;
-  font-family: 'Inter', sans-serif;
+  font-family: "Inter", system-ui, sans-serif;
+  color: var(--text-main);
+  background:
+    radial-gradient(900px 600px at 10% 8%, rgba(56,189,248,.35), transparent 55%),
+    radial-gradient(900px 600px at 90% 12%, rgba(129,140,248,.28), transparent 60%),
+    linear-gradient(160deg, var(--ink-700) 0%, var(--ink-800) 40%, var(--ink-900) 100%);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  color: #e5e7eb;
-  background:
-    radial-gradient(circle at 5% 5%, rgba(56,189,248,0.55), transparent 50%),
-    radial-gradient(circle at 90% 10%, rgba(129,140,248,0.45), transparent 50%),
-    radial-gradient(circle at 50% 100%, rgba(14,165,233,0.25), transparent 50%),
-    linear-gradient(160deg, #0f172a 0%, #0b1120 30%, #020617 100%);
   overflow-x: hidden;
 }
 
 img {
   display: block;
   max-width: 100%;
-}
-
-a {
-  text-decoration: none;
-  color: inherit;
-  transition: all 0.25s ease;
-}
-
-a:hover {
-  opacity: 0.96;
+  image-rendering: auto;
 }
 
 ::selection {
-  background: rgba(56,189,248,0.45);
-  color: #020617;
+  background: rgba(56,189,248,.45);
+  color: var(--ink-900);
 }
 
-/* ------------------------------
-   SHELL Y CONTAINER CENTRAL
-------------------------------- */
+/* ----------------------------------------------------------
+   LAYOUT CENTRAL
+---------------------------------------------------------- */
 .app-shell {
-  max-width: 1180px;
-  margin: 0 auto;
-  padding: 2rem 1rem 4rem;
+  max-width: 1200px;
+  margin-inline: auto;
+  padding: clamp(2rem, 4vw, 5rem) 1.25rem;
   position: relative;
   z-index: 2;
 }
-@media (min-width: 768px) {
-  .app-shell {
-    padding: 3rem 1.5rem 5rem;
-  }
-}
 
-/* ------------------------------
-   HERO LANDING REIMAGINADO
-------------------------------- */
+/* ----------------------------------------------------------
+   HERO · FONDO NÍTIDO (SIN TAPAR)
+---------------------------------------------------------- */
 .hero-landing {
   position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 80vh;
-  padding: 4rem 1rem;
-  overflow: hidden;
-  z-index: 1;
+  min-height: 82vh;
+  display: grid;
+  place-items: center;
   isolation: isolate;
 }
+
+/* Fondo NO borroso – solo luz ambiental */
 .hero-backdrop {
   position: absolute;
   inset: 0;
   z-index: -1;
   background:
-    radial-gradient(circle at 15% 10%, rgba(56,189,248,0.28), transparent 55%),
-    radial-gradient(circle at 85% 12%, rgba(129,140,248,0.28), transparent 60%),
-    radial-gradient(circle at 60% 90%, rgba(14,165,233,0.18), transparent 60%);
-  filter: blur(32px) saturate(160%);
+    radial-gradient(700px 500px at 18% 12%, rgba(56,189,248,.22), transparent 60%),
+    radial-gradient(800px 600px at 82% 14%, rgba(129,140,248,.20), transparent 62%);
 }
 
-/* ------------------------------
-   GLASS CONTAINER
-------------------------------- */
+/* ----------------------------------------------------------
+   GLASS PREMIUM (LEGIBLE)
+---------------------------------------------------------- */
 .glass {
-  background: rgba(15,23,42,0.92);
-  border: 1px solid rgba(148,163,184,0.25);
-  border-radius: 1.6rem;
-  backdrop-filter: blur(26px) saturate(180%);
-  -webkit-backdrop-filter: blur(26px) saturate(180%);
-  box-shadow: 0 28px 60px rgba(0,0,0,0.65), 0 0 0 1px rgba(59,130,246,0.55);
-  padding: 2.5rem 2rem;
-  color: #f1f5f9;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  box-shadow: var(--shadow-strong);
+  padding: clamp(2rem, 4vw, 3rem);
 }
 
-/* ------------------------------
-   HERO TITLES
-------------------------------- */
+/* ----------------------------------------------------------
+   HERO TEXT
+---------------------------------------------------------- */
 .hero-kicker {
-  display: inline-block;
-  background: rgba(56,189,248,0.12);
-  color: #38bdf8;
-  font-size: 0.85rem;
+  display: inline-flex;
+  gap: .4rem;
+  padding: .45rem 1rem;
+  font-size: .8rem;
   font-weight: 800;
-  padding: 0.4rem 1rem;
   border-radius: 999px;
+  background: rgba(56,189,248,.12);
+  color: var(--sky-400);
 }
 
 .hero-title {
   margin-top: 1rem;
-  font-size: clamp(2.8rem, 5vw, 4rem);
+  font-size: clamp(2.6rem, 5vw, 4.2rem);
   font-weight: 900;
-  line-height: 1.1;
-  color: #e2e8f0;
+  line-height: 1.08;
   letter-spacing: -0.5px;
 }
 
 .hero-sub {
   margin-top: 1rem;
-  font-size: 1.1rem;
-  line-height: 1.65;
-  color: #cbd5e1;
-  max-width: 600px;
+  max-width: 62ch;
+  font-size: 1.05rem;
+  line-height: 1.7;
+  color: var(--text-soft);
 }
 
-/* ------------------------------
-   BOTONES · GLOW & GHOST
-------------------------------- */
+/* ----------------------------------------------------------
+   BOTONES · ACCESIBLES + PREMIUM
+---------------------------------------------------------- */
 .btn-primary-glow {
-  background: linear-gradient(135deg, #38bdf8, #0ea5e9);
-  color: #020617;
-  padding: 1rem 2.4rem;
-  font-size: 0.95rem;
-  font-weight: 700;
+  padding: 1rem 2.6rem;
   border-radius: 999px;
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--sky-400), var(--sky-500));
+  color: var(--ink-900);
   border: none;
-  box-shadow: 0 20px 45px rgba(56,189,248,0.65);
-  transition: all 0.25s ease;
-  position: relative;
-  overflow: hidden;
+  box-shadow: 0 22px 50px rgba(56,189,248,.55);
+  transition: transform .25s var(--ease-out), box-shadow .25s var(--ease-out);
 }
+
 .btn-primary-glow:hover {
-  background: linear-gradient(135deg, #0ea5e9, #2563eb);
-  transform: translateY(-2px);
-  box-shadow: 0 26px 60px rgba(56,189,248,0.8);
+  transform: translateY(-3px);
+  box-shadow: 0 30px 70px rgba(56,189,248,.75);
+}
+
+.btn-primary-glow:focus-visible {
+  outline: 3px solid var(--sky-400);
+  outline-offset: 3px;
 }
 
 .btn-ghost-soft {
-  padding: 0.9rem 2rem;
-  background: rgba(15,23,42,0.88);
-  color: #e2e8f0;
-  border: 1px solid rgba(148,163,184,0.5);
+  padding: .95rem 2.2rem;
   border-radius: 999px;
+  background: rgba(15,23,42,.75);
+  border: 1px solid var(--glass-border);
+  color: var(--text-main);
   font-weight: 600;
-  transition: all 0.22s ease;
-}
-.btn-ghost-soft:hover {
-  background: rgba(15,23,42,1);
-  color: #f8fafc;
-  border-color: #38bdf8;
-  box-shadow: 0 18px 38px rgba(0,0,0,0.7);
 }
 
-/* ------------------------------
-   HERO TAGS / CHIPS
-------------------------------- */
+.btn-ghost-soft:hover {
+  border-color: var(--sky-400);
+}
+
+/* ----------------------------------------------------------
+   CHIPS
+---------------------------------------------------------- */
 .hero-chips {
-  margin-top: 1.6rem;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.6rem;
+  gap: .6rem;
+  margin-top: 1.5rem;
 }
+
 .chip {
-  padding: 0.45rem 1rem;
-  font-size: 0.8rem;
-  background: rgba(30,41,59,0.85);
-  border: 1px solid rgba(148,163,184,0.35);
+  padding: .45rem 1rem;
   border-radius: 999px;
+  font-size: .8rem;
+  background: rgba(30,41,59,.85);
+  border: 1px solid var(--glass-border);
   color: #dbeafe;
-  font-weight: 500;
-  transition: all 0.2s ease;
-}
-.chip:hover {
-  border-color: #38bdf8;
-  background: rgba(30,41,59,0.95);
-  box-shadow: 0 8px 20px rgba(0,0,0,0.5);
 }
 
-/* ------------------------------
-   ANIMACIONES NATIVAS
-------------------------------- */
+/* ----------------------------------------------------------
+   ANIMACIONES SUAVES (GPU SAFE)
+---------------------------------------------------------- */
 .animate-fade-in {
-  animation: fadeIn 0.9s ease-out both;
+  animation: fadeIn .7s var(--ease-out) both;
 }
+
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(20px) scale(0.985); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
-.animate-float {
-  animation: float 6s ease-in-out infinite;
-}
-@keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50%      { transform: translateY(-10px); }
-}
-
-/* ------------------------------
-   SCROLLBAR PERSONALIZADO
-------------------------------- */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-::-webkit-scrollbar-track {
-  background: #0f172a;
-}
+/* ----------------------------------------------------------
+   SCROLLBAR
+---------------------------------------------------------- */
+::-webkit-scrollbar { width: 8px; }
 ::-webkit-scrollbar-thumb {
-  background: linear-gradient(to bottom, #38bdf8, #1e40af);
+  background: linear-gradient(var(--sky-400), var(--sky-600));
   border-radius: 999px;
 }
-::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(to bottom, #0ea5e9, #2563eb);
-}
 
-/* ------------------------------
-   UTILIDADES EXTRAS
-------------------------------- */
-.section-padding {
-  padding-block: 3rem;
-}
-.image-soft-shadow {
-  border-radius: 1.4rem;
-  box-shadow: 0 20px 45px rgba(0,0,0,0.75);
-}
-.prose-skyline {
-  max-width: 65ch;
-  line-height: 1.75;
-  color: #e2e8f0;
-}
-
-/* ------------------------------
-   REDUCE MOTION RESPETADO
-------------------------------- */
+/* ----------------------------------------------------------
+   REDUCE MOTION
+---------------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
-  * {
-    animation: none !important;
-    transition: none !important;
-  }
+  * { animation: none !important; transition: none !important; }
 }

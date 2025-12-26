@@ -1,0 +1,421 @@
+<!-- templates/admin/products.html -->
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Productos · Admin</title>
+  <style>
+    :root{
+      --bg0:#0b1220; --bg1:#070b14;
+      --card: rgba(255,255,255,.06);
+      --stroke: rgba(255,255,255,.12);
+      --ink:#eaf0ff;
+      --muted: rgba(234,240,255,.70);
+      --a:#2563eb; --b:#06b6d4; --c:#f59e0b; --d:#22c55e;
+      --r: 18px;
+      --ease: cubic-bezier(.2,.9,.2,1);
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      min-height:100vh;
+      background:
+        radial-gradient(1100px 800px at 10% 10%, rgba(37,99,235,.25), transparent 60%),
+        radial-gradient(900px 700px at 90% 10%, rgba(6,182,212,.20), transparent 60%),
+        radial-gradient(900px 700px at 50% 90%, rgba(245,158,11,.16), transparent 60%),
+        linear-gradient(180deg, var(--bg0), var(--bg1));
+      color: var(--ink);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+    }
+    .topbar{
+      position:sticky; top:0; z-index:10;
+      backdrop-filter: blur(10px);
+      background: rgba(11,18,32,.70);
+      border-bottom:1px solid rgba(255,255,255,.10);
+    }
+    .wrap{ width:min(1200px, 92vw); margin:0 auto; padding:16px 0; display:flex; align-items:center; justify-content:space-between; gap:12px;}
+    .brand{ display:flex; align-items:center; gap:10px; font-weight:1000; }
+    .dot{ width:10px;height:10px;border-radius:999px;background:linear-gradient(135deg,var(--a),var(--b)); box-shadow:0 0 0 6px rgba(37,99,235,.18);}
+    .nav{ display:flex; gap:10px; flex-wrap:wrap;}
+    a.btn, button.btn{
+      text-decoration:none;
+      padding:10px 14px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.06);
+      color: var(--ink);
+      font-weight:950;
+      cursor:pointer;
+      transition: transform .18s var(--ease), border-color .18s var(--ease);
+    }
+    a.btn:hover, button.btn:hover{ transform: translateY(-2px); border-color: rgba(34,211,238,.45); }
+    .main{ width:min(1200px, 92vw); margin:0 auto; padding: 20px 0 44px; }
+
+    h1{ margin:0; font-size: clamp(1.5rem, 2.6vw, 2rem); letter-spacing:-.5px;}
+    .sub{ margin:8px 0 0; color: var(--muted); }
+
+    .panel{
+      margin-top:14px;
+      border-radius: var(--r);
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.06);
+      padding: 14px;
+    }
+    .filters{
+      display:grid;
+      grid-template-columns: 1.2fr .9fr .9fr .9fr auto;
+      gap: 10px;
+      align-items:end;
+    }
+    @media(max-width:980px){ .filters{ grid-template-columns:1fr 1fr; } }
+    label{ font-weight:900; font-size:.85rem; color: rgba(234,240,255,.85); }
+    input, select, textarea{
+      width:100%;
+      padding: 10px 12px;
+      border-radius: 14px;
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(15,23,42,.55);
+      color: var(--ink);
+      outline:none;
+    }
+    textarea{ min-height: 86px; resize: vertical; }
+    .grid{
+      margin-top:14px;
+      display:grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 12px;
+    }
+    .item{
+      grid-column: span 4;
+      border-radius: var(--r);
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.06);
+      overflow:hidden;
+    }
+    @media(max-width:980px){ .item{ grid-column: span 6; } }
+    @media(max-width:640px){ .item{ grid-column: span 12; } }
+
+    .media{
+      height: 170px;
+      background: rgba(255,255,255,.06);
+      border-bottom:1px solid rgba(255,255,255,.10);
+      display:grid; place-items:center;
+      overflow:hidden;
+    }
+    .media img{ width:100%; height:100%; object-fit:cover; display:block; }
+    .body{ padding: 12px; }
+    .top{ display:flex; justify-content:space-between; gap:10px; align-items:flex-start; }
+    .title{ font-weight:1050; letter-spacing:-.3px; }
+    .meta{ margin-top:6px; color: var(--muted); font-size:.92rem; line-height:1.5; }
+    .price{ font-weight:1000; }
+    .strike{ text-decoration: line-through; opacity:.7; margin-left:8px; font-weight:900; }
+    .tags{ margin-top:10px; display:flex; gap:8px; flex-wrap:wrap; }
+    .pill{
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.06);
+      font-weight:900;
+      font-size:.78rem;
+      color: rgba(234,240,255,.88);
+    }
+    .actions{ margin-top:10px; display:flex; gap:10px; flex-wrap:wrap; }
+    .danger{ border-color: rgba(239,68,68,.35)!important; }
+    .ok{ border-color: rgba(34,197,94,.35)!important; }
+    .warn{ border-color: rgba(245,158,11,.35)!important; }
+
+    .flash{ margin-top:10px; padding: 10px 12px; border-radius: 14px; border:1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.06); }
+    .flash.ok{ border-color: rgba(34,197,94,.35); }
+    .flash.err{ border-color: rgba(239,68,68,.35); }
+
+    details{ margin-top:12px; border-radius: var(--r); border:1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.05); padding:12px;}
+    summary{ cursor:pointer; font-weight:1000; }
+    .formgrid{ margin-top:12px; display:grid; grid-template-columns: repeat(12, 1fr); gap:10px;}
+    .col6{ grid-column: span 6; } .col12{ grid-column: span 12; } .col4{ grid-column: span 4; } .col3{ grid-column: span 3; }
+    @media(max-width:980px){ .col6,.col4,.col3{ grid-column:span 12; } }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="wrap">
+      <div class="brand"><span class="dot"></span> Productos</div>
+      <div class="nav">
+        <a class="btn" href="{{ url_for('admin.dashboard') }}">Dashboard</a>
+        <a class="btn" href="{{ url_for('admin.offers') }}">Ofertas</a>
+        <a class="btn" href="{{ url_for('admin.logout') }}">Salir</a>
+      </div>
+    </div>
+  </div>
+
+  <main class="main">
+    <h1>Catálogo completo</h1>
+    <p class="sub">Gestión pro: precio tachado, estado, fuente (Skyline/Printful/Dropshipping), stock, categorías.</p>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for cat, msg in messages %}
+          <div class="flash {{ cat }}">{{ msg }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <section class="panel">
+      <form method="get" class="filters">
+        <div>
+          <label>Buscar</label>
+          <input name="q" value="{{ q }}" placeholder="hoodie, gorra, tags, slug…">
+        </div>
+        <div>
+          <label>Categoría</label>
+          <select name="category">
+            <option value="">Todas</option>
+            {% for c in categories %}
+              <option value="{{ c.slug }}" {% if category==c.slug %}selected{% endif %}>{{ c.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label>Fuente</label>
+          <select name="source">
+            <option value="">Todas</option>
+            <option value="skyline" {% if source=="skyline" %}selected{% endif %}>Skyline</option>
+            <option value="printful" {% if source=="printful" %}selected{% endif %}>Printful</option>
+            <option value="dropshipping" {% if source=="dropshipping" %}selected{% endif %}>Dropshipping</option>
+          </select>
+        </div>
+        <div>
+          <label>Estado</label>
+          <select name="status">
+            <option value="">Todos</option>
+            <option value="active" {% if status=="active" %}selected{% endif %}>Activo</option>
+            <option value="draft" {% if status=="draft" %}selected{% endif %}>Borrador</option>
+            <option value="archived" {% if status=="archived" %}selected{% endif %}>Archivado</option>
+          </select>
+        </div>
+        <div>
+          <button class="btn" type="submit">Filtrar</button>
+        </div>
+      </form>
+
+      <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;">
+        <form method="post" action="{{ url_for('admin.sync_printful') }}">
+          <button class="btn ok" type="submit">🔄 Sync Printful</button>
+        </form>
+        <form method="post" action="{{ url_for('admin.sync_dropshipping') }}">
+          <button class="btn warn" type="submit">🔄 Sync Dropshipping</button>
+        </form>
+      </div>
+
+      <details>
+        <summary>➕ Crear producto (manual)</summary>
+        <form method="post" action="{{ url_for('admin.products_create') }}">
+          <div class="formgrid">
+            <div class="col6">
+              <label>Título</label>
+              <input name="title" required placeholder="Ej: Hoodie Skyline Essential">
+            </div>
+            <div class="col6">
+              <label>Slug (opcional)</label>
+              <input name="slug" placeholder="hoodie-skyline-essential">
+            </div>
+
+            <div class="col12">
+              <label>Descripción</label>
+              <textarea name="description" placeholder="Detalles del producto…"></textarea>
+            </div>
+
+            <div class="col3">
+              <label>Precio</label>
+              <input name="price" value="0" inputmode="decimal">
+            </div>
+            <div class="col3">
+              <label>Precio tachado</label>
+              <input name="compare_at_price" placeholder="Ej: 2490">
+            </div>
+            <div class="col3">
+              <label>Moneda</label>
+              <select name="currency">
+                <option value="UYU">UYU</option>
+                <option value="USD">USD</option>
+              </select>
+            </div>
+            <div class="col3">
+              <label>Stock</label>
+              <input name="stock" value="0" inputmode="numeric">
+            </div>
+
+            <div class="col4">
+              <label>Categoría</label>
+              <select name="category_slug">
+                <option value="">Sin categoría</option>
+                {% for c in categories %}
+                  <option value="{{ c.slug }}">{{ c.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col4">
+              <label>Fuente</label>
+              <select name="source">
+                <option value="skyline">Skyline</option>
+                <option value="printful">Printful</option>
+                <option value="dropshipping">Dropshipping</option>
+              </select>
+            </div>
+            <div class="col4">
+              <label>Estado</label>
+              <select name="status">
+                <option value="active">Activo</option>
+                <option value="draft">Borrador</option>
+                <option value="archived">Archivado</option>
+              </select>
+            </div>
+
+            <div class="col6">
+              <label>Imagen URL</label>
+              <input name="image_url" placeholder="https://.../imagen.jpg">
+            </div>
+            <div class="col6">
+              <label>External ID (si viene de proveedor)</label>
+              <input name="external_id" placeholder="printful:123 / ds:ABC">
+            </div>
+
+            <div class="col12">
+              <label>Tags (separados por coma)</label>
+              <input name="tags" placeholder="streetwear, hoodie, premium">
+            </div>
+
+            <div class="col12">
+              <button class="btn ok" type="submit">Crear producto</button>
+            </div>
+          </div>
+        </form>
+      </details>
+    </section>
+
+    <section class="grid" aria-label="Listado">
+      {% for p in products %}
+      <article class="item">
+        <div class="media">
+          {% if p.image_url %}
+            <img src="{{ p.image_url }}" alt="{{ p.title }}" loading="lazy">
+          {% else %}
+            <div style="color:rgba(234,240,255,.72);font-weight:900;">Sin imagen</div>
+          {% endif %}
+        </div>
+        <div class="body">
+          <div class="top">
+            <div class="title">{{ p.title }}</div>
+            <div class="price">
+              {{ p.currency }} {{ "%.2f"|format(p.price) }}
+              {% if p.compare_at_price %}
+                <span class="strike">{{ "%.2f"|format(p.compare_at_price) }}</span>
+              {% endif %}
+            </div>
+          </div>
+          <div class="meta">
+            <div>Slug: <b>{{ p.slug }}</b></div>
+            <div>Cat: <b>{{ p.category_slug or "—" }}</b> · Stock: <b>{{ p.stock }}</b></div>
+            <div>Fuente: <b>{{ p.source }}</b> · Estado: <b>{{ p.status }}</b></div>
+            {% if p.external_id %}<div>External ID: <b>{{ p.external_id }}</b></div>{% endif %}
+          </div>
+
+          <div class="tags">
+            <span class="pill">{{ p.source }}</span>
+            <span class="pill">{{ p.status }}</span>
+            {% if p.category_slug %}<span class="pill">{{ p.category_slug }}</span>{% endif %}
+          </div>
+
+          <details style="margin-top:12px;">
+            <summary>✏️ Editar</summary>
+            <form method="post" action="{{ url_for('admin.products_update', product_id=p.id) }}">
+              <div class="formgrid">
+                <div class="col6">
+                  <label>Título</label>
+                  <input name="title" value="{{ p.title }}" required>
+                </div>
+                <div class="col6">
+                  <label>Slug</label>
+                  <input name="slug" value="{{ p.slug }}" required>
+                </div>
+                <div class="col12">
+                  <label>Descripción</label>
+                  <textarea name="description">{{ p.description }}</textarea>
+                </div>
+                <div class="col3">
+                  <label>Precio</label>
+                  <input name="price" value="{{ p.price }}" inputmode="decimal">
+                </div>
+                <div class="col3">
+                  <label>Precio tachado</label>
+                  <input name="compare_at_price" value="{{ p.compare_at_price or '' }}" inputmode="decimal">
+                </div>
+                <div class="col3">
+                  <label>Moneda</label>
+                  <select name="currency">
+                    <option value="UYU" {% if p.currency=="UYU" %}selected{% endif %}>UYU</option>
+                    <option value="USD" {% if p.currency=="USD" %}selected{% endif %}>USD</option>
+                  </select>
+                </div>
+                <div class="col3">
+                  <label>Stock</label>
+                  <input name="stock" value="{{ p.stock }}" inputmode="numeric">
+                </div>
+
+                <div class="col4">
+                  <label>Categoría</label>
+                  <select name="category_slug">
+                    <option value="">Sin categoría</option>
+                    {% for c in categories %}
+                      <option value="{{ c.slug }}" {% if p.category_slug==c.slug %}selected{% endif %}>{{ c.name }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="col4">
+                  <label>Fuente</label>
+                  <select name="source">
+                    <option value="skyline" {% if p.source=="skyline" %}selected{% endif %}>Skyline</option>
+                    <option value="printful" {% if p.source=="printful" %}selected{% endif %}>Printful</option>
+                    <option value="dropshipping" {% if p.source=="dropshipping" %}selected{% endif %}>Dropshipping</option>
+                  </select>
+                </div>
+                <div class="col4">
+                  <label>Estado</label>
+                  <select name="status">
+                    <option value="active" {% if p.status=="active" %}selected{% endif %}>Activo</option>
+                    <option value="draft" {% if p.status=="draft" %}selected{% endif %}>Borrador</option>
+                    <option value="archived" {% if p.status=="archived" %}selected{% endif %}>Archivado</option>
+                  </select>
+                </div>
+
+                <div class="col6">
+                  <label>Imagen URL</label>
+                  <input name="image_url" value="{{ p.image_url }}">
+                </div>
+                <div class="col6">
+                  <label>External ID</label>
+                  <input name="external_id" value="{{ p.external_id or '' }}">
+                </div>
+
+                <div class="col12">
+                  <label>Tags</label>
+                  <input name="tags" value="{{ p.tags }}">
+                </div>
+
+                <div class="col12" style="display:flex; gap:10px; flex-wrap:wrap;">
+                  <button class="btn ok" type="submit">Guardar</button>
+                </div>
+              </div>
+            </form>
+
+            <form method="post" action="{{ url_for('admin.products_delete', product_id=p.id) }}" onsubmit="return confirm('¿Eliminar este producto?');" style="margin-top:10px;">
+              <button class="btn danger" type="submit">🗑️ Eliminar</button>
+            </form>
+          </details>
+        </div>
+      </article>
+      {% endfor %}
+    </section>
+  </main>
+</body>
+</html>

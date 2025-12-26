@@ -1,0 +1,56 @@
+# app/models/offer.py
+from __future__ import annotations
+
+from datetime import datetime
+from decimal import Decimal
+from flask_sqlalchemy import SQLAlchemy
+
+try:
+    from app.extensions import db
+except Exception:
+    try:
+        from app import db
+    except Exception:
+        db = SQLAlchemy()
+
+
+class Offer(db.Model):
+    __tablename__ = "offers"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    title = db.Column(db.String(220), nullable=False)
+    badge = db.Column(db.String(60), default="Oferta", nullable=False)
+
+    product_id = db.Column(db.Integer, nullable=True, index=True)
+
+    discount_type = db.Column(db.String(16), default="percent", nullable=False)  # percent/fixed
+    discount_value = db.Column(db.Numeric(10, 2), default=0, nullable=False)
+
+    starts_at = db.Column(db.DateTime, nullable=True)
+    ends_at = db.Column(db.DateTime, nullable=True)
+
+    active = db.Column(db.Boolean, default=True, nullable=False)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    def is_live(self) -> bool:
+        if not self.active:
+            return False
+        now = datetime.utcnow()
+        if self.starts_at and now < self.starts_at:
+            return False
+        if self.ends_at and now > self.ends_at:
+            return False
+        return True
+
+    def apply(self, base: Decimal) -> Decimal:
+        v = Decimal(self.discount_value or 0)
+        if self.discount_type == "fixed":
+            return max(Decimal("0"), base - v)
+        # percent
+        return max(Decimal("0"), base * (Decimal("1") - (v / Decimal("100"))))
+
+    def __repr__(self) -> str:
+        return f"<Offer {self.id} {self.discount_type}:{self.discount_value}>"
