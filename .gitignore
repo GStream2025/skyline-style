@@ -109,3 +109,12 @@ skyline_local.db
 # -----------------------------------------------------
 .env.render
 render.env
+
+# local/dev
+.venv/
+_backup_*/
+__pycache__/
+*.pyc
+instance/
+.env
+

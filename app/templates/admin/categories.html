@@ -1,75 +1,54 @@
-{% extends "base.html" %}
-
-{% block title %}Categorías · Admin · Skyline{% endblock %}
+{# app/templates/admin/categories.html — Categorías PRO #}
+{% extends "admin/base_admin.html" %}
+{% block title %}Categorías · Admin{% endblock %}
 
 {% block content %}
-<section class="max-w-xl mx-auto px-4 pt-10 pb-16">
-    <div class="flex items-center justify-between mb-6">
-        <div>
-            <p class="text-xs font-semibold text-amber-500 tracking-[0.2em] uppercase mb-1">
-                Panel admin
-            </p>
-            <h1 class="text-2xl font-bold tracking-tight text-slate-900">
-                Categorías de productos
-            </h1>
-        </div>
-        <a href="{{ url_for('admin_bp.products') }}"
-           class="inline-flex items-center gap-1 rounded-full border border-slate-200 px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50">
-            ← Volver a productos
-        </a>
+  <h1 style="margin:.2rem 0 0;font-weight:1000;letter-spacing:-.5px">Categorías</h1>
+  <p class="muted" style="margin:.45rem 0 1rem">
+    Control de categorías para filtros del shop (rápido, simple, escalable).
+  </p>
+
+  <form method="post" action="{{ url_for('admin.categories_new') }}" class="row cols2" style="margin-bottom:12px">
+    <div>
+      <label>Nombre</label>
+      <input name="name" placeholder="Ej: Accesorios" required>
     </div>
-
-    <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm mb-4">
-        <h2 class="text-sm font-semibold text-slate-900 mb-3">Categorías actuales</h2>
-        {% if categories %}
-            <div class="flex flex-wrap gap-2">
-                {% for cat in categories %}
-                    <span class="inline-flex items-center rounded-full bg-sky-50 px-3 py-1 text-[11px] font-medium text-sky-800 border border-sky-100">
-                        {{ cat }}
-                    </span>
-                {% endfor %}
-            </div>
-        {% else %}
-            <p class="text-xs text-slate-500">
-                Aún no hay categorías definidas.
-            </p>
-        {% endif %}
+    <div>
+      <label>Slug (opcional)</label>
+      <input name="slug" placeholder="Ej: accesorios">
     </div>
+    <div style="grid-column:1/-1;display:flex;gap:10px;flex-wrap:wrap">
+      <button class="btn" type="submit">Crear categoría</button>
+      <a class="btn2" href="{{ url_for('admin.products_list') }}">Ir a productos</a>
+    </div>
+  </form>
 
-    <form method="post" class="space-y-4">
-        <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 class="text-sm font-semibold text-slate-900 mb-3">Agregar nueva categoría</h2>
-            <div class="flex gap-2">
-                <input
-                    type="text"
-                    name="new_category"
-                    placeholder="Ej: Ediciones especiales"
-                    class="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
-                >
-                <button
-                    type="submit"
-                    name="action"
-                    value="add"
-                    class="inline-flex items-center rounded-xl bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-slate-800"
-                >
-                    + Agregar
-                </button>
-            </div>
-        </div>
-
-        <div class="rounded-2xl border border-rose-100 bg-rose-50 p-4 shadow-sm">
-            <p class="text-[11px] text-rose-700 mb-2">
-                Restaurar categorías por defecto (Buzos, Remeras, Gorras, Accesorios, Edición limitada).
-            </p>
-            <button
-                type="submit"
-                name="action"
-                value="reset"
-                class="inline-flex items-center rounded-full border border-rose-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-rose-700 hover:bg-rose-50"
-            >
-                Restaurar categorías por defecto
-            </button>
-        </div>
-    </form>
-</section>
+  {% if categories and categories|length %}
+    <table>
+      <thead>
+        <tr>
+          <th style="width:70px">ID</th>
+          <th>Nombre</th>
+          <th>Slug</th>
+          <th style="width:160px">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in categories %}
+          <tr>
+            <td>{{ c.id }}</td>
+            <td style="font-weight:950">{{ c.name }}</td>
+            <td class="muted">{{ c.slug }}</td>
+            <td>
+              <form method="post" action="{{ url_for('admin.categories_delete', cat_id=c.id) }}" onsubmit="return confirm('Eliminar categoría?')" style="margin:0">
+                <button class="btn2" type="submit">Eliminar</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <div class="msg info">No hay categorías. Creá la primera ✅</div>
+  {% endif %}
 {% endblock %}

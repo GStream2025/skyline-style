@@ -1,0 +1,200 @@
+{# app/templates/admin/base_admin.html — Admin Layout ULTRA (Premium) #}
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Admin · Skyline Store{% endblock %}</title>
+
+  <style>
+    :root{
+      --bg:#0b1120;
+      --panel: rgba(255,255,255,.06);
+      --panel2: rgba(255,255,255,.08);
+      --stroke: rgba(148,163,184,.16);
+      --text:#e5e7eb;
+      --muted:#9ca3af;
+      --a:#38bdf8;
+      --b:#2563eb;
+      --ok:#22c55e;
+      --warn:#f59e0b;
+      --bad:#ef4444;
+      --r: 18px;
+      --shadow: 0 22px 60px rgba(0,0,0,.45);
+      --ease: cubic-bezier(.16,1,.3,1);
+      --ring: 0 0 0 4px rgba(56,189,248,.18);
+    }
+    *{box-sizing:border-box}
+    html{scroll-behavior:smooth}
+    body{
+      margin:0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial;
+      color:var(--text);
+      background:
+        radial-gradient(900px 600px at 0% 0%, rgba(56,189,248,.20), transparent 55%),
+        radial-gradient(900px 600px at 100% 0%, rgba(37,99,235,.22), transparent 60%),
+        linear-gradient(160deg, #0f172a 0%, #0b1120 40%, #020617 100%);
+      min-height:100vh;
+      overflow-x:hidden;
+    }
+    a{color:inherit}
+    .wrap{max-width:1200px;margin:0 auto;padding:22px 16px}
+    .topbar{
+      display:flex;align-items:center;justify-content:space-between;gap:12px;
+      padding:14px 16px;border:1px solid var(--stroke);
+      background:linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.04));
+      border-radius:var(--r); box-shadow: var(--shadow);
+      position:sticky; top:14px; z-index:10;
+      backdrop-filter: blur(10px) saturate(160%);
+    }
+    .brand{display:flex;align-items:center;gap:10px;font-weight:950;letter-spacing:-.3px}
+    .dot{width:10px;height:10px;border-radius:999px;background:linear-gradient(135deg,var(--a),var(--b))}
+    .nav{display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-end}
+    .pill{
+      display:inline-flex;align-items:center;gap:8px;
+      padding:10px 12px;border-radius:999px;
+      background:rgba(255,255,255,.06);
+      border:1px solid var(--stroke);
+      text-decoration:none;
+      transition: transform .18s var(--ease), border-color .18s var(--ease), box-shadow .18s var(--ease);
+      white-space:nowrap;
+    }
+    .pill:hover{transform:translateY(-2px);border-color:rgba(56,189,248,.35); box-shadow: 0 14px 26px rgba(0,0,0,.25)}
+    .grid{display:grid;grid-template-columns: 1fr;gap:14px;margin-top:16px}
+    @media(min-width:900px){.grid{grid-template-columns: 290px 1fr}}
+    .side,.main{
+      border:1px solid var(--stroke);border-radius:var(--r);
+      background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.04));
+      box-shadow: var(--shadow);
+      padding:14px;
+    }
+    .h{margin:0 0 8px;font-size:1.1rem;font-weight:950}
+    .muted{color:var(--muted);line-height:1.6}
+    .btn{
+      display:inline-flex;align-items:center;justify-content:center;gap:10px;
+      padding:10px 14px;border-radius:12px;
+      background: linear-gradient(135deg,var(--a),var(--b));
+      border:0;color:#001018;font-weight:950;cursor:pointer;text-decoration:none;
+      box-shadow: 0 16px 40px rgba(56,189,248,.25);
+      transition: transform .18s var(--ease), filter .18s var(--ease);
+    }
+    .btn:hover{ transform: translateY(-2px); filter:saturate(1.08) }
+    .btn:focus-visible{ outline:none; box-shadow: var(--ring), 0 16px 40px rgba(56,189,248,.25) }
+    .btn2{
+      display:inline-flex;align-items:center;justify-content:center;gap:10px;
+      padding:10px 14px;border-radius:12px;
+      background: rgba(255,255,255,.06);
+      border:1px solid var(--stroke);color:var(--text);
+      font-weight:850;cursor:pointer;text-decoration:none;
+      transition: transform .18s var(--ease), border-color .18s var(--ease);
+    }
+    .btn2:hover{ transform: translateY(-2px); border-color: rgba(56,189,248,.30) }
+    .flash{margin:10px 0;display:grid;gap:8px}
+    .msg{
+      padding:10px 12px;border-radius:12px;border:1px solid var(--stroke);
+      background: rgba(255,255,255,.06)
+    }
+    .msg.success{ border-color: rgba(34,197,94,.25) }
+    .msg.error{ border-color: rgba(239,68,68,.30) }
+    .msg.warning{ border-color: rgba(245,158,11,.30) }
+    .msg.info{ border-color: rgba(56,189,248,.25) }
+
+    input, select, textarea{
+      width:100%;
+      background: rgba(255,255,255,.06);
+      border:1px solid rgba(148,163,184,.22);
+      border-radius:12px;
+      color: var(--text);
+      padding: 10px 12px;
+    }
+    textarea{ min-height: 110px; resize: vertical; }
+    input:focus-visible, select:focus-visible, textarea:focus-visible{ outline:none; box-shadow: var(--ring) }
+    label{display:block;margin:0 0 6px;font-weight:950}
+    .row{ display:grid; gap:10px }
+    @media(min-width:900px){
+      .row.cols2{ grid-template-columns: 1fr 1fr }
+      .row.cols3{ grid-template-columns: 1fr 1fr 1fr }
+    }
+
+    table{
+      width:100%;
+      border-collapse: collapse;
+      overflow:hidden;
+      border-radius: 14px;
+      border:1px solid rgba(148,163,184,.16)
+    }
+    th, td{
+      padding:10px 12px;
+      border-bottom:1px solid rgba(148,163,184,.12);
+      text-align:left;
+      vertical-align: top
+    }
+    th{ color:#dbeafe; font-weight: 950; background: rgba(255,255,255,.04) }
+    tr:hover td{ background: rgba(255,255,255,.03) }
+    code{ background: rgba(0,0,0,.25); padding: 2px 6px; border-radius: 8px; }
+    .kpi{display:flex;align-items:baseline;gap:10px}
+    .kpi b{font-size:1.35rem}
+    .badge{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;border:1px solid rgba(148,163,184,.16);background:rgba(255,255,255,.05);color:#cbd5e1;font-weight:850;font-size:.88rem}
+  </style>
+
+  {% block extra_head %}{% endblock %}
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <div class="brand"><span class="dot"></span> Skyline Admin <span class="badge">PRO</span></div>
+
+      <nav class="nav" aria-label="Navegación admin">
+        <a class="pill" href="{{ url_for('admin.dashboard') }}">Dashboard</a>
+        <a class="pill" href="{{ url_for('admin.products_list') }}">Productos</a>
+        <a class="pill" href="{{ url_for('admin.categories') }}">Categorías</a>
+        <a class="pill" href="/printful/productos">Printful</a>
+        <a class="pill" href="/shop">Ver tienda</a>
+        <a class="pill" href="{{ url_for('admin.logout') }}">Salir</a>
+      </nav>
+    </div>
+
+    <div class="flash" aria-live="polite">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="msg {{ category }}">{{ message }}</div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+    </div>
+
+    <div class="grid">
+      <aside class="side">
+        <div class="h">Acciones rápidas</div>
+        <p class="muted">Listo para operar catálogo: manual / Printful / dropship / Temu.</p>
+
+        <div style="display:grid;gap:10px;margin-top:10px">
+          <a class="btn" href="{{ url_for('admin.products_new') }}">Nuevo producto</a>
+          <a class="btn2" href="{{ url_for('admin.products_list') }}">Ver catálogo</a>
+          <a class="btn2" href="/printful/productos">Abrir Printful</a>
+          <a class="btn2" href="{{ url_for('admin.categories') }}">Categorías</a>
+        </div>
+
+        <hr style="border:0;border-top:1px solid var(--stroke);margin:14px 0">
+
+        <div class="h">Checklist</div>
+        <p class="muted" style="margin:0">
+          ✅ Login Admin (session)<br>
+          ✅ CRUD Productos + Categorías<br>
+          ✅ Upload imágenes<br>
+          ✅ Import Printful (draft)<br>
+          ⏳ Sync Printful completo / Temu API (próximo)
+        </p>
+      </aside>
+
+      <main class="main">
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </div>
+
+  {% block extra_js %}{% endblock %}
+</body>
+</html>

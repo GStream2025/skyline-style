@@ -1,30 +1,27 @@
-# app/models/category.py
-from __future__ import annotations
+﻿from __future__ import annotations
 
-from datetime import datetime
-from flask_sqlalchemy import SQLAlchemy
+from datetime import datetime, timezone
+from app import db
 
-try:
-    from app.extensions import db  # recomendado si tu proyecto lo tiene
-except Exception:
-    try:
-        from app import db  # si db está en app/__init__.py
-    except Exception:
-        db = SQLAlchemy()
+
+def utcnow() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 class Category(db.Model):
     __tablename__ = "categories"
 
     id = db.Column(db.Integer, primary_key=True)
+
     name = db.Column(db.String(120), nullable=False)
-    slug = db.Column(db.String(140), unique=True, nullable=False)
+    slug = db.Column(db.String(160), nullable=False, unique=True, index=True)
 
-    is_active = db.Column(db.Boolean, default=True, nullable=False)
-    sort_order = db.Column(db.Integer, default=0, nullable=False)
+    # árbol tipo Temu: parent -> children
+    parent_id = db.Column(db.Integer, db.ForeignKey("categories.id", ondelete="SET NULL"), nullable=True)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+
+    parent = db.relationship("Category", remote_side=[id], backref="children", lazy="select")
 
     def __repr__(self) -> str:
-        return f"<Category {self.slug}>"
+        return f"<Category id={self.id} name={self.name}>"

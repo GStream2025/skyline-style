@@ -1,10 +1,7 @@
-# app/printful_config.py
-import os
+﻿import os
 
-PRINTFUL_API_KEY = os.getenv("PRINTFUL_API_KEY")
-PRINTFUL_BASE_URL = "https://api.printful.com"
+PRINTFUL_API_KEY = (os.getenv("PRINTFUL_API_KEY") or "").strip()
+PRINTFUL_BASE_URL = (os.getenv("PRINTFUL_BASE_URL") or "https://api.printful.com").strip()
 
-if not PRINTFUL_API_KEY:
-    raise RuntimeError(
-        "PRINTFUL_API_KEY no está definido en las variables de entorno."
-    )
+# No tiramos RuntimeError al importar.
+# La validación se hace dentro de PrintfulClient.

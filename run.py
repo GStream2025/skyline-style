@@ -1,12 +1,12 @@
 """
-run.py — Skyline Store (ENTRYPOINT FINAL)
+run.py — Skyline Store (ENTRYPOINT FINAL PRO)
 
 ✔ Compatible con Render / Gunicorn
+✔ Expone `app` correctamente (gunicorn run:app)
 ✔ Carga .env SOLO en local
 ✔ Logging profesional (Loguru opcional)
 ✔ Valida variables críticas
-✔ Expone `app` correctamente (gunicorn run:app)
-✔ No interfiere con static/templates (eso lo maneja create_app)
+✔ No interfiere con static/templates (lo maneja create_app)
 """
 
 from __future__ import annotations
@@ -15,23 +15,27 @@ import os
 import sys
 import platform
 import logging
-from typing import Iterable, List
+from typing import Iterable, List, Optional
+
 
 # =============================================================================
 # Logging (Loguru opcional + fallback estándar)
 # =============================================================================
 class _StdLogger:
-    """Wrapper estilo Loguru si no está instalado."""
+    """
+    Logger simple con API parecida a Loguru.
+    Nota: usa % formatting / f-strings (no {} tipo loguru).
+    """
 
     def __init__(self, name: str = "skyline"):
         self._log = logging.getLogger(name)
 
-    def debug(self, msg, *a): self._log.debug(str(msg).format(*a))
-    def info(self, msg, *a): self._log.info(str(msg).format(*a))
-    def warning(self, msg, *a): self._log.warning(str(msg).format(*a))
-    def error(self, msg, *a): self._log.error(str(msg).format(*a))
-    def exception(self, msg, *a): self._log.exception(str(msg).format(*a))
-    def success(self, msg, *a): self._log.info("✅ " + str(msg).format(*a))
+    def debug(self, msg: str, *a): self._log.debug(msg % a if a else msg)
+    def info(self, msg: str, *a): self._log.info(msg % a if a else msg)
+    def warning(self, msg: str, *a): self._log.warning(msg % a if a else msg)
+    def error(self, msg: str, *a): self._log.error(msg % a if a else msg)
+    def exception(self, msg: str, *a): self._log.exception(msg % a if a else msg)
+    def success(self, msg: str, *a): self._log.info("✅ " + (msg % a if a else msg))
 
 
 try:
@@ -72,24 +76,36 @@ def _setup_logger(debug: bool) -> None:
 # =============================================================================
 # Helpers
 # =============================================================================
-def _truthy(val: str | None) -> bool:
+def _truthy(val: Optional[str]) -> bool:
     return (val or "").strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
-def _env(key: str, default: str | None = None) -> str | None:
-    return os.getenv(key, default)
+def _env(key: str, default: Optional[str] = None) -> Optional[str]:
+    v = os.getenv(key)
+    return v if v is not None else default
 
 
 def _running_on_render() -> bool:
+    # Render suele setear PORT + RENDER_SERVICE_ID (o RENDER)
     return bool(os.getenv("RENDER")) or bool(os.getenv("RENDER_SERVICE_ID"))
 
 
 def _load_dotenv_if_local() -> str:
-    """Carga .env SOLO en local."""
+    """
+    Carga .env SOLO en local.
+    - Si detecta Render => NO carga.
+    - Si no detecta Render y existe .env => intenta cargar.
+    """
     base_dir = os.path.abspath(os.path.dirname(__file__))
     dotenv_path = os.path.join(base_dir, ".env")
 
-    if os.path.exists(dotenv_path) and not _running_on_render():
+    if _running_on_render():
+        if os.path.exists(dotenv_path):
+            return "Render detectado: .env existe pero NO se carga (seguridad)."
+        return "Render detectado: usando Environment Variables."
+
+    # Local
+    if os.path.exists(dotenv_path):
         try:
             from dotenv import load_dotenv
             load_dotenv(dotenv_path)
@@ -99,23 +115,26 @@ def _load_dotenv_if_local() -> str:
         except Exception as e:
             return f"⚠️ Error cargando .env: {e}"
 
-    if os.path.exists(dotenv_path) and _running_on_render():
-        return "Render detectado: .env existe pero NO se carga (seguridad)."
-
-    return "No se encontró .env. Usando variables del sistema / Render."
+    return "No se encontró .env. Usando variables del sistema."
 
 
 def _check_env(required: Iterable[str], optional: Iterable[str]) -> None:
     missing = [k for k in required if not (os.getenv(k) or "").strip()]
     for k in missing:
-        logger.warning(
-            "Falta variable OBLIGATORIA: '{}' — configúrala en Render (Environment) o en .env local.",
-            k,
-        )
+        if _HAS_LOGURU:
+            logger.warning(
+                "Falta variable OBLIGATORIA: '{}' — configúrala en Render (Environment) o en .env local.",
+                k,
+            )
+        else:
+            logger.warning("Falta variable OBLIGATORIA: '%s' — configúrala en Render (Environment) o en .env local.", k)
 
     for k in optional:
         if not (os.getenv(k) or "").strip():
-            logger.debug("Variable opcional no definida: '{}'", k)
+            if _HAS_LOGURU:
+                logger.debug("Variable opcional no definida: '{}'", k)
+            else:
+                logger.debug("Variable opcional no definida: '%s'", k)
 
 
 # =============================================================================
@@ -124,23 +143,33 @@ def _check_env(required: Iterable[str], optional: Iterable[str]) -> None:
 dotenv_msg = _load_dotenv_if_local()
 
 # =============================================================================
-# 2) Entorno
+# 2) Entorno (NO pisar; solo leer)
 # =============================================================================
-ENV = (_env("FLASK_ENV", "production") or "production").lower()
-DEBUG = ENV == "development" or _truthy(os.getenv("DEBUG"))
+ENV = (_env("FLASK_ENV") or _env("ENV") or "production").lower()
+DEBUG = (ENV == "development") or _truthy(_env("DEBUG"))
 
 HOST = _env("HOST", "0.0.0.0") or "0.0.0.0"
 PORT = int(_env("PORT", "10000") or "10000")  # Render usa PORT dinámico
 
 _setup_logger(DEBUG)
 
-logger.info("🚀 Iniciando Skyline Store")
-logger.info("ENV={} DEBUG={} HOST={} PORT={}", ENV, DEBUG, HOST, PORT)
-logger.info("Python={} | Platform={}", sys.version.split()[0], platform.platform())
-logger.info(dotenv_msg)
+# Logs arranque
+if _HAS_LOGURU:
+    logger.info("🚀 Iniciando Skyline Store")
+    logger.info("ENV={} DEBUG={} HOST={} PORT={}", ENV, DEBUG, HOST, PORT)
+    logger.info("Python={} | Platform={}", sys.version.split()[0], platform.platform())
+    logger.info(dotenv_msg)
+else:
+    logger.info("🚀 Iniciando Skyline Store")
+    logger.info("ENV=%s DEBUG=%s HOST=%s PORT=%s", ENV, DEBUG, HOST, PORT)
+    logger.info("Python=%s | Platform=%s", sys.version.split()[0], platform.platform())
+    logger.info("%s", dotenv_msg)
 
 if DEBUG and ENV == "production":
-    logger.warning("⚠️ DEBUG activo en producción. Recomendado desactivarlo.")
+    if _HAS_LOGURU:
+        logger.warning("⚠️ DEBUG activo en producción. Recomendado desactivarlo.")
+    else:
+        logger.warning("⚠️ DEBUG activo en producción. Recomendado desactivarlo.")
 
 # =============================================================================
 # 3) Validación de variables
@@ -162,18 +191,21 @@ OPTIONAL_ENV_VARS: List[str] = [
 _check_env(REQUIRED_ENV_VARS, OPTIONAL_ENV_VARS)
 
 # =============================================================================
-# 4) Crear Flask App (Factory)
+# 4) Crear Flask App (Factory) y exponer `app` para Gunicorn
 # =============================================================================
 try:
     from app import create_app
 except Exception:
-    logger.exception(
-        "❌ No se pudo importar create_app.\n"
-        "Revisá:\n"
-        " - app/__init__.py existe\n"
-        " - imports circulares\n"
-        " - dependencias faltantes"
-    )
+    if _HAS_LOGURU:
+        logger.exception(
+            "❌ No se pudo importar create_app.\n"
+            "Revisá:\n"
+            " - app/__init__.py existe\n"
+            " - imports circulares\n"
+            " - dependencias faltantes"
+        )
+    else:
+        logger.exception("❌ No se pudo importar create_app. Revisá app/__init__.py / imports / deps.")
     raise
 
 try:
@@ -188,5 +220,9 @@ except Exception:
 # 5) Local DEV
 # =============================================================================
 if __name__ == "__main__":
-    logger.info("🧪 Servidor local → http://{}:{}/", HOST, PORT)
+    if _HAS_LOGURU:
+        logger.info("🧪 Servidor local → http://{}:{}/", HOST, PORT)
+    else:
+        logger.info("🧪 Servidor local → http://%s:%s/", HOST, PORT)
+
     app.run(host=HOST, port=PORT, debug=DEBUG)
