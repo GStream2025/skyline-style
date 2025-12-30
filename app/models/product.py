@@ -3,14 +3,17 @@
 from datetime import datetime, timezone
 from typing import Optional
 
-from app import db
+from app.models import db  # ✅ SIEMPRE importar el db ÚNICO desde app.models
 
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+# ============================================================
 # Many-to-many: Product <-> Tags
+# ============================================================
+
 product_tags = db.Table(
     "product_tags",
     db.Column("product_id", db.Integer, db.ForeignKey("products.id", ondelete="CASCADE"), primary_key=True),
@@ -25,13 +28,18 @@ product_categories = db.Table(
 )
 
 
+# ============================================================
+# Models
+# ============================================================
+
 class Product(db.Model):
     """
     Producto universal:
     - source: manual | printful | dropship
     - status: draft | active | hidden
     - Media: imágenes + videos
-    - Variants: talles/colores (si querés escalar)
+    - Tags y categorías extra
+    - Compat legacy: name->title, stock->stock_qty
     """
     __tablename__ = "products"
 
@@ -41,21 +49,21 @@ class Product(db.Model):
     slug = db.Column(db.String(200), unique=True, index=True, nullable=False)
 
     short_description = db.Column(db.String(260), nullable=True)
-    description_html = db.Column(db.Text, nullable=True)  # descripción rica (HTML)
+    description_html = db.Column(db.Text, nullable=True)
 
-    source = db.Column(db.String(20), nullable=False, default="manual")  # manual/printful/dropship
-    status = db.Column(db.String(20), nullable=False, default="draft")  # draft/active/hidden
+    source = db.Column(db.String(20), nullable=False, default="manual")   # manual/printful/dropship
+    status = db.Column(db.String(20), nullable=False, default="draft")    # draft/active/hidden
 
-    # precios (USD base; luego podés convertir a UYU en checkout)
+    # precios
     currency = db.Column(db.String(3), nullable=False, default="USD")
     price = db.Column(db.Numeric(12, 2), nullable=False, default=0)
-    compare_at_price = db.Column(db.Numeric(12, 2), nullable=True)  # precio tachado
+    compare_at_price = db.Column(db.Numeric(12, 2), nullable=True)
 
     # stock
     stock_mode = db.Column(db.String(20), nullable=False, default="finite")  # finite/unlimited/external
     stock_qty = db.Column(db.Integer, nullable=False, default=0)
 
-    # categoría principal (para navegación)
+    # categoría principal
     category_id = db.Column(db.Integer, db.ForeignKey("categories.id", ondelete="SET NULL"), nullable=True)
 
     # dropshipping
@@ -77,58 +85,60 @@ class Product(db.Model):
     category = db.relationship("Category", foreign_keys=[category_id], lazy="select")
     extra_categories = db.relationship("Category", secondary=product_categories, lazy="select")
     tags = db.relationship("Tag", secondary=product_tags, lazy="select")
-    media = db.relationship("ProductMedia", back_populates="product", cascade="all, delete-orphan", lazy="select")
-# -------------------------
-# Compatibilidad legacy
-# - Algunos módulos usan `name` en lugar de `title`
-# - Otros usan `stock` en lugar de `stock_qty`
-# -------------------------
-def __init__(self, **kwargs):
-    # Soportar name/title
-    if "name" in kwargs and "title" not in kwargs:
-        kwargs["title"] = kwargs.pop("name")
-    # Soportar stock/stock_qty
-    if "stock" in kwargs and "stock_qty" not in kwargs:
-        kwargs["stock_qty"] = kwargs.pop("stock")
-    super().__init__(**kwargs)
+    media = db.relationship(
+        "ProductMedia",
+        back_populates="product",
+        cascade="all, delete-orphan",
+        lazy="select",
+    )
 
-@property
-def name(self) -> str:
-    return self.title
+    # -------------------------
+    # Compatibilidad legacy
+    # -------------------------
+    def __init__(self, **kwargs):
+        # soportar name/title
+        if "name" in kwargs and "title" not in kwargs:
+            kwargs["title"] = kwargs.pop("name")
+        # soportar stock/stock_qty
+        if "stock" in kwargs and "stock_qty" not in kwargs:
+            kwargs["stock_qty"] = kwargs.pop("stock")
+        super().__init__(**kwargs)
 
-@name.setter
-def name(self, value: str) -> None:
-    self.title = value
+    @property
+    def name(self) -> str:
+        return self.title
 
-@property
-def stock(self) -> int:
-    return int(self.stock_qty or 0)
+    @name.setter
+    def name(self, value: str) -> None:
+        self.title = value
 
-@stock.setter
-def stock(self, value: int) -> None:
-    self.stock_qty = int(value or 0)
+    @property
+    def stock(self) -> int:
+        return int(self.stock_qty or 0)
 
-@property
-def is_active(self) -> bool:
-    return (self.status or "").lower() == "active"
+    @stock.setter
+    def stock(self, value: int) -> None:
+        self.stock_qty = int(value or 0)
+
+    @property
+    def is_active(self) -> bool:
+        return (self.status or "").lower() == "active"
 
     def is_available(self) -> bool:
-        if self.status != "active":
+        if (self.status or "").lower() != "active":
             return False
-        if self.stock_mode == "unlimited":
-            return True
-        if self.stock_mode == "external":
+        mode = (self.stock_mode or "finite").lower()
+        if mode in {"unlimited", "external"}:
             return True
         return (self.stock_qty or 0) > 0
 
     def main_image_url(self) -> Optional[str]:
-        # devuelve la primera imagen ordenada
-        imgs = [m for m in (self.media or []) if m.type == "image"]
+        imgs = [m for m in (self.media or []) if (m.type or "").lower() == "image"]
         imgs.sort(key=lambda x: x.sort_order or 0)
         return imgs[0].url if imgs else None
 
     def __repr__(self) -> str:
-        return f"<Product id={self.id} title={self.title}>"
+        return f"<Product id={self.id} title={self.title!r} status={self.status!r}>"
 
 
 class ProductMedia(db.Model):
@@ -140,8 +150,7 @@ class ProductMedia(db.Model):
     # image | video
     type = db.Column(db.String(10), nullable=False, default="image")
 
-    # Si es upload local: /static/uploads/media/xxx.jpg
-    # Si es externo: https://...
+    # Si es upload local: /static/uploads/media/xxx.jpg | externo: https://...
     url = db.Column(db.String(700), nullable=False)
 
     # para videos: opcional poster/thumbnail
@@ -155,7 +164,7 @@ class ProductMedia(db.Model):
     product = db.relationship("Product", back_populates="media")
 
     def __repr__(self) -> str:
-        return f"<ProductMedia id={self.id} product_id={self.product_id} type={self.type}>"
+        return f"<ProductMedia id={self.id} product_id={self.product_id} type={self.type!r}>"
 
 
 class Tag(db.Model):
@@ -166,4 +175,4 @@ class Tag(db.Model):
     slug = db.Column(db.String(100), nullable=False, unique=True, index=True)
 
     def __repr__(self) -> str:
-        return f"<Tag id={self.id} name={self.name}>"
+        return f"<Tag id={self.id} name={self.name!r}>"

@@ -1,456 +1,352 @@
 <!doctype html>
-<html lang="es" class="scroll-smooth">
+<html lang="es">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#ffffff" />
+  <meta name="color-scheme" content="light" />
+  <title>{% block title %}Skyline Store{% endblock %}</title>
 
-  <title>{% block title %}Skyline Store · Moda urbana y accesorios premium{% endblock %}</title>
-  <meta name="description" content="{% block meta_description %}Skyline Store: moda urbana, accesorios y productos cuidadosamente seleccionados. Experiencia premium y compras sin fricción.{% endblock %}">
-  <meta name="theme-color" content="#f8fafc">
-  <meta name="robots" content="index,follow,max-image-preview:large">
-  <meta name="referrer" content="strict-origin-when-cross-origin">
-  <meta name="color-scheme" content="light">
-
-  <link rel="canonical" href="{{ (request.url_root.rstrip('/') ~ request.path) if request else '' }}">
-
-  <!-- Open Graph -->
-  <meta property="og:title" content="{% block og_title %}Skyline Store · Moda urbana y accesorios premium{% endblock %}">
-  <meta property="og:description" content="{% block og_description %}Moda urbana y accesorios seleccionados con criterio. Novedades y colección Skyline — todo en un solo lugar.{% endblock %}">
-  <meta property="og:type" content="website">
-  <meta property="og:url" content="{{ request.url if request else '' }}">
-  <meta property="og:image" content="{{ url_for('static', filename='img/og_skyline.jpg') }}">
-
-  <meta name="twitter:card" content="summary_large_image">
-
-  <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}">
-
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-
-  <!-- Tailwind CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          fontFamily: { sans: ["Inter","system-ui","sans-serif"] },
-          colors: {
-            ink: { 900:"#0b1220", 700:"#1f2937", 600:"#334155" },
-            soft:{ 50:"#f8fafc", 100:"#f1f5f9", 200:"#e2e8f0" },
-            brand:{ blue:"#2563eb", cyan:"#06b6d4", amber:"#f59e0b", green:"#22c55e", violet:"#a855f7" }
-          },
-          boxShadow: {
-            glass:"0 18px 55px rgba(2,6,23,.10)",
-            soft:"0 14px 30px rgba(2,6,23,.08)",
-            lift:"0 24px 70px rgba(2,6,23,.14)"
-          },
-          borderRadius:{ xl2:"1.25rem", xl3:"1.75rem" },
-          keyframes:{
-            fadeUp:{ "0%":{opacity:0,transform:"translateY(14px)"}, "100%":{opacity:1,transform:"translateY(0)"} },
-            pop:{ "0%":{transform:"scale(.98)",opacity:.2}, "100%":{transform:"scale(1)",opacity:1} },
-            shimmer:{ "0%":{transform:"translateX(-60%)"}, "100%":{transform:"translateX(70%)"} }
-          },
-          animation:{
-            fadeUp:"fadeUp .55s ease-out both",
-            pop:"pop .18s ease-out both",
-            shimmer:"shimmer .9s ease forwards"
-          }
-        }
-      }
-    }
-  </script>
-
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
-
+  <!-- Mejoras: preconnect + fuentes seguras (sin depender de CDN obligatorio) -->
   <style>
+    :root{
+      --bg:#f6f7fb;
+      --card:#ffffff;
+      --ink:#0b1220;
+      --muted: rgba(11,18,32,.68);
+      --stroke: rgba(15,23,42,.10);
+
+      --a:#2563eb;
+      --b:#06b6d4;
+      --c:#f59e0b;
+
+      --shadow1: 0 10px 26px rgba(2,6,23,.08);
+      --shadow2: 0 18px 50px rgba(2,6,23,.10);
+
+      --r: 14px;
+      --r2: 18px;
+      --max: 1220px;
+
+      --ease: cubic-bezier(.2,.9,.2,1);
+    }
+
+    *{box-sizing:border-box}
+    html{scroll-behavior:smooth}
     body{
-      background:
-        radial-gradient(1100px 700px at 12% 8%, rgba(37,99,235,.12), transparent 55%),
-        radial-gradient(900px 520px at 90% 10%, rgba(245,158,11,.10), transparent 60%),
-        radial-gradient(900px 520px at 60% 95%, rgba(34,197,94,.10), transparent 58%),
-        linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      color:var(--ink);
+      background: linear-gradient(180deg,#fff, var(--bg));
     }
 
-    /* ✅ Nav active indicator (pro) */
-    .navlink{
-      position:relative;
-      padding:.35rem .25rem;
-      border-radius:.75rem;
+    a{color:inherit}
+    img{max-width:100%;display:block}
+    .container{max-width:var(--max);margin:0 auto;padding:0 18px}
+
+    /* ===== TOPBAR (igual a la imagen) ===== */
+    .topbar{
+      position:sticky; top:0; z-index:50;
+      background: rgba(255,255,255,.92);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--stroke);
     }
-    .navlink::after{
-      content:"";
-      position:absolute;
-      left:.25rem; right:.25rem; bottom:.1rem;
-      height:2px;
+    .topbar-inner{
+      display:flex; align-items:center; gap:14px;
+      padding: 12px 0;
+    }
+    .brand{
+      display:flex; align-items:center; gap:10px;
+      text-decoration:none;
+      font-weight:1000;
+      letter-spacing:-.3px;
+    }
+    .brand-mark{
+      width:30px; height:20px;
+      border-radius:8px;
+      background: linear-gradient(90deg, var(--a), var(--b), var(--c));
+      box-shadow: 0 8px 18px rgba(2,6,23,.12);
+    }
+    .brand-name{
+      font-weight:1000;
+      text-transform:uppercase;
+      font-size:1.05rem;
+    }
+    .brand-name b{color:var(--a)}
+
+    .nav{
+      display:none;
+      gap:18px;
+      margin-left:10px;
+    }
+    .nav a{
+      text-decoration:none;
+      font-weight:900;
+      color: rgba(11,18,32,.82);
+      padding:10px 6px;
+      border-radius:10px;
+      transition: background .2s var(--ease), transform .2s var(--ease);
+    }
+    .nav a:hover{
+      background: rgba(37,99,235,.08);
+      transform: translateY(-1px);
+    }
+
+    /* Search */
+    .search{
+      margin-left:auto;
+      display:flex; align-items:center; gap:8px;
+      background:#f3f4f6;
+      border:1px solid rgba(15,23,42,.08);
       border-radius:999px;
-      background: linear-gradient(90deg, rgba(37,99,235,.0), rgba(37,99,235,.85), rgba(6,182,212,.75), rgba(37,99,235,.0));
-      transform: scaleX(0);
-      transform-origin:center;
-      transition: transform .18s ease;
-      opacity:.95;
+      padding: 8px 10px;
+      min-width: min(460px, 42vw);
+      transition: box-shadow .2s var(--ease), border-color .2s var(--ease);
     }
-    .navlink:hover::after{ transform: scaleX(.65); }
-    .navlink.is-active{
-      background: rgba(37,99,235,.06);
-      color: #0b1220 !important;
+    .search:focus-within{
+      border-color: rgba(37,99,235,.22);
+      box-shadow: 0 0 0 4px rgba(37,99,235,.14);
+      background:#fff;
     }
-    .navlink.is-active::after{ transform: scaleX(1); }
+    .search input{
+      border:0; outline:0; background:transparent;
+      width:100%;
+      font-size: .98rem;
+    }
+    .search button{
+      border:0;
+      cursor:pointer;
+      background:#fff;
+      border:1px solid rgba(15,23,42,.10);
+      border-radius:999px;
+      padding: 8px 10px;
+      transition: transform .2s var(--ease);
+    }
+    .search button:hover{transform: translateY(-1px)}
 
-    /* ✅ Header scroll state */
-    .hdr-scrolled .hdr-shell{
-      border-color: rgba(226,232,240,.95);
-      background: rgba(255,255,255,.82);
-      backdrop-filter: blur(18px);
-      box-shadow: 0 18px 55px rgba(2,6,23,.10);
+    /* Cuenta */
+    .account{
+      display:flex; align-items:center; gap:8px;
+      text-decoration:none;
+      font-weight:1000;
+      background: rgba(245,158,11,.14);
+      border: 1px solid rgba(245,158,11,.25);
+      padding: 10px 12px;
+      border-radius:999px;
+      white-space:nowrap;
+      transition: transform .2s var(--ease), box-shadow .2s var(--ease);
+    }
+    .account:hover{transform: translateY(-1px); box-shadow: 0 10px 18px rgba(2,6,23,.10)}
+    .acc-ico{
+      width:28px;height:28px;border-radius:999px;
+      display:grid;place-items:center;
+      background:#fff;
+      border:1px solid rgba(15,23,42,.10);
     }
 
-    /* ✅ Announcement shimmer */
-    .announce{
-      position:relative;
-      overflow:hidden;
+    /* Mobile menu */
+    .burger{
+      display:inline-flex; align-items:center; justify-content:center;
+      width:44px;height:44px;
+      border-radius:12px;
+      border:1px solid rgba(15,23,42,.10);
+      background:#fff;
+      cursor:pointer;
+      transition: transform .2s var(--ease);
     }
-    .announce::after{
-      content:"";
-      position:absolute; inset:0;
-      background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,.22) 45%, transparent 70%);
-      transform: translateX(-60%);
-      opacity:.0;
-      pointer-events:none;
+    .burger:hover{transform: translateY(-1px)}
+    .mobile{
+      display:none;
+      border-top:1px solid var(--stroke);
+      background:#fff;
+      padding: 10px 0 14px;
     }
-    .announce:hover::after{
+    .mobile a{
+      display:block;
+      padding: 12px 18px;
+      text-decoration:none;
+      font-weight:950;
+      color: rgba(11,18,32,.85);
+    }
+    .mobile a:hover{background: rgba(37,99,235,.06)}
+    .mobile.is-open{display:block}
+
+    @media (min-width: 980px){
+      .nav{display:flex}
+      .burger{display:none}
+      .mobile{display:none!important}
+    }
+
+    /* Flash messages (si tu backend los usa) */
+    .flash-wrap{padding: 10px 0}
+    .flash{
+      background:#fff;
+      border:1px solid var(--stroke);
+      box-shadow: var(--shadow1);
+      border-radius: 12px;
+      padding: 10px 12px;
+      margin: 10px 0;
+      font-weight:900;
+    }
+
+    /* Footer tipo imagen (simple y prolijo) */
+    footer{
+      margin-top: 30px;
+      background: linear-gradient(180deg, #ffffff, #f3f6ff);
+      border-top:1px solid var(--stroke);
+    }
+    .footer-top{
+      padding: 18px 0 10px;
+      display:flex; flex-wrap:wrap; gap:12px;
+      align-items:center; justify-content:space-between;
+      color: rgba(11,18,32,.78);
+      font-weight:900;
+    }
+    .footer-links{
+      display:flex; flex-wrap:wrap; gap:12px;
+      align-items:center;
+    }
+    .footer-links a{
+      text-decoration:none;
+      color: rgba(11,18,32,.75);
+    }
+    .footer-links a:hover{text-decoration:underline}
+    .payrow{
+      padding: 10px 0 18px;
+      display:flex; gap:18px; align-items:center; justify-content:center;
       opacity:.9;
-      animation: shimmer .9s ease forwards;
+      flex-wrap:wrap;
+    }
+    .pay{
+      width:74px; height:36px;
+      border-radius:10px;
+      border:1px solid rgba(15,23,42,.10);
+      background:#fff;
+      display:grid; place-items:center;
+      font-weight:1000;
+      color: rgba(11,18,32,.75);
+    }
+    .copyright{
+      text-align:center;
+      padding: 0 0 18px;
+      color: rgba(11,18,32,.55);
+      font-weight:800;
+      font-size:.92rem;
     }
 
+    /* Accesibilidad: focus visible */
+    :focus-visible{
+      outline:none;
+      box-shadow: 0 0 0 4px rgba(37,99,235,.18);
+      border-radius: 10px;
+    }
+
+    /* Motion-safe */
     @media (prefers-reduced-motion: reduce){
-      *{ animation:none!important; transition:none!important; scroll-behavior:auto!important; }
+      *{transition:none!important; scroll-behavior:auto!important}
     }
   </style>
 
   {% block extra_head %}{% endblock %}
 </head>
 
-<body class="min-h-screen text-ink-900 font-sans antialiased selection:bg-[rgba(37,99,235,.20)] selection:text-ink-900">
+<body>
+  <!-- TOPBAR -->
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <a class="brand" href="/" aria-label="Ir a inicio">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-name">SKYLINE <b>STYLE</b></span>
+      </a>
 
-{% set current = (request.endpoint or '') if request else '' %}
-{% set is_admin = (session.get('is_admin') if session else False) %}
+      <nav class="nav" aria-label="Navegación principal">
+        <a href="/">Inicio</a>
+        <a href="/shop?categoria=ropa">Ropa</a>
+        <a href="/shop?categoria=accesorios">Accesorios</a>
+        <a href="/shop?categoria=tecnologia">Tecnología</a>
+        <a href="/shop?ofertas=1">Ofertas</a>
+      </nav>
 
-{# SAFE ROUTES #}
-{% set URL_HOME  = '/' %}
-{% set URL_SHOP  = '/shop' %}
-{% set URL_ABOUT = '/about' %}
-{% set URL_ADMIN = '/admin' %}
-{% set URL_LOGIN = '/admin/login' %}
+      <form class="search" action="/shop" method="get" role="search" aria-label="Buscar productos">
+        <input name="q" type="search" placeholder="Buscar productos..." autocomplete="off" />
+        <button type="submit" aria-label="Buscar">🔎</button>
+      </form>
 
-{# ✅ WhatsApp (cambiá al tuyo cuando quieras) #}
-{% set WHATSAPP_LINK = 'https://wa.me/0000000000' %}
+      <a class="account" href="/account" aria-label="Mi cuenta">
+        <span class="acc-ico" aria-hidden="true">👤</span>
+        <span>Mi Cuenta</span>
+      </a>
 
-<!-- Skip link -->
-<a href="#main-content"
-   class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[999]
-          focus:px-3 focus:py-2 focus:rounded-xl focus:bg-white focus:text-ink-900 focus:shadow-glass">
-  Ir al contenido principal
-</a>
-
-<!-- =========================
-     HEADER (GLASS · LIGHT · ULTRA)
-========================== -->
-<header id="main-header" class="fixed top-0 inset-x-0 z-50">
-  <div class="mx-auto max-w-6xl px-4">
-
-    <!-- ✅ 1) Announcement bar -->
-    <div class="mt-3 mb-2 hidden sm:block">
-      <div class="announce rounded-2xl border border-soft-200/80 bg-white/65 backdrop-blur-xl shadow-soft px-4 py-2 text-xs text-slate-600 flex items-center justify-between gap-3">
-        <div class="flex items-center gap-2">
-          <span class="inline-flex h-5 w-5 rounded-full bg-emerald-50 border border-emerald-200 items-center justify-center">✅</span>
-          <span><b class="text-slate-800">Novedades semanales</b> · Productos cuidadosamente seleccionados, estilo y calidad.</span>
-        </div>
-        <a href="{{ WHATSAPP_LINK }}" target="_blank" rel="noopener"
-           class="text-slate-700 hover:text-ink-900 font-extrabold transition">
-          Hablá por WhatsApp →
-        </a>
-      </div>
+      <button class="burger" type="button" aria-label="Abrir menú" aria-expanded="false" id="burger">☰</button>
     </div>
 
-    <div class="hdr-shell rounded-2xl border border-soft-200/80 bg-white/70 backdrop-blur-xl shadow-glass">
-      <div class="h-14 md:h-16 flex items-center justify-between gap-3 px-3 md:px-4">
-
-        <!-- Logo -->
-        <a href="{{ URL_HOME }}"
-           class="flex items-center gap-2 rounded-xl px-2 py-1
-                  focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(37,99,235,.35)]">
-          <span class="h-9 w-9 rounded-xl grid place-items-center font-black text-[12px] text-white
-                       bg-gradient-to-br from-brand-blue to-brand-cyan shadow-soft">
-            SS
-          </span>
-          <div class="leading-tight">
-            <p class="text-sm md:text-base font-extrabold tracking-tight text-ink-900">Skyline Store</p>
-            <p class="text-[10px] uppercase tracking-[0.18em] text-slate-500">Streetwear</p>
-          </div>
-        </a>
-
-        <!-- NAV Desktop -->
-        <nav class="hidden md:flex items-center gap-6 text-sm font-semibold" aria-label="Navegación principal">
-          <a href="{{ URL_SHOP }}"
-             class="navlink text-slate-600 hover:text-ink-900 transition {% if current == 'main.shop' %}is-active{% endif %}">
-            Tienda
-          </a>
-
-          <a href="{{ URL_HOME }}#destacados"
-             class="navlink text-slate-600 hover:text-ink-900 transition">
-            Destacados
-          </a>
-
-          <a href="{{ URL_ABOUT }}"
-             class="navlink text-slate-600 hover:text-ink-900 transition {% if current == 'main.about' %}is-active{% endif %}">
-            La marca
-          </a>
-
-          {% if is_admin %}
-            <a href="{{ URL_ADMIN }}/productos"
-               class="navlink text-amber-700 hover:text-amber-800 transition">
-              Panel admin
-            </a>
-          {% endif %}
-
-          <a href="{{ URL_LOGIN }}"
-             class="navlink text-slate-600 hover:text-ink-900 transition">
-            Ingresar
-          </a>
-        </nav>
-
-        <!-- CTA -->
-        <div class="hidden sm:flex items-center gap-2">
-          {% if is_admin %}
-            <a href="{{ URL_ADMIN }}/logout"
-               class="px-3 py-1.5 rounded-full border border-soft-200 bg-white/70
-                      text-[12px] font-semibold text-slate-700 hover:bg-white transition">
-              Cerrar sesión
-            </a>
-          {% endif %}
-
-          <a href="{{ URL_SHOP }}"
-             class="px-4 py-2 rounded-full text-[13px] font-extrabold text-white
-                    bg-gradient-to-r from-brand-blue to-brand-cyan shadow-soft hover:shadow-lift transition
-                    focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(37,99,235,.35)]">
-            Ver colección
-          </a>
-        </div>
-
-        <!-- Mobile toggle -->
-        <button id="mobile-toggle"
-                class="md:hidden h-10 w-10 rounded-full border border-soft-200 bg-white/70
-                       grid place-items-center text-slate-700 hover:bg-white transition
-                       focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(37,99,235,.35)]"
-                type="button"
-                aria-label="Abrir menú"
-                aria-expanded="false"
-                aria-controls="mobile-menu"
-                data-open="false">
-          <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M4 12h16M4 17h16"/>
-          </svg>
-        </button>
-      </div>
-
-      <!-- Mobile menu -->
-      <div id="mobile-menu" class="hidden md:hidden px-3 pb-3">
-        <nav class="rounded-2xl border border-soft-200 bg-white/80 backdrop-blur-xl shadow-soft p-3 text-sm font-semibold">
-          <a class="block px-3 py-2 rounded-xl hover:bg-soft-100 transition" href="{{ URL_SHOP }}">Tienda</a>
-          <a class="block px-3 py-2 rounded-xl hover:bg-soft-100 transition" href="{{ URL_HOME }}#destacados">Destacados</a>
-          <a class="block px-3 py-2 rounded-xl hover:bg-soft-100 transition" href="{{ URL_ABOUT }}">La marca</a>
-
-          {% if is_admin %}
-            <a class="block px-3 py-2 rounded-xl hover:bg-soft-100 transition text-amber-700" href="{{ URL_ADMIN }}/productos">Panel admin</a>
-            <a class="block px-3 py-2 rounded-xl hover:bg-soft-100 transition text-slate-600" href="{{ URL_ADMIN }}/logout">Cerrar sesión</a>
-          {% endif %}
-
-          <a class="block px-3 py-2 rounded-xl hover:bg-soft-100 transition" href="{{ URL_LOGIN }}">Ingresar</a>
-
-          <a href="{{ WHATSAPP_LINK }}" target="_blank" rel="noopener"
-             class="mt-2 block text-center px-3 py-2 rounded-full font-extrabold text-white
-                    bg-gradient-to-r from-emerald-500 to-emerald-600 shadow-soft hover:shadow-lift transition">
-            WhatsApp
-          </a>
-
-          <a href="{{ URL_SHOP }}"
-             class="mt-2 block text-center px-3 py-2 rounded-full font-extrabold text-white
-                    bg-gradient-to-r from-brand-blue to-brand-cyan shadow-soft hover:shadow-lift transition">
-            Ver colección
-          </a>
-        </nav>
-      </div>
-
+    <div class="mobile" id="mobileMenu" aria-label="Menú móvil">
+      <a href="/">Inicio</a>
+      <a href="/shop?categoria=ropa">Ropa</a>
+      <a href="/shop?categoria=accesorios">Accesorios</a>
+      <a href="/shop?categoria=tecnologia">Tecnología</a>
+      <a href="/shop?ofertas=1">Ofertas</a>
+      <a href="/account">Mi Cuenta</a>
     </div>
-  </div>
-</header>
+  </header>
 
-<!-- =========================
-     MAIN + FLASHES
-========================== -->
-<main id="main-content" class="pt-28 md:pt-32">
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-      <div class="max-w-6xl mx-auto px-4 mt-3 space-y-2 animate-fadeUp">
+  <!-- FLASH (opcional si tu backend usa flashes) -->
+  <div class="container flash-wrap">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
         {% for category, message in messages %}
-          {% set base = 'bg-white/85 border-soft-200 text-slate-800' %}
-          {% set icon = 'ℹ️' %}
-          {% if category in ['success'] %}
-            {% set base = 'bg-emerald-50 border-emerald-200 text-emerald-900' %}
-            {% set icon = '✅' %}
-          {% elif category in ['danger','error'] %}
-            {% set base = 'bg-rose-50 border-rose-200 text-rose-900' %}
-            {% set icon = '❌' %}
-          {% elif category in ['warning'] %}
-            {% set base = 'bg-amber-50 border-amber-200 text-amber-900' %}
-            {% set icon = '⚠️' %}
-          {% endif %}
-          <div class="border rounded-xl px-3 py-2 text-sm {{ base }}">
-            <span class="mr-2">{{ icon }}</span>{{ message }}
-          </div>
+          <div class="flash" role="status">{{ message }}</div>
         {% endfor %}
-      </div>
-    {% endif %}
-  {% endwith %}
-
-  {% block content %}{% endblock %}
-</main>
-
-<!-- ✅ 4) WhatsApp floating (convertidor) -->
-<a href="{{ WHATSAPP_LINK }}" target="_blank" rel="noopener"
-   class="fixed bottom-5 left-5 z-40 inline-flex items-center gap-2 px-4 py-2 rounded-full
-          bg-white/90 border border-soft-200 text-slate-800 text-sm font-extrabold
-          shadow-soft hover:shadow-lift hover:-translate-y-0.5 transition
-          focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(34,197,94,.35)]">
-  <span class="text-base">💬</span>
-  <span class="hidden sm:inline">WhatsApp</span>
-</a>
-
-<!-- Back to top -->
-<a id="backtop" href="{{ URL_HOME }}"
-   class="hidden fixed bottom-5 right-5 z-40 items-center gap-2 px-3.5 py-2 rounded-full
-          bg-white/90 border border-soft-200 text-slate-800 text-sm font-extrabold
-          shadow-soft hover:shadow-lift hover:-translate-y-0.5 transition
-          focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(37,99,235,.35)]">
-  <span class="text-base">↑</span>
-  <span class="hidden sm:inline">Volver arriba</span>
-  <span class="sm:hidden">Arriba</span>
-</a>
-
-<!-- ✅ 5) Footer premium -->
-<footer class="mt-14 border-t border-soft-200/80 bg-white/60 backdrop-blur">
-  <div class="max-w-6xl mx-auto px-4 py-10 grid gap-6 md:grid-cols-3 text-sm text-slate-600">
-    <div>
-      <div class="font-extrabold text-ink-900">Skyline Store</div>
-      <p class="mt-2 text-slate-600 leading-relaxed">
-        Moda urbana, accesorios y novedades cuidadosamente seleccionadas. Una experiencia simple, rápida y con estilo.
-      </p>
-    </div>
-
-    <div>
-      <div class="font-extrabold text-ink-900">Links rápidos</div>
-      <div class="mt-3 grid grid-cols-2 gap-2">
-        <a class="hover:text-ink-900 transition" href="{{ URL_SHOP }}">Tienda</a>
-        <a class="hover:text-ink-900 transition" href="{{ URL_HOME }}#destacados">Destacados</a>
-        <a class="hover:text-ink-900 transition" href="{{ URL_ABOUT }}">La marca</a>
-        <a class="hover:text-ink-900 transition" href="{{ URL_LOGIN }}">Ingresar</a>
-      </div>
-    </div>
-
-    <div>
-      <div class="font-extrabold text-ink-900">Contacto</div>
-      <div class="mt-3 space-y-2">
-        <a class="inline-flex items-center gap-2 hover:text-ink-900 transition" href="{{ WHATSAPP_LINK }}" target="_blank" rel="noopener">
-          <span>💬</span> WhatsApp
-        </a>
-        <a class="inline-flex items-center gap-2 hover:text-ink-900 transition" href="#" aria-label="Instagram">
-          <span>📷</span> Instagram
-        </a>
-        <a class="inline-flex items-center gap-2 hover:text-ink-900 transition" href="#" aria-label="TikTok">
-          <span>🎵</span> TikTok
-        </a>
-      </div>
-    </div>
+      {% endif %}
+    {% endwith %}
   </div>
 
-  <div class="border-t border-soft-200/70">
-    <div class="max-w-6xl mx-auto px-4 py-5 text-xs text-slate-500 flex flex-wrap items-center justify-between gap-3">
-      <span>© <span id="year"></span> Skyline Store. Todos los derechos reservados.</span>
-      <span class="text-slate-400">Hecho con ❤️ por Gaby.</span>
+  <!-- CONTENIDO -->
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="container footer-top">
+      <div class="footer-links">
+        <a href="/terms">Términos y Condiciones</a>
+        <a href="/privacy">Política de Privacidad</a>
+        <a href="/help">Ayuda / Contacto</a>
+      </div>
+
+      <div class="footer-links" aria-label="Redes">
+        <a href="#" aria-label="Facebook">📘</a>
+        <a href="#" aria-label="Instagram">📷</a>
+        <a href="#" aria-label="WhatsApp">💬</a>
+      </div>
     </div>
-  </div>
-</footer>
 
-<!-- =========================
-     JS: Header shadow + Mobile menu + ESC close + Backtop + Year
-========================== -->
-<script>
-document.addEventListener("DOMContentLoaded", () => {
-  const header = document.getElementById("main-header");
-  const toggle = document.getElementById("mobile-toggle");
-  const menu   = document.getElementById("mobile-menu");
-  const back   = document.getElementById("backtop");
+    <div class="container payrow" aria-label="Medios de pago">
+      <div class="pay">MP</div>
+      <div class="pay">VISA</div>
+      <div class="pay">MC</div>
+      <div class="pay">OCA</div>
+    </div>
 
-  // year auto
-  const y = document.getElementById("year");
-  if (y) y.textContent = String(new Date().getFullYear());
+    <div class="copyright">
+      © {{ 2025 }} Skyline Store. Todos los derechos reservados.
+    </div>
+  </footer>
 
-  const setScrollState = () => {
-    if (!header) return;
-    if (window.scrollY > 10) header.classList.add("hdr-scrolled");
-    else header.classList.remove("hdr-scrolled");
-  };
-  window.addEventListener("scroll", setScrollState, { passive:true });
-  setScrollState();
+  <script>
+    // Menú móvil sin errores
+    (function(){
+      const btn = document.getElementById("burger");
+      const menu = document.getElementById("mobileMenu");
+      if(!btn || !menu) return;
 
-  const setBackTop = () => {
-    if (!back) return;
-    if (window.scrollY > 420) { back.classList.remove("hidden"); back.classList.add("inline-flex"); }
-    else { back.classList.add("hidden"); back.classList.remove("inline-flex"); }
-  };
-  window.addEventListener("scroll", setBackTop, { passive:true });
-  setBackTop();
+      btn.addEventListener("click", () => {
+        const open = menu.classList.toggle("is-open");
+        btn.setAttribute("aria-expanded", open ? "true" : "false");
+      });
+    })();
+  </script>
 
-  const openMenu = () => {
-    if (!menu || !toggle) return;
-    menu.classList.remove("hidden");
-    menu.classList.add("animate-pop");
-    toggle.setAttribute("aria-expanded", "true");
-    toggle.dataset.open = "true";
-  };
-
-  const closeMenu = () => {
-    if (!menu || !toggle) return;
-    menu.classList.add("hidden");
-    toggle.setAttribute("aria-expanded", "false");
-    toggle.dataset.open = "false";
-  };
-
-  if (toggle){
-    toggle.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const isOpen = toggle.dataset.open === "true";
-      isOpen ? closeMenu() : openMenu();
-    });
-  }
-
-  document.addEventListener("click", (e) => {
-    if (!toggle || toggle.dataset.open !== "true") return;
-    if (menu && !menu.contains(e.target) && !toggle.contains(e.target)) closeMenu();
-  });
-
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeMenu();
-  });
-
-  if (menu){
-    menu.querySelectorAll("a").forEach(a => a.addEventListener("click", () => closeMenu()));
-  }
-});
-</script>
-
-{% block extra_js %}{% endblock %}
+  {% block extra_js %}{% endblock %}
 </body>
 </html>

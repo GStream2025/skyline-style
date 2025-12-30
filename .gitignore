@@ -60,7 +60,7 @@ desktop.ini
 *.swo
 
 # -----------------------------------------------------
-# NODE / FRONTEND (si en el futuro agregás)
+# NODE / FRONTEND (futuro)
 # -----------------------------------------------------
 node_modules/
 npm-debug.log*
@@ -76,13 +76,13 @@ yarn-error.log*
 *.tar
 *.gz
 *.bak
+_backup_*/
 
 # -----------------------------------------------------
 # UPLOADS (USUARIOS)
+# -----------------------------------------------------
 # Assets oficiales → app/static/img/ (versionar)
 # Uploads dinámicos → NO versionar
-# Mantener .gitkeep para conservar carpetas vacías
-# -----------------------------------------------------
 app/static/uploads/**
 !app/static/uploads/.gitkeep
 !app/static/uploads/products/
@@ -97,7 +97,7 @@ tmp/
 temp/
 
 # -----------------------------------------------------
-# DATABASE LOCAL (si usás sqlite en dev)
+# DATABASE LOCAL (SQLite dev)
 # -----------------------------------------------------
 *.sqlite
 *.sqlite3
@@ -105,25 +105,6 @@ skyline_local.db
 
 # -----------------------------------------------------
 # RENDER / DEPLOY (opcional)
-# Si usás archivos locales de entorno para deploy, ignorarlos
 # -----------------------------------------------------
 .env.render
 render.env
-
-# local/dev
-.venv/
-_backup_*/
-__pycache__/
-*.pyc
-instance/
-.env
-
-
-# local only
-.venv/
-_backup_*/
-__pycache__/
-*.pyc
-.env
-instance/
-

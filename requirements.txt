@@ -1,12 +1,64 @@
-﻿Flask==3.*
+﻿# =========================
+# Skyline Store — Core
+# =========================
+Flask==3.*
 Werkzeug==3.*
-gunicorn==22.*
-requests==2.*
 python-dotenv==1.*
+
+# WSGI (producción)
+gunicorn==22.*
+
+# HTTP / APIs
+requests==2.*
+
+# =========================
+# DB + Migraciones
+# =========================
 Flask-SQLAlchemy==3.*
+SQLAlchemy==2.*
 Flask-Migrate==4.*
+alembic==1.*
+
+# Drivers DB (elegí según tu DB)
+# Postgres (Render/Prod):
+psycopg[binary]==3.*
+# SQLite ya viene con Python (local)
+
+# =========================
+# Performance / Front
+# =========================
 Flask-Compress==1.*
-Flask-Talisman==1.*
 Flask-Caching==2.*
 Flask-Minify==0.43
 whitenoise==6.*
+
+# =========================
+# Seguridad
+# =========================
+Flask-Talisman==1.*
+itsdangerous==2.*
+bcrypt==4.*
+
+# =========================
+# Auth / Forms / Validación
+# =========================
+Flask-Login==0.6.*
+Flask-WTF==1.2.*
+email-validator==2.*
+WTForms==3.*
+
+# =========================
+# Admin (panel real)
+# =========================
+Flask-Admin==1.6.*
+
+# =========================
+# Email (confirmaciones, reset pass)
+# =========================
+Flask-Mail==0.10.*
+
+# =========================
+# Utils
+# =========================
+python-slugify==8.*
+Pillow==10.*
