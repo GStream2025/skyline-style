@@ -1,0 +1,423 @@
+{% extends "base.html" %}
+
+{% block title %}Mi cuenta | Skyline Store{% endblock %}
+
+{% block content %}
+<section class="ss-account">
+  <div class="ss-account__bg" aria-hidden="true">
+    <span class="blob b1"></span>
+    <span class="blob b2"></span>
+    <span class="grid"></span>
+  </div>
+
+  <div class="ss-account__container">
+    <!-- Left / Hero -->
+    <div class="ss-account__hero">
+      <div class="brand">
+        <div class="logo-mark" aria-hidden="true">
+          <!-- simple mark -->
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none">
+            <path d="M4 14.5 12 4l8 10.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M7.5 14.5 12 9l4.5 5.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity=".7"/>
+            <path d="M6 20h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <div class="brand-name">Skyline Store</div>
+          <div class="brand-tag">Tu tienda premium de tech + streetwear</div>
+        </div>
+      </div>
+
+      <h1>Entrá a tu cuenta</h1>
+      <p class="lead">
+        Guardá tus compras, seguí pedidos, administrá tu perfil y accedé a ofertas exclusivas.
+      </p>
+
+      <ul class="perks" role="list">
+        <li>
+          <span class="perk-ic" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
+              <path d="M20 7 10.5 16.5 7 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10Z" stroke="currentColor" stroke-width="2" opacity=".7"/>
+            </svg>
+          </span>
+          Checkout más rápido y seguro
+        </li>
+        <li>
+          <span class="perk-ic" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
+              <path d="M12 8v4l3 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0Z" stroke="currentColor" stroke-width="2" opacity=".7"/>
+            </svg>
+          </span>
+          Historial y seguimiento de pedidos
+        </li>
+        <li>
+          <span class="perk-ic" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
+              <path d="M12 3l3 6 6 .9-4.5 4.4 1 6.2L12 17.8 6.5 20.5l1-6.2L3 9.9 9 9l3-6Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+            </svg>
+          </span>
+          Acceso a promos y drops exclusivos
+        </li>
+      </ul>
+    </div>
+
+    <!-- Right / Card -->
+    <div class="ss-account__card">
+      <div class="card-head">
+        <div>
+          <div class="card-title">Continuar</div>
+          <div class="card-sub">Elegí una opción para seguir</div>
+        </div>
+        <span class="secure-pill" title="Conexión segura">
+          <span class="dot"></span> Seguro
+        </span>
+      </div>
+
+      <div class="actions">
+        <a class="btn primary"
+           href="{{ url_for('auth.login', next=next) }}">
+          <span class="btn-ic" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
+              <path d="M10 17l5-5-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M15 12H3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <path d="M21 21V3" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity=".7"/>
+            </svg>
+          </span>
+          Iniciar sesión
+          <span class="btn-meta">Ya tengo cuenta</span>
+        </a>
+
+        <a class="btn ghost"
+           href="{{ url_for('auth.register', next=next) }}">
+          <span class="btn-ic" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" stroke="currentColor" stroke-width="2"/>
+              <path d="M19 8v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <path d="M16 11h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </span>
+          Crear cuenta
+          <span class="btn-meta">Es rápido, 1 minuto</span>
+        </a>
+      </div>
+
+      <div class="divider">
+        <span>o</span>
+      </div>
+
+      <div class="secondary">
+        <a class="link"
+           href="{{ url_for('shop.shop') }}">
+          Seguir como invitado
+        </a>
+
+        <div class="fineprint">
+          Al continuar aceptás nuestros <a class="link2" href="{{ url_for('main.about') }}">términos</a> y
+          <a class="link2" href="{{ url_for('main.contact') }}">soporte</a>.
+        </div>
+      </div>
+
+      {% if next %}
+      <input type="hidden" name="next" value="{{ next }}">
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+<style>
+  /* =========================================================
+     Skyline Store — Account (PRO)
+     - Fully responsive
+     - Glass card
+     - Gradient blobs
+     - Clean marketplace look
+  ========================================================== */
+
+  .ss-account{
+    position: relative;
+    min-height: calc(100vh - 120px);
+    padding: clamp(22px, 3vw, 36px) 14px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+
+  .ss-account__bg{
+    position:absolute;
+    inset:0;
+    overflow:hidden;
+    pointer-events:none;
+  }
+  .ss-account__bg .grid{
+    position:absolute; inset:-2px;
+    background:
+      radial-gradient(circle at 20% 10%, rgba(56,189,248,.14), transparent 35%),
+      radial-gradient(circle at 80% 20%, rgba(250,204,21,.12), transparent 38%),
+      radial-gradient(circle at 40% 90%, rgba(244,114,182,.10), transparent 42%),
+      linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.0));
+    filter: saturate(1.08);
+  }
+  .ss-account__bg .blob{
+    position:absolute;
+    width: 520px; height: 520px;
+    border-radius: 999px;
+    filter: blur(50px);
+    opacity: .35;
+    transform: translate3d(0,0,0);
+  }
+  .ss-account__bg .b1{
+    left:-160px; top:-180px;
+    background: radial-gradient(circle at 30% 30%, rgba(56,189,248,.9), rgba(56,189,248,0));
+  }
+  .ss-account__bg .b2{
+    right:-180px; bottom:-200px;
+    background: radial-gradient(circle at 40% 40%, rgba(250,204,21,.85), rgba(250,204,21,0));
+  }
+
+  .ss-account__container{
+    position: relative;
+    width: min(1100px, 100%);
+    display:grid;
+    gap: 18px;
+    grid-template-columns: 1.15fr .85fr;
+    align-items: stretch;
+  }
+
+  .ss-account__hero{
+    padding: clamp(18px, 2.5vw, 26px);
+    border-radius: 22px;
+    background: rgba(255,255,255,.03);
+    border: 1px solid rgba(255,255,255,.08);
+    box-shadow: 0 10px 30px rgba(0,0,0,.12);
+    backdrop-filter: blur(10px);
+  }
+
+  .brand{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    margin-bottom: 12px;
+  }
+  .logo-mark{
+    width:42px; height:42px;
+    border-radius: 14px;
+    display:grid; place-items:center;
+    background: linear-gradient(135deg, rgba(56,189,248,.25), rgba(250,204,21,.18));
+    border: 1px solid rgba(255,255,255,.10);
+    color: rgba(255,255,255,.92);
+  }
+  .brand-name{ font-weight: 800; letter-spacing: .2px; }
+  .brand-tag{ opacity:.75; font-size: .95rem; margin-top:2px; }
+
+  .ss-account__hero h1{
+    font-size: clamp(1.6rem, 2.4vw, 2.2rem);
+    margin: 10px 0 6px;
+    line-height: 1.15;
+  }
+  .ss-account__hero .lead{
+    opacity: .86;
+    margin: 0 0 16px;
+    max-width: 56ch;
+  }
+
+  .perks{
+    list-style: none;
+    padding:0;
+    margin: 14px 0 0;
+    display:grid;
+    gap: 10px;
+  }
+  .perks li{
+    display:flex;
+    align-items:flex-start;
+    gap:10px;
+    padding: 10px 12px;
+    border-radius: 14px;
+    background: rgba(255,255,255,.03);
+    border: 1px solid rgba(255,255,255,.07);
+  }
+  .perk-ic{
+    width:34px; height:34px;
+    border-radius: 12px;
+    display:grid; place-items:center;
+    background: rgba(255,255,255,.04);
+    border: 1px solid rgba(255,255,255,.08);
+    flex: 0 0 auto;
+    opacity: .95;
+  }
+
+  .ss-account__card{
+    border-radius: 22px;
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.10);
+    box-shadow: 0 16px 40px rgba(0,0,0,.16);
+    backdrop-filter: blur(12px);
+    padding: 18px;
+    display:flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+
+  .card-head{
+    display:flex;
+    align-items:flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .card-title{ font-weight: 900; font-size: 1.25rem; }
+  .card-sub{ opacity:.78; font-size:.95rem; margin-top:2px; }
+
+  .secure-pill{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding: 7px 10px;
+    border-radius: 999px;
+    font-size:.85rem;
+    background: rgba(16,185,129,.14);
+    border: 1px solid rgba(16,185,129,.22);
+    color: rgba(220,252,231,.95);
+    white-space: nowrap;
+  }
+  .secure-pill .dot{
+    width:8px; height:8px; border-radius: 999px;
+    background: rgba(16,185,129,.95);
+    box-shadow: 0 0 0 4px rgba(16,185,129,.18);
+  }
+
+  .actions{
+    display:grid;
+    gap: 12px;
+    margin-top: 10px;
+  }
+
+  .btn{
+    position: relative;
+    display:flex;
+    align-items:center;
+    gap: 10px;
+    padding: 14px 14px;
+    border-radius: 16px;
+    text-decoration:none;
+    border: 1px solid transparent;
+    transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease, background .12s ease;
+    user-select:none;
+  }
+  .btn:hover{ transform: translateY(-1px); }
+  .btn:active{ transform: translateY(0px); }
+
+  .btn .btn-ic{
+    width:38px; height:38px;
+    border-radius: 14px;
+    display:grid; place-items:center;
+    border: 1px solid rgba(255,255,255,.10);
+    background: rgba(255,255,255,.05);
+    flex: 0 0 auto;
+  }
+  .btn .btn-meta{
+    margin-left:auto;
+    opacity:.72;
+    font-size:.9rem;
+  }
+
+  .btn.primary{
+    background: linear-gradient(135deg, rgba(56,189,248,.28), rgba(250,204,21,.18));
+    border-color: rgba(255,255,255,.14);
+    color: rgba(255,255,255,.96);
+    box-shadow: 0 12px 28px rgba(0,0,0,.18);
+  }
+  .btn.primary:hover{
+    box-shadow: 0 18px 40px rgba(0,0,0,.22);
+    border-color: rgba(255,255,255,.20);
+  }
+
+  .btn.ghost{
+    background: rgba(255,255,255,.04);
+    border-color: rgba(255,255,255,.12);
+    color: rgba(255,255,255,.92);
+  }
+  .btn.ghost:hover{
+    border-color: rgba(255,255,255,.18);
+    background: rgba(255,255,255,.06);
+  }
+
+  .divider{
+    position: relative;
+    margin: 14px 0 10px;
+    text-align:center;
+  }
+  .divider::before{
+    content:"";
+    position:absolute;
+    left:0; right:0;
+    top: 50%;
+    height:1px;
+    background: rgba(255,255,255,.12);
+  }
+  .divider span{
+    position: relative;
+    display:inline-block;
+    padding: 0 10px;
+    border-radius: 999px;
+    background: rgba(10, 10, 15, .35);
+    border: 1px solid rgba(255,255,255,.10);
+    opacity: .8;
+    font-size:.9rem;
+  }
+
+  .secondary{
+    display:flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items:center;
+    padding-top: 6px;
+  }
+  .link{
+    text-decoration:none;
+    font-weight: 700;
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px dashed rgba(255,255,255,.18);
+    background: rgba(255,255,255,.03);
+    color: rgba(255,255,255,.92);
+    transition: background .12s ease, border-color .12s ease, transform .12s ease;
+  }
+  .link:hover{
+    transform: translateY(-1px);
+    background: rgba(255,255,255,.05);
+    border-color: rgba(255,255,255,.24);
+  }
+
+  .fineprint{
+    text-align:center;
+    font-size: .9rem;
+    opacity: .78;
+    max-width: 44ch;
+    line-height: 1.35;
+  }
+  .link2{
+    color: rgba(255,255,255,.92);
+    font-weight: 700;
+    text-decoration: none;
+    border-bottom: 1px solid rgba(255,255,255,.22);
+  }
+  .link2:hover{ border-bottom-color: rgba(255,255,255,.38); }
+
+  /* Responsive */
+  @media (max-width: 980px){
+    .ss-account__container{
+      grid-template-columns: 1fr;
+    }
+    .ss-account__hero{
+      order: 2;
+    }
+    .ss-account__card{
+      order: 1;
+    }
+  }
+</style>
+{% endblock %}
