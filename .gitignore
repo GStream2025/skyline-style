@@ -38,6 +38,8 @@ htmlcov/
 # -----------------------------------------------------
 .env
 .env.*
+.env.production
+.env.prod
 !.env.example
 
 # -----------------------------------------------------
@@ -118,3 +120,5 @@ pip-delete-this-directory.txt
 # -----------------------------------------------------
 .env.render
 render.env
+.render/
+.render-cache/
