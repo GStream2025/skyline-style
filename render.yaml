@@ -7,45 +7,42 @@ services:
     branch: master
     autoDeploy: true
 
-    # ✅ Salud (Render usa esto para saber si está vivo)
     healthCheckPath: /health
 
-    # ✅ Build robusto + reproducible
+    # Build pro y reproducible (usa pip limpio)
     buildCommand: |
       python -m pip install --upgrade pip setuptools wheel
       pip install --no-cache-dir -r requirements.txt
 
-    # ✅ Gunicorn PRO (logs OK, timeouts OK, workers auto, sin crashear)
-    startCommand: |
-      gunicorn "wsgi:app" \
-        --bind "0.0.0.0:${PORT}" \
-        --workers "${WEB_CONCURRENCY:-2}" \
-        --threads "${GUNICORN_THREADS:-4}" \
-        --timeout "${GUNICORN_TIMEOUT:-120}" \
-        --graceful-timeout "${GUNICORN_GRACEFUL_TIMEOUT:-30}" \
-        --keep-alive "${GUNICORN_KEEPALIVE:-5}" \
-        --max-requests "${GUNICORN_MAX_REQUESTS:-1000}" \
-        --max-requests-jitter "${GUNICORN_MAX_REQUESTS_JITTER:-100}" \
-        --access-logfile "-" \
-        --error-logfile "-" \
-        --log-level "${LOG_LEVEL:-info}"
+    # Start command pro (gunicorn estable)
+    startCommand: >
+      gunicorn "wsgi:app"
+      --bind "0.0.0.0:${PORT}"
+      --workers "${WEB_CONCURRENCY:-2}"
+      --threads "${GUNICORN_THREADS:-4}"
+      --timeout "${GUNICORN_TIMEOUT:-120}"
+      --graceful-timeout "${GUNICORN_GRACEFUL_TIMEOUT:-30}"
+      --keep-alive "${GUNICORN_KEEPALIVE:-5}"
+      --max-requests "${GUNICORN_MAX_REQUESTS:-1000}"
+      --max-requests-jitter "${GUNICORN_MAX_REQUESTS_JITTER:-100}"
+      --access-logfile "-"
+      --error-logfile "-"
+      --log-level "${LOG_LEVEL:-info}"
 
     envVars:
       # -------------------------
-      # Runtime
+      # Python / runtime
       # -------------------------
       - key: PYTHON_VERSION
         value: 3.12.9
 
       # -------------------------
-      # App env (TU código usa ENV/DEBUG)
+      # App env
       # -------------------------
       - key: ENV
         value: production
       - key: DEBUG
         value: "0"
-
-      # LOGS
       - key: LOG_LEVEL
         value: INFO
 
@@ -59,22 +56,27 @@ services:
       - key: FORCE_HTTPS
         value: "1"
 
-      # 🔐 Obligatorio
+      # Recomendado para proxies/CDN (si tu app lo usa)
+      - key: TRUST_PROXY_HEADERS
+        value: "1"
+
+      # 🔐 Obligatorio (ponerlo en Render Dashboard)
       - key: SECRET_KEY
         sync: false
 
       # -------------------------
-      # DB
+      # DB (ponerlo en Render Dashboard)
       # -------------------------
       - key: DATABASE_URL
         sync: false
 
       # -------------------------
-      # Uploads (si querés ruta custom)
-      # Recomendado: usar static/uploads dentro del repo
+      # Uploads
+      # En Render FREE el filesystem NO es persistente.
+      # Si subís imágenes desde admin, te conviene S3/Cloudinary.
       # -------------------------
       - key: UPLOADS_DIR
-        value: ""
+        value: "static/uploads"
 
       # -------------------------
       # Printful
@@ -88,8 +90,6 @@ services:
 
       # -------------------------
       # Mercado Pago (si usás integración real)
-      # OJO: si solo guardás "links de cobro" en admin,
-      # no necesitás estos env.
       # -------------------------
       - key: MP_ACCESS_TOKEN
         sync: false
@@ -97,7 +97,7 @@ services:
         sync: false
 
       # -------------------------
-      # Admin bootstrap (si tu create_admin_if_missing lo usa)
+      # Admin bootstrap (ponerlos en Render Dashboard)
       # -------------------------
       - key: ADMIN_EMAIL
         sync: false
@@ -105,7 +105,7 @@ services:
         sync: false
 
       # -------------------------
-      # Gunicorn tuning (sin tocar YAML)
+      # Gunicorn tuning
       # -------------------------
       - key: WEB_CONCURRENCY
         value: "2"
