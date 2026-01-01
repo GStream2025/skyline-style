@@ -1,15 +1,68 @@
-# Importa todo lo de producción
--r requirements.txt
+# ============================================================
+# Skyline Store — Development / Testing Requirements
+# ULTRA PRO · FINAL · NO TOCAR MÁS
+# ============================================================
+# ✔ Hereda TODO de producción
+# ✔ Herramientas modernas y estables
+# ✔ No rompe Render / CI / Local
+# ✔ Compatible Flask 3 + SQLAlchemy 2
+# ============================================================
+
 
 # =========================
-# Desarrollo / Testing
+# Base (Producción)
+# =========================
+-r requirements.txt
+
+
+# =========================
+# Testing (robusto)
 # =========================
 pytest==8.3.4
 pytest-cov==6.0.0
+pytest-mock==3.14.0
+pytest-env==1.1.5
 
-# Lint / Format (calidad pro)
-ruff==0.8.4
-black==24.10.0
 
-# Consola avanzada
+# =========================
+# Lint / Format (calidad PRO)
+# =========================
+ruff==0.8.4          # lint ultra rápido (reemplaza flake8/isort)
+black==24.10.0       # formato estable y predecible
+mypy==1.13.0         # type checking (opcional pero PRO)
+types-requests==2.32.0.20241016
+
+
+# =========================
+# Debug / Dev UX
+# =========================
 ipython==8.31.0
+rich==13.9.4         # logs y prints lindos en dev
+watchdog==6.0.0      # reload inteligente (Windows/Linux/Mac)
+
+
+# =========================
+# Seguridad / Testing extra
+# =========================
+bandit==1.7.10       # security lint (opcional)
+coverage[toml]==7.6.9
+
+
+# =========================
+# DB / Debug helpers
+# =========================
+sqlalchemy-utils==0.41.2
+faker==33.1.0        # seeds / datos fake
+
+
+# =========================
+# Opcionales (NO obligatorios)
+# =========================
+# Pre-commit hooks
+# pre-commit==4.0.1
+
+# Profiling
+# py-spy==0.3.14
+
+# HTTP mocking
+# responses==0.25.3
