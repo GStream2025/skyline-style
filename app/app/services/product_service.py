@@ -1,2 +1,0 @@
-﻿# services\product_service.py
-

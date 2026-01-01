@@ -6,28 +6,26 @@ import secrets
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
+from flask_login import UserMixin
 from sqlalchemy import Index
 from sqlalchemy.orm import validates
 
 from app.models import db
 from app.utils.security import hash_password, verify_password
 
-
 # ============================================================
-# Utils
+# Helpers
 # ============================================================
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
-
-# Email soft validation: limpia, NO rompe
 EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 
 
 def _token64() -> str:
     """Token EXACTO 64 chars (hex)."""
-    return secrets.token_hex(32)  # 64 chars
+    return secrets.token_hex(32)
 
 
 def _safe_strip(v: Optional[str]) -> Optional[str]:
@@ -41,13 +39,12 @@ def _safe_strip(v: Optional[str]) -> Optional[str]:
 # User
 # ============================================================
 
-class User(db.Model):
+class User(UserMixin, db.Model):
     """
     Skyline Store — User ULTRA PRO (FINAL)
-
+    ✅ Flask-Login compatible
     ✅ Cliente + Admin + Checkout + Marketing
-    ✅ Compatible con hash_password / verify_password
-    ✅ Anti-bruteforce (lockouts)
+    ✅ Hash seguro + lockouts
     ✅ Tokens 64 fixed (DB safe)
     """
 
@@ -60,8 +57,7 @@ class User(db.Model):
     # -------------------------
     email = db.Column(db.String(255), unique=True, index=True, nullable=False)
 
-    # ⚠️ nullable=True para NO romper DB vieja en deploy.
-    # Recomendado: migración para hacerlo NOT NULL cuando ya esté en producción estable.
+    # nullable=True para NO romper DB vieja.
     password_hash = db.Column(db.String(255), nullable=True)
 
     name = db.Column(db.String(120), nullable=True)
@@ -77,7 +73,13 @@ class User(db.Model):
     # Estado / roles
     # -------------------------
     is_active = db.Column(db.Boolean, nullable=False, default=True, index=True)
+
+    # Legacy/admin boolean (tu app ya lo usa)
     is_admin = db.Column(db.Boolean, nullable=False, default=False, index=True)
+
+    # Role string (opcional, PRO). No rompe: puede ser NULL.
+    # Si lo usás: "admin" / "staff" / "customer"
+    role = db.Column(db.String(20), nullable=True, index=True)
 
     # -------------------------
     # Email verification
@@ -133,6 +135,28 @@ class User(db.Model):
         lazy="select",
         passive_deletes=True,
     )
+
+    # ============================================================
+    # Flask-Login compatibility
+    # ============================================================
+
+    def get_id(self) -> str:
+        # Flask-Login usa string
+        return str(self.id)
+
+    @property
+    def is_staff(self) -> bool:
+        # staff = admin o role staff
+        r = (self.role or "").lower().strip()
+        return bool(self.is_admin) or r in {"admin", "staff"}
+
+    @property
+    def role_effective(self) -> str:
+        # para UI / permisos: no rompe si role NULL
+        if self.is_admin:
+            return "admin"
+        r = (self.role or "").lower().strip()
+        return r if r else "customer"
 
     # ============================================================
     # Password
@@ -245,7 +269,7 @@ class User(db.Model):
     @validates("email")
     def _v_email(self, _k, v: str) -> str:
         vv = self.normalize_email(v)
-        # No rompe: solo recorta y limpia
+        # No rompe: solo limpia
         return vv[:255] if vv else ""
 
     @validates("country")
@@ -263,25 +287,24 @@ class User(db.Model):
         vv = _safe_strip(v)
         if not vv:
             return None
-        cleaned = "".join(ch for ch in vv if ch.isdigit() or ch in {"+", " ", "(", ")", "-"})
-        cleaned = cleaned.strip()
+        cleaned = "".join(ch for ch in vv if ch.isdigit() or ch in {"+", " ", "(", ")", "-"}).strip()
         return cleaned[:40] if cleaned else None
 
+    @validates("role")
+    def _v_role(self, _k, v: Optional[str]) -> Optional[str]:
+        vv = _safe_strip(v)
+        return vv.lower()[:20] if vv else None
+
     # ============================================================
-    # Safety: auto-token on insert
+    # Safety: ensure tokens
     # ============================================================
 
     def ensure_tokens(self) -> None:
-        """Llamalo antes de commit si creás usuarios manualmente."""
         if not self.unsubscribe_token:
             self.unsubscribe_token = _token64()
 
     def __repr__(self) -> str:
-        return (
-            f"<User id={self.id} email={self.email!r} "
-            f"admin={bool(self.is_admin)} active={bool(self.is_active)}>"
-        )
-
+        return f"<User id={self.id} email={self.email!r} role={self.role_effective!r} active={bool(self.is_active)}>"
 
 Index("ix_users_active_admin", User.is_active, User.is_admin)
 Index("ix_users_country_city", User.country, User.city)
@@ -347,21 +370,18 @@ class UserAddress(db.Model):
         vv = _safe_strip(v)
         if not vv:
             return None
-        cleaned = "".join(ch for ch in vv if ch.isdigit() or ch in {"+", " ", "(", ")", "-"})
-        cleaned = cleaned.strip()
+        cleaned = "".join(ch for ch in vv if ch.isdigit() or ch in {"+", " ", "(", ")", "-"}).strip()
         return cleaned[:40] if cleaned else None
 
     def set_as_default(self) -> None:
         """
         Marca esta dirección como default y desmarca las demás.
-        ✅ Seguro: no rompe y no necesita cargar todas las direcciones.
+        ✅ Seguro: update masivo sin necesitar cargar todo.
         """
         if not self.user_id:
             self.is_default = True
             return
 
-        # OJO: update masivo sin sincronizar objetos en memoria.
-        # Está bien para web apps; si querés, podés refrescar luego.
         db.session.query(UserAddress).filter(
             UserAddress.user_id == self.user_id,
             UserAddress.id != self.id,
@@ -371,6 +391,5 @@ class UserAddress(db.Model):
 
     def __repr__(self) -> str:
         return f"<UserAddress id={self.id} user_id={self.user_id} default={bool(self.is_default)}>"
-
 
 Index("ix_user_addresses_user_default", UserAddress.user_id, UserAddress.is_default)

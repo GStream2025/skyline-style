@@ -1,17 +1,20 @@
 ﻿from __future__ import annotations
 
 import re
-import secrets
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
-from typing import Optional, Any, Iterable
+from typing import Any, Optional
 
-from sqlalchemy import event
+from sqlalchemy import Index, event, select, func
 from sqlalchemy.orm import validates
 from sqlalchemy.ext.hybrid import hybrid_property
 
-from app.models import db  # ✅ SIEMPRE db ÚNICO
+from app.models import db  # db único
 
+
+# ============================================================
+# Helpers
+# ============================================================
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
@@ -37,9 +40,12 @@ _slug_re = re.compile(r"[^a-z0-9\-]+")
 
 
 def slugify(text: str, max_len: int = 180) -> str:
-    """Slug simple, estable y portable (sin dependencias externas)."""
+    """Slug simple, estable, portable (sin dependencias)."""
     s = (text or "").strip().lower()
-    s = s.replace("á", "a").replace("é", "e").replace("í", "i").replace("ó", "o").replace("ú", "u").replace("ñ", "n")
+    s = (
+        s.replace("á", "a").replace("é", "e").replace("í", "i")
+         .replace("ó", "o").replace("ú", "u").replace("ñ", "n")
+    )
     s = re.sub(r"\s+", "-", s)
     s = _slug_re.sub("", s)
     s = re.sub(r"-{2,}", "-", s).strip("-")
@@ -48,8 +54,38 @@ def slugify(text: str, max_len: int = 180) -> str:
     return s[:max_len]
 
 
+def _unique_slug(conn, base_slug: str, product_id: Optional[int] = None) -> str:
+    """
+    Genera slug único en DB (evita choques).
+    - Usa suffix -2, -3, ...
+    - No requiere dependencias.
+    """
+    base_slug = (base_slug or "product").strip()[:180] or "product"
+    candidate = base_slug
+
+    # EXISTS query portable
+    def exists(sl: str) -> bool:
+        q = select(func.count(Product.id)).where(Product.slug == sl)
+        if product_id:
+            q = q.where(Product.id != product_id)
+        return (conn.execute(q).scalar() or 0) > 0
+
+    if not exists(candidate):
+        return candidate
+
+    # prueba con sufijos
+    for i in range(2, 5000):
+        suffix = f"-{i}"
+        candidate = (base_slug[: (200 - len(suffix))] + suffix).strip("-")
+        if not exists(candidate):
+            return candidate
+
+    # ultra fallback (muy raro)
+    return base_slug[:190] + "-x"
+
+
 # ============================================================
-# Many-to-many: Product <-> Tags
+# Many-to-many
 # ============================================================
 
 product_tags = db.Table(
@@ -58,7 +94,6 @@ product_tags = db.Table(
     db.Column("tag_id", db.Integer, db.ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True),
 )
 
-# Many-to-many: Product <-> Extra Categories (además de la principal)
 product_categories = db.Table(
     "product_categories",
     db.Column("product_id", db.Integer, db.ForeignKey("products.id", ondelete="CASCADE"), primary_key=True),
@@ -72,13 +107,14 @@ product_categories = db.Table(
 
 class Product(db.Model):
     """
-    Skyline Store — Product ULTRA PRO (FINAL)
+    Skyline Store — Product PRO (FINAL)
 
-    ✅ Compatible con tus rutas actuales:
-    - shop_routes filtra Product.is_active en SQL -> acá es hybrid_property (NO rompe)
-    - cart/checkout usan status, stock_mode, stock_qty y main_image_url()
-    - compat legacy: name/title, stock/stock_qty, description/description_html
+    ✅ Compat rutas actuales:
+    - filtros por Product.is_active (SQL) -> hybrid_property OK
+    - cart/checkout usan status, stock_mode, stock_qty + main_image_url()
+    - legacy: name/title, stock/stock_qty, description/description_html
     """
+
     __tablename__ = "products"
 
     id = db.Column(db.Integer, primary_key=True)
@@ -122,10 +158,11 @@ class Product(db.Model):
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, index=True)
     updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow, index=True)
 
-    # relationships
+    # Relationships
     category = db.relationship("Category", foreign_keys=[category_id], lazy="select")
     extra_categories = db.relationship("Category", secondary=product_categories, lazy="select")
     tags = db.relationship("Tag", secondary=product_tags, lazy="select")
+
     media = db.relationship(
         "ProductMedia",
         back_populates="product",
@@ -134,7 +171,7 @@ class Product(db.Model):
     )
 
     # -------------------------
-    # Compatibilidad legacy (NO ROMPE CÓDIGO VIEJO)
+    # Compat legacy (NO rompe)
     # -------------------------
     def __init__(self, **kwargs):
         # name -> title
@@ -149,13 +186,12 @@ class Product(db.Model):
         if "description" in kwargs and "description_html" not in kwargs:
             kwargs["description_html"] = kwargs.pop("description")
 
-        # slug auto si falta (mejora #1)
+        # slug si falta
         if not kwargs.get("slug") and kwargs.get("title"):
             kwargs["slug"] = slugify(kwargs["title"])
 
         super().__init__(**kwargs)
 
-    # Back-compat: name
     @property
     def name(self) -> str:
         return self.title
@@ -164,7 +200,6 @@ class Product(db.Model):
     def name(self, value: str) -> None:
         self.title = (value or "").strip()
 
-    # Back-compat: stock
     @property
     def stock(self) -> int:
         return int(self.stock_qty or 0)
@@ -177,7 +212,7 @@ class Product(db.Model):
             self.stock_qty = 0
 
     # -------------------------
-    # is_active para TUS QUERIES (mejora #2: hybrid_property)
+    # is_active (Python + SQL)
     # -------------------------
     @hybrid_property
     def is_active(self) -> bool:
@@ -185,11 +220,10 @@ class Product(db.Model):
 
     @is_active.expression
     def is_active(cls):  # type: ignore[override]
-        # permite: Product.is_active.is_(True) en SQLAlchemy
         return cls.status == "active"
 
     # -------------------------
-    # Validaciones suaves (no rompen forms)
+    # Validaciones suaves
     # -------------------------
     @validates("title")
     def _v_title(self, _k, v: str) -> str:
@@ -198,6 +232,7 @@ class Product(db.Model):
 
     @validates("slug")
     def _v_slug(self, _k, v: str) -> str:
+        # OJO: acá solo normaliza, la unicidad la resuelven hooks con DB
         v = slugify(v or "")
         return v[:200] if v else "product"
 
@@ -223,15 +258,12 @@ class Product(db.Model):
 
     @validates("price", "compare_at_price")
     def _v_price(self, _k, v: Any):
-        # mejora #3: clamp anti negativos / NaN
-        d = _clamp_money(_d(v, "0.00"))
-        return d
+        return _clamp_money(_d(v, "0.00"))
 
     # -------------------------
     # Helpers PRO
     # -------------------------
     def is_available(self) -> bool:
-        """Disponibilidad real para comprar (mejora #4: consistente con carrito)."""
         if not self.is_active:
             return False
         mode = (self.stock_mode or "finite").lower()
@@ -253,7 +285,6 @@ class Product(db.Model):
         return bool(ca and ca > self.price_decimal())
 
     def discount_percent(self) -> Optional[int]:
-        """% descuento redondeado (mejora #5: seguro)."""
         ca = self.compare_at_decimal()
         p = self.price_decimal()
         if not ca or ca <= 0 or p <= 0 or ca <= p:
@@ -264,15 +295,20 @@ class Product(db.Model):
             return None
 
     def main_image_url(self) -> Optional[str]:
-        """Primera imagen por sort_order (mejora #6)."""
-        imgs = [m for m in (self.media or []) if (m.type or "").lower() == "image" and (m.url or "").strip()]
+        imgs = [
+            m for m in (self.media or [])
+            if (m.type or "").lower() == "image" and (m.url or "").strip()
+        ]
         if not imgs:
             return None
         imgs.sort(key=lambda x: (x.sort_order or 0, x.id or 0))
         return imgs[0].url
 
     def main_video_url(self) -> Optional[str]:
-        vids = [m for m in (self.media or []) if (m.type or "").lower() == "video" and (m.url or "").strip()]
+        vids = [
+            m for m in (self.media or [])
+            if (m.type or "").lower() == "video" and (m.url or "").strip()
+        ]
         if not vids:
             return None
         vids.sort(key=lambda x: (x.sort_order or 0, x.id or 0))
@@ -288,14 +324,12 @@ class Product(db.Model):
         d = (self.seo_description or self.short_description or "").strip()
         if d:
             return d[:260]
-        # fallback “limpio” sin HTML (mejora #7)
         raw = (self.description_html or "").strip()
         raw = re.sub(r"<[^>]+>", " ", raw)
         raw = re.sub(r"\s+", " ", raw).strip()
         return (raw[:260] if raw else "") or ""
 
     def to_dict(self) -> dict:
-        """mejora #8: serializable (admin/API)."""
         return {
             "id": self.id,
             "title": self.title,
@@ -310,17 +344,11 @@ class Product(db.Model):
             "category_id": self.category_id,
             "main_image": self.main_image_url(),
             "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
 
     def __repr__(self) -> str:
         return f"<Product id={self.id} title={self.title!r} status={self.status!r}>"
-
-
-# Índices de performance (tipo marketplace)
-db.Index("ix_products_status_source", Product.status, Product.source)
-db.Index("ix_products_category_status", Product.category_id, Product.status)
-db.Index("ix_products_price", Product.price)
-db.Index("ix_products_updated", Product.updated_at)
 
 
 class ProductMedia(db.Model):
@@ -352,7 +380,15 @@ class ProductMedia(db.Model):
     @validates("url")
     def _v_url(self, _k, v: str) -> str:
         v = (v or "").strip()
-        return v[:700] if v else ""
+        if not v:
+            # mejor fallar acá con mensaje claro antes que explotar en DB
+            raise ValueError("ProductMedia.url no puede estar vacío")
+        return v[:700]
+
+    @validates("alt_text")
+    def _v_alt(self, _k, v: Optional[str]) -> Optional[str]:
+        v = (v or "").strip()
+        return v[:200] if v else None
 
     def __repr__(self) -> str:
         return f"<ProductMedia id={self.id} product_id={self.product_id} type={self.type!r}>"
@@ -383,18 +419,42 @@ class Tag(db.Model):
 # ============================================================
 
 @event.listens_for(Product, "before_insert", propagate=True)
-def _product_before_insert(_mapper, _conn, target: Product):
-    # mejora #9: slug auto si faltó
+def _product_before_insert(_mapper, conn, target: Product):
+    # slug base
     if not (target.slug or "").strip():
         target.slug = slugify(target.title or "product")
+    else:
+        target.slug = slugify(target.slug)
 
-    # mejora #10: updated_at consistente
-    target.updated_at = utcnow()
+    # asegurar unicidad
+    target.slug = _unique_slug(conn, target.slug)
+
+    # timestamps
+    now = utcnow()
+    target.updated_at = now
     if not target.created_at:
-        target.created_at = utcnow()
+        target.created_at = now
 
 
 @event.listens_for(Product, "before_update", propagate=True)
-def _product_before_update(_mapper, _conn, target: Product):
-    # garantía de updated_at (tu hook original, pero blindado)
+def _product_before_update(_mapper, conn, target: Product):
+    # si cambia title y slug quedó vacío, lo regeneramos
+    if not (target.slug or "").strip():
+        target.slug = slugify(target.title or "product")
+    else:
+        target.slug = slugify(target.slug)
+
+    # asegurar unicidad (excluye el mismo id)
+    target.slug = _unique_slug(conn, target.slug, product_id=target.id)
+
     target.updated_at = utcnow()
+
+
+# ============================================================
+# Índices PRO (marketplace)
+# ============================================================
+
+Index("ix_products_status_source", Product.status, Product.source)
+Index("ix_products_category_status", Product.category_id, Product.status)
+Index("ix_products_price", Product.price)
+Index("ix_products_updated", Product.updated_at)
