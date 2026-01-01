@@ -7,35 +7,78 @@ services:
     branch: master
     autoDeploy: true
 
+    # ✅ Salud (Render usa esto para saber si está vivo)
+    healthCheckPath: /health
+
+    # ✅ Build robusto + reproducible
     buildCommand: |
       python -m pip install --upgrade pip setuptools wheel
       pip install --no-cache-dir -r requirements.txt
 
-    # ⚡ Mejor entrypoint (estándar para Flask + Gunicorn)
+    # ✅ Gunicorn PRO (logs OK, timeouts OK, workers auto, sin crashear)
     startCommand: |
-      gunicorn wsgi:app \
-        --bind 0.0.0.0:$PORT \
-        --workers 2 \
-        --threads 4 \
-        --timeout 120 \
-        --access-logfile - \
-        --error-logfile - \
-        --log-level info
+      gunicorn "wsgi:app" \
+        --bind "0.0.0.0:${PORT}" \
+        --workers "${WEB_CONCURRENCY:-2}" \
+        --threads "${GUNICORN_THREADS:-4}" \
+        --timeout "${GUNICORN_TIMEOUT:-120}" \
+        --graceful-timeout "${GUNICORN_GRACEFUL_TIMEOUT:-30}" \
+        --keep-alive "${GUNICORN_KEEPALIVE:-5}" \
+        --max-requests "${GUNICORN_MAX_REQUESTS:-1000}" \
+        --max-requests-jitter "${GUNICORN_MAX_REQUESTS_JITTER:-100}" \
+        --access-logfile "-" \
+        --error-logfile "-" \
+        --log-level "${LOG_LEVEL:-info}"
 
     envVars:
-      # Python runtime
+      # -------------------------
+      # Runtime
+      # -------------------------
       - key: PYTHON_VERSION
         value: 3.12.9
 
-      # Flask
-      - key: FLASK_ENV
+      # -------------------------
+      # App env (TU código usa ENV/DEBUG)
+      # -------------------------
+      - key: ENV
         value: production
+      - key: DEBUG
+        value: "0"
 
-      # Seguridad
+      # LOGS
+      - key: LOG_LEVEL
+        value: INFO
+
+      # -------------------------
+      # Seguridad cookies / HTTPS
+      # -------------------------
+      - key: COOKIE_SECURE
+        value: "1"
+      - key: SESSION_SAMESITE
+        value: Lax
+      - key: FORCE_HTTPS
+        value: "1"
+
+      # 🔐 Obligatorio
       - key: SECRET_KEY
         sync: false
 
-      # ✅ Printful (alineado con tu código)
+      # -------------------------
+      # DB
+      # -------------------------
+      - key: DATABASE_URL
+        sync: false
+
+      # -------------------------
+      # Uploads (si querés ruta custom)
+      # Recomendado: usar static/uploads dentro del repo
+      # -------------------------
+      - key: UPLOADS_DIR
+        value: ""
+
+      # -------------------------
+      # Printful
+      # -------------------------
       - key: PRINTFUL_API_KEY
         sync: false
       - key: PRINTFUL_STORE_ID
@@ -43,12 +86,38 @@ services:
       - key: PRINTFUL_CACHE_TTL
         value: "300"
 
-      # DB (opcional)
-      - key: DATABASE_URL
-        sync: false
-
-      # Mercado Pago (opcional)
+      # -------------------------
+      # Mercado Pago (si usás integración real)
+      # OJO: si solo guardás "links de cobro" en admin,
+      # no necesitás estos env.
+      # -------------------------
       - key: MP_ACCESS_TOKEN
         sync: false
       - key: MP_PUBLIC_KEY
         sync: false
+
+      # -------------------------
+      # Admin bootstrap (si tu create_admin_if_missing lo usa)
+      # -------------------------
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+
+      # -------------------------
+      # Gunicorn tuning (sin tocar YAML)
+      # -------------------------
+      - key: WEB_CONCURRENCY
+        value: "2"
+      - key: GUNICORN_THREADS
+        value: "4"
+      - key: GUNICORN_TIMEOUT
+        value: "120"
+      - key: GUNICORN_GRACEFUL_TIMEOUT
+        value: "30"
+      - key: GUNICORN_KEEPALIVE
+        value: "5"
+      - key: GUNICORN_MAX_REQUESTS
+        value: "1000"
+      - key: GUNICORN_MAX_REQUESTS_JITTER
+        value: "100"

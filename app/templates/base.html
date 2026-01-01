@@ -5,14 +5,27 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <meta name="theme-color" content="#ffffff" />
   <meta name="color-scheme" content="light" />
-  <title>{% block title %}Skyline Store{% endblock %}</title>
 
-  <!-- CSRF global (si existe en session). No rompe si no existe. -->
-  <meta name="csrf-token" content="{{ session.get('csrf_token','') if session else '' }}"/>
+  {# =========================
+     SEO dinámico (desde ctx)
+     main_routes ya inyecta meta_title/meta_description/og_image si querés
+  ========================= #}
+  <title>{% block title %}{{ meta_title if meta_title else "Skyline Store" }}{% endblock %}</title>
+  <meta name="description" content="{{ meta_description if meta_description else 'Skyline Store — tienda online con estilo, ofertas y productos premium.' }}" />
+  <link rel="canonical" href="{{ request.url }}" />
 
-  <!-- Opcional SEO básico -->
-  <meta name="description" content="Skyline Store — tienda online con estilo, ofertas y productos premium." />
+  <meta property="og:title" content="{{ meta_title if meta_title else 'Skyline Store' }}">
+  <meta property="og:description" content="{{ meta_description if meta_description else 'Tienda online moderna tipo marketplace.' }}">
+  <meta property="og:image" content="{{ og_image if og_image else url_for('static', filename='img/og.png', _external=True) }}">
+  <meta property="og:type" content="website">
 
+  <meta http-equiv="X-Content-Type-Options" content="nosniff">
+  <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
+
+  <!-- CSRF global (si existe). No rompe si no existe -->
+  <meta name="csrf-token" content="{{ session.get('csrf_token','') }}"/>
+
+  <!-- Preconnect fonts/icons si usás -->
   <style>
     :root{
       --bg:#f6f7fb;
@@ -48,7 +61,7 @@
     img{max-width:100%;display:block}
     .container{max-width:var(--max);margin:0 auto;padding:0 18px}
 
-    /* Skip link (A11y) */
+    /* ✅ Mejora #1: A11y Skip link */
     .skip{
       position:absolute; left:-9999px; top:10px;
       background:#fff; border:1px solid var(--stroke);
@@ -305,7 +318,7 @@
       font-size:.92rem;
     }
 
-    /* Focus visible */
+    /* ✅ Mejora #2: Focus visible pro */
     :focus-visible{
       outline:none;
       box-shadow: 0 0 0 4px rgba(37,99,235,.18);
@@ -382,8 +395,10 @@
         <a href="/shop?ofertas=1">Ofertas</a>
       </nav>
 
+      <!-- ✅ Mejora #3: mantiene la búsqueda al navegar -->
       <form class="search" action="/shop" method="get" role="search" aria-label="Buscar productos">
-        <input name="q" type="search" placeholder="Buscar productos..." autocomplete="off" />
+        <input name="q" type="search" placeholder="Buscar productos..." autocomplete="off"
+               value="{{ request.args.get('q','') }}" />
         <button type="submit" aria-label="Buscar">🔎</button>
       </form>
 
@@ -468,13 +483,13 @@
   <div class="toasts" aria-live="polite" aria-label="Notificaciones" id="toasts"></div>
 
   <script>
-    // ===== Año automático (sin tocar backend) =====
+    // Año automático
     (function(){
       const y = document.getElementById('year');
       if(y) y.textContent = String(new Date().getFullYear());
     })();
 
-    // ===== Menú móvil =====
+    // Menú móvil
     (function(){
       const btn = document.getElementById("burger");
       const menu = document.getElementById("mobileMenu");
@@ -485,7 +500,7 @@
       });
     })();
 
-    // ===== Toast global =====
+    // Toast global
     (function(){
       const host = document.getElementById('toasts');
       if(!host) return;
@@ -517,7 +532,7 @@
       window.toast = toast;
     })();
 
-    // ===== Offline banner =====
+    // Offline banner
     (function(){
       const box = document.getElementById('offlineBanner');
       const btn = document.getElementById('offlineRetry');
@@ -529,22 +544,18 @@
       set();
 
       if(btn){
-        btn.addEventListener('click', () => {
-          window.location.reload();
-        });
+        btn.addEventListener('click', () => window.location.reload());
       }
     })();
 
-    // ===== Fetch helpers (timeout + retry) =====
+    // Fetch helpers (timeout + retry) + CSRF
     (function(){
       const csrf = (document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '').trim();
 
       const withTimeout = (ms, promise) => {
         const c = new AbortController();
         const t = setTimeout(() => c.abort(), ms);
-        return Promise.race([
-          promise(c.signal).finally(() => clearTimeout(t)),
-        ]);
+        return Promise.race([ promise(c.signal).finally(() => clearTimeout(t)) ]);
       };
 
       const _req = async (method, url, body, tries=2) => {
@@ -574,7 +585,6 @@
             return data;
           }catch(e){
             lastErr = e;
-            // retry solo en errores de red/timeout
             const isAbort = (String(e && e.name) === 'AbortError');
             const isNetwork = !navigator.onLine || isAbort || String(e.message || '').toLowerCase().includes('failed');
             if(i < tries-1 && isNetwork){
@@ -591,7 +601,7 @@
       window.apiPost = (url, body) => _req('POST', url, body, 2);
     })();
 
-    // ===== CartStore (cache + sincronización entre pestañas) =====
+    // ✅ Mejora #4: CartStore (cache + sync pestañas)
     (function(){
       const KEY = 'skyline:cart:snap:v1';
       const badge = document.querySelector('[data-cart-badge]');
@@ -613,10 +623,8 @@
         badge.classList.toggle('is-on', count > 0);
       };
 
-      // init from cache
       setBadge(read());
 
-      // sync across tabs
       if(bc){
         bc.onmessage = (ev) => {
           if(ev && ev.data && ev.data.type === 'cart'){
@@ -626,7 +634,6 @@
         };
       }
 
-      // fetch fresh (best effort)
       window.CartStore = {
         async refresh(){
           try{
@@ -636,7 +643,6 @@
             setBadge(snap);
             return snap;
           }catch(e){
-            // si falla, mantenemos cache
             return read();
           }
         },
@@ -644,12 +650,9 @@
           write(snap);
           setBadge(snap);
         },
-        get(){
-          return read();
-        }
+        get(){ return read(); }
       };
 
-      // warmup
       setTimeout(() => { window.CartStore.refresh(); }, 120);
     })();
   </script>

@@ -2,29 +2,18 @@
 """
 Skyline Store · Routes Package (ULTRA PRO - FINAL / BULLETPROOF)
 
-Centraliza y registra todos los blueprints de la aplicación para mantener
-la app principal limpia y evitar imports circulares.
+Centraliza y registra todos los blueprints:
+✅ Safe-import con importlib
+✅ Valida Blueprint real
+✅ Anti-duplicados por name
+✅ Registro robusto (si falla NO tumba prod)
+✅ Report final prolijo
+✅ Modo estricto opcional en dev (ROUTES_STRICT=1)
 
-✅ Orden tipo marketplace:
-- main / shop / auth
-- account / profile / address
-- cart / checkout
-- marketing
-- admin / printful
-
-🛡️ Blindaje TOTAL (para copiar/pegar y no tocar más):
-- Safe-import real con importlib (más robusto que __import__)
-- Valida que lo importado sea Blueprint (evita registrar cualquier cosa)
-- Anti-duplicados por nombre
-- Registro robusto: si register_blueprint falla (colisión endpoints/url_prefix), NO rompe
-- Log final prolijo con:
-  - registrados
-  - módulos/símbolos faltantes
-  - inválidos (no Blueprint)
-  - duplicados evitados
-  - fallos de registro
-- Modo estricto opcional SOLO para dev:
-  - ROUTES_STRICT=1 -> si falla un registro/import, lanza excepción (para detectar bugs rápido)
+EXTRAS PRO:
+- ROUTES_DISABLE="admin,printful" -> desactiva blueprints por env
+- url_prefix opcional por spec (si querés forzar)
+- fallback: si el símbolo no existe pero el módulo trae 1 blueprint, lo detecta
 """
 
 from __future__ import annotations
@@ -32,7 +21,7 @@ from __future__ import annotations
 import os
 import logging
 from importlib import import_module
-from typing import TYPE_CHECKING, Optional, Set, Iterable, Tuple, Dict, List
+from typing import TYPE_CHECKING, Optional, Set, Iterable, Tuple, Dict, List, Any
 
 if TYPE_CHECKING:
     from flask import Flask
@@ -43,46 +32,80 @@ log = logging.getLogger("routes")
 _TRUE = {"1", "true", "yes", "y", "on"}
 
 
+# ------------------------------------------------------------
+# Strict mode (solo dev)
+# ------------------------------------------------------------
 def _strict_mode(app: "Flask") -> bool:
     """
-    Modo estricto SOLO recomendado en development.
-    Si ROUTES_STRICT=1 y ENV=development -> levanta error para que lo veas al toque.
+    En dev, si ROUTES_STRICT=1 -> explota para detectar rápido errores.
+    En prod, nunca debería explotar por rutas.
     """
+    v = (os.getenv("ROUTES_STRICT") or "").strip().lower()
+    if v not in _TRUE:
+        return False
+
+    # Detecta env lo más robusto posible
+    env = ""
     try:
         env = (app.config.get("ENV") or "").strip().lower()
     except Exception:
         env = ""
-    v = (os.getenv("ROUTES_STRICT") or "").strip().lower()
-    return (v in _TRUE) and (env == "development")
 
+    # soporte alternativo (FLASK_ENV / app.debug)
+    if not env:
+        env = (os.getenv("FLASK_ENV") or "").strip().lower()
 
-def _safe_import(path: str, name: str):
-    """
-    Importa un símbolo de forma segura.
-    Devuelve:
-      - objeto si existe
-      - None si falla
-    """
+    if env:
+        return env in {"development", "dev"}
     try:
-        mod = import_module(path)
-        return getattr(mod, name, None)
+        return bool(getattr(app, "debug", False))
+    except Exception:
+        return False
+
+
+# ------------------------------------------------------------
+# Disable list by ENV
+# ------------------------------------------------------------
+def _disabled_set() -> Set[str]:
+    """
+    ROUTES_DISABLE="admin,printful,marketing"
+    Compara contra bp.name y/o símbolo.
+    """
+    raw = (os.getenv("ROUTES_DISABLE") or "").strip().lower()
+    if not raw:
+        return set()
+    items = {x.strip() for x in raw.split(",") if x.strip()}
+    return items
+
+
+# ------------------------------------------------------------
+# Import helpers
+# ------------------------------------------------------------
+def _safe_import_module(path: str):
+    try:
+        return import_module(path)
     except Exception as e:
-        log.debug("Blueprint import failed: %s.%s (%s)", path, name, e)
+        log.debug("Import module failed: %s (%s)", path, e)
         return None
 
 
-def _is_blueprint(obj) -> bool:
+def _safe_getattr(mod, name: str):
+    try:
+        return getattr(mod, name, None)
+    except Exception:
+        return None
+
+
+def _is_blueprint(obj: Any) -> bool:
     """
-    Validación flexible:
-    - evita importar Flask en runtime
-    - confirma estructura típica de Blueprint
+    Validación flexible y segura:
+    - no importa Flask en runtime
+    - chequea estructura típica
     """
     if obj is None:
         return False
-    # Clase suele llamarse Blueprint
     if obj.__class__.__name__ != "Blueprint":
         return False
-    # props típicas
     if not hasattr(obj, "name"):
         return False
     if not hasattr(obj, "register"):
@@ -90,16 +113,59 @@ def _is_blueprint(obj) -> bool:
     return True
 
 
+def _find_single_blueprint_in_module(mod) -> Optional[Any]:
+    """
+    Fallback: si no existe el símbolo, pero el módulo define 1 blueprint,
+    lo usamos. Si hay 0 o >1, no adivinamos.
+    """
+    if not mod:
+        return None
+    found = []
+    for k in dir(mod):
+        if k.startswith("_"):
+            continue
+        obj = _safe_getattr(mod, k)
+        if _is_blueprint(obj):
+            found.append(obj)
+            if len(found) > 1:
+                return None
+    return found[0] if len(found) == 1 else None
+
+
+def _safe_import_symbol(path: str, name: str) -> Any:
+    """
+    Importa mod + símbolo. Si no existe, intenta fallback por 1 blueprint.
+    """
+    mod = _safe_import_module(path)
+    if not mod:
+        return None
+
+    obj = _safe_getattr(mod, name)
+    if _is_blueprint(obj):
+        return obj
+
+    # fallback: auto-detect 1 blueprint
+    auto_bp = _find_single_blueprint_in_module(mod)
+    return auto_bp
+
+
+# ------------------------------------------------------------
+# Register
+# ------------------------------------------------------------
 def _register_once(
     app: "Flask",
-    bp,
+    bp: Any,
+    *,
     seen: Set[str],
     report: Dict[str, List[str]],
     origin: str,
+    url_prefix: Optional[str] = None,
+    disabled: Set[str],
 ) -> None:
     """
-    Registra el blueprint evitando duplicados.
-    Nunca rompe (salvo modo estricto en dev).
+    Registra blueprint evitando duplicados.
+    - no rompe en prod
+    - en strict dev levanta error
     """
     if bp is None:
         report["missing"].append(origin)
@@ -109,9 +175,15 @@ def _register_once(
         report["invalid"].append(origin)
         return
 
-    bp_name = getattr(bp, "name", None)
+    bp_name = (getattr(bp, "name", "") or "").strip()
     if not bp_name:
         report["invalid"].append(origin)
+        return
+
+    # disable by env (acepta bp.name o símbolo)
+    origin_tail = origin.split(".")[-1].strip().lower()
+    if bp_name.lower() in disabled or origin_tail in disabled:
+        report["disabled"].append(f"{bp_name} <- {origin}")
         return
 
     if bp_name in seen:
@@ -119,23 +191,33 @@ def _register_once(
         return
 
     try:
-        app.register_blueprint(bp)
+        if url_prefix:
+            # forzar prefijo si lo pedís en specs
+            app.register_blueprint(bp, url_prefix=url_prefix)
+        else:
+            app.register_blueprint(bp)
         seen.add(bp_name)
         report["registered"].append(bp_name)
+
     except Exception as e:
-        report["failed_register"].append(f"{bp_name} <- {origin} :: {e}")
-        # warning sin stack para no ensuciar logs de prod
+        # no ensucia prod con stack
+        msg = f"{bp_name} <- {origin} :: {e}"
+        report["failed_register"].append(msg)
         log.warning("⚠️ No se pudo registrar blueprint '%s' (%s): %s", bp_name, origin, e, exc_info=False)
         if _strict_mode(app):
             raise
 
 
+# ------------------------------------------------------------
+# Public API
+# ------------------------------------------------------------
 def register_blueprints(app: "Flask") -> None:
     """
-    Registra TODOS los blueprints en la app (orden marketplace).
-    Si algo falta o rompe, NO tumba la app.
+    Registra TODOS los blueprints en orden marketplace.
+    Si algo falta o rompe, NO tumba la app (salvo strict dev).
     """
     seen: Set[str] = set()
+    disabled = _disabled_set()
 
     report: Dict[str, List[str]] = {
         "registered": [],
@@ -143,49 +225,65 @@ def register_blueprints(app: "Flask") -> None:
         "invalid": [],
         "duplicate": [],
         "failed_register": [],
+        "disabled": [],
     }
 
-    # Declarativo + ordenado (marketplace)
-    specs: Iterable[Tuple[str, str]] = (
+    # Specs:
+    # (module, symbol, url_prefix_override)
+    specs: Iterable[Tuple[str, str, Optional[str]]] = (
         # Core
-        ("app.routes.main_routes", "main_bp"),
-        ("app.routes.shop_routes", "shop_bp"),
-        ("app.routes.auth_routes", "auth_bp"),
+        ("app.routes.main_routes", "main_bp", None),
+        ("app.routes.shop_routes", "shop_bp", None),
+        ("app.routes.auth_routes", "auth_bp", None),
 
         # Account
-        ("app.routes.account_routes", "account_bp"),
-        ("app.routes.account_routes", "cuenta_bp"),
-        ("app.routes.profile_routes", "profile_bp"),
-        ("app.routes.address_routes", "address_bp"),
+        ("app.routes.account_routes", "account_bp", None),
+        ("app.routes.account_routes", "cuenta_bp", None),
+        ("app.routes.profile_routes", "profile_bp", None),
+        ("app.routes.address_routes", "address_bp", None),
 
         # Cart / Checkout
-        ("app.routes.cart_routes", "cart_bp"),
-        ("app.routes.checkout_routes", "checkout_bp"),
+        ("app.routes.cart_routes", "cart_bp", None),
+        ("app.routes.checkout_routes", "checkout_bp", None),
 
         # Marketing
-        ("app.routes.marketing_routes", "marketing_bp"),
+        ("app.routes.marketing_routes", "marketing_bp", None),
 
         # Admin / Printful
-        ("app.routes.admin_routes", "admin_bp"),
-        ("app.routes.printful_routes", "printful_bp"),
+        ("app.routes.admin_routes", "admin_bp", None),
+        ("app.routes.printful_routes", "printful_bp", None),
     )
 
-    for mod, sym in specs:
+    for mod, sym, pref in specs:
         origin = f"{mod}.{sym}"
-        bp = _safe_import(mod, sym)
-        _register_once(app, bp, seen, report, origin)
+        bp = _safe_import_symbol(mod, sym)
+        _register_once(
+            app,
+            bp,
+            seen=seen,
+            report=report,
+            origin=origin,
+            url_prefix=pref,
+            disabled=disabled,
+        )
 
-    # Log final prolijo (nunca rompe)
+    # -------- Summary logs (limpios) --------
     try:
         log.info("✅ Blueprints registrados (%d): %s", len(seen), ", ".join(sorted(seen)) if seen else "(ninguno)")
 
-        # Detalle solo si hay algo raro (para no spamear)
+        # solo si hay ruido
+        if report["disabled"]:
+            log.info("⛔ Blueprints deshabilitados por ENV: %s", ", ".join(report["disabled"]))
+
         if report["missing"]:
             log.debug("ℹ️ Blueprints no encontrados: %s", ", ".join(report["missing"]))
+
         if report["invalid"]:
             log.warning("⚠️ Blueprints inválidos (no Blueprint): %s", ", ".join(report["invalid"]))
+
         if report["duplicate"]:
             log.debug("ℹ️ Duplicados evitados: %s", ", ".join(report["duplicate"]))
+
         if report["failed_register"]:
             log.warning("⚠️ Fallos al registrar: %s", " | ".join(report["failed_register"]))
     except Exception:
