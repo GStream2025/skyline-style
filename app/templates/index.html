@@ -2,9 +2,6 @@
 {% block title %}Skyline Store · Moda urbana premium{% endblock %}
 
 {% block extra_head %}
-<!-- =========================
- SEO / SHARE / PERFORMANCE
-========================= -->
 <meta name="description" content="{{ meta_description if meta_description is defined else 'Skyline Store · Moda urbana premium, accesorios y tecnología. Comprá fácil, rápido y seguro.' }}">
 <link rel="canonical" href="{{ request.url }}">
 
@@ -13,343 +10,368 @@
 <meta property="og:image" content="{{ (og_image if og_image is defined else url_for('static', filename='img/banners/hero_home.png', _external=True)) }}">
 <meta property="og:type" content="website">
 
-<meta http-equiv="X-Content-Type-Options" content="nosniff">
-<meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
-
 <link rel="preload" as="image" href="{{ url_for('static', filename='img/banners/hero_home.png') }}">
 
 <style>
 /* =========================
- TOKENS / BASE
+ HOME — Marketplace Premium (consistente con base)
 ========================= */
-:root{
-  --bg:#f6f7fb;
-  --card:#ffffff;
-  --text:#0b1220;
-  --muted: rgba(11,18,32,.66);
-  --line: rgba(15,23,42,.10);
-  --shadow: 0 14px 40px rgba(2,6,23,.10);
-  --shadow2: 0 10px 26px rgba(2,6,23,.08);
-  --brand:#f59e0b;
-  --brand2:#2563eb;
-  --radius:18px;
-}
-*{box-sizing:border-box}
-.home{background:var(--bg)}
-.section{max-width:1220px;margin:0 auto;padding:0 18px 28px}
+.home{padding: 10px 0 0}
+.section{max-width: var(--max); margin:0 auto; padding: 0 18px 28px}
 a{color:inherit}
 .sr-only{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
 
-/* =========================
- TOPBAR (Temu-like)
-========================= */
-.topbar{
-  margin:14px 0 10px;
-  display:flex; gap:10px; flex-wrap:wrap;
-  align-items:center; justify-content:space-between;
+/* ===== Layout row superior ===== */
+.home-top{
+  margin: 14px 0 12px;
+  display:flex;
+  gap:12px;
+  flex-wrap:wrap;
+  align-items:center;
+  justify-content:space-between;
 }
-.badges{
-  display:flex; gap:8px; flex-wrap:wrap; align-items:center;
-}
+.badges{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
 .badge{
   display:inline-flex; align-items:center; gap:8px;
-  background:rgba(255,255,255,.88);
-  border:1px solid var(--line);
+  background: rgba(255,255,255,.85);
+  border: 1px solid var(--stroke);
   border-radius:999px;
-  padding:8px 10px;
-  box-shadow: 0 8px 18px rgba(2,6,23,.06);
-  font-weight:900;
-  font-size:.86rem;
+  padding: 9px 11px;
+  box-shadow: 0 12px 24px rgba(2,6,23,.06);
+  font-weight: 800;
+  font-size: .88rem;
   color: rgba(11,18,32,.86);
 }
-.badge i{
-  width:10px;height:10px;border-radius:99px;background:rgba(34,197,94,.35);
-  display:inline-block;
+.badge .d{
+  width:10px;height:10px;border-radius:99px;
+  background: var(--grad);
+  opacity:.95;
 }
-.badge.blue i{background:rgba(37,99,235,.30)}
-.badge.amber i{background:rgba(245,158,11,.35)}
-.badge.gray i{background:rgba(100,116,139,.30)}
 
-/* =========================
- SEARCH (quick)
-========================= */
-.searchbar{
-  display:flex; gap:10px; align-items:center;
-  width:min(540px, 100%);
+.home-search{
+  display:flex; align-items:center; gap:10px;
+  width: min(560px, 100%);
 }
-.search{
+.home-search .search{
   flex:1;
   display:flex; gap:10px; align-items:center;
-  background:rgba(255,255,255,.94);
-  border:1px solid var(--line);
-  border-radius:14px;
-  padding:10px 12px;
-  box-shadow: 0 10px 26px rgba(2,6,23,.06);
+  background: rgba(255,255,255,.92);
+  border: 1px solid var(--stroke);
+  border-radius: 16px;
+  padding: 10px 12px;
+  box-shadow: 0 14px 30px rgba(2,6,23,.06);
 }
-.search input{
+.home-search input{
   border:0; outline:none; width:100%;
-  font-weight:900;
-  background:transparent;
-  color: var(--text);
+  font-weight: 700;
+  background: transparent;
+  color: rgba(11,18,32,.92);
 }
-.search button{
+.home-search input::placeholder{color: rgba(11,18,32,.45)}
+.home-search button{
   border:0;
-  background:var(--brand2);
+  background: var(--grad);
   color:#fff;
-  font-weight:1000;
-  padding:10px 12px;
-  border-radius:12px;
+  font-weight: 900;
+  padding: 10px 14px;
+  border-radius: 14px;
   cursor:pointer;
+  box-shadow: 0 12px 22px rgba(2,6,23,.12);
+  transition: transform .18s var(--ease);
 }
-.search button:active{transform:translateY(1px)}
+.home-search button:hover{transform: translateY(-1px)}
+@media (max-width: 560px){
+  .home-search{width:100%}
+}
 
-/* =========================
- HERO
-========================= */
-.hero-wrap{padding:8px 0 12px}
+/* ===== HERO ===== */
 .hero{
   position:relative;
-  border-radius:var(--radius);
+  border-radius: 22px;
   overflow:hidden;
-  background:var(--card);
-  box-shadow:var(--shadow);
-  border:1px solid var(--line);
+  background: #fff;
+  border: 1px solid var(--stroke);
+  box-shadow: var(--shadow2);
 }
 .hero-img{
   width:100%;
-  height:min(480px,64vw);
-  object-fit:cover;
+  height: min(520px, 70vw);
+  object-fit: cover;
   display:block;
+  filter: saturate(1.05) contrast(1.02);
 }
 .hero-overlay{
   position:absolute; inset:0;
   display:flex; align-items:center;
-  padding:22px clamp(18px,4vw,46px);
+  padding: 22px clamp(18px,4vw,46px);
 }
-.hero-left{
-  max-width:560px;
-  background:linear-gradient(180deg,rgba(255,255,255,.90),rgba(255,255,255,.64));
-  border:1px solid var(--line);
-  box-shadow:0 18px 50px rgba(2,6,23,.10);
-  border-radius:18px;
-  padding:18px 18px 16px;
-  backdrop-filter: blur(6px);
+.hero-card{
+  max-width: 600px;
+  background: linear-gradient(180deg, rgba(255,255,255,.92), rgba(255,255,255,.70));
+  border: 1px solid rgba(15,23,42,.12);
+  box-shadow: 0 18px 55px rgba(2,6,23,.12);
+  border-radius: 22px;
+  padding: 18px 18px 16px;
+  backdrop-filter: blur(10px);
 }
-.hero-left h1{
-  margin:0;
-  font-weight:1000;
-  letter-spacing:-1px;
-  line-height:1.02;
-  font-size:clamp(2rem,4.8vw,3.35rem);
-  color:var(--text);
+.hero-kicker{
+  display:inline-flex; align-items:center; gap:8px;
+  font-weight:900; font-size:.86rem;
+  padding: 8px 10px;
+  border-radius:999px;
+  background: rgba(47,123,255,.10);
+  border: 1px solid rgba(47,123,255,.18);
+  color: rgba(11,18,32,.88);
 }
-.hero-left h1 .accent{color:var(--brand)}
+.hero-kicker .d{width:10px;height:10px;border-radius:99px;background:var(--grad)}
+.hero-card h1{
+  margin: 12px 0 0;
+  font-weight: 950;
+  letter-spacing: -1px;
+  line-height: 1.02;
+  font-size: clamp(2rem, 4.9vw, 3.3rem);
+  color: rgba(11,18,32,.95);
+}
+.hero-card h1 .accent{
+  background: var(--grad);
+  -webkit-background-clip:text;
+  background-clip:text;
+  color: transparent;
+}
 .hero-sub{
-  margin-top:10px;
-  font-weight:900;
-  color:rgba(11,18,32,.68);
-  line-height:1.35;
+  margin-top: 10px;
+  font-weight: 650;
+  color: rgba(11,18,32,.62);
+  line-height: 1.35;
+  max-width: 52ch;
 }
 .hero-ctas{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
 .btn{
   display:inline-flex;align-items:center;justify-content:center;
-  text-decoration:none;font-weight:1000;
-  padding:12px 14px;border-radius:12px;
-  border:1px solid var(--line);
+  text-decoration:none;font-weight:900;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border:1px solid var(--stroke);
   cursor:pointer;
-  transition: transform .18s cubic-bezier(.2,.9,.2,1);
+  transition: transform .18s var(--ease), box-shadow .18s var(--ease);
 }
-.btn:hover{transform:translateY(-2px)}
+.btn:hover{transform: translateY(-2px); box-shadow: 0 14px 26px rgba(2,6,23,.10)}
 .btn.primary{
-  background:var(--brand);
-  color:#111827;
-  border-color: rgba(245,158,11,.35);
-  box-shadow:0 14px 30px rgba(245,158,11,.18);
+  background: var(--grad);
+  color:#fff;
+  border-color: rgba(47,123,255,.20);
 }
 .btn.ghost{
-  background:rgba(255,255,255,.85);
-  color:var(--text);
+  background: rgba(255,255,255,.86);
+  color: rgba(11,18,32,.92);
 }
 .hero-mini{
   display:flex; gap:10px; flex-wrap:wrap;
-  margin-top:12px;
+  margin-top: 12px;
 }
 .pill{
   display:inline-flex;align-items:center;gap:8px;
-  padding:8px 10px;border-radius:999px;
-  background:rgba(255,255,255,.86);
-  border:1px solid rgba(15,23,42,.10);
-  font-weight:1000;
-  color:rgba(11,18,32,.75);
-  font-size:.86rem;
+  padding: 8px 10px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.88);
+  border: 1px solid rgba(15,23,42,.10);
+  font-weight: 800;
+  color: rgba(11,18,32,.72);
+  font-size: .88rem;
 }
-.pill b{color:var(--text)}
+.pill b{color: rgba(11,18,32,.92)}
 
-/* =========================
- CATEGORÍAS (snap en mobile)
-========================= */
+/* ===== Categorías ===== */
 .cats{
-  display:grid;grid-template-columns:1fr;
-  gap:12px;margin:14px 0 10px;
+  display:grid;
+  grid-template-columns: 1fr;
+  gap:12px;
+  margin: 14px 0 10px;
 }
-@media (min-width:860px){.cats{grid-template-columns:repeat(4,1fr)}}
-@media (max-width:859px){
+@media (min-width: 860px){ .cats{grid-template-columns: repeat(4,1fr)} }
+@media (max-width: 859px){
   .cats{
     display:flex;
     overflow:auto;
     scroll-snap-type:x mandatory;
-    padding-bottom:4px;
+    padding-bottom: 4px;
   }
-  .cat{min-width:78%; scroll-snap-align:start}
+  .cat{min-width: 78%; scroll-snap-align: start}
 }
 .cat{
-  position:relative;border-radius:14px;overflow:hidden;
-  border:1px solid var(--line);
-  box-shadow:var(--shadow2);
-  min-height:130px;
-  background:var(--card);
+  position:relative;
+  border-radius: 18px;
+  overflow:hidden;
+  border: 1px solid var(--stroke);
+  box-shadow: 0 16px 34px rgba(2,6,23,.08);
+  min-height: 140px;
+  background:#fff;
 }
-.cat img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.cat .layer{position:absolute;inset:0;background:linear-gradient(90deg,rgba(0,0,0,.35),transparent)}
-.cat .content{position:absolute;left:12px;bottom:12px;right:12px;color:#fff}
-.cat .content b{display:block;font-weight:1000;font-size:1.05rem}
+.cat img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:saturate(1.05)}
+.cat .layer{
+  position:absolute; inset:0;
+  background: linear-gradient(90deg, rgba(0,0,0,.42), rgba(0,0,0,.10), transparent);
+}
+.cat .content{position:absolute;left:14px;bottom:14px;right:14px;color:#fff}
+.cat .content b{display:block;font-weight:950;font-size:1.06rem;letter-spacing:-.2px}
 .cat .content a{
-  margin-top:6px;display:inline-flex;
+  margin-top:8px;display:inline-flex;
   color:#fff;text-decoration:none;
-  font-weight:1000;
-  background:rgba(255,255,255,.16);
+  font-weight:900;
+  background: rgba(255,255,255,.14);
   border:1px solid rgba(255,255,255,.22);
-  padding:8px 10px;border-radius:10px
+  padding: 9px 11px;
+  border-radius: 12px;
+  backdrop-filter: blur(6px);
 }
 
-/* =========================
- QUICK FILTERS (chips)
-========================= */
+/* ===== Chips filtros ===== */
 .filters{
   display:flex; gap:8px; flex-wrap:wrap;
-  margin:10px 0 14px;
+  margin: 10px 0 14px;
 }
 .chip{
   display:inline-flex; align-items:center; gap:8px;
-  padding:9px 12px;
-  border-radius:999px;
-  background:rgba(255,255,255,.90);
-  border:1px solid var(--line);
-  box-shadow: 0 8px 18px rgba(2,6,23,.05);
+  padding: 10px 12px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.90);
+  border: 1px solid var(--stroke);
+  box-shadow: 0 10px 20px rgba(2,6,23,.06);
   text-decoration:none;
-  font-weight:1000;
-  color: rgba(11,18,32,.85);
+  font-weight: 850;
+  color: rgba(11,18,32,.86);
 }
-.chip i{width:8px;height:8px;border-radius:99px;background:rgba(245,158,11,.40)}
-.chip.blue i{background:rgba(37,99,235,.30)}
-.chip.green i{background:rgba(34,197,94,.30)}
-.chip.violet i{background:rgba(168,85,247,.30)}
+.chip .d{width:8px;height:8px;border-radius:99px;background: var(--grad)}
+.chip:hover{transform: translateY(-1px); transition: transform .18s var(--ease)}
 
-/* =========================
- DESTACADOS
-========================= */
+/* ===== Destacados ===== */
 .block-head{
-  margin:10px 0 10px;
+  margin: 14px 0 10px;
   display:flex; align-items:flex-end; justify-content:space-between;
-  gap:10px;
+  gap:12px; flex-wrap:wrap;
 }
 .block-title{
-  font-weight:1000;
-  letter-spacing:-.4px;
-  color:var(--text);
-  font-size:1.18rem;
+  font-weight: 950;
+  letter-spacing:-.5px;
+  color: rgba(11,18,32,.95);
+  font-size: 1.25rem;
 }
 .block-sub{
-  font-weight:900;
-  color:rgba(11,18,32,.58);
-  font-size:.9rem;
+  font-weight: 700;
+  color: rgba(11,18,32,.58);
+  font-size: .92rem;
 }
+
 .gridP{display:grid;grid-template-columns:1fr;gap:12px}
-@media (min-width:860px){.gridP{grid-template-columns:repeat(4,1fr)}}
+@media (min-width: 860px){ .gridP{grid-template-columns: repeat(4,1fr)} }
 
 .cardP{
-  background:var(--card);
-  border:1px solid var(--line);
-  box-shadow:var(--shadow2);
-  border-radius:14px;
+  background: rgba(255,255,255,.94);
+  border: 1px solid var(--stroke);
+  box-shadow: 0 16px 34px rgba(2,6,23,.08);
+  border-radius: 20px;
   overflow:hidden;
-  transition: transform .2s cubic-bezier(.2,.9,.2,1);
+  transition: transform .2s var(--ease), box-shadow .2s var(--ease);
   display:flex;
   flex-direction:column;
 }
-.cardP:hover{transform:translateY(-4px)}
+.cardP:hover{
+  transform: translateY(-6px);
+  box-shadow: 0 22px 50px rgba(2,6,23,.12);
+}
 .ph{
-  background:#f1f5f9;height:170px;
-  position:relative;display:grid;place-items:center;
+  background: #eef2ff;
+  height: 180px;
+  position:relative;
+  display:grid;
+  place-items:center;
   overflow:hidden;
 }
 .ph img{width:100%;height:100%;object-fit:cover;display:block}
 .sk{
-  position:absolute;inset:0;
-  background:linear-gradient(90deg,rgba(226,232,240,.55) 0%,rgba(226,232,240,.25) 45%,rgba(226,232,240,.55) 100%);
+  position:absolute; inset:0;
+  background: linear-gradient(90deg, rgba(226,232,240,.55) 0%, rgba(226,232,240,.25) 45%, rgba(226,232,240,.55) 100%);
   background-size:200% 100%;
-  animation:sk 1.1s ease-in-out infinite;
+  animation: sk 1.05s ease-in-out infinite;
 }
 @keyframes sk{0%{background-position:0% 0}100%{background-position:200% 0}}
 .fallback{
-  position:absolute;inset:0;display:none;
-  place-items:center;text-align:center;
+  position:absolute; inset:0;
+  display:none;
+  place-items:center;
+  text-align:center;
   padding:12px;
-  font-weight:1000;
-  color:rgba(11,18,32,.72);
+  font-weight: 850;
+  color: rgba(11,18,32,.72);
 }
-.body{padding:12px;display:flex;flex-direction:column;gap:8px;flex:1}
-.name{font-weight:1000;color:var(--text);line-height:1.2}
-.price{font-weight:1000;color:var(--text)}
-.row{
-  display:flex;align-items:center;justify-content:space-between;gap:10px
+.body{padding: 12px 12px 14px;display:flex;flex-direction:column;gap:8px;flex:1}
+.name{font-weight: 850;color: rgba(11,18,32,.92);line-height:1.2}
+.price{font-weight: 950;color: rgba(11,18,32,.95); font-size: 1.02rem}
+.meta{
+  display:flex; flex-wrap:wrap; gap:8px;
+  color: rgba(11,18,32,.62);
+  font-weight:700;
+  font-size: .86rem;
 }
+.tag{
+  display:inline-flex; align-items:center; gap:6px;
+  padding: 7px 9px;
+  border-radius: 999px;
+  background: rgba(47,123,255,.08);
+  border:1px solid rgba(47,123,255,.14);
+}
+.tag .t{width:7px;height:7px;border-radius:99px;background: var(--grad)}
 .buy{
   margin-top:auto;
   display:inline-flex;align-items:center;justify-content:center;
   text-decoration:none;
-  font-weight:1000;
-  background:var(--brand);
-  color:#111827;
-  padding:11px 12px;
-  border-radius:12px;
-  border:1px solid rgba(245,158,11,.35);
+  font-weight: 950;
+  background: var(--grad);
+  color:#fff;
+  padding: 12px 12px;
+  border-radius: 14px;
+  border:1px solid rgba(47,123,255,.22);
+  box-shadow: 0 14px 26px rgba(2,6,23,.10);
 }
-.buy:active{transform:translateY(1px)}
+.buy:active{transform: translateY(1px)}
 
-/* =========================
- SERVICES
-========================= */
+/* ===== Servicios ===== */
 .services{
-  margin-top:14px;
-  display:grid;grid-template-columns:1fr;gap:10px;
-  background:var(--card);
-  border:1px solid var(--line);
-  border-radius:14px;
-  padding:10px;
-  box-shadow:var(--shadow2);
+  margin-top: 14px;
+  display:grid;
+  grid-template-columns: 1fr;
+  gap:10px;
+  background: rgba(255,255,255,.92);
+  border:1px solid var(--stroke);
+  border-radius: 20px;
+  padding: 12px;
+  box-shadow: 0 16px 34px rgba(2,6,23,.08);
 }
-@media (min-width:860px){.services{grid-template-columns:repeat(3,1fr)}}
-.svc{display:flex;gap:10px;align-items:center;padding:8px;border-radius:12px}
+@media (min-width: 860px){ .services{grid-template-columns: repeat(3,1fr)} }
+.svc{
+  display:flex; gap:12px; align-items:center;
+  padding: 10px;
+  border-radius: 16px;
+  background: rgba(255,255,255,.70);
+  border: 1px solid rgba(15,23,42,.08);
+}
 .svc img{width:54px;height:54px;object-fit:contain}
-.svc b{display:block;font-weight:1000;color:var(--text)}
-.svc span{display:block;color:rgba(11,18,32,.66);font-size:.92rem;font-weight:800}
+.svc b{display:block;font-weight: 950;color: rgba(11,18,32,.92)}
+.svc span{display:block;color: rgba(11,18,32,.62);font-size:.92rem;font-weight:650}
 
-/* =========================
- FLOATING TOP BUTTON
-========================= */
+/* ===== Floating Top ===== */
 .to-top{
-  position:fixed;
-  right:16px;
-  bottom:18px;
-  z-index:50;
+  position: fixed;
+  right: 16px;
+  bottom: 18px;
+  z-index: 50;
   display:none;
-  width:44px;height:44px;
-  border-radius:999px;
-  background:rgba(255,255,255,.92);
-  border:1px solid var(--line);
-  box-shadow:0 14px 30px rgba(2,6,23,.14);
-  font-weight:1000;
+  width: 46px; height: 46px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.92);
+  border: 1px solid var(--stroke);
+  box-shadow: 0 18px 38px rgba(2,6,23,.14);
+  font-weight: 950;
   cursor:pointer;
 }
 .to-top.show{display:grid;place-items:center}
@@ -360,17 +382,16 @@ a{color:inherit}
 <div class="home">
   <div class="section">
 
-    <!-- TOPBAR -->
-    <div class="topbar" aria-label="Beneficios de la tienda">
+    <!-- TOP -->
+    <div class="home-top" aria-label="Beneficios de la tienda">
       <div class="badges">
-        <span class="badge green"><i></i> Envío rápido</span>
-        <span class="badge blue"><i></i> Pago seguro</span>
-        <span class="badge amber"><i></i> Soporte 24/7</span>
-        <span class="badge gray"><i></i> Compra protegida</span>
+        <span class="badge"><span class="d" aria-hidden="true"></span> Envío rápido</span>
+        <span class="badge"><span class="d" aria-hidden="true"></span> Pago seguro</span>
+        <span class="badge"><span class="d" aria-hidden="true"></span> Soporte 24/7</span>
+        <span class="badge"><span class="d" aria-hidden="true"></span> Compra protegida</span>
       </div>
 
-      <!-- SEARCH -->
-      <form class="searchbar" action="{{ url_for('shop.shop') }}" method="get" role="search" aria-label="Buscar productos">
+      <form class="home-search" action="{{ url_for('shop.shop') }}" method="get" role="search" aria-label="Buscar productos">
         <div class="search">
           <label class="sr-only" for="q">Buscar</label>
           <input id="q" name="q" placeholder="Buscar en Skyline Store…" autocomplete="off">
@@ -380,27 +401,31 @@ a{color:inherit}
     </div>
 
     <!-- HERO -->
-    <div class="hero-wrap">
-      <div class="hero" aria-label="Hero principal">
-        <img class="hero-img"
-             src="{{ url_for('static', filename='img/banners/hero_home.png') }}"
-             alt="Nueva colección urbana Skyline Store"
-             loading="eager" decoding="async">
-        <div class="hero-overlay">
-          <div class="hero-left">
-            <h1>NUEVA<br>COLECCIÓN<br><span class="accent">URBANA</span></h1>
-            <div class="hero-sub">
-              Tendencias + productos top. Comprá fácil, rápido y seguro.
-            </div>
-            <div class="hero-ctas">
-              <a class="btn primary" href="{{ url_for('shop.shop') }}">COMPRAR AHORA</a>
-              <a class="btn ghost" href="{{ url_for('shop.shop') }}?sort=new">VER NOVEDADES</a>
-            </div>
-            <div class="hero-mini" aria-label="Highlights">
-              <span class="pill"><b>+100</b> productos</span>
-              <span class="pill"><b>Ofertas</b> semanales</span>
-              <span class="pill"><b>Seguimiento</b> de pedidos</span>
-            </div>
+    <div class="hero" aria-label="Hero principal">
+      <img class="hero-img"
+           src="{{ url_for('static', filename='img/banners/hero_home.png') }}"
+           alt="Nueva colección urbana Skyline Store"
+           loading="eager" decoding="async">
+
+      <div class="hero-overlay">
+        <div class="hero-card">
+          <div class="hero-kicker"><span class="d" aria-hidden="true"></span> NUEVA TEMPORADA · 2026</div>
+
+          <h1>Nueva colección <span class="accent">urbana</span></h1>
+
+          <div class="hero-sub">
+            Streetwear + tecnología con look premium. Comprá fácil, rápido y con confianza.
+          </div>
+
+          <div class="hero-ctas">
+            <a class="btn primary" href="{{ url_for('shop.shop') }}">Explorar productos</a>
+            <a class="btn ghost" href="{{ url_for('shop.shop') }}?sort=new">Ver novedades</a>
+          </div>
+
+          <div class="hero-mini" aria-label="Highlights">
+            <span class="pill"><b>+100</b> productos</span>
+            <span class="pill"><b>Ofertas</b> semanales</span>
+            <span class="pill"><b>Seguimiento</b> de pedidos</span>
           </div>
         </div>
       </div>
@@ -413,47 +438,50 @@ a{color:inherit}
         <div class="layer"></div>
         <div class="content">
           <b>Moda Masculina</b>
-          <a href="{{ url_for('shop.shop') }}?categoria=ropa&sub=masculina">VER MÁS</a>
+          <a href="{{ url_for('shop.shop') }}?categoria=ropa&sub=masculina">Ver más</a>
         </div>
       </div>
+
       <div class="cat">
         <img src="{{ url_for('static', filename='img/banners/cat_women.png') }}" alt="Moda femenina" loading="lazy" decoding="async">
         <div class="layer"></div>
         <div class="content">
           <b>Moda Femenina</b>
-          <a href="{{ url_for('shop.shop') }}?categoria=ropa&sub=femenina">VER MÁS</a>
+          <a href="{{ url_for('shop.shop') }}?categoria=ropa&sub=femenina">Ver más</a>
         </div>
       </div>
+
       <div class="cat">
         <img src="{{ url_for('static', filename='img/banners/cat_accessories.png') }}" alt="Accesorios" loading="lazy" decoding="async">
         <div class="layer"></div>
         <div class="content">
           <b>Accesorios</b>
-          <a href="{{ url_for('shop.shop') }}?categoria=accesorios">VER MÁS</a>
+          <a href="{{ url_for('shop.shop') }}?categoria=accesorios">Ver más</a>
         </div>
       </div>
+
       <div class="cat">
         <img src="{{ url_for('static', filename='img/banners/cat_tech.png') }}" alt="Gadgets y tecnología" loading="lazy" decoding="async">
         <div class="layer"></div>
         <div class="content">
           <b>Gadgets & Tech</b>
-          <a href="{{ url_for('shop.shop') }}?categoria=tecnologia">VER MÁS</a>
+          <a href="{{ url_for('shop.shop') }}?categoria=tecnologia">Ver más</a>
         </div>
       </div>
     </div>
 
     <!-- QUICK FILTERS -->
     <div class="filters" aria-label="Filtros rápidos">
-      <a class="chip" href="{{ url_for('shop.shop') }}?sort=new"><i></i> Novedades</a>
-      <a class="chip blue" href="{{ url_for('shop.shop') }}?q=oferta"><i></i> Ofertas</a>
-      <a class="chip green" href="{{ url_for('shop.shop') }}?available=1"><i></i> Disponibles</a>
-      <a class="chip violet" href="{{ url_for('shop.shop') }}?categoria=tecnologia"><i></i> Tech</a>
+      <a class="chip" href="{{ url_for('shop.shop') }}?sort=new"><span class="d" aria-hidden="true"></span> Novedades</a>
+      <a class="chip" href="{{ url_for('shop.shop') }}?q=oferta"><span class="d" aria-hidden="true"></span> Ofertas</a>
+      <a class="chip" href="{{ url_for('shop.shop') }}?available=1"><span class="d" aria-hidden="true"></span> Disponibles</a>
+      <a class="chip" href="{{ url_for('shop.shop') }}?categoria=tecnologia"><span class="d" aria-hidden="true"></span> Tech</a>
     </div>
 
     <!-- DESTACADOS -->
     <div class="block-head">
       <div>
-        <div class="block-title">PRODUCTOS DESTACADOS</div>
+        <div class="block-title">Productos destacados</div>
         <div class="block-sub">Selección premium — lo más buscado hoy</div>
       </div>
       <div class="block-sub">Actualiza automáticamente</div>
@@ -481,18 +509,20 @@ a{color:inherit}
         </div>
 
         <div class="body">
-          <div class="row">
-            <div class="price">{{ p.price }}</div>
+          <div class="price">{{ p.price }}</div>
+          <div class="meta">
+            <span class="tag"><span class="t" aria-hidden="true"></span> Envío</span>
+            <span class="tag"><span class="t" aria-hidden="true"></span> Pago seguro</span>
           </div>
           <div class="name">{{ p.title }}</div>
-          <a class="buy" href="{{ p.href }}">COMPRAR</a>
+          <a class="buy" href="{{ p.href }}">Comprar</a>
         </div>
       </article>
       {% endfor %}
     </div>
 
     {% if featured_list|length == 0 %}
-    <div style="margin-top:12px;padding:14px;background:#fff;border:1px solid rgba(15,23,42,.10);border-radius:14px;box-shadow:0 10px 26px rgba(2,6,23,.08);font-weight:900;color:rgba(11,18,32,.70)">
+    <div style="margin-top:12px;padding:14px;background:#fff;border:1px solid rgba(15,23,42,.10);border-radius:16px;box-shadow:0 16px 34px rgba(2,6,23,.08);font-weight:800;color:rgba(11,18,32,.70)">
       No hay destacados aún. Agregá productos activos y se mostrarán automáticamente.
     </div>
     {% endif %}
@@ -501,15 +531,15 @@ a{color:inherit}
     <div class="services" aria-label="Servicios">
       <div class="svc">
         <img src="{{ url_for('static', filename='img/banners/service_shipping.png') }}" alt="Envío rápido" loading="lazy" decoding="async">
-        <div><b>ENVÍO RÁPIDO</b><span>Entrega ágil y seguimiento</span></div>
+        <div><b>Envío rápido</b><span>Entrega ágil y seguimiento</span></div>
       </div>
       <div class="svc">
         <img src="{{ url_for('static', filename='img/banners/service_payment.png') }}" alt="Pago seguro" loading="lazy" decoding="async">
-        <div><b>PAGO SEGURO</b><span>Plataformas certificadas</span></div>
+        <div><b>Pago seguro</b><span>Plataformas certificadas</span></div>
       </div>
       <div class="svc">
         <img src="{{ url_for('static', filename='img/banners/service_support.png') }}" alt="Soporte 24/7" loading="lazy" decoding="async">
-        <div><b>SOPORTE 24/7</b><span>Atención al cliente</span></div>
+        <div><b>Soporte 24/7</b><span>Atención al cliente</span></div>
       </div>
     </div>
 

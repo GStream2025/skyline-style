@@ -1,241 +1,324 @@
 {% extends "base.html" %}
-
 {% block title %}Crear cuenta | Skyline Store{% endblock %}
 
+{% block extra_head %}
+<style>
+/* =========================
+ AUTH — Marketplace Premium
+========================= */
+.auth-wrap{
+  min-height: calc(100vh - 180px);
+  display:grid;
+  place-items:center;
+  padding: 24px 18px;
+}
+
+.auth-card{
+  width:100%;
+  max-width: 980px;
+  display:grid;
+  grid-template-columns: 1.1fr .9fr;
+  gap:18px;
+}
+
+@media (max-width: 900px){
+  .auth-card{grid-template-columns: 1fr}
+}
+
+.auth-left{
+  background:
+    radial-gradient(420px 260px at 20% 10%, rgba(47,123,255,.18), transparent 60%),
+    radial-gradient(420px 260px at 90% 20%, rgba(255,181,71,.20), transparent 60%),
+    linear-gradient(180deg, rgba(255,255,255,.96), rgba(255,255,255,.86));
+  border:1px solid var(--stroke);
+  border-radius: 22px;
+  padding: 26px;
+  box-shadow: var(--shadow2);
+}
+
+.auth-brand{
+  display:flex; align-items:center; gap:12px;
+}
+.auth-mark{
+  width:38px;height:28px;
+  border-radius:12px;
+  background: var(--grad);
+  box-shadow: 0 12px 22px rgba(2,6,23,.16);
+}
+.auth-title{
+  font-weight: 950;
+  letter-spacing:-.4px;
+}
+.auth-sub{
+  font-weight:700;
+  color: rgba(11,18,32,.62);
+  font-size:.92rem;
+}
+
+.auth-left h1{
+  margin: 16px 0 0;
+  font-weight: 950;
+  letter-spacing:-.6px;
+  font-size: clamp(1.8rem, 4vw, 2.4rem);
+  color: rgba(11,18,32,.95);
+}
+.auth-left p{
+  margin-top:10px;
+  max-width: 46ch;
+  color: rgba(11,18,32,.62);
+  font-weight: 650;
+}
+
+.auth-benefits{
+  margin-top:16px;
+  display:grid;
+  gap:10px;
+}
+.benefit{
+  display:flex; gap:12px; align-items:flex-start;
+  padding:12px;
+  border-radius:16px;
+  background: rgba(255,255,255,.80);
+  border:1px solid var(--stroke);
+}
+.benefit .dot{
+  width:12px;height:12px;border-radius:99px;
+  background: var(--grad);
+  margin-top:6px;
+}
+.benefit b{
+  display:block;
+  font-weight:900;
+}
+.benefit span{
+  display:block;
+  font-weight:650;
+  color: rgba(11,18,32,.60);
+  font-size:.92rem;
+}
+
+/* ===== Right / Form ===== */
+.auth-right{
+  background:#fff;
+  border:1px solid var(--stroke);
+  border-radius: 22px;
+  padding: 26px;
+  box-shadow: var(--shadow2);
+}
+
+.auth-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+}
+.auth-head h2{
+  margin:0;
+  font-weight: 950;
+  letter-spacing:-.4px;
+}
+.secure{
+  display:inline-flex; align-items:center; gap:8px;
+  padding: 8px 10px;
+  border-radius:999px;
+  background: rgba(47,123,255,.10);
+  border:1px solid rgba(47,123,255,.20);
+  font-weight:800;
+  font-size:.82rem;
+}
+
+.form{
+  margin-top:16px;
+  display:grid;
+  gap:14px;
+}
+
+.field label{
+  display:block;
+  font-size:.8rem;
+  font-weight:800;
+  color: rgba(11,18,32,.62);
+  margin-bottom:6px;
+}
+
+.field input{
+  width:100%;
+  padding: 14px 14px;
+  border-radius: 14px;
+  border:1px solid var(--stroke);
+  font-weight:700;
+  font-size:.95rem;
+}
+
+.field input:focus{
+  outline:none;
+  border-color: rgba(47,123,255,.35);
+  box-shadow: 0 0 0 4px rgba(47,123,255,.14);
+}
+
+.pass-wrap{position:relative}
+.pass-toggle{
+  position:absolute;
+  right:10px;
+  top:50%;
+  transform:translateY(-50%);
+  border:0;
+  background: rgba(255,255,255,.85);
+  border-radius:10px;
+  padding:6px 10px;
+  cursor:pointer;
+  font-weight:900;
+}
+
+.meter{
+  height:6px;
+  border-radius:999px;
+  background: #eef2ff;
+  overflow:hidden;
+  border:1px solid var(--stroke);
+}
+.meter > span{
+  display:block;
+  height:100%;
+  width:0%;
+  background: var(--grad);
+  transition: width .2s var(--ease);
+}
+
+.rules{
+  display:grid;
+  gap:4px;
+  font-size:.78rem;
+  color: rgba(11,18,32,.58);
+}
+
+.submit{
+  margin-top:6px;
+  width:100%;
+  padding: 14px;
+  border-radius: 16px;
+  background: var(--grad);
+  color:#fff;
+  border:0;
+  font-weight:950;
+  cursor:pointer;
+  box-shadow: 0 16px 30px rgba(2,6,23,.16);
+}
+.submit:active{transform:translateY(1px)}
+
+.auth-links{
+  margin-top:10px;
+  display:flex;
+  justify-content:space-between;
+  font-size:.9rem;
+  font-weight:800;
+}
+.auth-links a{text-decoration:none}
+</style>
+{% endblock %}
+
 {% block content %}
-<section class="relative py-10 px-4">
-  <!-- Background -->
-  <div class="pointer-events-none absolute inset-0 overflow-hidden">
-    <div class="absolute -top-28 -left-28 w-[520px] h-[520px] rounded-full blur-3xl opacity-40
-                bg-gradient-to-br from-sky-300/60 via-cyan-200/40 to-transparent"></div>
-    <div class="absolute -bottom-32 -right-28 w-[560px] h-[560px] rounded-full blur-3xl opacity-35
-                bg-gradient-to-tr from-amber-300/60 via-pink-200/35 to-transparent"></div>
-    <div class="absolute inset-0 opacity-[0.08]"
-         style="background-image: radial-gradient(circle at 1px 1px, #ffffff 1px, transparent 0); background-size: 22px 22px;">
-    </div>
-  </div>
+<section class="auth-wrap">
+  <div class="auth-card">
 
-  <div class="relative max-w-5xl mx-auto">
-    <div class="grid lg:grid-cols-2 gap-6 items-stretch">
-      <!-- Left / Brand -->
-      <div class="rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-[0_20px_60px_rgba(0,0,0,0.18)] p-7 lg:p-9">
-        <div class="flex items-center gap-3">
-          <div class="h-11 w-11 rounded-2xl grid place-items-center border border-white/15
-                      bg-gradient-to-br from-sky-300/30 via-white/10 to-amber-300/20 text-white">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none">
-              <path d="M4 14.5 12 4l8 10.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M7.5 14.5 12 9l4.5 5.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity=".7"/>
-              <path d="M6 20h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-            </svg>
-          </div>
-          <div>
-            <div class="text-white font-extrabold tracking-tight text-lg">Skyline Store</div>
-            <div class="text-white/70 text-sm">Streetwear + Tech con vibra premium</div>
-          </div>
-        </div>
-
-        <h1 class="mt-6 text-3xl lg:text-4xl font-black tracking-tight text-white leading-tight">
-          Creá tu cuenta <span class="text-white/70">en 1 minuto</span>
-        </h1>
-        <p class="mt-3 text-white/75 max-w-prose">
-          Accedé a un checkout más rápido, guardá tus pedidos y recibí ofertas exclusivas.
-        </p>
-
-        <div class="mt-6 grid gap-3">
-          <div class="flex gap-3 items-start rounded-2xl border border-white/10 bg-white/5 p-4">
-            <div class="mt-0.5 h-9 w-9 rounded-xl grid place-items-center border border-white/10 bg-white/5 text-white/90">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
-                <path d="M20 7 10.5 16.5 7 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10Z" stroke="currentColor" stroke-width="2" opacity=".7"/>
-              </svg>
-            </div>
-            <div>
-              <div class="text-white font-semibold">Más rápido y seguro</div>
-              <div class="text-white/70 text-sm">Datos protegidos y acceso a tu historial.</div>
-            </div>
-          </div>
-
-          <div class="flex gap-3 items-start rounded-2xl border border-white/10 bg-white/5 p-4">
-            <div class="mt-0.5 h-9 w-9 rounded-xl grid place-items-center border border-white/10 bg-white/5 text-white/90">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
-                <path d="M12 8v4l3 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0Z" stroke="currentColor" stroke-width="2" opacity=".7"/>
-              </svg>
-            </div>
-            <div>
-              <div class="text-white font-semibold">Seguimiento de pedidos</div>
-              <div class="text-white/70 text-sm">Todo en un panel, sin perder nada.</div>
-            </div>
-          </div>
-
-          <div class="flex gap-3 items-start rounded-2xl border border-white/10 bg-white/5 p-4">
-            <div class="mt-0.5 h-9 w-9 rounded-xl grid place-items-center border border-white/10 bg-white/5 text-white/90">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
-                <path d="M12 3l3 6 6 .9-4.5 4.4 1 6.2L12 17.8 6.5 20.5l1-6.2L3 9.9 9 9l3-6Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-              </svg>
-            </div>
-            <div>
-              <div class="text-white font-semibold">Ofertas exclusivas</div>
-              <div class="text-white/70 text-sm">Promos, drops y novedades primero.</div>
-            </div>
-          </div>
+    <!-- LEFT -->
+    <div class="auth-left">
+      <div class="auth-brand">
+        <span class="auth-mark"></span>
+        <div>
+          <div class="auth-title">Skyline Store</div>
+          <div class="auth-sub">Marketplace premium</div>
         </div>
       </div>
 
-      <!-- Right / Form -->
-      <div class="rounded-3xl border border-slate-200/60 bg-white shadow-sm p-7 lg:p-9">
-        <div class="flex items-start justify-between gap-4">
-          <div>
-            <div class="text-slate-900 font-extrabold text-xl">Crear cuenta</div>
-            <div class="text-slate-500 text-sm mt-1">Usá un correo real para poder recuperar acceso.</div>
-          </div>
-          <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold
-                       bg-emerald-50 text-emerald-700 border border-emerald-100">
-            <span class="h-2 w-2 rounded-full bg-emerald-500"></span> Seguro
-          </span>
+      <h1>Creá tu cuenta</h1>
+      <p>
+        Comprá más rápido, guardá pedidos y accedé a ofertas exclusivas
+        en un solo lugar.
+      </p>
+
+      <div class="auth-benefits">
+        <div class="benefit">
+          <span class="dot"></span>
+          <div><b>Checkout rápido</b><span>Menos pasos, más velocidad.</span></div>
         </div>
-
-        <form method="post" class="mt-6 space-y-4" id="registerForm" novalidate>
-          {% if next %}
-            <input type="hidden" name="next" value="{{ next }}">
-          {% endif %}
-
-          <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">Correo electrónico</label>
-            <div class="relative">
-              <input
-                type="email"
-                name="email"
-                required
-                autocomplete="email"
-                placeholder="tu@email.com"
-                class="w-full rounded-2xl border border-slate-300 px-4 py-3 pr-10 text-sm
-                       focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400"
-              >
-              <span class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
-                  <path d="M4 6h16v12H4z" stroke="currentColor" stroke-width="2" opacity=".7"/>
-                  <path d="m4 7 8 6 8-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </span>
-            </div>
-            <p class="mt-1 text-xs text-slate-500">No compartimos tu correo. Cero spam.</p>
-          </div>
-
-          <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">Contraseña</label>
-            <div class="relative">
-              <input
-                type="password"
-                name="password"
-                id="password"
-                required
-                autocomplete="new-password"
-                placeholder="Mínimo 8 caracteres"
-                class="w-full rounded-2xl border border-slate-300 px-4 py-3 pr-12 text-sm
-                       focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400"
-              >
-              <button type="button" id="togglePass"
-                class="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-2 rounded-xl
-                       text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition"
-                aria-label="Mostrar contraseña">
-                <svg id="eyeOpen" viewBox="0 0 24 24" width="18" height="18" fill="none">
-                  <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" stroke="currentColor" stroke-width="2"/>
-                  <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="currentColor" stroke-width="2"/>
-                </svg>
-                <svg id="eyeClosed" class="hidden" viewBox="0 0 24 24" width="18" height="18" fill="none">
-                  <path d="M3 3l18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                  <path d="M2 12s3.5-7 10-7c2.2 0 4 .7 5.4 1.7M22 12s-3.5 7-10 7c-2.2 0-4-.7-5.4-1.7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                  <path d="M10.3 10.3A3 3 0 0 0 12 15a3 3 0 0 0 1.7-.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                </svg>
-              </button>
-            </div>
-
-            <!-- Password meter -->
-            <div class="mt-2">
-              <div class="h-2 rounded-full bg-slate-100 overflow-hidden border border-slate-200">
-                <div id="meter" class="h-full w-0 bg-amber-400 transition-all"></div>
-              </div>
-              <ul class="mt-2 text-xs text-slate-500 grid gap-1" id="rules">
-                <li data-rule="len" class="flex items-center gap-2"><span class="dot h-2 w-2 rounded-full bg-slate-300"></span> 8+ caracteres</li>
-                <li data-rule="mix" class="flex items-center gap-2"><span class="dot h-2 w-2 rounded-full bg-slate-300"></span> Letras y números</li>
-                <li data-rule="cap" class="flex items-center gap-2"><span class="dot h-2 w-2 rounded-full bg-slate-300"></span> Al menos 1 mayúscula (recomendado)</li>
-              </ul>
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            class="w-full px-5 py-3 rounded-2xl bg-slate-900 text-white text-sm font-semibold
-                   hover:bg-slate-800 active:scale-[0.99] transition shadow-sm"
-          >
-            Crear cuenta
-          </button>
-
-          <div class="flex items-center justify-between gap-3 pt-2">
-            <a href="{{ url_for('auth.login') }}"
-               class="text-sm font-semibold text-amber-700 hover:text-amber-600">
-              Ya tengo cuenta
-            </a>
-            <a href="{{ url_for('shop.shop') }}"
-               class="text-sm font-semibold text-slate-600 hover:text-slate-800">
-              Seguir como invitado
-            </a>
-          </div>
-
-          <p class="pt-2 text-xs text-slate-500 leading-relaxed">
-            Al registrarte aceptás nuestros términos y política de privacidad.
-          </p>
-        </form>
+        <div class="benefit">
+          <span class="dot"></span>
+          <div><b>Seguimiento</b><span>Control total de tus compras.</span></div>
+        </div>
+        <div class="benefit">
+          <span class="dot"></span>
+          <div><b>Ofertas exclusivas</b><span>Promos solo para usuarios.</span></div>
+        </div>
       </div>
     </div>
+
+    <!-- RIGHT -->
+    <div class="auth-right">
+      <div class="auth-head">
+        <h2>Crear cuenta</h2>
+        <span class="secure">🔒 Seguro</span>
+      </div>
+
+      <form method="post" class="form" id="registerForm">
+        {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+
+        <div class="field">
+          <label>Correo electrónico</label>
+          <input type="email" name="email" required placeholder="tu@email.com">
+        </div>
+
+        <div class="field">
+          <label>Contraseña</label>
+          <div class="pass-wrap">
+            <input type="password" name="password" id="password" required placeholder="Mínimo 8 caracteres">
+            <button type="button" class="pass-toggle" id="togglePass">👁</button>
+          </div>
+          <div class="meter"><span id="meter"></span></div>
+          <div class="rules">
+            <span>• 8+ caracteres</span>
+            <span>• Letras y números</span>
+            <span>• 1 mayúscula (recomendado)</span>
+          </div>
+        </div>
+
+        <button type="submit" class="submit">Crear cuenta</button>
+
+        <div class="auth-links">
+          <a href="{{ url_for('auth.login') }}">Ya tengo cuenta</a>
+          <a href="{{ url_for('shop.shop') }}">Seguir como invitado</a>
+        </div>
+      </form>
+    </div>
+
   </div>
 </section>
 
 <script>
-  (function(){
-    const pass = document.getElementById("password");
-    const toggle = document.getElementById("togglePass");
-    const eyeOpen = document.getElementById("eyeOpen");
-    const eyeClosed = document.getElementById("eyeClosed");
-    const meter = document.getElementById("meter");
-    const rules = document.getElementById("rules");
+(function(){
+  const pass = document.getElementById("password");
+  const meter = document.getElementById("meter");
+  const toggle = document.getElementById("togglePass");
 
-    function scorePassword(v){
-      let s = 0;
-      if (!v) return 0;
-      if (v.length >= 8) s += 40;
-      if (/[0-9]/.test(v) && /[a-zA-Z]/.test(v)) s += 35;
-      if (/[A-Z]/.test(v)) s += 25;
-      return Math.min(100, s);
-    }
+  function score(v){
+    let s = 0;
+    if(v.length >= 8) s += 40;
+    if(/[0-9]/.test(v) && /[a-zA-Z]/.test(v)) s += 35;
+    if(/[A-Z]/.test(v)) s += 25;
+    return Math.min(100, s);
+  }
 
-    function setRule(rule, ok){
-      const li = rules.querySelector(`[data-rule="${rule}"]`);
-      if (!li) return;
-      const dot = li.querySelector(".dot");
-      dot.className = "dot h-2 w-2 rounded-full " + (ok ? "bg-emerald-500" : "bg-slate-300");
-      li.className = "flex items-center gap-2 " + (ok ? "text-slate-700" : "text-slate-500");
-    }
+  if(pass){
+    pass.addEventListener("input", () => {
+      meter.style.width = score(pass.value) + "%";
+    });
+  }
 
-    if (toggle && pass){
-      toggle.addEventListener("click", () => {
-        const isPass = pass.type === "password";
-        pass.type = isPass ? "text" : "password";
-        eyeOpen.classList.toggle("hidden", !isPass);
-        eyeClosed.classList.toggle("hidden", isPass);
-      });
-
-      pass.addEventListener("input", () => {
-        const v = pass.value || "";
-        const sc = scorePassword(v);
-        meter.style.width = sc + "%";
-
-        setRule("len", v.length >= 8);
-        setRule("mix", /[0-9]/.test(v) && /[a-zA-Z]/.test(v));
-        setRule("cap", /[A-Z]/.test(v));
-      });
-    }
-  })();
+  if(toggle && pass){
+    toggle.addEventListener("click", () => {
+      pass.type = pass.type === "password" ? "text" : "password";
+    });
+  }
+})();
 </script>
 {% endblock %}

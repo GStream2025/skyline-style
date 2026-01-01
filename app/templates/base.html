@@ -8,7 +8,6 @@
 
   {# =========================
      SEO dinámico (desde ctx)
-     main_routes ya inyecta meta_title/meta_description/og_image si querés
   ========================= #}
   <title>{% block title %}{{ meta_title if meta_title else "Skyline Store" }}{% endblock %}</title>
   <meta name="description" content="{{ meta_description if meta_description else 'Skyline Store — tienda online con estilo, ofertas y productos premium.' }}" />
@@ -22,28 +21,38 @@
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
 
-  <!-- CSRF global (si existe). No rompe si no existe -->
   <meta name="csrf-token" content="{{ session.get('csrf_token','') }}"/>
 
-  <!-- Preconnect fonts/icons si usás -->
+  <!-- ✅ Tipografía PRO (sin librerías raras) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
   <style>
     :root{
-      --bg:#f6f7fb;
+      /* ===== Brand / Marketplace Premium ===== */
+      --bg0:#ffffff;
+      --bg1:#f6f7fb;
       --card:#ffffff;
-      --ink:#0b1220;
-      --muted: rgba(11,18,32,.68);
-      --stroke: rgba(15,23,42,.10);
 
-      --a:#2563eb;
-      --b:#06b6d4;
-      --c:#f59e0b;
+      --ink:#0b1220;
+      --muted: rgba(11,18,32,.62);
+      --muted2: rgba(11,18,32,.45);
+
+      --stroke: rgba(15,23,42,.10);
+      --stroke2: rgba(15,23,42,.08);
+
+      --primary:#2f7bff;      /* azul premium */
+      --cyan:#10b8d6;         /* acento tech */
+      --amber:#ffb547;        /* acento warm */
+      --grad: linear-gradient(90deg, var(--primary), var(--cyan), var(--amber));
 
       --shadow1: 0 10px 26px rgba(2,6,23,.08);
-      --shadow2: 0 18px 50px rgba(2,6,23,.10);
+      --shadow2: 0 18px 55px rgba(2,6,23,.10);
 
       --r: 14px;
-      --r2: 18px;
-      --max: 1220px;
+      --r2: 20px;
+      --max: 1240px;
 
       --ease: cubic-bezier(.2,.9,.2,1);
     }
@@ -52,121 +61,181 @@
     html{scroll-behavior:smooth}
     body{
       margin:0;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
       color:var(--ink);
-      background: linear-gradient(180deg,#fff, var(--bg));
+      background:
+        radial-gradient(900px 460px at 18% 20%, rgba(47,123,255,.10), transparent 60%),
+        radial-gradient(900px 520px at 86% 22%, rgba(255,181,71,.12), transparent 62%),
+        linear-gradient(180deg, var(--bg0), var(--bg1));
     }
 
     a{color:inherit}
     img{max-width:100%;display:block}
     .container{max-width:var(--max);margin:0 auto;padding:0 18px}
 
-    /* ✅ Mejora #1: A11y Skip link */
+    /* ✅ A11y Skip link */
     .skip{
-      position:absolute; left:-9999px; top:10px;
+      position:absolute; left:-9999px; top:12px;
       background:#fff; border:1px solid var(--stroke);
       padding:10px 12px; border-radius:12px;
       box-shadow: var(--shadow1);
-      font-weight:1000;
+      font-weight:900;
       z-index:9999;
     }
-    .skip:focus{left:10px}
+    .skip:focus{left:12px}
 
-    /* ===== TOPBAR ===== */
+    /* ===== Top strip (confianza tipo marketplace) ===== */
+    .strip{
+      background: rgba(255,255,255,.75);
+      border-bottom: 1px solid var(--stroke2);
+    }
+    .strip-inner{
+      display:flex; align-items:center; justify-content:space-between;
+      gap:12px;
+      padding: 8px 0;
+      color: rgba(11,18,32,.78);
+      font-weight:700;
+      font-size:.92rem;
+    }
+    .strip-badges{
+      display:flex; gap:10px; flex-wrap:wrap; align-items:center;
+    }
+    .pill{
+      display:inline-flex; align-items:center; gap:8px;
+      padding: 7px 10px;
+      border-radius:999px;
+      background: rgba(255,255,255,.82);
+      border: 1px solid var(--stroke2);
+      box-shadow: 0 10px 22px rgba(2,6,23,.06);
+      white-space:nowrap;
+    }
+    .pill b{font-weight:900}
+    .dot-grad{
+      width:10px;height:10px;border-radius:999px;
+      background: var(--grad);
+      box-shadow: 0 10px 16px rgba(2,6,23,.12);
+    }
+
+    /* ===== Header (Marketplace Premium) ===== */
     .topbar{
       position:sticky; top:0; z-index:50;
-      background: rgba(255,255,255,.92);
-      backdrop-filter: blur(10px);
+      background: rgba(255,255,255,.86);
+      backdrop-filter: blur(14px);
       border-bottom: 1px solid var(--stroke);
     }
     .topbar-inner{
       display:flex; align-items:center; gap:14px;
       padding: 12px 0;
     }
+
+    /* Brand */
     .brand{
       display:flex; align-items:center; gap:10px;
       text-decoration:none;
-      font-weight:1000;
-      letter-spacing:-.3px;
+      font-weight:900;
+      letter-spacing:-.35px;
     }
     .brand-mark{
-      width:30px; height:20px;
-      border-radius:8px;
-      background: linear-gradient(90deg, var(--a), var(--b), var(--c));
-      box-shadow: 0 8px 18px rgba(2,6,23,.12);
+      width:34px; height:24px;
+      border-radius:10px;
+      background: var(--grad);
+      box-shadow: 0 12px 22px rgba(2,6,23,.14);
     }
     .brand-name{
-      font-weight:1000;
+      font-weight:900;
       text-transform:uppercase;
       font-size:1.05rem;
+      line-height:1;
     }
-    .brand-name b{color:var(--a)}
+    .brand-name small{
+      display:block;
+      font-size:.72rem;
+      letter-spacing:.2px;
+      color: var(--muted);
+      font-weight:700;
+      text-transform:none;
+      margin-top:2px;
+    }
 
+    /* Nav desktop */
     .nav{
       display:none;
-      gap:18px;
-      margin-left:10px;
+      gap:8px;
+      margin-left:8px;
     }
     .nav a{
       text-decoration:none;
-      font-weight:900;
+      font-weight:800;
       color: rgba(11,18,32,.82);
-      padding:10px 6px;
-      border-radius:10px;
-      transition: background .2s var(--ease), transform .2s var(--ease);
+      padding:10px 12px;
+      border-radius:999px;
+      transition: background .2s var(--ease), transform .2s var(--ease), color .2s var(--ease);
     }
     .nav a:hover{
-      background: rgba(37,99,235,.08);
+      background: rgba(47,123,255,.10);
+      color: rgba(11,18,32,.95);
       transform: translateY(-1px);
     }
 
-    /* Search */
+    /* Search (protagonista) */
     .search{
       margin-left:auto;
-      display:flex; align-items:center; gap:8px;
-      background:#f3f4f6;
-      border:1px solid rgba(15,23,42,.08);
+      display:flex; align-items:center; gap:10px;
+      background: rgba(255,255,255,.92);
+      border:1px solid var(--stroke);
       border-radius:999px;
-      padding: 8px 10px;
-      min-width: min(460px, 42vw);
-      transition: box-shadow .2s var(--ease), border-color .2s var(--ease);
+      padding: 10px 12px;
+      min-width: min(560px, 46vw);
+      box-shadow: 0 14px 30px rgba(2,6,23,.06);
+      transition: box-shadow .2s var(--ease), border-color .2s var(--ease), background .2s var(--ease);
     }
     .search:focus-within{
-      border-color: rgba(37,99,235,.22);
-      box-shadow: 0 0 0 4px rgba(37,99,235,.14);
+      border-color: rgba(47,123,255,.28);
+      box-shadow: 0 0 0 5px rgba(47,123,255,.14), 0 18px 40px rgba(2,6,23,.08);
       background:#fff;
+    }
+    .search .s-ico{
+      width:18px;height:18px; opacity:.7; flex: 0 0 auto;
     }
     .search input{
       border:0; outline:0; background:transparent;
       width:100%;
       font-size: .98rem;
+      font-weight:600;
+      color: rgba(11,18,32,.90);
     }
+    .search input::placeholder{color: rgba(11,18,32,.45); font-weight:600}
     .search button{
       border:0;
       cursor:pointer;
-      background:#fff;
-      border:1px solid rgba(15,23,42,.10);
+      background: var(--grad);
+      color:#fff;
       border-radius:999px;
-      padding: 8px 10px;
-      transition: transform .2s var(--ease);
+      padding: 10px 14px;
+      font-weight:900;
+      box-shadow: 0 12px 22px rgba(2,6,23,.12);
+      transition: transform .2s var(--ease), box-shadow .2s var(--ease);
     }
-    .search button:hover{transform: translateY(-1px)}
+    .search button:hover{transform: translateY(-1px); box-shadow: 0 16px 28px rgba(2,6,23,.16)}
 
     .actions{display:flex; align-items:center; gap:10px}
 
-    /* Cart icon button */
     .icon-btn{
       position:relative;
-      width:44px;height:44px;
+      width:46px;height:46px;
       border-radius:999px;
-      border:1px solid rgba(15,23,42,.10);
-      background:#fff;
+      border:1px solid var(--stroke);
+      background: rgba(255,255,255,.92);
       cursor:pointer;
       display:grid; place-items:center;
       text-decoration:none;
+      box-shadow: 0 14px 28px rgba(2,6,23,.06);
       transition: transform .2s var(--ease), box-shadow .2s var(--ease);
     }
-    .icon-btn:hover{transform: translateY(-1px); box-shadow: 0 10px 18px rgba(2,6,23,.10)}
+    .icon-btn:hover{transform: translateY(-1px); box-shadow: 0 18px 36px rgba(2,6,23,.10)}
+    .icon{
+      width:20px;height:20px; opacity:.84;
+    }
 
     .badge{
       position:absolute;
@@ -174,63 +243,67 @@
       min-width:20px; height:20px;
       padding:0 6px;
       border-radius:999px;
-      background: linear-gradient(90deg, var(--a), var(--b), var(--c));
+      background: var(--grad);
       color:#fff;
       display:none;
       align-items:center;
       justify-content:center;
       font-size:12px;
-      font-weight:1000;
-      box-shadow: 0 8px 16px rgba(2,6,23,.14);
+      font-weight:900;
+      box-shadow: 0 10px 18px rgba(2,6,23,.16);
       border: 2px solid #fff;
     }
     .badge.is-on{display:flex}
 
-    /* Cuenta */
+    /* Cuenta CTA */
     .account{
-      display:flex; align-items:center; gap:8px;
+      display:flex; align-items:center; gap:10px;
       text-decoration:none;
-      font-weight:1000;
-      background: rgba(245,158,11,.14);
-      border: 1px solid rgba(245,158,11,.25);
+      font-weight:900;
+      background: rgba(47,123,255,.10);
+      border: 1px solid rgba(47,123,255,.18);
       padding: 10px 12px;
       border-radius:999px;
       white-space:nowrap;
+      box-shadow: 0 14px 28px rgba(2,6,23,.06);
       transition: transform .2s var(--ease), box-shadow .2s var(--ease);
     }
-    .account:hover{transform: translateY(-1px); box-shadow: 0 10px 18px rgba(2,6,23,.10)}
+    .account:hover{transform: translateY(-1px); box-shadow: 0 18px 36px rgba(2,6,23,.10)}
     .acc-ico{
-      width:28px;height:28px;border-radius:999px;
+      width:30px;height:30px;border-radius:999px;
       display:grid;place-items:center;
       background:#fff;
-      border:1px solid rgba(15,23,42,.10);
+      border:1px solid var(--stroke);
+      box-shadow: 0 10px 20px rgba(2,6,23,.08);
     }
+    .acc-ico svg{width:18px;height:18px; opacity:.85}
 
     /* Mobile menu */
     .burger{
       display:inline-flex; align-items:center; justify-content:center;
-      width:44px;height:44px;
-      border-radius:12px;
-      border:1px solid rgba(15,23,42,.10);
-      background:#fff;
+      width:46px;height:46px;
+      border-radius:14px;
+      border:1px solid var(--stroke);
+      background: rgba(255,255,255,.92);
       cursor:pointer;
+      box-shadow: 0 14px 28px rgba(2,6,23,.06);
       transition: transform .2s var(--ease);
     }
     .burger:hover{transform: translateY(-1px)}
     .mobile{
       display:none;
       border-top:1px solid var(--stroke);
-      background:#fff;
+      background: rgba(255,255,255,.96);
       padding: 10px 0 14px;
     }
     .mobile a{
       display:block;
       padding: 12px 18px;
       text-decoration:none;
-      font-weight:950;
-      color: rgba(11,18,32,.85);
+      font-weight:900;
+      color: rgba(11,18,32,.86);
     }
-    .mobile a:hover{background: rgba(37,99,235,.06)}
+    .mobile a:hover{background: rgba(47,123,255,.07)}
     .mobile.is-open{display:block}
 
     @media (min-width: 980px){
@@ -245,22 +318,23 @@
       background:#fff;
       border:1px solid var(--stroke);
       box-shadow: var(--shadow1);
-      border-radius: 12px;
-      padding: 10px 12px;
+      border-radius: 14px;
+      padding: 12px 14px;
       margin: 10px 0;
-      font-weight:900;
+      font-weight:800;
+      color: rgba(11,18,32,.90);
     }
 
     /* Offline banner */
     .offline{
       display:none;
       margin: 10px 0 0;
-      background: rgba(245,158,11,.12);
-      border: 1px solid rgba(245,158,11,.25);
-      color: rgba(11,18,32,.85);
-      border-radius: 14px;
-      padding: 10px 12px;
-      font-weight:950;
+      background: rgba(255,181,71,.14);
+      border: 1px solid rgba(255,181,71,.26);
+      color: rgba(11,18,32,.86);
+      border-radius: 16px;
+      padding: 12px 14px;
+      font-weight:800;
       box-shadow: var(--shadow1);
     }
     .offline.is-on{display:flex;align-items:center;justify-content:space-between;gap:12px}
@@ -268,67 +342,102 @@
       border:1px solid rgba(15,23,42,.12);
       background:#fff;
       border-radius:999px;
-      padding:8px 10px;
-      font-weight:1000;
+      padding:8px 12px;
+      font-weight:900;
       cursor:pointer;
     }
 
-    /* Footer */
+    /* Main spacing base */
+    main{padding: 10px 0 0}
+
+    /* Footer PRO */
     footer{
-      margin-top: 30px;
-      background: linear-gradient(180deg, #ffffff, #f3f6ff);
+      margin-top: 34px;
+      background:
+        radial-gradient(900px 380px at 20% 0%, rgba(47,123,255,.10), transparent 62%),
+        radial-gradient(900px 380px at 85% 0%, rgba(255,181,71,.10), transparent 62%),
+        linear-gradient(180deg, #ffffff, #f4f7ff);
       border-top:1px solid var(--stroke);
     }
-    .footer-top{
-      padding: 18px 0 10px;
-      display:flex; flex-wrap:wrap; gap:12px;
-      align-items:center; justify-content:space-between;
-      color: rgba(11,18,32,.78);
+    .footer-grid{
+      padding: 22px 0 10px;
+      display:grid;
+      grid-template-columns: 1.2fr 1fr 1fr 1fr;
+      gap:16px;
+      align-items:start;
+    }
+    .f-brand{
+      display:flex; gap:12px; align-items:flex-start;
+    }
+    .f-title{
+      font-weight:900; letter-spacing:-.3px;
+    }
+    .f-desc{
+      margin-top:6px;
+      color: var(--muted);
+      font-weight:600;
+      line-height:1.3;
+      max-width: 42ch;
+    }
+    .f-col h4{
+      margin:0 0 10px;
+      font-size:.98rem;
       font-weight:900;
+      color: rgba(11,18,32,.90);
     }
-    .footer-links{
-      display:flex; flex-wrap:wrap; gap:12px;
-      align-items:center;
+    .f-links{
+      display:flex; flex-direction:column; gap:8px;
     }
-    .footer-links a{
+    .f-links a{
       text-decoration:none;
-      color: rgba(11,18,32,.75);
+      color: rgba(11,18,32,.72);
+      font-weight:650;
     }
-    .footer-links a:hover{text-decoration:underline}
+    .f-links a:hover{text-decoration:underline; color: rgba(11,18,32,.92)}
     .payrow{
-      padding: 10px 0 18px;
-      display:flex; gap:18px; align-items:center; justify-content:center;
-      opacity:.9;
+      padding: 10px 0 16px;
+      display:flex; gap:12px; align-items:center; justify-content:center;
+      opacity:.95;
       flex-wrap:wrap;
     }
     .pay{
-      width:74px; height:36px;
-      border-radius:10px;
-      border:1px solid rgba(15,23,42,.10);
+      width:78px; height:38px;
+      border-radius:12px;
+      border:1px solid var(--stroke);
       background:#fff;
       display:grid; place-items:center;
-      font-weight:1000;
-      color: rgba(11,18,32,.75);
+      font-weight:900;
+      color: rgba(11,18,32,.70);
+      box-shadow: 0 12px 22px rgba(2,6,23,.06);
     }
     .copyright{
       text-align:center;
       padding: 0 0 18px;
       color: rgba(11,18,32,.55);
-      font-weight:800;
+      font-weight:700;
       font-size:.92rem;
     }
 
-    /* ✅ Mejora #2: Focus visible pro */
+    @media (max-width: 980px){
+      .search{min-width: 40vw}
+      .footer-grid{grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 560px){
+      .search{display:none;} /* en mobile se prioriza simple */
+      .footer-grid{grid-template-columns: 1fr; }
+    }
+
+    /* Focus visible pro */
     :focus-visible{
       outline:none;
-      box-shadow: 0 0 0 4px rgba(37,99,235,.18);
-      border-radius: 10px;
+      box-shadow: 0 0 0 5px rgba(47,123,255,.16);
+      border-radius: 12px;
     }
     @media (prefers-reduced-motion: reduce){
       *{transition:none!important; scroll-behavior:auto!important}
     }
 
-    /* ===== Toaster ===== */
+    /* Toaster */
     .toasts{
       position: fixed;
       right: 14px;
@@ -341,11 +450,11 @@
     }
     .toast{
       pointer-events:auto;
-      width: min(360px, calc(100vw - 28px));
+      width: min(380px, calc(100vw - 28px));
       background:#fff;
-      border:1px solid rgba(15,23,42,.10);
+      border:1px solid var(--stroke);
       box-shadow: var(--shadow2);
-      border-radius: 14px;
+      border-radius: 16px;
       padding: 12px 12px;
       display:flex;
       gap:10px;
@@ -357,18 +466,18 @@
     .toast.is-on{transform: translateY(0); opacity:1}
     .toast .dot{
       width:12px;height:12px;border-radius:999px;margin-top:4px;
-      background: linear-gradient(90deg, var(--a), var(--b), var(--c));
+      background: var(--grad);
       flex: 0 0 auto;
     }
-    .toast .t-title{font-weight:1000; font-size:.95rem; color: rgba(11,18,32,.90)}
-    .toast .t-msg{font-weight:850; font-size:.86rem; color: rgba(11,18,32,.62); margin-top:2px; line-height:1.25}
+    .toast .t-title{font-weight:900; font-size:.95rem; color: rgba(11,18,32,.92)}
+    .toast .t-msg{font-weight:650; font-size:.88rem; color: rgba(11,18,32,.62); margin-top:2px; line-height:1.25}
     .toast .t-close{
       margin-left:auto;
       border:0;
       background:transparent;
       cursor:pointer;
-      font-weight:1000;
-      opacity:.65;
+      font-weight:900;
+      opacity:.62;
     }
     .toast .t-close:hover{opacity:1}
   </style>
@@ -379,12 +488,29 @@
 <body>
   <a class="skip" href="#main">Saltar al contenido</a>
 
-  <!-- TOPBAR -->
+  <!-- TOP STRIP -->
+  <div class="strip">
+    <div class="container strip-inner">
+      <div class="strip-badges" aria-label="Beneficios">
+        <span class="pill"><span class="dot-grad" aria-hidden="true"></span><b>Marketplace</b> tech + streetwear</span>
+        <span class="pill">🛡️ Pago seguro</span>
+        <span class="pill">🚚 Seguimiento de pedidos</span>
+      </div>
+      <div class="strip-badges" aria-label="Info">
+        <span class="pill">🔥 Ofertas activas</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- HEADER -->
   <header class="topbar">
     <div class="container topbar-inner">
       <a class="brand" href="/" aria-label="Ir a inicio">
         <span class="brand-mark" aria-hidden="true"></span>
-        <span class="brand-name">SKYLINE <b>STYLE</b></span>
+        <span class="brand-name">
+          SKYLINE <span style="color:var(--primary)">STORE</span>
+          <small>premium marketplace</small>
+        </span>
       </a>
 
       <nav class="nav" aria-label="Navegación principal">
@@ -395,25 +521,41 @@
         <a href="/shop?ofertas=1">Ofertas</a>
       </nav>
 
-      <!-- ✅ Mejora #3: mantiene la búsqueda al navegar -->
       <form class="search" action="/shop" method="get" role="search" aria-label="Buscar productos">
-        <input name="q" type="search" placeholder="Buscar productos..." autocomplete="off"
-               value="{{ request.args.get('q','') }}" />
-        <button type="submit" aria-label="Buscar">🔎</button>
+        <svg class="s-ico" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M10.5 19a8.5 8.5 0 1 1 0-17 8.5 8.5 0 0 1 0 17Z" stroke="currentColor" stroke-width="2"/>
+          <path d="M16.8 16.8 21 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <input name="q" type="search" placeholder="Buscar productos, marcas o categorías..."
+               autocomplete="off" value="{{ request.args.get('q','') }}" />
+        <button type="submit" aria-label="Buscar">Buscar</button>
       </form>
 
       <div class="actions">
         <a class="icon-btn" href="/cart" aria-label="Carrito">
-          🛒
+          <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M6 7h15l-1.6 8.2a2 2 0 0 1-2 1.6H9.1a2 2 0 0 1-2-1.6L5 3H2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M9 21a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" fill="currentColor"/>
+            <path d="M17 21a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" fill="currentColor"/>
+          </svg>
           <span class="badge" data-cart-badge>0</span>
         </a>
 
         <a class="account" href="/account" aria-label="Mi cuenta">
-          <span class="acc-ico" aria-hidden="true">👤</span>
+          <span class="acc-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z" stroke="currentColor" stroke-width="2"/>
+              <path d="M20 21a8 8 0 0 0-16 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </span>
           <span>Mi Cuenta</span>
         </a>
 
-        <button class="burger" type="button" aria-label="Abrir menú" aria-expanded="false" id="burger">☰</button>
+        <button class="burger" type="button" aria-label="Abrir menú" aria-expanded="false" id="burger">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
       </div>
     </div>
 
@@ -453,17 +595,43 @@
 
   <!-- FOOTER -->
   <footer>
-    <div class="container footer-top">
-      <div class="footer-links">
-        <a href="/terms">Términos y Condiciones</a>
-        <a href="/privacy">Política de Privacidad</a>
-        <a href="/help">Ayuda / Contacto</a>
+    <div class="container footer-grid">
+      <div>
+        <div class="f-brand">
+          <span class="brand-mark" aria-hidden="true" style="width:38px;height:28px;border-radius:12px;"></span>
+          <div>
+            <div class="f-title">Skyline Store</div>
+            <div class="f-desc">Marketplace premium de tech + streetwear. Comprá fácil, rápido y con confianza.</div>
+          </div>
+        </div>
       </div>
 
-      <div class="footer-links" aria-label="Redes">
-        <a href="#" aria-label="Facebook">📘</a>
-        <a href="#" aria-label="Instagram">📷</a>
-        <a href="#" aria-label="WhatsApp">💬</a>
+      <div class="f-col">
+        <h4>Explorar</h4>
+        <div class="f-links">
+          <a href="/shop?categoria=ropa">Ropa</a>
+          <a href="/shop?categoria=accesorios">Accesorios</a>
+          <a href="/shop?categoria=tecnologia">Tecnología</a>
+          <a href="/shop?ofertas=1">Ofertas</a>
+        </div>
+      </div>
+
+      <div class="f-col">
+        <h4>Soporte</h4>
+        <div class="f-links">
+          <a href="/help">Ayuda / Contacto</a>
+          <a href="/terms">Términos y Condiciones</a>
+          <a href="/privacy">Política de Privacidad</a>
+        </div>
+      </div>
+
+      <div class="f-col">
+        <h4>Cuenta</h4>
+        <div class="f-links">
+          <a href="/account">Mi cuenta</a>
+          <a href="/cart">Carrito</a>
+          <a href="/shop">Buscar productos</a>
+        </div>
       </div>
     </div>
 
@@ -601,7 +769,7 @@
       window.apiPost = (url, body) => _req('POST', url, body, 2);
     })();
 
-    // ✅ Mejora #4: CartStore (cache + sync pestañas)
+    // CartStore (cache + sync pestañas)
     (function(){
       const KEY = 'skyline:cart:snap:v1';
       const badge = document.querySelector('[data-cart-badge]');
