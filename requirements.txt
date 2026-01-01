@@ -1,64 +1,63 @@
 ﻿# =========================
-# Skyline Store — Core
+# Skyline Store — Production
 # =========================
-Flask==3.*
-Werkzeug==3.*
-python-dotenv==1.*
 
-# WSGI (producción)
-gunicorn==22.*
+# --- Core ---
+Flask==3.0.3
+Werkzeug==3.0.3
+python-dotenv==1.0.1
 
-# HTTP / APIs
-requests==2.*
+# --- WSGI (producción) ---
+gunicorn==22.0.0
+
+# --- HTTP / APIs ---
+requests==2.32.3
 
 # =========================
-# DB + Migraciones
+# DB + ORM + Migraciones
 # =========================
-Flask-SQLAlchemy==3.*
-SQLAlchemy==2.*
-Flask-Migrate==4.*
-alembic==1.*
+Flask-SQLAlchemy==3.1.1
+SQLAlchemy==2.0.36
+Flask-Migrate==4.0.7
+alembic==1.14.0
 
-# Drivers DB (elegí según tu DB)
-# Postgres (Render/Prod):
-psycopg[binary]==3.*
-# SQLite ya viene con Python (local)
+# Driver Postgres (Render / Prod)
+psycopg[binary]==3.2.3
+# SQLite → incluido en Python (local)
 
 # =========================
 # Performance / Front
 # =========================
-Flask-Compress==1.*
-Flask-Caching==2.*
-Flask-Minify==0.43
-whitenoise==6.*
+Flask-Compress==1.17
+Flask-Caching==2.3.0
+whitenoise==6.8.2
 
 # =========================
 # Seguridad
 # =========================
-Flask-Talisman==1.*
-itsdangerous==2.*
-bcrypt==4.*
+Flask-Talisman==1.1.0
+bcrypt==4.2.0
 
 # =========================
 # Auth / Forms / Validación
 # =========================
-Flask-Login==0.6.*
-Flask-WTF==1.2.*
-email-validator==2.*
-WTForms==3.*
+Flask-Login==0.6.3
+Flask-WTF==1.2.2
+WTForms==3.2.1
+email-validator==2.2.0
 
 # =========================
 # Admin (panel real)
 # =========================
-Flask-Admin==1.6.*
+Flask-Admin==1.6.1
 
 # =========================
-# Email (confirmaciones, reset pass)
+# Email (confirmaciones, reset)
 # =========================
-Flask-Mail==0.10.*
+Flask-Mail==0.10.0
 
 # =========================
 # Utils
 # =========================
-python-slugify==8.*
-Pillow==10.*
+python-slugify==8.0.4
+Pillow==10.4.0

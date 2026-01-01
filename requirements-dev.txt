@@ -1,0 +1,15 @@
+# Importa todo lo de producción
+-r requirements.txt
+
+# =========================
+# Desarrollo / Testing
+# =========================
+pytest==8.3.4
+pytest-cov==6.0.0
+
+# Lint / Format (calidad pro)
+ruff==0.8.4
+black==24.10.0
+
+# Consola avanzada
+ipython==8.31.0
