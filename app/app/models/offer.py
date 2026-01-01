@@ -1,0 +1,2 @@
+﻿# models\offer.py
+

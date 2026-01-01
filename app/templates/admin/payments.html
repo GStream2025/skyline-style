@@ -1,0 +1,430 @@
+{# app/templates/admin/payments.html — Pagos ULTRA FINAL PRO (sin fallos) #}
+{% extends "admin/base_admin.html" %}
+{% block title %}Pagos · Skyline Admin{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* ===== Payments ULTRA (Admin) ===== */
+  .pay-head{
+    display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;
+    margin-bottom:12px;
+  }
+  .pay-title{
+    margin:.2rem 0 0;font-weight:1000;letter-spacing:-.5px;
+  }
+  .pay-sub{
+    margin:.45rem 0 0;max-width:70ch
+  }
+
+  .pay-grid{
+    display:grid;
+    grid-template-columns: 1fr;
+    gap:14px;
+  }
+  @media(min-width:980px){
+    .pay-grid{ grid-template-columns: 1fr 1fr; }
+  }
+
+  .card{
+    border:1px solid rgba(148,163,184,.16);
+    border-radius:18px;
+    padding:14px;
+    background:rgba(255,255,255,.05);
+    box-shadow: 0 16px 40px rgba(0,0,0,.18);
+  }
+  :root[data-theme="light"] .card{
+    background: rgba(0,0,0,.02);
+    box-shadow: 0 14px 30px rgba(0,0,0,.08);
+  }
+
+  .card-top{
+    display:flex;justify-content:space-between;align-items:flex-start;gap:10px;
+    margin-bottom:8px;
+  }
+  .card-title{
+    display:flex;align-items:center;gap:10px;
+    font-weight:1000;letter-spacing:-.3px;
+  }
+  .card-ic{
+    width:34px;height:34px;border-radius:12px;
+    display:grid;place-items:center;
+    background: rgba(255,255,255,.08);
+    border:1px solid rgba(148,163,184,.18);
+  }
+  :root[data-theme="light"] .card-ic{
+    background: rgba(0,0,0,.04);
+    border-color: rgba(2,6,23,.10);
+  }
+
+  .card-desc{ margin:0; opacity:.82; line-height:1.55; }
+
+  .toggle{
+    display:inline-flex;align-items:center;gap:10px;
+    padding:8px 10px;
+    border-radius:999px;
+    border:1px solid rgba(148,163,184,.18);
+    background: rgba(255,255,255,.06);
+    font-weight:900;
+    white-space:nowrap;
+  }
+  :root[data-theme="light"] .toggle{
+    background: rgba(0,0,0,.02);
+    border-color: rgba(2,6,23,.10);
+  }
+
+  .switch{
+    position:relative;width:46px;height:26px;flex:0 0 auto;
+    display:inline-block;
+  }
+  .switch input{ display:none; }
+  .track{
+    position:absolute;inset:0;border-radius:999px;
+    background: rgba(148,163,184,.25);
+    transition: all .18s ease;
+    border:1px solid rgba(148,163,184,.22);
+  }
+  .thumb{
+    position:absolute;top:3px;left:3px;
+    width:20px;height:20px;border-radius:999px;
+    background: rgba(255,255,255,.92);
+    transition: all .18s ease;
+    box-shadow: 0 8px 18px rgba(0,0,0,.25);
+  }
+  .switch input:checked + .track{
+    background: rgba(34,197,94,.26);
+    border-color: rgba(34,197,94,.35);
+  }
+  .switch input:checked + .track .thumb{ left:23px; }
+
+  .fields{
+    display:grid;gap:10px;margin-top:10px;
+  }
+  .hint{
+    font-size:.9rem;
+    opacity:.75;
+    margin-top:-6px;
+  }
+  .invalid{
+    border-color: rgba(239,68,68,.55) !important;
+    box-shadow: 0 0 0 4px rgba(239,68,68,.14) !important;
+  }
+  .actions{
+    display:flex;gap:10px;flex-wrap:wrap;
+    margin-top:14px;
+    align-items:center;
+  }
+  .mini{
+    padding:8px 10px;border-radius:12px;
+    border:1px dashed rgba(148,163,184,.28);
+    background: rgba(255,255,255,.04);
+    opacity:.9;
+    font-size:.92rem;
+  }
+  :root[data-theme="light"] .mini{
+    background: rgba(0,0,0,.02);
+    border-color: rgba(2,6,23,.12);
+  }
+
+  .safe-note{
+    margin-top:10px;
+    border:1px solid rgba(56,189,248,.28);
+    background: rgba(56,189,248,.08);
+    border-radius: 16px;
+    padding: 12px;
+    opacity: .92;
+  }
+  :root[data-theme="light"] .safe-note{
+    background: rgba(37,99,235,.06);
+    border-color: rgba(37,99,235,.18);
+  }
+
+  .svg{ width:18px;height:18px; display:block; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="pay-head">
+  <div>
+    <h1 class="pay-title">Pagos</h1>
+    <p class="muted pay-sub">
+      Activá métodos de cobro y completá los datos. Esto se muestra en el checkout para que el cliente elija.
+    </p>
+  </div>
+
+  <div class="mini" title="Tip">
+    ✅ Activá solo lo que uses · 🔒 No pegues claves privadas/API keys acá
+  </div>
+</div>
+
+<form method="post" action="{{ url_for('admin.payments_save') }}" id="paymentsForm" novalidate>
+  <div class="pay-grid">
+
+    <!-- MercadoPago UY -->
+    <section class="card">
+      <div class="card-top">
+        <div>
+          <div class="card-title">
+            <span class="card-ic" aria-hidden="true">
+              <svg class="svg" viewBox="0 0 24 24" fill="none">
+                <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Z" stroke="currentColor" stroke-width="2" opacity=".8"/>
+                <path d="M7.5 12c1.2-2.4 2.8-3.6 4.5-3.6S15.3 9.6 16.5 12c-1.2 2.4-2.8 3.6-4.5 3.6S8.7 14.4 7.5 12Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+              </svg>
+            </span>
+            MercadoPago Uruguay
+          </div>
+          <p class="card-desc muted">
+            Pegá tu link de pago MP UY (mpago.la) o link de checkout.
+          </p>
+        </div>
+
+        <label class="toggle" title="Activar método">
+          <span>Activo</span>
+          <span class="switch">
+            <input type="checkbox" name="mp_uy_active" id="mp_uy_active" {% if data.mp_uy.active %}checked{% endif %}>
+            <span class="track"><span class="thumb"></span></span>
+          </span>
+        </label>
+      </div>
+
+      <div class="fields">
+        <div>
+          <label for="mp_uy_link">Link MercadoPago UY</label>
+          <input id="mp_uy_link" name="mp_uy_link" value="{{ data.mp_uy.link or '' }}" placeholder="https://mpago.la/xxxxxx" autocomplete="off" inputmode="url">
+          <div class="hint muted">Recomendado: link público de pago (no claves).</div>
+        </div>
+        <div>
+          <label for="mp_uy_note">Nota (opcional)</label>
+          <input id="mp_uy_note" name="mp_uy_note" value="{{ data.mp_uy.note or '' }}" placeholder="Ej: Tarjeta UY / cuotas / QR..." autocomplete="off">
+        </div>
+      </div>
+    </section>
+
+    <!-- MercadoPago AR -->
+    <section class="card">
+      <div class="card-top">
+        <div>
+          <div class="card-title">
+            <span class="card-ic" aria-hidden="true">
+              <svg class="svg" viewBox="0 0 24 24" fill="none">
+                <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Z" stroke="currentColor" stroke-width="2" opacity=".8"/>
+                <path d="M8 13c1.2-2 2.6-3 4-3s2.8 1 4 3c-1.2 2-2.6 3-4 3s-2.8-1-4-3Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                <path d="M9.3 8.2 8 6.5M14.7 8.2 16 6.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity=".7"/>
+              </svg>
+            </span>
+            MercadoPago Argentina
+          </div>
+          <p class="card-desc muted">
+            Pegá tu link de pago MP AR (mpago.la) o link de checkout.
+          </p>
+        </div>
+
+        <label class="toggle" title="Activar método">
+          <span>Activo</span>
+          <span class="switch">
+            <input type="checkbox" name="mp_ar_active" id="mp_ar_active" {% if data.mp_ar.active %}checked{% endif %}>
+            <span class="track"><span class="thumb"></span></span>
+          </span>
+        </label>
+      </div>
+
+      <div class="fields">
+        <div>
+          <label for="mp_ar_link">Link MercadoPago AR</label>
+          <input id="mp_ar_link" name="mp_ar_link" value="{{ data.mp_ar.link or '' }}" placeholder="https://mpago.la/yyyyyy" autocomplete="off" inputmode="url">
+          <div class="hint muted">Si el método está activo, el link debería estar completo.</div>
+        </div>
+        <div>
+          <label for="mp_ar_note">Nota (opcional)</label>
+          <input id="mp_ar_note" name="mp_ar_note" value="{{ data.mp_ar.note or '' }}" placeholder="Ej: QR / promos / etc." autocomplete="off">
+        </div>
+      </div>
+    </section>
+
+    <!-- PayPal -->
+    <section class="card">
+      <div class="card-top">
+        <div>
+          <div class="card-title">
+            <span class="card-ic" aria-hidden="true">
+              <svg class="svg" viewBox="0 0 24 24" fill="none">
+                <path d="M7 20h7.2a5.2 5.2 0 0 0 0-10.4H9.6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <path d="M9.6 9.6H8.4a5.2 5.2 0 1 0 0 10.4H7" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity=".75"/>
+              </svg>
+            </span>
+            PayPal
+          </div>
+          <p class="card-desc muted">
+            Usá PayPal.me o el email (se muestra al cliente).
+          </p>
+        </div>
+
+        <label class="toggle" title="Activar método">
+          <span>Activo</span>
+          <span class="switch">
+            <input type="checkbox" name="paypal_active" id="paypal_active" {% if data.paypal.active %}checked{% endif %}>
+            <span class="track"><span class="thumb"></span></span>
+          </span>
+        </label>
+      </div>
+
+      <div class="fields">
+        <div>
+          <label for="paypal_user">PayPal.me (usuario)</label>
+          <input id="paypal_user" name="paypal_user" value="{{ data.paypal.user or '' }}" placeholder="tuusuario (sin https://paypal.me/)" autocomplete="off">
+          <div class="hint muted">Ej: si tu link es paypal.me/juan, acá va <b>juan</b>.</div>
+        </div>
+        <div>
+          <label for="paypal_email">Email PayPal (opcional)</label>
+          <input id="paypal_email" name="paypal_email" value="{{ data.paypal.email or '' }}" placeholder="ventas@tuemail.com" autocomplete="email">
+        </div>
+      </div>
+    </section>
+
+    <!-- Transferencias -->
+    <section class="card">
+      <div class="card-top">
+        <div>
+          <div class="card-title">
+            <span class="card-ic" aria-hidden="true">
+              <svg class="svg" viewBox="0 0 24 24" fill="none">
+                <path d="M3 7h18M6 11h12M8 15h8M10 19h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </span>
+            Transferencias
+          </div>
+          <p class="card-desc muted">
+            Datos de cuenta (local/internacional). Se muestra tal cual al cliente.
+          </p>
+        </div>
+
+        <label class="toggle" title="Activar método">
+          <span>Activo</span>
+          <span class="switch">
+            <input type="checkbox" name="transfer_active" id="transfer_active" {% if data.transfer.active %}checked{% endif %}>
+            <span class="track"><span class="thumb"></span></span>
+          </span>
+        </label>
+      </div>
+
+      <div class="fields">
+        <div>
+          <label for="transfer_info">Información (Banco / Alias / IBAN / SWIFT / Wise)</label>
+          <textarea id="transfer_info" name="transfer_info" placeholder="Banco: ...&#10;Cuenta: ...&#10;Alias: ...&#10;IBAN/SWIFT/Wise: ...">{{ data.transfer.info or '' }}</textarea>
+          <div class="hint muted">Tip: separá por líneas para que quede perfecto en checkout.</div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <div class="safe-note">
+    <b>Seguridad:</b> acá solo pegás <u>links públicos</u> y <u>datos de cobro</u>. No pegues tokens ni claves privadas.
+  </div>
+
+  <div class="actions">
+    <button class="btn" type="submit">
+      <span class="ic" aria-hidden="true">💾</span> Guardar métodos
+    </button>
+    <a class="btn2" href="{{ url_for('shop.checkout') }}">
+      <span class="ic" aria-hidden="true">🔎</span> Ver checkout
+    </a>
+    <span class="muted" style="margin-left:auto">
+      Consejo: si activás un método, completá su link/datos.
+    </span>
+  </div>
+</form>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(() => {
+  const byId = (id) => document.getElementById(id);
+
+  const rules = [
+    { active: "mp_uy_active", required: ["mp_uy_link"], url: ["mp_uy_link"] },
+    { active: "mp_ar_active", required: ["mp_ar_link"], url: ["mp_ar_link"] },
+    { active: "paypal_active", required: ["paypal_user","paypal_email"], anyOne: true },
+    { active: "transfer_active", required: ["transfer_info"] },
+  ];
+
+  function looksLikeUrl(v){
+    if(!v) return false;
+    try { new URL(v); return true; } catch(e) { return false; }
+  }
+  function looksLikeEmail(v){
+    if(!v) return false;
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
+  }
+
+  function clearInvalid(ids){
+    ids.forEach(id => {
+      const el = byId(id);
+      if(el) el.classList.remove("invalid");
+    });
+  }
+
+  function markInvalid(ids){
+    ids.forEach(id => {
+      const el = byId(id);
+      if(el) el.classList.add("invalid");
+    });
+  }
+
+  const form = document.getElementById("paymentsForm");
+
+  form.addEventListener("submit", (e) => {
+    let ok = true;
+
+    // limpiar estados previos
+    rules.forEach(r => clearInvalid(r.required.concat(r.url || [])));
+
+    rules.forEach(r => {
+      const isOn = byId(r.active)?.checked;
+
+      if(!isOn) return;
+
+      if(r.anyOne){
+        const a = (byId(r.required[0])?.value || "").trim();
+        const b = (byId(r.required[1])?.value || "").trim();
+        const hasAny = !!(a || b);
+        if(!hasAny){
+          ok = false;
+          markInvalid(r.required);
+        }else{
+          // si puso email, validarlo
+          if(b && !looksLikeEmail(b)){
+            ok = false;
+            markInvalid([r.required[1]]);
+          }
+        }
+        return;
+      }
+
+      // required
+      const missing = r.required.filter(id => !((byId(id)?.value || "").trim()));
+      if(missing.length){
+        ok = false;
+        markInvalid(missing);
+      }
+
+      // url validation
+      if(r.url){
+        r.url.forEach(id => {
+          const v = (byId(id)?.value || "").trim();
+          if(v && !looksLikeUrl(v)){
+            ok = false;
+            markInvalid([id]);
+          }
+        });
+      }
+    });
+
+    if(!ok){
+      e.preventDefault();
+      alert("Revisá los campos marcados en rojo: activaste un método pero faltan datos o el link/email no es válido.");
+    }
+  });
+})();
+</script>
+{% endblock %}

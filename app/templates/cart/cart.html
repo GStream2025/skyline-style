@@ -1,0 +1,387 @@
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const root = document.querySelector('[data-cart-root]');
+  if (!root) return;
+
+  const $  = (sel, ctx = document) => ctx.querySelector(sel);
+  const $$ = (sel, ctx = document) => Array.from(ctx.querySelectorAll(sel));
+
+  // ==========================================================
+  // A11y live region (no spam)
+  // ==========================================================
+  const live = $('[data-cart-live]', root);
+  let lastLive = "";
+  const say = (msg) => {
+    if (!live) return;
+    const s = String(msg || "");
+    if (s === lastLive) return;
+    lastLive = s;
+    live.textContent = s;
+  };
+
+  // ==========================================================
+  // Summary nodes
+  // ==========================================================
+  const metaEl      = $('[data-cart-meta]', root);
+  const subtotalEl  = $('[data-subtotal]', root);
+  const discountEl  = $('[data-discount]', root);
+  const discountRow = $('[data-discount-row]', root);
+  const totalEl     = $('[data-total]', root);
+
+  const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
+  const toInt = (v, def = 1) => {
+    const n = parseInt(String(v ?? ''), 10);
+    return Number.isFinite(n) ? n : def;
+  };
+
+  // ==========================================================
+  // CSRF auto (si existe, se manda; si no, no rompe)
+  // ==========================================================
+  const readCsrf = () => {
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    if (meta && meta.content) return meta.content;
+    const inp = document.querySelector('input[name="csrf_token"]');
+    if (inp && inp.value) return inp.value;
+    return "";
+  };
+  let csrf = readCsrf(); // lo re-leemos si falla por token rotado
+
+  // ==========================================================
+  // Error helper
+  // ==========================================================
+  const errMsg = (j) => {
+    if (!j) return "Request failed";
+    if (typeof j === "string") return j;
+    if (j?.error?.message) return j.error.message;
+    if (j?.error?.code && j?.error?.message) return j.error.message;
+    if (typeof j?.error === "string") return j.error;
+    if (j?.message) return j.message;
+    return "Request failed";
+  };
+
+  // ==========================================================
+  // Abort controllers (cancel requests anteriores por clave)
+  // ==========================================================
+  const controllers = new Map();
+  const abortPrev = (key) => {
+    const c = controllers.get(key);
+    if (c) { try { c.abort(); } catch(e){} }
+    const nc = new AbortController();
+    controllers.set(key, nc);
+    return nc;
+  };
+
+  // ==========================================================
+  // Fetch helpers (fallback seguro si no hay window.apiGet/apiPost)
+  // ==========================================================
+  const apiGet = async (url, key = "get") => {
+    const ctrl = abortPrev(key);
+
+    if (window.apiGet) return window.apiGet(url);
+
+    const r = await fetch(url, {
+      headers: { "Accept": "application/json" },
+      credentials: "same-origin",
+      signal: ctrl.signal
+    });
+
+    let j = {};
+    try { j = await r.json(); } catch(e) { j = {}; }
+
+    if (!r.ok || j?.ok === false) throw new Error(errMsg(j));
+    return j;
+  };
+
+  const apiPost = async (url, body, key = "post") => {
+    const ctrl = abortPrev(key);
+
+    if (window.apiPost) return window.apiPost(url, body);
+
+    const headers = {
+      "Content-Type": "application/json",
+      "Accept": "application/json"
+    };
+
+    // Relee CSRF por si cambió después del DOMContentLoaded
+    csrf = csrf || readCsrf();
+    if (csrf) headers["X-CSRF-Token"] = csrf;
+
+    const r = await fetch(url, {
+      method: "POST",
+      headers,
+      credentials: "same-origin",
+      body: JSON.stringify(body || {}),
+      signal: ctrl.signal
+    });
+
+    let j = {};
+    try { j = await r.json(); } catch(e) { j = {}; }
+
+    // Si falla por CSRF, reintenta 1 vez releyendo token (sin bucle infinito)
+    const msg = errMsg(j);
+    const looksCsrf = /csrf|token/i.test(msg);
+    if ((!r.ok || j?.ok === false) && looksCsrf) {
+      const fresh = readCsrf();
+      if (fresh && fresh !== csrf) {
+        csrf = fresh;
+        headers["X-CSRF-Token"] = csrf;
+
+        const r2 = await fetch(url, {
+          method: "POST",
+          headers,
+          credentials: "same-origin",
+          body: JSON.stringify(body || {}),
+          signal: ctrl.signal
+        });
+
+        let j2 = {};
+        try { j2 = await r2.json(); } catch(e) { j2 = {}; }
+
+        if (!r2.ok || j2?.ok === false) throw new Error(errMsg(j2));
+        return j2;
+      }
+    }
+
+    if (!r.ok || j?.ok === false) throw new Error(msg);
+    return j;
+  };
+
+  const toastSafe = (t, m) => { try { window.toast && toast(t, m); } catch(e){} };
+
+  // ==========================================================
+  // UI apply snapshot
+  // ==========================================================
+  const setSummary = (snap) => {
+    if (!snap) return;
+    if (metaEl) metaEl.textContent = `${snap.items_count || 0} item(s) • ${snap.distinct_items || 0} producto(s)`;
+    if (subtotalEl) subtotalEl.textContent = snap.subtotal || "0.00";
+
+    const disc = snap.discount_total || "0.00";
+    if (discountEl) discountEl.textContent = disc;
+    if (discountRow) discountRow.style.display = (disc && disc !== "0.00") ? "" : "none";
+
+    if (totalEl) totalEl.textContent = snap.total || snap.subtotal || "0.00";
+  };
+
+  const renderLines = (snap) => {
+    if (!snap || !Array.isArray(snap.lines)) return;
+
+    // Update existentes
+    for (const ln of snap.lines) {
+      const row = root.querySelector(`[data-line][data-id="${ln.product_id}"]`);
+      if (!row) continue;
+
+      const qtyInput  = row.querySelector('[data-qty-input]');
+      const lineTotal = row.querySelector('[data-line-total]');
+      const unit      = row.querySelector('[data-unit]');
+
+      if (qtyInput)  qtyInput.value = String(ln.qty || 1);
+      if (lineTotal) lineTotal.textContent = ln.line_total_display || ln.line_total || "0.00";
+      if (unit)      unit.textContent = ln.unit_price_display || ln.unit_price || "0.00";
+    }
+
+    // Elimina del DOM líneas que ya no están
+    const ids = new Set(snap.lines.map(x => String(x.product_id)));
+    for (const el of $$('[data-line]', root)) {
+      const id = el.getAttribute('data-id');
+      if (id && !ids.has(String(id))) {
+        el.classList.add('fade-out');
+        setTimeout(() => el.remove(), 220);
+      }
+    }
+  };
+
+  const applySnap = (snap) => {
+    setSummary(snap);
+    renderLines(snap);
+
+    if (window.CartStore && typeof window.CartStore.update === 'function') {
+      try { window.CartStore.update(snap); } catch(e) {}
+    }
+
+    // Si queda vacío, redirigimos a /cart para que el server renderice empty state bien
+    const hasItems = !!(snap?.has_items || (Number(snap?.items_count || 0) > 0));
+    if (!hasItems && window.location.pathname.includes('/cart')) {
+      // no hacemos nada agresivo acá para no “parpadear”;
+      // si querés, descomentá:
+      // window.location.reload();
+    }
+  };
+
+  // ==========================================================
+  // Busy lock SOLO para acciones del carrito (NO checkout)
+  // ==========================================================
+  let busy = false;
+  const setBusy = (state) => {
+    busy = !!state;
+    for (const b of $$('[data-action]', root)) {
+      const act = b.getAttribute('data-action');
+      if (act === 'go-checkout') continue; // checkout siempre libre
+      if (state) b.classList.add('btn-disabled');
+      else b.classList.remove('btn-disabled');
+    }
+  };
+
+  // ==========================================================
+  // Refresh (retry 1 vez)
+  // ==========================================================
+  const refresh = async (retry = true) => {
+    if (busy) return;
+    setBusy(true);
+    say("Actualizando carrito…");
+    try {
+      const d = await apiGet('/cart/json', 'refresh');
+      applySnap(d.cart);
+      say("Carrito actualizado.");
+    } catch (e) {
+      if (retry) {
+        setTimeout(() => refresh(false), 250);
+      } else {
+        toastSafe("Ups", e.message || "No se pudo actualizar");
+        say("Error al actualizar.");
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // ==========================================================
+  // Debounce qty input
+  // ==========================================================
+  const debounceMap = new Map();
+  const debounce = (key, fn, ms = 320) => {
+    if (debounceMap.has(key)) clearTimeout(debounceMap.get(key));
+    debounceMap.set(key, setTimeout(fn, ms));
+  };
+
+  // ==========================================================
+  // Click actions
+  // ==========================================================
+  root.addEventListener('click', async (ev) => {
+    const btn = ev.target.closest('[data-action]');
+    if (!btn) return;
+
+    const action = btn.getAttribute('data-action');
+    const id = btn.getAttribute('data-id');
+
+    // ✅ Checkout PRO (nunca bloqueado por busy)
+    if (action === 'go-checkout') {
+      ev.preventDefault();
+      if (btn.dataset.loading === '1') return;
+
+      btn.dataset.loading = '1';
+      const original = btn.textContent;
+      btn.textContent = 'Redirigiendo...';
+      btn.classList.add('btn-disabled');
+      say("Redirigiendo al checkout…");
+
+      // Siempre a tu puente seguro
+      window.location.href = btn.getAttribute('href') || '/cart/checkout';
+
+      // Por si el navegador tarda o bloquea, revertimos UI (no rompe)
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.dataset.loading = '0';
+        btn.classList.remove('btn-disabled');
+      }, 2500);
+      return;
+    }
+
+    if (action === 'refresh') return refresh();
+    if (busy) return;
+
+    try {
+      if (action === 'clear') {
+        setBusy(true);
+        say("Vaciando carrito…");
+        const d = await apiPost('/cart/clear?json=1', {}, 'clear');
+        applySnap(d.cart);
+        toastSafe("Listo", "Carrito vacío ✅");
+        say("Carrito vacío.");
+        return;
+      }
+
+      if (action === 'remove') {
+        setBusy(true);
+        const row = root.querySelector(`[data-line][data-id="${id}"]`);
+        if (row) { row.classList.add('fade-out'); setTimeout(() => row.remove(), 220); }
+        say("Quitando producto…");
+        const d = await apiPost('/cart/remove?json=1', { id }, 'remove');
+        applySnap(d.cart);
+        toastSafe("Listo", "Producto quitado ✅");
+        say("Producto quitado.");
+        return;
+      }
+
+      if (action === 'inc' || action === 'dec') {
+        setBusy(true);
+        const input = root.querySelector(`[data-qty-input][data-id="${id}"]`);
+        const current = input ? toInt(input.value, 1) : 1;
+        const next = action === 'inc' ? current + 1 : current - 1;
+        const qty = clamp(next, 1, 25);
+        if (input) input.value = String(qty);
+
+        say("Actualizando cantidad…");
+        const d = await apiPost('/cart/update?json=1', { id, qty }, 'qty');
+        applySnap(d.cart);
+        say("Cantidad actualizada.");
+        return;
+      }
+    } catch (e) {
+      toastSafe("Ups", e.message || "Error");
+      say("Ocurrió un error.");
+      refresh(); // fallback
+    } finally {
+      setBusy(false);
+    }
+  });
+
+  // ==========================================================
+  // Qty input manual (debounced)
+  // ==========================================================
+  root.addEventListener('input', (ev) => {
+    const inp = ev.target.closest('[data-qty-input]');
+    if (!inp) return;
+
+    const id = inp.getAttribute('data-id');
+    debounce(`qty:${id}`, async () => {
+      if (busy) return;
+
+      let qty = clamp(toInt(inp.value, 1), 1, 25);
+      inp.value = String(qty);
+
+      try {
+        setBusy(true);
+        say("Actualizando cantidad…");
+        const d = await apiPost('/cart/update?json=1', { id, qty }, 'qty');
+        applySnap(d.cart);
+        say("Cantidad actualizada.");
+      } catch (e) {
+        toastSafe("Ups", e.message || "No se pudo actualizar");
+        refresh();
+      } finally {
+        setBusy(false);
+      }
+    }, 350);
+  });
+
+  // Enter / Escape helpers
+  root.addEventListener('keydown', (ev) => {
+    const inp = ev.target.closest('[data-qty-input]');
+    if (!inp) return;
+
+    if (ev.key === 'Enter') {
+      ev.preventDefault();
+      inp.blur();
+    }
+    if (ev.key === 'Escape') {
+      ev.preventDefault();
+      refresh();
+      inp.blur();
+    }
+  });
+
+  // ✅ Primera sync
+  refresh();
+});
+</script>

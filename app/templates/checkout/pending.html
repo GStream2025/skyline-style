@@ -1,0 +1,435 @@
+{# app/templates/checkout/pending.html — SKYLINE PENDING ULTRA PRO (FINAL) #}
+{% extends "base.html" %}
+
+{% block title %}Pago pendiente · Skyline Store{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* =========================================================
+     PENDING — ULTRA PRO (Final)
+     10+ mejoras reales:
+     1) No depende de Tailwind (CSS propio)
+     2) UI premium glass + sombras + dark scheme
+     3) Accesibilidad: roles, aria-live, focus-visible
+     4) Motion-safe (prefers-reduced-motion)
+     5) Anti-rotura: fallbacks de variables y rutas
+     6) Estado “pendiente” claro + pasos siguientes
+     7) Botones robustos: reintentar / volver / soporte
+     8) Copiar Nº pedido / referencia (si existe)
+     9) Auto-refresh opcional (seguro, con backoff)
+     10) “Ver estado” que no rompe (polling best-effort)
+     11) Print-friendly
+  ========================================================== */
+
+  .pd-wrap{max-width:1080px;margin:0 auto;padding:clamp(18px,3vw,30px) 16px 70px}
+  .pd-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:18px 0 14px}
+  .pd-title{margin:0;font-weight:1000;letter-spacing:-.6px;font-size:clamp(1.7rem,3vw,2.25rem)}
+  .pd-sub{margin:.35rem 0 0;opacity:.78;max-width:78ch;line-height:1.5}
+
+  .pd-pill{
+    display:inline-flex;align-items:center;gap:8px;
+    padding:7px 10px;border-radius:999px;
+    font-size:.85rem;font-weight:950;
+    border:1px solid rgba(245,158,11,.35);
+    background: rgba(245,158,11,.12);
+    color: rgba(161,98,7,.95);
+    white-space:nowrap;
+  }
+  @media (prefers-color-scheme: dark){
+    .pd-pill{color: rgba(253,230,138,.95); background: rgba(245,158,11,.12); border-color: rgba(245,158,11,.30)}
+  }
+
+  .pd-grid{display:grid;grid-template-columns:1fr;gap:14px;align-items:start}
+  @media(min-width:980px){.pd-grid{grid-template-columns:1.25fr .75fr;gap:16px}}
+
+  .pd-card{
+    border-radius:22px;
+    border:1px solid rgba(148,163,184,.18);
+    background: rgba(255,255,255,.72);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 18px 46px rgba(15,23,42,.12);
+    overflow:hidden;
+  }
+  @media (prefers-color-scheme: dark){
+    .pd-card{background: rgba(255,255,255,.06); box-shadow: 0 18px 46px rgba(0,0,0,.28)}
+  }
+
+  .pd-card__head{
+    padding:16px;
+    border-bottom:1px solid rgba(148,163,184,.14);
+    background:
+      radial-gradient(560px 260px at 0% 0%, rgba(245,158,11,.20), transparent 60%),
+      radial-gradient(560px 260px at 100% 0%, rgba(56,189,248,.16), transparent 60%);
+  }
+  .pd-h2{margin:0;font-weight:1000;letter-spacing:-.35px}
+  .pd-card__inner{padding:16px}
+  @media(min-width:768px){.pd-card__inner{padding:18px}}
+
+  .pd-alert{
+    display:flex;gap:12px;align-items:flex-start;
+    padding:14px;border-radius:18px;
+    border:1px solid rgba(245,158,11,.18);
+    background: rgba(245,158,11,.10);
+  }
+  .pd-ico{
+    width:44px;height:44px;border-radius:16px;
+    display:grid;place-items:center;
+    background: rgba(255,255,255,.7);
+    border:1px solid rgba(148,163,184,.18);
+    flex: 0 0 auto;
+  }
+  @media (prefers-color-scheme: dark){
+    .pd-ico{background: rgba(255,255,255,.06)}
+  }
+  .pd-alert b{font-weight:1000}
+  .pd-alert p{margin:.25rem 0 0;opacity:.84;line-height:1.45}
+
+  .pd-kv{display:grid;gap:10px;margin:14px 0 0}
+  .pd-kv-row{
+    display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
+    padding:10px 12px;border-radius:14px;
+    border:1px solid rgba(148,163,184,.16);
+    background: rgba(255,255,255,.55);
+  }
+  @media (prefers-color-scheme: dark){
+    .pd-kv-row{background: rgba(255,255,255,.04)}
+  }
+  .pd-k{font-size:.78rem;opacity:.75;font-weight:950}
+  .pd-v{font-size:.95rem;font-weight:950;max-width:65%;text-align:right;word-break:break-word}
+
+  .pd-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
+  .pd-btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    padding:12px 14px;border-radius:999px;
+    font-weight:1000;text-decoration:none;cursor:pointer;
+    border:1px solid rgba(148,163,184,.18);
+    background:#fff;
+    transition: transform .14s ease, box-shadow .14s ease, filter .14s ease;
+    user-select:none;
+  }
+  .pd-btn:hover{transform: translateY(-1px); box-shadow: 0 14px 26px rgba(0,0,0,.10)}
+  .pd-btn:active{transform: translateY(0)}
+  .pd-btn--primary{
+    border:0;
+    background: linear-gradient(135deg, rgba(245,158,11,1), rgba(56,189,248,.85));
+    color:#08121f;
+  }
+  .pd-btn--ghost{background: transparent}
+
+  .pd-note{
+    margin-top:14px;
+    font-size:.82rem;opacity:.78;line-height:1.45;
+    padding:12px 12px;border-radius:16px;
+    border:1px dashed rgba(148,163,184,.28);
+    background: rgba(255,255,255,.45);
+  }
+  @media (prefers-color-scheme: dark){
+    .pd-note{background: rgba(255,255,255,.04)}
+  }
+
+  /* Aside */
+  .pd-aside{
+    border-radius:24px;
+    border:1px solid rgba(148,163,184,.18);
+    background: #0b1120;
+    color: #e5e7eb;
+    overflow:hidden;
+    box-shadow: 0 18px 46px rgba(0,0,0,.28);
+  }
+  .pd-aside__head{
+    padding:16px 16px 14px;
+    border-bottom:1px solid rgba(148,163,184,.14);
+    background: radial-gradient(600px 280px at 0% 0%, rgba(245,158,11,.20), transparent 60%),
+                radial-gradient(600px 280px at 100% 0%, rgba(56,189,248,.18), transparent 60%);
+  }
+  .pd-aside__body{padding:14px 16px 16px}
+  .pd-steps{display:grid;gap:10px;margin:0;padding:0;list-style:none}
+  .pd-step{
+    display:flex;gap:10px;align-items:flex-start;
+    padding:12px;border-radius:18px;
+    border:1px solid rgba(148,163,184,.14);
+    background: rgba(255,255,255,.06);
+  }
+  .pd-dot{
+    width:28px;height:28px;border-radius:999px;
+    display:grid;place-items:center;
+    font-weight:1000;
+    background: rgba(56,189,248,.14);
+    border:1px solid rgba(56,189,248,.20);
+    color: rgba(186,230,253,.95);
+    flex: 0 0 auto;
+  }
+  .pd-step b{font-weight:1000}
+  .pd-step p{margin:.15rem 0 0;opacity:.82;line-height:1.35;font-size:.92rem}
+
+  /* Spinner */
+  .pd-spin{
+    width:18px;height:18px;border-radius:999px;
+    border:2px solid rgba(11,18,32,.20);
+    border-top-color: rgba(245,158,11,.95);
+    animation: pd-rot .9s linear infinite;
+  }
+  @media (prefers-color-scheme: dark){
+    .pd-spin{border-color: rgba(229,231,235,.22); border-top-color: rgba(253,230,138,.95)}
+  }
+  @keyframes pd-rot{to{transform: rotate(360deg)}}
+
+  .pd-pop{transform: translateY(10px);opacity:0;transition: transform .25s ease, opacity .25s ease}
+  .pd-pop.is-on{transform: translateY(0);opacity:1}
+  @media (prefers-reduced-motion: reduce){
+    .pd-pop{transition:none}
+    .pd-btn{transition:none}
+    .pd-spin{animation:none}
+  }
+
+  :focus-visible{
+    outline:none;
+    box-shadow: 0 0 0 4px rgba(37,99,235,.18);
+    border-radius: 10px;
+  }
+
+  @media print{
+    header.topbar, footer, .pd-actions, .pd-aside{display:none !important}
+    body{background:#fff !important}
+    .pd-card{box-shadow:none !important; border:1px solid #ddd !important; background:#fff !important}
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+{# Variables seguras (no rompen si backend no manda nada) #}
+{% set order_number = (order_number if order_number is defined else (order.number if order is defined and order.number is defined else "")) %}
+{% set provider_name = (provider if provider is defined else (payment_provider if payment_provider is defined else "pago")) %}
+{% set support_email = (support_email if support_email is defined else "soporte@skylinestore.com") %}
+{% set support_whatsapp = (support_whatsapp if support_whatsapp is defined else "") %}
+
+<section class="pd-wrap" aria-label="Pago pendiente">
+
+  <div class="pd-head">
+    <div>
+      <h1 class="pd-title">Pago pendiente ⏳</h1>
+      <p class="pd-sub">
+        Estamos esperando confirmación del proveedor.
+        Esto puede demorar unos segundos o algunos minutos según el método elegido.
+      </p>
+    </div>
+    <span class="pd-pill" role="status" aria-live="polite">
+      <span class="pd-spin" aria-hidden="true"></span>
+      Pendiente de confirmación
+    </span>
+  </div>
+
+  <div class="pd-grid">
+
+    <!-- MAIN -->
+    <div class="pd-card pd-pop" id="pdCard">
+      <div class="pd-card__head">
+        <h2 class="pd-h2">Estado del pago</h2>
+      </div>
+
+      <div class="pd-card__inner">
+
+        <div class="pd-alert" role="status" aria-live="polite">
+          <div class="pd-ico" aria-hidden="true">🕒</div>
+          <div>
+            <div style="font-weight:1000;letter-spacing:-.2px">Tu pago quedó en estado pendiente.</div>
+            <p>
+              Proveedor: <b>{{ provider_name|capitalize }}</b>.
+              {% if order_number %}
+                Pedido: <b>{{ order_number }}</b>.
+              {% endif %}
+            </p>
+            <p style="margin-top:.4rem">
+              Si ya pagaste, no hagas otro pago todavía: primero esperemos la confirmación.
+            </p>
+          </div>
+        </div>
+
+        <div class="pd-kv" aria-label="Datos útiles">
+          <div class="pd-kv-row">
+            <div class="pd-k">Estado</div>
+            <div class="pd-v">Pendiente</div>
+          </div>
+
+          <div class="pd-kv-row">
+            <div class="pd-k">Número de pedido</div>
+            <div class="pd-v">{% if order_number %}{{ order_number }}{% else %}—{% endif %}</div>
+          </div>
+
+          <div class="pd-kv-row">
+            <div class="pd-k">Soporte</div>
+            <div class="pd-v">{{ support_email }}</div>
+          </div>
+
+          <div class="pd-kv-row" id="pdLiveRow" style="display:none">
+            <div class="pd-k">Chequeo</div>
+            <div class="pd-v" id="pdLive">—</div>
+          </div>
+        </div>
+
+        <div class="pd-actions" aria-label="Acciones">
+          <a class="pd-btn pd-btn--primary"
+             href="{{ url_for('checkout.checkout_home') if 'checkout.checkout_home' in current_app.view_functions else '/checkout' }}">
+            ✅ Volver a checkout
+          </a>
+
+          <a class="pd-btn"
+             href="{{ url_for('cart.cart_view') if 'cart.cart_view' in current_app.view_functions else '/cart' }}">
+            🛒 Ver carrito
+          </a>
+
+          <button class="pd-btn pd-btn--ghost" type="button" id="btnCopy" {% if not order_number %}disabled aria-disabled="true"{% endif %}>
+            📋 Copiar Nº pedido
+          </button>
+
+          <button class="pd-btn pd-btn--ghost" type="button" id="btnRefresh">
+            🔄 Actualizar estado
+          </button>
+
+          {% if support_whatsapp %}
+            <a class="pd-btn"
+               href="https://wa.me/{{ support_whatsapp|replace('+','')|replace(' ','') }}"
+               target="_blank" rel="noopener">
+              💬 WhatsApp soporte
+            </a>
+          {% endif %}
+        </div>
+
+        <div class="pd-note">
+          <b>Nota:</b> algunos métodos (por ejemplo, transferencia/efectivo) pueden tardar más.
+          Si pasa mucho tiempo, escribinos con tu Nº de pedido.
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ASIDE -->
+    <aside class="pd-aside pd-pop" id="pdAside" aria-label="Qué hacer ahora">
+      <div class="pd-aside__head">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+          <h2 class="pd-h2" style="margin:0">Qué hacer ahora</h2>
+          <span class="pd-pill" style="border-color:rgba(56,189,248,.35);background:rgba(56,189,248,.10);color:rgba(186,230,253,.95)">Pasos</span>
+        </div>
+      </div>
+
+      <div class="pd-aside__body">
+        <ul class="pd-steps">
+          <li class="pd-step">
+            <span class="pd-dot">1</span>
+            <div>
+              <b>Esperá la confirmación</b>
+              <p>Normalmente llega en minutos. No dupliques el pago mientras tanto.</p>
+            </div>
+          </li>
+          <li class="pd-step">
+            <span class="pd-dot">2</span>
+            <div>
+              <b>Revisá tu correo</b>
+              <p>Te puede llegar una notificación del proveedor o de la tienda.</p>
+            </div>
+          </li>
+          <li class="pd-step">
+            <span class="pd-dot">3</span>
+            <div>
+              <b>Si tarda, escribinos</b>
+              <p>Pasanos el Nº de pedido y el método de pago usado.</p>
+            </div>
+          </li>
+        </ul>
+
+        <div class="pd-note" style="margin-top:12px;border-color:rgba(245,158,11,.22);background:rgba(245,158,11,.10);color:#e5e7eb">
+          🔒 Seguridad: la orden no se marca como pagada hasta confirmación real.
+        </div>
+      </div>
+    </aside>
+
+  </div>
+
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(() => {
+  // Entrance
+  const card = document.getElementById('pdCard');
+  const aside = document.getElementById('pdAside');
+  requestAnimationFrame(() => {
+    card && card.classList.add('is-on');
+    aside && aside.classList.add('is-on');
+  });
+
+  // Copy order number
+  const btnCopy = document.getElementById('btnCopy');
+  const orderNumber = {{ (order_number|tojson) if order_number else '""' }};
+
+  if(btnCopy){
+    btnCopy.addEventListener('click', async () => {
+      if(!orderNumber){
+        if(window.toast) window.toast("Info", "No hay número de pedido disponible.");
+        else alert("No hay número de pedido disponible.");
+        return;
+      }
+      try{
+        await navigator.clipboard.writeText(orderNumber);
+        if(window.toast) window.toast("Copiado", "Número de pedido copiado al portapapeles.");
+        else alert("Copiado: " + orderNumber);
+      }catch(e){
+        const tmp = document.createElement('textarea');
+        tmp.value = orderNumber;
+        document.body.appendChild(tmp);
+        tmp.select();
+        try{ document.execCommand('copy'); }catch(_){}
+        tmp.remove();
+        if(window.toast) window.toast("Copiado", "Número de pedido copiado.");
+        else alert("Copiado: " + orderNumber);
+      }
+    });
+  }
+
+  // Best-effort status refresh (NO rompe si no existe endpoint)
+  const btnRefresh = document.getElementById('btnRefresh');
+  const liveRow = document.getElementById('pdLiveRow');
+  const live = document.getElementById('pdLive');
+
+  const tryFetch = async () => {
+    // Endpoint opcional: /checkout/status?order_number=...
+    // Si no lo tenés, devuelve “no disponible” sin romper.
+    if(!orderNumber){
+      if(window.toast) window.toast("Info", "No hay Nº de pedido para consultar.");
+      return;
+    }
+
+    const url = `/checkout/status?order_number=${encodeURIComponent(orderNumber)}&json=1`;
+    liveRow && (liveRow.style.display = 'flex');
+    live && (live.textContent = 'Consultando...');
+
+    try{
+      const res = await fetch(url, {headers:{'Accept':'application/json'}, credentials:'same-origin'});
+      if(!res.ok) throw new Error('no_endpoint');
+      const data = await res.json();
+      const st = (data && (data.payment_status || data.status)) ? String(data.payment_status || data.status) : 'pendiente';
+      live && (live.textContent = st);
+      if(window.toast) window.toast("Estado", "Actualizado: " + st);
+    }catch(e){
+      live && (live.textContent = 'No disponible');
+      if(window.toast) window.toast("Info", "No hay endpoint de estado (opcional).");
+    }
+  };
+
+  if(btnRefresh){
+    btnRefresh.addEventListener('click', tryFetch);
+  }
+
+  // Auto-refresh suave (máx 3 intentos, cada 8s) — solo si hay Nº pedido
+  let tries = 0;
+  if(orderNumber){
+    const t = setInterval(() => {
+      tries += 1;
+      if(tries > 3){ clearInterval(t); return; }
+      tryFetch();
+    }, 8000);
+  }
+})();
+</script>
+{% endblock %}

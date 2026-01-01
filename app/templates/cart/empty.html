@@ -1,0 +1,46 @@
+{# =========================================================
+   CART EMPTY — ULTRA PRO
+   Reutilizable en:
+   - cart/cart.html
+   - cart/mini.html
+   - cart/modal.html
+   - checkout si queda vacío
+   ========================================================= #}
+
+<section class="bg-white rounded-2xl border border-dashed border-slate-300 p-10 text-center">
+
+  <!-- Icono visual (no depende de libs) -->
+  <div class="mx-auto mb-4 flex items-center justify-center w-16 h-16 rounded-full bg-slate-100 text-slate-500">
+    🛒
+  </div>
+
+  <!-- Mensaje principal -->
+  <h2 class="text-xl font-semibold text-slate-900">
+    Tu carrito está vacío
+  </h2>
+
+  <p class="text-sm text-slate-500 mt-2 leading-relaxed max-w-md mx-auto">
+    Todavía no agregaste productos. Explorá la tienda y encontrá algo que te encante.
+  </p>
+
+  <!-- CTA principal -->
+  <div class="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
+    <a href="{{ url_for('main.shop') }}"
+       class="inline-flex items-center justify-center px-6 py-2.5 rounded-full bg-slate-900 text-slate-50 text-sm font-semibold hover:bg-slate-800 shadow-sm hover:shadow-md transition"
+       aria-label="Ir a la tienda">
+      Ir a la tienda
+    </a>
+
+    <!-- CTA secundario opcional -->
+    <a href="{{ url_for('main.index') if 'main.index' in current_app.view_functions else '/' }}"
+       class="inline-flex items-center justify-center px-6 py-2.5 rounded-full border border-slate-300 text-slate-700 text-sm hover:border-amber-500 hover:text-amber-600 transition">
+      Volver al inicio
+    </a>
+  </div>
+
+  <!-- Info UX -->
+  <p class="mt-6 text-[11px] text-slate-400">
+    El carrito se guarda automáticamente mientras navegás.
+  </p>
+
+</section>

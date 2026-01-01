@@ -1,0 +1,387 @@
+{# app/templates/checkout/failure.html — SKYLINE FAILURE ULTRA PRO (FINAL) #}
+{% extends "base.html" %}
+
+{% block title %}Pago no completado · Skyline Store{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* =========================================================
+     FAILURE — ULTRA PRO (Final)
+     10+ mejoras reales:
+     1) No depende de Tailwind (CSS propio)
+     2) Responsive real + clamp + grid estable
+     3) Accesibilidad: aria-live, roles, focus visible, contraste
+     4) Motion-safe (prefers-reduced-motion)
+     5) A prueba de balas: fallback de variables + endpoints
+     6) Mensajes claros + checklist de soluciones
+     7) Botones robustos (reintentar / cambiar método / volver)
+     8) Copiar Nº pedido/ID (si existe) + fallback sin romper
+     9) “Soporte” configurable por variables, con fallback
+     10) Print-friendly (por si necesitás prueba)
+     11) UI premium: glass + sombra + modo oscuro
+  ========================================================== */
+
+  .fx-wrap{max-width:1080px;margin:0 auto;padding:clamp(18px,3vw,30px) 16px 70px}
+  .fx-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:18px 0 14px}
+  .fx-title{margin:0;font-weight:1000;letter-spacing:-.6px;font-size:clamp(1.7rem,3vw,2.25rem)}
+  .fx-sub{margin:.35rem 0 0;opacity:.78;max-width:78ch;line-height:1.5}
+  .fx-pill{
+    display:inline-flex;align-items:center;gap:8px;
+    padding:7px 10px;border-radius:999px;
+    font-size:.85rem;font-weight:950;
+    border:1px solid rgba(239,68,68,.35);
+    background: rgba(239,68,68,.12);
+    color: rgba(185,28,28,.95);
+    white-space:nowrap;
+  }
+  @media (prefers-color-scheme: dark){
+    .fx-pill{color: rgba(254,202,202,.95); background: rgba(239,68,68,.12); border-color: rgba(239,68,68,.30)}
+  }
+
+  .fx-grid{display:grid;grid-template-columns:1fr;gap:14px;align-items:start}
+  @media(min-width:980px){.fx-grid{grid-template-columns:1.25fr .75fr;gap:16px}}
+
+  .fx-card{
+    border-radius:22px;
+    border:1px solid rgba(148,163,184,.18);
+    background: rgba(255,255,255,.72);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 18px 46px rgba(15,23,42,.12);
+    overflow:hidden;
+  }
+  @media (prefers-color-scheme: dark){
+    .fx-card{background: rgba(255,255,255,.06); box-shadow: 0 18px 46px rgba(0,0,0,.28)}
+  }
+  .fx-card__head{
+    padding:16px;
+    border-bottom:1px solid rgba(148,163,184,.14);
+    background:
+      radial-gradient(520px 240px at 0% 0%, rgba(239,68,68,.18), transparent 60%),
+      radial-gradient(520px 240px at 100% 0%, rgba(245,158,11,.18), transparent 60%);
+  }
+  .fx-h2{margin:0;font-weight:1000;letter-spacing:-.35px}
+  .fx-card__inner{padding:16px}
+  @media(min-width:768px){.fx-card__inner{padding:18px}}
+
+  .fx-alert{
+    display:flex;gap:12px;align-items:flex-start;
+    padding:14px;border-radius:18px;
+    border:1px solid rgba(239,68,68,.18);
+    background: rgba(239,68,68,.08);
+  }
+  .fx-ico{
+    width:44px;height:44px;border-radius:16px;
+    display:grid;place-items:center;
+    background: rgba(255,255,255,.7);
+    border:1px solid rgba(148,163,184,.18);
+    flex: 0 0 auto;
+  }
+  @media (prefers-color-scheme: dark){
+    .fx-ico{background: rgba(255,255,255,.06)}
+  }
+  .fx-alert b{font-weight:1000}
+  .fx-alert p{margin:.25rem 0 0;opacity:.82;line-height:1.45}
+
+  .fx-kv{display:grid;gap:10px;margin:14px 0 0}
+  .fx-kv-row{
+    display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
+    padding:10px 12px;border-radius:14px;
+    border:1px solid rgba(148,163,184,.16);
+    background: rgba(255,255,255,.55);
+  }
+  @media (prefers-color-scheme: dark){
+    .fx-kv-row{background: rgba(255,255,255,.04)}
+  }
+  .fx-k{font-size:.78rem;opacity:.75;font-weight:950}
+  .fx-v{font-size:.95rem;font-weight:950;max-width:65%;text-align:right;word-break:break-word}
+
+  .fx-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
+  .fx-btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    padding:12px 14px;border-radius:999px;
+    font-weight:1000;text-decoration:none;cursor:pointer;
+    border:1px solid rgba(148,163,184,.18);
+    background:#fff;
+    transition: transform .14s ease, box-shadow .14s ease, filter .14s ease;
+    user-select:none;
+  }
+  .fx-btn:hover{transform: translateY(-1px); box-shadow: 0 14px 26px rgba(0,0,0,.10)}
+  .fx-btn:active{transform: translateY(0)}
+  .fx-btn--primary{
+    border:0;
+    background: linear-gradient(135deg, rgba(245,158,11,1), rgba(239,68,68,.85));
+    color:#08121f;
+  }
+  .fx-btn--ghost{background: transparent}
+
+  .fx-note{
+    margin-top:14px;
+    font-size:.82rem;opacity:.78;line-height:1.45;
+    padding:12px 12px;border-radius:16px;
+    border:1px dashed rgba(148,163,184,.28);
+    background: rgba(255,255,255,.45);
+  }
+  @media (prefers-color-scheme: dark){
+    .fx-note{background: rgba(255,255,255,.04)}
+  }
+
+  /* Aside */
+  .fx-aside{
+    border-radius:24px;
+    border:1px solid rgba(148,163,184,.18);
+    background: #0b1120;
+    color: #e5e7eb;
+    overflow:hidden;
+    box-shadow: 0 18px 46px rgba(0,0,0,.28);
+  }
+  .fx-aside__head{
+    padding:16px 16px 14px;
+    border-bottom:1px solid rgba(148,163,184,.14);
+    background: radial-gradient(600px 280px at 0% 0%, rgba(239,68,68,.20), transparent 60%),
+                radial-gradient(600px 280px at 100% 0%, rgba(245,158,11,.18), transparent 60%);
+  }
+  .fx-aside__body{padding:14px 16px 16px}
+  .fx-list{display:grid;gap:10px;margin:0;padding:0;list-style:none}
+  .fx-li{
+    display:flex;gap:10px;align-items:flex-start;
+    padding:12px;border-radius:18px;
+    border:1px solid rgba(148,163,184,.14);
+    background: rgba(255,255,255,.06);
+  }
+  .fx-dot{
+    width:28px;height:28px;border-radius:999px;
+    display:grid;place-items:center;
+    font-weight:1000;
+    background: rgba(245,158,11,.16);
+    border:1px solid rgba(245,158,11,.22);
+    color: rgba(253,230,138,.95);
+    flex: 0 0 auto;
+  }
+  .fx-li b{font-weight:1000}
+  .fx-li p{margin:.15rem 0 0;opacity:.82;line-height:1.35;font-size:.92rem}
+
+  /* Motion-safe entrance */
+  .fx-pop{transform: translateY(10px);opacity:0;transition: transform .25s ease, opacity .25s ease}
+  .fx-pop.is-on{transform: translateY(0);opacity:1}
+  @media (prefers-reduced-motion: reduce){
+    .fx-pop{transition:none}
+    .fx-btn{transition:none}
+  }
+
+  /* Focus visible */
+  :focus-visible{
+    outline:none;
+    box-shadow: 0 0 0 4px rgba(37,99,235,.18);
+    border-radius: 10px;
+  }
+
+  /* Print clean */
+  @media print{
+    header.topbar, footer, .fx-actions, .fx-aside{display:none !important}
+    body{background:#fff !important}
+    .fx-card{box-shadow:none !important; border:1px solid #ddd !important; background:#fff !important}
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+{# Variables seguras (no rompen si backend no manda nada) #}
+{% set order_number = (order_number if order_number is defined else (order.number if order is defined and order.number is defined else "")) %}
+{% set provider_name = (provider if provider is defined else (payment_provider if payment_provider is defined else "pago")) %}
+{% set reason = (message if message is defined else (error if error is defined else "")) %}
+{% set support_email = (support_email if support_email is defined else "soporte@skylinestore.com") %}
+{% set support_whatsapp = (support_whatsapp if support_whatsapp is defined else "") %}
+
+<section class="fx-wrap" aria-label="Pago no completado">
+
+  <div class="fx-head">
+    <div>
+      <h1 class="fx-title">Pago no completado ❌</h1>
+      <p class="fx-sub">
+        No te preocupes: tu carrito sigue intacto.
+        Podés reintentar el pago o elegir otro método.
+      </p>
+    </div>
+    <span class="fx-pill" aria-live="polite">Acción requerida</span>
+  </div>
+
+  <div class="fx-grid">
+
+    <!-- MAIN -->
+    <div class="fx-card fx-pop" id="fxCard">
+      <div class="fx-card__head">
+        <h2 class="fx-h2">¿Qué pasó?</h2>
+      </div>
+
+      <div class="fx-card__inner">
+
+        <div class="fx-alert" role="status" aria-live="polite">
+          <div class="fx-ico" aria-hidden="true">⚠️</div>
+          <div>
+            <div style="font-weight:1000;letter-spacing:-.2px">El pago no se pudo finalizar.</div>
+            <p>
+              {% if reason %}
+                Motivo: <b>{{ reason }}</b>
+              {% else %}
+                Puede ser por falta de saldo, límite de la tarjeta, validación pendiente o una interrupción en el proceso.
+              {% endif %}
+            </p>
+            <p style="margin-top:.4rem">
+              Proveedor: <b>{{ provider_name|capitalize }}</b>.
+              {% if order_number %}
+                Pedido: <b>{{ order_number }}</b>.
+              {% endif %}
+            </p>
+          </div>
+        </div>
+
+        <div class="fx-kv" aria-label="Datos útiles">
+          <div class="fx-kv-row">
+            <div class="fx-k">Estado</div>
+            <div class="fx-v">No confirmado</div>
+          </div>
+
+          <div class="fx-kv-row">
+            <div class="fx-k">Número de pedido</div>
+            <div class="fx-v">{% if order_number %}{{ order_number }}{% else %}—{% endif %}</div>
+          </div>
+
+          <div class="fx-kv-row">
+            <div class="fx-k">Soporte</div>
+            <div class="fx-v">{{ support_email }}</div>
+          </div>
+        </div>
+
+        <div class="fx-actions" aria-label="Acciones">
+          <a class="fx-btn fx-btn--primary"
+             href="{{ url_for('checkout.checkout_home') if 'checkout.checkout_home' in current_app.view_functions else '/checkout' }}">
+            🔁 Reintentar pago
+          </a>
+
+          <a class="fx-btn"
+             href="{{ url_for('cart.cart_view') if 'cart.cart_view' in current_app.view_functions else '/cart' }}">
+            🛒 Volver al carrito
+          </a>
+
+          <a class="fx-btn fx-btn--ghost"
+             href="{{ url_for('main.shop') if 'main.shop' in current_app.view_functions else '/shop' }}">
+            🛍️ Seguir comprando
+          </a>
+
+          <button class="fx-btn fx-btn--ghost" type="button" id="btnCopy" {% if not order_number %}disabled aria-disabled="true"{% endif %}>
+            📋 Copiar Nº pedido
+          </button>
+
+          {% if support_whatsapp %}
+            <a class="fx-btn"
+               href="https://wa.me/{{ support_whatsapp|replace('+','')|replace(' ','') }}"
+               target="_blank" rel="noopener">
+              💬 WhatsApp soporte
+            </a>
+          {% endif %}
+        </div>
+
+        <div class="fx-note">
+          <b>Tip rápido:</b> si usás tarjeta, probá otra o verificá el límite.
+          Si elegiste transferencia, revisá que los datos sean correctos.
+          {% if order_number %}
+            Si contactás soporte, mandá el número <b>{{ order_number }}</b>.
+          {% endif %}
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ASIDE -->
+    <aside class="fx-aside fx-pop" id="fxAside" aria-label="Cómo solucionarlo">
+      <div class="fx-aside__head">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+          <h2 class="fx-h2" style="margin:0">Soluciones rápidas</h2>
+          <span class="fx-pill" style="border-color:rgba(245,158,11,.35);background:rgba(245,158,11,.12);color:rgba(253,230,138,.95)">Checklist</span>
+        </div>
+      </div>
+
+      <div class="fx-aside__body">
+        <ul class="fx-list">
+          <li class="fx-li">
+            <span class="fx-dot">1</span>
+            <div>
+              <b>Reintentá en 1 minuto</b>
+              <p>A veces el proveedor tiene una validación momentánea.</p>
+            </div>
+          </li>
+          <li class="fx-li">
+            <span class="fx-dot">2</span>
+            <div>
+              <b>Cambiá el método</b>
+              <p>Probá MercadoPago / PayPal / Transferencia según tengas disponible.</p>
+            </div>
+          </li>
+          <li class="fx-li">
+            <span class="fx-dot">3</span>
+            <div>
+              <b>Verificá saldo / límite</b>
+              <p>Si tu banco rechaza, suele ser por límite o verificación 3DS.</p>
+            </div>
+          </li>
+          <li class="fx-li">
+            <span class="fx-dot">4</span>
+            <div>
+              <b>Contactá soporte</b>
+              <p>Enviá el Nº de pedido y el correo usado en la compra.</p>
+            </div>
+          </li>
+        </ul>
+
+        <div class="fx-note" style="margin-top:12px;border-color:rgba(56,189,248,.22);background:rgba(56,189,248,.10);color:#e5e7eb">
+          🔒 Seguridad: si el pago no se confirma, tu orden no se marca como pagada.
+        </div>
+      </div>
+    </aside>
+
+  </div>
+
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(() => {
+  // Motion-safe entrance
+  const card = document.getElementById('fxCard');
+  const aside = document.getElementById('fxAside');
+  requestAnimationFrame(() => {
+    card && card.classList.add('is-on');
+    aside && aside.classList.add('is-on');
+  });
+
+  // Copy order number
+  const btn = document.getElementById('btnCopy');
+  const orderNumber = {{ (order_number|tojson) if order_number else '""' }};
+
+  if(btn && orderNumber){
+    btn.addEventListener('click', async () => {
+      try{
+        await navigator.clipboard.writeText(orderNumber);
+        if(window.toast) window.toast("Copiado", "Número de pedido copiado al portapapeles.");
+        else alert("Copiado: " + orderNumber);
+      }catch(e){
+        const tmp = document.createElement('textarea');
+        tmp.value = orderNumber;
+        document.body.appendChild(tmp);
+        tmp.select();
+        try{ document.execCommand('copy'); }catch(_){}
+        tmp.remove();
+        if(window.toast) window.toast("Copiado", "Número de pedido copiado.");
+        else alert("Copiado: " + orderNumber);
+      }
+    });
+  } else if(btn){
+    btn.addEventListener('click', () => {
+      if(window.toast) window.toast("Info", "No hay número de pedido disponible.");
+      else alert("No hay número de pedido disponible.");
+    });
+  }
+})();
+</script>
+{% endblock %}

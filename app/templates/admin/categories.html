@@ -1,54 +1,198 @@
-{# app/templates/admin/categories.html — Categorías PRO #}
+{# app/templates/admin/categories.html — CATEGORÍAS ULTRA PRO (FINAL) #}
 {% extends "admin/base_admin.html" %}
-{% block title %}Categorías · Admin{% endblock %}
+{% block title %}Categorías · Skyline Admin{% endblock %}
 
 {% block content %}
-  <h1 style="margin:.2rem 0 0;font-weight:1000;letter-spacing:-.5px">Categorías</h1>
-  <p class="muted" style="margin:.45rem 0 1rem">
-    Control de categorías para filtros del shop (rápido, simple, escalable).
-  </p>
-
-  <form method="post" action="{{ url_for('admin.categories_new') }}" class="row cols2" style="margin-bottom:12px">
+  <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap">
     <div>
-      <label>Nombre</label>
-      <input name="name" placeholder="Ej: Accesorios" required>
+      <h1 style="margin:.2rem 0 0;font-weight:1000;letter-spacing:-.5px">Categorías</h1>
+      <p class="muted" style="margin:.45rem 0 0">
+        Ordená el shop con filtros claros. Creá, buscá y gestioná en segundos.
+      </p>
     </div>
-    <div>
-      <label>Slug (opcional)</label>
-      <input name="slug" placeholder="Ej: accesorios">
-    </div>
-    <div style="grid-column:1/-1;display:flex;gap:10px;flex-wrap:wrap">
-      <button class="btn" type="submit">Crear categoría</button>
-      <a class="btn2" href="{{ url_for('admin.products_list') }}">Ir a productos</a>
-    </div>
-  </form>
 
+    <div class="badge" title="Cantidad total" style="gap:8px">
+      <span style="opacity:.85">Total</span>
+      <b style="font-size:.95rem">{{ categories|length if categories else 0 }}</b>
+    </div>
+  </div>
+
+  {# ===================== CARD: CREAR ===================== #}
+  <section style="margin-top:14px;border:1px solid var(--stroke);border-radius:18px;padding:14px;background:rgba(255,255,255,.05)">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap">
+      <div>
+        <div style="font-weight:950">Crear nueva categoría</div>
+        <div class="muted" style="margin-top:4px;font-size:.95rem">
+          Consejo: el <b>slug</b> es la URL. Si lo dejás vacío, el sistema lo genera.
+        </div>
+      </div>
+      <a class="btn2" href="{{ url_for('admin.products_list') }}" style="white-space:nowrap">📦 Ir a productos</a>
+    </div>
+
+    <form method="post" action="{{ url_for('admin.categories_new') }}" class="row cols2" style="margin-top:12px">
+      <div>
+        <label>Nombre</label>
+        <input name="name" placeholder="Ej: Accesorios" required autocomplete="off">
+        <p class="muted" style="font-size:.85rem;margin:.45rem 0 0">
+          Visible para el cliente en el filtro del shop.
+        </p>
+      </div>
+
+      <div>
+        <label>Slug (opcional)</label>
+        <input name="slug" placeholder="Ej: accesorios" autocomplete="off">
+        <p class="muted" style="font-size:.85rem;margin:.45rem 0 0">
+          Solo letras/números. Ej: <code>smartwatches</code>, <code>audio</code>.
+        </p>
+      </div>
+
+      <div style="grid-column:1/-1;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <button class="btn" type="submit">➕ Crear categoría</button>
+        <span class="muted" style="font-size:.9rem">
+          Tip: mantené nombres cortos y claros.
+        </span>
+      </div>
+    </form>
+  </section>
+
+  {# ===================== TOOLBAR ===================== #}
+  <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <div class="badge" style="background:rgba(255,255,255,.04)">
+        🔎 Búsqueda rápida
+      </div>
+      <div style="min-width:min(520px, 100%);flex:1">
+        <input id="catSearch" placeholder="Buscar por nombre o slug…" autocomplete="off">
+      </div>
+    </div>
+
+    <div class="muted" style="font-size:.9rem">
+      Tip: click en “Copiar” para copiar el slug.
+    </div>
+  </div>
+
+  {# ===================== LISTADO ===================== #}
   {% if categories and categories|length %}
-    <table>
-      <thead>
-        <tr>
-          <th style="width:70px">ID</th>
-          <th>Nombre</th>
-          <th>Slug</th>
-          <th style="width:160px">Acciones</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for c in categories %}
+    <div style="margin-top:12px;border:1px solid var(--stroke);border-radius:18px;overflow:hidden;background:rgba(255,255,255,.04)">
+      <table id="catTable" style="border:0;border-radius:0">
+        <thead>
           <tr>
-            <td>{{ c.id }}</td>
-            <td style="font-weight:950">{{ c.name }}</td>
-            <td class="muted">{{ c.slug }}</td>
-            <td>
-              <form method="post" action="{{ url_for('admin.categories_delete', cat_id=c.id) }}" onsubmit="return confirm('Eliminar categoría?')" style="margin:0">
-                <button class="btn2" type="submit">Eliminar</button>
-              </form>
-            </td>
+            <th style="width:80px">ID</th>
+            <th>Nombre</th>
+            <th style="width:320px">Slug</th>
+            <th style="width:210px">Acciones</th>
           </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {% for c in categories %}
+            <tr data-name="{{ (c.name or '')|lower }}" data-slug="{{ (c.slug or '')|lower }}">
+              <td>
+                <span class="badge" style="padding:6px 10px;background:rgba(255,255,255,.04)">
+                  #{{ c.id }}
+                </span>
+              </td>
+
+              <td>
+                <div style="font-weight:950">{{ c.name }}</div>
+                <div class="muted" style="font-size:.9rem;margin-top:2px">
+                  Filtro del shop
+                </div>
+              </td>
+
+              <td>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+                  <code style="background:rgba(0,0,0,.22)">{{ c.slug }}</code>
+                  <button
+                    type="button"
+                    class="btn2"
+                    style="padding:8px 10px;border-radius:12px"
+                    data-copy="{{ c.slug }}"
+                    aria-label="Copiar slug {{ c.slug }}">
+                    📋 Copiar
+                  </button>
+                </div>
+              </td>
+
+              <td>
+                <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end">
+                  <a class="btn2"
+                     href="{{ url_for('admin.products_list', q=c.name) }}"
+                     title="Ver productos con esta categoría (búsqueda por nombre)">
+                    🧾 Ver productos
+                  </a>
+
+                  <form method="post"
+                        action="{{ url_for('admin.categories_delete', cat_id=c.id) }}"
+                        style="margin:0"
+                        onsubmit="return confirm('¿Seguro que querés eliminar la categoría “{{ c.name }}”?\\n\\nEsto NO elimina productos, solo quita la categoría.')">
+                    <button class="btn2" type="submit" title="Eliminar categoría">🗑 Eliminar</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div id="noResults" class="msg info" style="display:none;margin-top:12px">
+      No hay resultados para esa búsqueda. Probá con otro término ✅
+    </div>
   {% else %}
-    <div class="msg info">No hay categorías. Creá la primera ✅</div>
+    <div class="msg info" style="margin-top:14px">
+      No hay categorías todavía. Creá la primera arriba ✅
+    </div>
   {% endif %}
+
+  {# ===================== JS: Search + Copy ===================== #}
+  <script>
+    (() => {
+      const search = document.getElementById("catSearch");
+      const table = document.getElementById("catTable");
+      const noResults = document.getElementById("noResults");
+
+      // Copy slug
+      document.addEventListener("click", async (e) => {
+        const btn = e.target.closest("[data-copy]");
+        if (!btn) return;
+        const text = btn.getAttribute("data-copy") || "";
+        try {
+          await navigator.clipboard.writeText(text);
+          const prev = btn.textContent;
+          btn.textContent = "✅ Copiado";
+          setTimeout(() => btn.textContent = prev, 900);
+        } catch {
+          // Fallback
+          const tmp = document.createElement("textarea");
+          tmp.value = text;
+          document.body.appendChild(tmp);
+          tmp.select();
+          document.execCommand("copy");
+          document.body.removeChild(tmp);
+          const prev = btn.textContent;
+          btn.textContent = "✅ Copiado";
+          setTimeout(() => btn.textContent = prev, 900);
+        }
+      });
+
+      // Live filter
+      if (search && table) {
+        const rows = Array.from(table.querySelectorAll("tbody tr"));
+        const apply = () => {
+          const q = (search.value || "").trim().toLowerCase();
+          let shown = 0;
+          rows.forEach(r => {
+            const name = r.getAttribute("data-name") || "";
+            const slug = r.getAttribute("data-slug") || "";
+            const ok = !q || name.includes(q) || slug.includes(q);
+            r.style.display = ok ? "" : "none";
+            if (ok) shown++;
+          });
+          if (noResults) noResults.style.display = (shown === 0) ? "" : "none";
+        };
+        search.addEventListener("input", apply);
+        apply();
+      }
+    })();
+  </script>
 {% endblock %}

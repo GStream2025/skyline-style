@@ -1,109 +1,466 @@
+{# app/templates/admin/offers.html — OFERTAS / PROMOS ULTRA PRO (FINAL) #}
 {% extends "admin/base_admin.html" %}
-{% block title %}Admin · Ofertas{% endblock %}
+{% block title %}Ofertas · Skyline Admin{% endblock %}
 
 {% block content %}
-<div class="max-w-6xl mx-auto px-4 py-6">
-  <div class="flex items-center justify-between gap-4 flex-wrap">
+
+  <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap">
     <div>
-      <h1 class="text-2xl font-semibold">Ofertas / Promos</h1>
-      <p class="text-slate-500 text-sm">Creá banners/cards para la home y secciones.</p>
+      <h1 style="margin:.2rem 0 0;font-weight:1000;letter-spacing:-.5px">Ofertas / Promos</h1>
+      <p class="muted" style="margin:.45rem 0 0">
+        Gestioná banners/cards para la home y secciones. Imágenes o videos. Orden, CTA y activación rápida.
+      </p>
+    </div>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <span class="badge" title="Cantidad total" style="gap:8px">
+        <span style="opacity:.85">Total</span>
+        <b style="font-size:.95rem">{{ offers|length if offers else 0 }}</b>
+      </span>
+      <a class="btn2" href="/shop" target="_blank" rel="noopener" style="padding:10px 12px">🛍️ Ver tienda</a>
     </div>
   </div>
 
-  <div class="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
-    <form class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" method="post" action="{{ url_for('admin.offers_new') }}" enctype="multipart/form-data">
-      <h2 class="font-semibold">Nueva oferta</h2>
-      <div class="mt-3 space-y-3">
-        <div>
-          <label class="text-xs text-slate-500">Título</label>
-          <input name="title" class="w-full mt-1 rounded-xl border border-slate-200 px-3 py-2" placeholder="Ej: 2x1 Streetwear" required>
-        </div>
-        <div>
-          <label class="text-xs text-slate-500">Subtítulo</label>
-          <input name="subtitle" class="w-full mt-1 rounded-xl border border-slate-200 px-3 py-2" placeholder="Ej: Solo esta semana">
-        </div>
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="text-xs text-slate-500">Badge</label>
-            <input name="badge" class="w-full mt-1 rounded-xl border border-slate-200 px-3 py-2" placeholder="NEW / HOT">
-          </div>
-          <div>
-            <label class="text-xs text-slate-500">Orden</label>
-            <input name="sort_order" type="number" class="w-full mt-1 rounded-xl border border-slate-200 px-3 py-2" value="0">
-          </div>
-        </div>
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="text-xs text-slate-500">CTA Texto</label>
-            <input name="cta_text" class="w-full mt-1 rounded-xl border border-slate-200 px-3 py-2" placeholder="Comprar">
-          </div>
-          <div>
-            <label class="text-xs text-slate-500">CTA URL</label>
-            <input name="cta_url" class="w-full mt-1 rounded-xl border border-slate-200 px-3 py-2" placeholder="/shop">
-          </div>
-        </div>
-        <div>
-          <label class="text-xs text-slate-500">Media (img/video)</label>
-          <input name="media" type="file" class="w-full mt-1 rounded-xl border border-slate-200 px-3 py-2">
-        </div>
-        <label class="inline-flex items-center gap-2 text-sm">
-          <input type="checkbox" name="active" checked class="rounded border-slate-300">
-          Activa
-        </label>
+  {# ===================== GRID ===================== #}
+  <div class="row cols2" style="margin-top:14px;align-items:start">
 
-        <button class="w-full rounded-xl bg-slate-900 text-white py-2 font-medium hover:opacity-95">Crear oferta</button>
+    {# ===================== CARD: NUEVA OFERTA ===================== #}
+    <section style="border:1px solid var(--stroke);border-radius:18px;padding:14px;background:rgba(255,255,255,.05)">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <div>
+          <div style="font-weight:1000;letter-spacing:-.2px">Nueva oferta</div>
+          <div class="muted" style="margin-top:4px;font-size:.95rem">
+            Tip PRO: título corto + badge (NEW/HOT/-20%) + CTA claro + orden bajo para que salga primero.
+          </div>
+        </div>
+        <span class="badge" style="background:rgba(255,255,255,.04)">⚡ Home ready</span>
       </div>
-    </form>
 
-    <div class="lg:col-span-2">
-      <div class="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <div class="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
-          <h2 class="font-semibold">Ofertas existentes ({{ offers|length }})</h2>
+      <form method="post"
+            action="{{ url_for('admin.offers_new') }}"
+            enctype="multipart/form-data"
+            style="margin-top:12px"
+            class="row"
+            id="offerCreateForm">
+
+        <div class="row cols2">
+          <div>
+            <label>Título *</label>
+            <input name="title" placeholder="Ej: 2x1 Streetwear" required autocomplete="off" maxlength="80">
+          </div>
+
+          <div>
+            <label>Subtítulo (opcional)</label>
+            <input name="subtitle" placeholder="Ej: Solo esta semana" autocomplete="off" maxlength="120">
+          </div>
         </div>
 
-        <div class="divide-y divide-slate-100">
-          {% for o in offers %}
-          <div class="p-4 flex gap-4 items-start">
-            <div class="w-24 h-24 rounded-xl bg-slate-50 border border-slate-200 overflow-hidden flex items-center justify-center">
-              {% if o.media_url %}
-                {% if o.media_url.endswith('.mp4') or o.media_url.endswith('.webm') %}
-                  <video src="{{ o.media_url }}" class="w-full h-full object-cover" muted playsinline></video>
-                {% else %}
-                  <img src="{{ o.media_url }}" class="w-full h-full object-cover" alt="">
-                {% endif %}
-              {% else %}
-                <span class="text-xs text-slate-400">sin media</span>
-              {% endif %}
+        <div class="row cols3">
+          <div>
+            <label>Badge (opcional)</label>
+            <input name="badge" placeholder="NEW / HOT / -20%" autocomplete="off" maxlength="24">
+            <p class="muted" style="font-size:.85rem;margin:.45rem 0 0">Corto, visible y directo.</p>
+          </div>
+
+          <div>
+            <label>Orden</label>
+            <input name="sort_order" type="number" value="0" inputmode="numeric" min="-999" max="9999">
+            <p class="muted" style="font-size:.85rem;margin:.45rem 0 0">Menor = aparece primero.</p>
+          </div>
+
+          <div>
+            <label>Activa</label>
+            <label style="display:flex;align-items:center;gap:10px;font-weight:900;margin-top:6px">
+              <input type="checkbox" name="active" checked>
+              Visible en home
+            </label>
+          </div>
+        </div>
+
+        <div class="row cols2">
+          <div>
+            <label>CTA Texto (opcional)</label>
+            <input name="cta_text" placeholder="Comprar / Ver más" autocomplete="off" maxlength="30">
+          </div>
+          <div>
+            <label>CTA URL (opcional)</label>
+            <input name="cta_url" placeholder="/shop o https://..." autocomplete="off" maxlength="240">
+            <p class="muted" style="font-size:.85rem;margin:.45rem 0 0">Si ponés link externo, se abre en nueva pestaña.</p>
+          </div>
+        </div>
+
+        {# ====== Extras PRO (no rompen si backend no los guarda) ====== #}
+        <div style="border:1px dashed rgba(148,163,184,.22);border-radius:16px;padding:12px;background:rgba(255,255,255,.03)">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+            <div style="font-weight:950">Extras PRO (opcional)</div>
+            <span class="badge" style="background:rgba(255,255,255,.04)">🎨 Diseño + descuento</span>
+          </div>
+
+          <div class="row cols3" style="margin-top:10px">
+            <div>
+              <label>Descuento tipo</label>
+              <select name="discount_type">
+                <option value="">(ninguno)</option>
+                <option value="percent">% (porcentaje)</option>
+                <option value="amount">$ (monto fijo)</option>
+              </select>
             </div>
-            <div class="flex-1">
-              <div class="flex items-center gap-2">
-                <span class="font-semibold">{{ o.title }}</span>
-                {% if o.active %}
-                  <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Activa</span>
+            <div>
+              <label>Valor</label>
+              <input name="discount_value" type="number" step="0.01" min="0" placeholder="Ej: 20 o 500">
+            </div>
+            <div>
+              <label>Color (tag)</label>
+              <select name="theme">
+                <option value="">Auto</option>
+                <option value="amber">Ámbar</option>
+                <option value="emerald">Verde</option>
+                <option value="sky">Celeste</option>
+                <option value="rose">Rosa</option>
+                <option value="slate">Gris</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="row cols2" style="margin-top:10px">
+            <div>
+              <label>Inicio (opcional)</label>
+              <input name="starts_at" type="datetime-local">
+            </div>
+            <div>
+              <label>Fin (opcional)</label>
+              <input name="ends_at" type="datetime-local">
+            </div>
+          </div>
+
+          <p class="muted" style="margin:.6rem 0 0;font-size:.9rem">
+            Estos campos quedan listos para cuando habilitemos “editar + descuentos reales” en backend.
+          </p>
+        </div>
+
+        <div>
+          <label>Media (imagen o video)</label>
+          <input name="media" type="file" accept=".png,.jpg,.jpeg,.webp,.mp4,.webm">
+          <p class="muted" style="margin:.5rem 0 0;font-size:.85rem">
+            Formatos: <code>PNG/JPG/WEBP</code> o <code>MP4/WEBM</code>. Recomendado: 1200×600.
+          </p>
+
+          <div id="newOfferPreview" style="margin-top:10px;display:none;border:1px solid rgba(148,163,184,.16);border-radius:16px;overflow:hidden;background:rgba(255,255,255,.04)">
+            <div style="height:160px;display:grid;place-items:center">
+              <span class="muted">preview</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between">
+          <button class="btn" type="submit">➕ Crear oferta</button>
+          <button class="btn2" type="reset" style="padding:10px 12px">🧹 Limpiar</button>
+        </div>
+
+        <p class="muted" style="margin:0;font-size:.9rem">
+          Si no subís media, se crea igual (card simple). Después podés reemplazar media desde “Editar” (lo habilitamos en backend).
+        </p>
+      </form>
+    </section>
+
+    {# ===================== CARD: LISTADO ===================== #}
+    <section style="border:1px solid var(--stroke);border-radius:18px;padding:14px;background:rgba(255,255,255,.05)">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <div>
+          <div style="font-weight:1000;letter-spacing:-.2px">Ofertas existentes</div>
+          <div class="muted" style="margin-top:4px;font-size:.95rem">
+            Buscá por título, subtítulo o badge. Ordena por <code>sort_order</code>. Hover en video para preview.
+          </div>
+        </div>
+
+        <div style="min-width:min(420px, 100%);flex:1;display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end">
+          <input id="offerSearch" placeholder="Buscar oferta…" autocomplete="off" style="flex:1;min-width:260px">
+          <button class="btn2" type="button" id="toggleOnlyActive" aria-pressed="false" style="padding:10px 12px">
+            ✅ Solo activas: OFF
+          </button>
+        </div>
+      </div>
+
+      <div style="margin-top:12px;display:grid;gap:12px" id="offersList">
+
+        {% set sorted_offers = (offers|sort(attribute='sort_order') if offers else []) %}
+
+        {% for o in sorted_offers %}
+          {% set is_video = (o.media_url and (o.media_url.endswith('.mp4') or o.media_url.endswith('.webm'))) %}
+          <article class="offer-row"
+                   data-title="{{ (o.title or '')|lower }}"
+                   data-subtitle="{{ (o.subtitle or '')|lower }}"
+                   data-badge="{{ (o.badge or '')|lower }}"
+                   data-active="{{ '1' if o.active else '0' }}"
+                   style="border:1px solid rgba(148,163,184,.14);border-radius:18px;padding:12px;background:rgba(255,255,255,.04)">
+
+            <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap">
+
+              <div style="width:140px;height:100px;border-radius:16px;overflow:hidden;border:1px solid rgba(148,163,184,.16);background:rgba(255,255,255,.06);display:grid;place-items:center;flex:0 0 auto">
+                {% if o.media_url %}
+                  {% if is_video %}
+                    <video src="{{ o.media_url }}"
+                           muted playsinline
+                           preload="metadata"
+                           style="width:100%;height:100%;object-fit:cover"
+                           class="offer-media"></video>
+                  {% else %}
+                    <img src="{{ o.media_url }}" alt="" style="width:100%;height:100%;object-fit:cover">
+                  {% endif %}
                 {% else %}
-                  <span class="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">Inactiva</span>
-                {% endif %}
-                {% if o.badge %}
-                  <span class="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">{{ o.badge }}</span>
+                  <span class="muted" style="font-size:.85rem">sin media</span>
                 {% endif %}
               </div>
-              {% if o.subtitle %}
-                <p class="text-sm text-slate-500 mt-1">{{ o.subtitle }}</p>
-              {% endif %}
-              <div class="text-xs text-slate-400 mt-2">
-                Orden: {{ o.sort_order }} · CTA: {{ o.cta_text or '-' }} → {{ o.cta_url or '-' }}
+
+              <div style="flex:1;min-width:260px">
+
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+                  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                    <div style="font-weight:1000;letter-spacing:-.2px">{{ o.title }}</div>
+
+                    {% if o.active %}
+                      <span class="badge" style="border-color:rgba(34,197,94,.35);background:rgba(34,197,94,.10);color:rgba(220,252,231,.95)">✅ Activa</span>
+                    {% else %}
+                      <span class="badge" style="border-color:rgba(148,163,184,.25);background:rgba(255,255,255,.05)">⏸ Inactiva</span>
+                    {% endif %}
+
+                    {% if o.badge %}
+                      <span class="badge" style="border-color:rgba(245,158,11,.35);background:rgba(245,158,11,.10);color:#fde68a">🏷 {{ o.badge }}</span>
+                    {% endif %}
+                  </div>
+
+                  <span class="badge" title="Orden">🔢 <span style="opacity:.9">Orden</span> <b style="margin-left:6px">{{ o.sort_order }}</b></span>
+                </div>
+
+                {% if o.subtitle %}
+                  <div class="muted" style="margin-top:6px">{{ o.subtitle }}</div>
+                {% endif %}
+
+                <div class="muted" style="margin-top:10px;font-size:.9rem;display:grid;gap:8px">
+                  <div>
+                    CTA:
+                    <b style="color:var(--text)">{{ o.cta_text or '-' }}</b>
+                    <span style="opacity:.7">→</span>
+                    <code style="word-break:break-all">{{ o.cta_url or '-' }}</code>
+                  </div>
+
+                  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between">
+
+                    <div style="display:flex;gap:10px;flex-wrap:wrap">
+                      {% if o.cta_url %}
+                        <button type="button" class="btn2" data-copy="{{ o.cta_url }}" style="padding:8px 10px">
+                          📋 Copiar CTA
+                        </button>
+                        <a class="btn2" href="{{ o.cta_url }}" target="_blank" rel="noopener" style="padding:8px 10px">
+                          🔗 Abrir CTA
+                        </a>
+                      {% else %}
+                        <span class="muted" style="font-size:.9rem">Sin CTA configurado.</span>
+                      {% endif %}
+                    </div>
+
+                    <div style="display:flex;gap:10px;flex-wrap:wrap">
+                      <button type="button" class="btn2" data-edit-offer="{{ o.id }}" style="padding:8px 10px">
+                        ✏️ Editar
+                      </button>
+
+                      <form method="post"
+                            action="{{ url_for('admin.offers_delete', offer_id=o.id) }}"
+                            style="margin:0"
+                            onsubmit="return confirm('¿Eliminar la oferta “{{ o.title }}”?\\n\\nEsto no se puede deshacer.')">
+                        <button class="btn2" type="submit" style="border-color:rgba(239,68,68,.35)">
+                          🗑 Eliminar
+                        </button>
+                      </form>
+                    </div>
+
+                  </div>
+                </div>
+
               </div>
             </div>
-            <form method="post" action="{{ url_for('admin.offers_delete', offer_id=o.id) }}" onsubmit="return confirm('Eliminar oferta?')">
-              <button class="rounded-xl border border-rose-200 text-rose-600 px-3 py-2 text-sm hover:bg-rose-50">Eliminar</button>
-            </form>
-          </div>
-          {% else %}
-            <div class="p-6 text-slate-500">Todavía no hay ofertas.</div>
-          {% endfor %}
+
+            {# ====== MODAL EDIT (frontend listo; backend lo activamos después) ====== #}
+            <div class="offer-edit" id="edit-{{ o.id }}" style="display:none;margin-top:12px;border-top:1px solid rgba(148,163,184,.16);padding-top:12px">
+              <div class="muted" style="font-size:.92rem">
+                Editor rápido (UI lista). Para que guarde de verdad: agregamos ruta <code>admin.offers_update</code>.
+              </div>
+
+              <div class="row cols2" style="margin-top:10px">
+                <div>
+                  <label>Título</label>
+                  <input value="{{ o.title or '' }}" data-field="title">
+                </div>
+                <div>
+                  <label>Subtítulo</label>
+                  <input value="{{ o.subtitle or '' }}" data-field="subtitle">
+                </div>
+              </div>
+
+              <div class="row cols3">
+                <div>
+                  <label>Badge</label>
+                  <input value="{{ o.badge or '' }}" data-field="badge" maxlength="24">
+                </div>
+                <div>
+                  <label>Orden</label>
+                  <input type="number" value="{{ o.sort_order or 0 }}" data-field="sort_order">
+                </div>
+                <div>
+                  <label>Activa</label>
+                  <label style="display:flex;align-items:center;gap:10px;font-weight:900;margin-top:6px">
+                    <input type="checkbox" {% if o.active %}checked{% endif %} data-field="active">
+                    Visible
+                  </label>
+                </div>
+              </div>
+
+              <div class="row cols2">
+                <div>
+                  <label>CTA Texto</label>
+                  <input value="{{ o.cta_text or '' }}" data-field="cta_text" maxlength="30">
+                </div>
+                <div>
+                  <label>CTA URL</label>
+                  <input value="{{ o.cta_url or '' }}" data-field="cta_url" maxlength="240">
+                </div>
+              </div>
+
+              <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;justify-content:flex-end">
+                <button type="button" class="btn2" data-cancel-edit="{{ o.id }}" style="padding:8px 10px">Cancelar</button>
+                <button type="button" class="btn" data-save-edit="{{ o.id }}" style="padding:10px 12px">💾 Guardar (pendiente)</button>
+              </div>
+            </div>
+
+          </article>
+        {% else %}
+          <div class="msg info">Todavía no hay ofertas. Creá la primera arriba ✅</div>
+        {% endfor %}
+
+        <div id="noOffers" class="msg info" style="display:none">
+          No hay resultados para esa búsqueda. Probá con otro término ✅
         </div>
       </div>
-    </div>
+    </section>
   </div>
-</div>
+
+  <script>
+    (() => {
+      // ===== Preview media (create form) =====
+      const form = document.getElementById("offerCreateForm");
+      const preview = document.getElementById("newOfferPreview");
+      if (form && preview) {
+        const fileInput = form.querySelector('input[type="file"][name="media"]');
+        const stage = preview.querySelector("div");
+        const clean = () => { stage.innerHTML = '<span class="muted">preview</span>'; preview.style.display = "none"; };
+
+        if (fileInput) {
+          fileInput.addEventListener("change", () => {
+            const f = fileInput.files && fileInput.files[0];
+            if (!f) return clean();
+            const url = URL.createObjectURL(f);
+            preview.style.display = "";
+            if (f.type.startsWith("video/")) {
+              stage.innerHTML = `<video src="${url}" muted playsinline controls style="width:100%;height:160px;object-fit:cover"></video>`;
+            } else if (f.type.startsWith("image/")) {
+              stage.innerHTML = `<img src="${url}" alt="preview" style="width:100%;height:160px;object-fit:cover">`;
+            } else {
+              stage.innerHTML = `<span class="muted">archivo seleccionado</span>`;
+            }
+          });
+        }
+      }
+
+      // ===== Copy CTA =====
+      document.addEventListener("click", async (e) => {
+        const btn = e.target.closest("[data-copy]");
+        if (!btn) return;
+        const text = btn.getAttribute("data-copy") || "";
+        try {
+          await navigator.clipboard.writeText(text);
+          const prev = btn.textContent;
+          btn.textContent = "✅ Copiado";
+          setTimeout(() => btn.textContent = prev, 900);
+        } catch {
+          const tmp = document.createElement("textarea");
+          tmp.value = text;
+          document.body.appendChild(tmp);
+          tmp.select();
+          document.execCommand("copy");
+          document.body.removeChild(tmp);
+          const prev = btn.textContent;
+          btn.textContent = "✅ Copiado";
+          setTimeout(() => btn.textContent = prev, 900);
+        }
+      });
+
+      // ===== Video hover play =====
+      document.querySelectorAll("video.offer-media").forEach(v => {
+        v.addEventListener("mouseenter", () => { try { v.play(); } catch {} });
+        v.addEventListener("mouseleave", () => { try { v.pause(); v.currentTime = 0; } catch {} });
+      });
+
+      // ===== Live search + filter only active =====
+      const input = document.getElementById("offerSearch");
+      const no = document.getElementById("noOffers");
+      const rows = Array.from(document.querySelectorAll(".offer-row"));
+      const onlyBtn = document.getElementById("toggleOnlyActive");
+      let onlyActive = false;
+
+      const apply = () => {
+        const q = (input?.value || "").trim().toLowerCase();
+        let shown = 0;
+        rows.forEach(r => {
+          const t = r.getAttribute("data-title") || "";
+          const s = r.getAttribute("data-subtitle") || "";
+          const b = r.getAttribute("data-badge") || "";
+          const a = r.getAttribute("data-active") || "0";
+          const okQ = !q || t.includes(q) || s.includes(q) || b.includes(q);
+          const okA = !onlyActive || a === "1";
+          const ok = okQ && okA;
+          r.style.display = ok ? "" : "none";
+          if (ok) shown++;
+        });
+        if (no) no.style.display = (shown === 0) ? "" : "none";
+      };
+
+      if (input) input.addEventListener("input", apply);
+
+      if (onlyBtn) {
+        onlyBtn.addEventListener("click", () => {
+          onlyActive = !onlyActive;
+          onlyBtn.setAttribute("aria-pressed", onlyActive ? "true" : "false");
+          onlyBtn.textContent = onlyActive ? "✅ Solo activas: ON" : "✅ Solo activas: OFF";
+          apply();
+        });
+      }
+
+      // ===== Inline editor (UI only) =====
+      document.addEventListener("click", (e) => {
+        const edit = e.target.closest("[data-edit-offer]");
+        if (edit) {
+          const id = edit.getAttribute("data-edit-offer");
+          const box = document.getElementById("edit-" + id);
+          if (box) box.style.display = (box.style.display === "none" || !box.style.display) ? "" : "none";
+          return;
+        }
+
+        const cancel = e.target.closest("[data-cancel-edit]");
+        if (cancel) {
+          const id = cancel.getAttribute("data-cancel-edit");
+          const box = document.getElementById("edit-" + id);
+          if (box) box.style.display = "none";
+          return;
+        }
+
+        const save = e.target.closest("[data-save-edit]");
+        if (save) {
+          alert("Listo: UI preparada ✅\n\nPara que guarde de verdad, agregamos la ruta admin.offers_update en backend.");
+          return;
+        }
+      });
+
+      apply();
+    })();
+  </script>
 {% endblock %}

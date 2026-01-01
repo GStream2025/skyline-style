@@ -1,0 +1,2 @@
+﻿# models\product.py
+

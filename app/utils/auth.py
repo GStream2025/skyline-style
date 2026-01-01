@@ -2,47 +2,143 @@ from __future__ import annotations
 
 import hmac
 import os
+import time
 from functools import wraps
-from typing import Any, Callable, Optional, TypeVar
+from typing import Any, Callable, TypeVar, Optional
 
 from flask import current_app, flash, redirect, request, session, url_for
 
 F = TypeVar("F", bound=Callable[..., Any])
 
-# -----------------------------
-# Config helpers
-# -----------------------------
+# ============================================================
+# Constantes
+# ============================================================
+
+ADMIN_SESSION_TTL = int(os.getenv("ADMIN_SESSION_TTL", 60 * 60 * 4))  # 4 horas
+_TRUE = {"1", "true", "yes", "y", "on"}
+
+
+# ============================================================
+# ENV / Config helpers (robustos)
+# ============================================================
 
 def _env(key: str, default: str = "") -> str:
-    return (os.getenv(key) or current_app.config.get(key) or default).strip()
+    """
+    Lee primero ENV, luego app.config, luego default.
+    Nunca rompe.
+    """
+    try:
+        return (os.getenv(key) or current_app.config.get(key) or default).strip()
+    except Exception:
+        return default
+
 
 def _get_admin_email() -> str:
     return _env("ADMIN_EMAIL").lower()
 
+
 def _get_admin_password() -> str:
     return _env("ADMIN_PASSWORD")
 
-def _bool_session(key: str) -> bool:
-    return bool(session.get(key) is True)
+
+def _now() -> int:
+    return int(time.time())
+
+
+# ============================================================
+# Redirect seguro (anti open-redirect)
+# ============================================================
 
 def _safe_next_url(default_endpoint: str = "admin.dashboard") -> str:
     """
-    next seguro: solo permite paths internos "/..."
-    Evita open redirect (http://evil.com)
+    Permite SOLO paths internos (/algo).
+    Si no es seguro → endpoint por defecto.
     """
     nxt = (request.args.get("next") or request.form.get("next") or "").strip()
     if nxt.startswith("/"):
         return nxt
-    return url_for(default_endpoint)
+    try:
+        return url_for(default_endpoint)
+    except Exception:
+        return "/"
 
-# -----------------------------
-# DB / current user helper (opcional)
-# -----------------------------
+
+# ============================================================
+# Admin credentials (ENV)
+# ============================================================
+
+def admin_creds_ok(email: str, password: str) -> bool:
+    """
+    Valida credenciales admin contra ENV/config.
+    Usa comparación constante (anti timing attacks).
+    """
+    admin_email = _get_admin_email()
+    admin_pass = _get_admin_password()
+
+    if not admin_email or not admin_pass:
+        # No rompe la app, solo bloquea login admin
+        try:
+            current_app.logger.warning(
+                "⚠️ ADMIN_EMAIL / ADMIN_PASSWORD no configurados."
+            )
+        except Exception:
+            pass
+        return False
+
+    email_ok = hmac.compare_digest(
+        (email or "").strip().lower(),
+        admin_email,
+    )
+    pass_ok = hmac.compare_digest(
+        (password or "").strip(),
+        admin_pass,
+    )
+
+    return bool(email_ok and pass_ok)
+
+
+# ============================================================
+# Admin session helpers
+# ============================================================
+
+def admin_login() -> None:
+    """
+    Marca sesión admin con timestamp.
+    """
+    session.clear()
+    session["admin_logged_in"] = True
+    session["admin_ts"] = _now()
+
+
+def admin_logout() -> None:
+    """
+    Cierra sesión admin limpiamente.
+    """
+    session.clear()
+
+
+def _session_admin_valid() -> bool:
+    """
+    Valida sesión admin con TTL (expira).
+    """
+    if session.get("admin_logged_in") is not True:
+        return False
+
+    ts = session.get("admin_ts")
+    if not isinstance(ts, int):
+        return False
+
+    if (_now() - ts) > ADMIN_SESSION_TTL:
+        return False
+
+    # Sliding window
+    session["admin_ts"] = _now()
+    return True
+
 
 def _current_user_is_admin() -> bool:
     """
-    1) Si guardás session["is_admin"] => lo usa
-    2) Si no, intenta leer User.is_admin desde DB usando session["user_id"]
+    Fallback: usuario normal con flag admin en DB.
     """
     if session.get("is_admin") is True:
         return True
@@ -52,62 +148,31 @@ def _current_user_is_admin() -> bool:
         return False
 
     try:
-        from app.models import db, User  # usa tu hub
+        from app.models import db, User
         u = db.session.get(User, int(uid))
         return bool(getattr(u, "is_admin", False))
     except Exception:
         return False
 
-# -----------------------------
-# Admin credentials (ENV)
-# -----------------------------
-
-def admin_creds_ok(email: str, password: str) -> bool:
-    """
-    Valida contra ADMIN_EMAIL / ADMIN_PASSWORD (ENV o config).
-    Comparación constante para evitar timing leaks.
-    """
-    admin_email = _get_admin_email()
-    admin_pass = _get_admin_password()
-
-    if not admin_email or not admin_pass:
-        current_app.logger.warning("⚠️ ADMIN_EMAIL / ADMIN_PASSWORD no están definidos.")
-        return False
-
-    email_ok = hmac.compare_digest((email or "").strip().lower(), admin_email)
-    pass_ok = hmac.compare_digest((password or "").strip(), admin_pass)
-    return bool(email_ok and pass_ok)
-
-# -----------------------------
-# Admin session helpers
-# -----------------------------
-
-def admin_login() -> None:
-    """Marca la sesión como admin (para panel)."""
-    session["admin_logged_in"] = True
-
-def admin_logout() -> None:
-    """Quita marca admin."""
-    session.pop("admin_logged_in", None)
 
 def is_admin_logged() -> bool:
     """
     Considera admin si:
-    - session["admin_logged_in"] == True  (login admin panel)
-    - session["is_admin"] == True         (login normal pero admin)
-    - User.is_admin == True en DB         (fallback)
+    - sesión admin válida (panel)
+    - sesión user con is_admin
+    - User.is_admin en DB
     """
-    return _bool_session("admin_logged_in") or _current_user_is_admin()
+    return _session_admin_valid() or _current_user_is_admin()
 
-# -----------------------------
+
+# ============================================================
 # Decorator
-# -----------------------------
+# ============================================================
 
 def admin_required(view: F) -> F:
     """
-    Protege rutas /admin:
-    - Permite si is_admin_logged() es True
-    - Si no, redirige a admin.login con next seguro
+    Protege rutas /admin.
+    Redirige a login admin con next seguro.
     """
     @wraps(view)
     def wrapped(*args: Any, **kwargs: Any):
@@ -115,6 +180,24 @@ def admin_required(view: F) -> F:
             return view(*args, **kwargs)
 
         flash("Tenés que iniciar sesión como admin.", "warning")
-        return redirect(url_for("admin.login", next=_safe_next_url("admin.dashboard")))
+        return redirect(
+            url_for(
+                "admin.login",
+                next=_safe_next_url("admin.dashboard"),
+            )
+        )
 
     return wrapped  # type: ignore[misc]
+
+
+# ============================================================
+# Exports
+# ============================================================
+
+__all__ = [
+    "admin_required",
+    "admin_creds_ok",
+    "admin_login",
+    "admin_logout",
+    "is_admin_logged",
+]

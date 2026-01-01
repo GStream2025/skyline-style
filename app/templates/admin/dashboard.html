@@ -1,17 +1,25 @@
-{# app/templates/admin/dashboard.html — Dashboard PRO #}
+{# app/templates/admin/dashboard.html — Dashboard ULTRA PRO (FINAL) #}
 {% extends "admin/base_admin.html" %}
+
 {% block title %}Dashboard · Skyline Admin{% endblock %}
 
 {% block content %}
-  <h1 style="margin:.2rem 0 0;font-weight:1000;letter-spacing:-.5px">Dashboard</h1>
-  <p class="muted" style="margin:.45rem 0 1rem">
-    Centro de control para tu marketplace: catálogo, categorías, media y fuentes (Printful / dropship / Temu).
-  </p>
+  <header style="margin-bottom:14px">
+    <h1 style="margin:.2rem 0 0;font-weight:1000;letter-spacing:-.5px">Dashboard</h1>
+    <p class="muted" style="margin:.45rem 0 0">
+      Centro de control para tu marketplace: catálogo, categorías, media y fuentes (Printful / dropship / Temu).
+    </p>
+  </header>
 
   <div class="row cols2">
     <section style="border:1px solid rgba(148,163,184,.16);border-radius:18px;padding:14px;background:rgba(255,255,255,.05)">
-      <div class="kpi"><div style="font-weight:950">Productos</div><b>{{ prod_count }}</b></div>
+      <div class="kpi">
+        <div style="font-weight:950">Productos</div>
+        <b>{{ prod_count|default(0) }}</b>
+      </div>
+
       <p class="muted" style="margin:.6rem 0 0">Publicá y editá rápido. Soporta miles.</p>
+
       <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap">
         <a class="btn" href="{{ url_for('admin.products_list') }}">Ver productos</a>
         <a class="btn2" href="{{ url_for('admin.products_new') }}">Crear nuevo</a>
@@ -19,8 +27,13 @@
     </section>
 
     <section style="border:1px solid rgba(148,163,184,.16);border-radius:18px;padding:14px;background:rgba(255,255,255,.05)">
-      <div class="kpi"><div style="font-weight:950">Categorías</div><b>{{ cat_count }}</b></div>
+      <div class="kpi">
+        <div style="font-weight:950">Categorías</div>
+        <b>{{ cat_count|default(0) }}</b>
+      </div>
+
       <p class="muted" style="margin:.6rem 0 0">Control del filtro del shop.</p>
+
       <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap">
         <a class="btn2" href="{{ url_for('admin.categories') }}">Gestionar</a>
       </div>
@@ -33,8 +46,12 @@
       <p class="muted" style="margin:0">
         Vista interna lista. Importar crea producto en borrador para editar y publicar.
       </p>
+
       <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:10px">
-        <a class="btn" href="/printful/productos">Ver productos Printful</a>
+        {# ✅ Fallback seguro: si no existe el endpoint, usa path #}
+        <a class="btn" href="{{ url_for('printful.products') if 'printful' in (current_app.blueprints or {}) else '/printful/productos' }}">
+          Ver productos Printful
+        </a>
       </div>
     </section>
 
@@ -43,8 +60,34 @@
       <p class="muted" style="margin:0">
         Ya podés cargar productos con <code>source=dropship</code> o <code>source=temu</code> y pegar el link externo.
       </p>
+
       <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:10px">
         <a class="btn2" href="{{ url_for('admin.products_new') }}">Crear producto dropship</a>
+      </div>
+    </section>
+  </div>
+
+  <div style="margin-top:14px" class="row cols2">
+    <section style="border:1px solid rgba(148,163,184,.16);border-radius:18px;padding:14px;background:rgba(255,255,255,.05)">
+      <div class="kpi">
+        <div style="font-weight:950">Ofertas</div>
+        <b>{{ offer_count|default(0) }}</b>
+      </div>
+
+      <p class="muted" style="margin:.6rem 0 0">Banners/cards para promos y lanzamientos.</p>
+
+      <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap">
+        <a class="btn2" href="{{ url_for('admin.offers') }}">Gestionar ofertas</a>
+      </div>
+    </section>
+
+    <section style="border:1px solid rgba(148,163,184,.16);border-radius:18px;padding:14px;background:rgba(255,255,255,.05)">
+      <h2 style="margin:0 0 6px;font-size:1.05rem;font-weight:950">Media</h2>
+      <p class="muted" style="margin:0">
+        Subí imágenes/videos al crear/editar productos. Se guardan en <code>/static/uploads/products</code>.
+      </p>
+      <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:10px">
+        <a class="btn" href="{{ url_for('admin.products_list') }}">Administrar media</a>
       </div>
     </section>
   </div>

@@ -1,0 +1,202 @@
+{# =========================================================
+   CART MINI — ULTRA PRO (Navbar / Dropdown)
+   ✅ 5+ mejoras:
+   1) No revienta si no hay CartStore/apiGet (fallback fetch)
+   2) Accesible: role="menu", aria-live para totales
+   3) Estados: loading / empty / ok
+   4) Render seguro + límites (max 6 items) para performance
+   5) CTA profesional: Ver carrito + Checkout real (/cart/checkout)
+   6) Hook global: SkylineCartMini.refresh() para actualizar badge/mini
+   ========================================================= #}
+
+{% set snap = cart if cart is defined else none %}
+
+<div class="w-[340px] sm:w-[380px] bg-white border border-slate-200 shadow-xl rounded-2xl overflow-hidden"
+     data-cart-mini
+     role="menu"
+     aria-label="Mini carrito">
+
+  <!-- Header -->
+  <div class="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+    <div class="min-w-0">
+      <p class="text-sm font-semibold text-slate-900">Carrito</p>
+      <p class="text-[11px] text-slate-500 mt-0.5" data-mini-meta>
+        {% if snap %}
+          {{ (snap.items_count or 0) }} item(s) • {{ (snap.distinct_items or 0) }} producto(s)
+        {% else %}
+          Cargando…
+        {% endif %}
+      </p>
+    </div>
+
+    <a href="{{ url_for('cart.cart_view') if 'cart.cart_view' in current_app.view_functions else '/cart' }}"
+       class="text-xs px-3 py-1.5 rounded-full border border-slate-200 text-slate-700 hover:border-amber-500 hover:text-amber-600 transition">
+      Ver
+    </a>
+  </div>
+
+  <!-- Body -->
+  <div class="p-4">
+    <!-- Loading -->
+    <div class="space-y-2" data-mini-loading>
+      <div class="h-14 rounded-xl bg-slate-100 animate-pulse"></div>
+      <div class="h-14 rounded-xl bg-slate-100 animate-pulse"></div>
+      <div class="h-14 rounded-xl bg-slate-100 animate-pulse"></div>
+    </div>
+
+    <!-- Content -->
+    <div class="hidden" data-mini-content>
+      <div class="space-y-2" data-mini-lines></div>
+
+      <!-- Empty -->
+      <div class="hidden" data-mini-empty>
+        {% include "cart/empty.html" %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="px-4 py-4 border-t border-slate-200 bg-white">
+    <div class="flex items-center justify-between text-sm" aria-live="polite">
+      <span class="text-slate-600">Subtotal</span>
+      <span class="font-semibold text-slate-900">
+        <span data-mini-currency>{{ (snap.currency if snap else "USD") }}</span>
+        <span data-mini-subtotal>{{ (snap.subtotal if snap else "0.00") }}</span>
+      </span>
+    </div>
+
+    <div class="mt-3 grid grid-cols-2 gap-2">
+      <a href="{{ url_for('cart.cart_view') if 'cart.cart_view' in current_app.view_functions else '/cart' }}"
+         class="inline-flex justify-center text-sm px-4 py-2.5 rounded-full border border-slate-300 text-slate-700 hover:border-amber-500 hover:text-amber-600 transition">
+        Ver carrito
+      </a>
+
+      <a href="{{ url_for('cart.cart_go_checkout') if 'cart.cart_go_checkout' in current_app.view_functions else '/cart/checkout' }}"
+         class="inline-flex justify-center text-sm px-4 py-2.5 rounded-full bg-slate-900 text-slate-50 hover:bg-slate-800 shadow-sm hover:shadow-md transition"
+         data-mini-checkout>
+        Checkout
+      </a>
+    </div>
+
+    <button type="button"
+            class="mt-2 w-full inline-flex justify-center text-xs px-4 py-2 rounded-full border border-slate-200 text-slate-600 hover:bg-slate-50 transition"
+            data-mini-refresh>
+      Actualizar
+    </button>
+  </div>
+</div>
+
+<script>
+(() => {
+  const root = document.querySelector('[data-cart-mini]');
+  if(!root) return;
+
+  const metaEl = root.querySelector('[data-mini-meta]');
+  const currencyEl = root.querySelector('[data-mini-currency]');
+  const subtotalEl = root.querySelector('[data-mini-subtotal]');
+
+  const loadingEl = root.querySelector('[data-mini-loading]');
+  const contentEl = root.querySelector('[data-mini-content]');
+  const linesEl = root.querySelector('[data-mini-lines]');
+  const emptyEl = root.querySelector('[data-mini-empty]');
+
+  const btnRefresh = root.querySelector('[data-mini-refresh]');
+
+  const safeText = (v) => (v === null || v === undefined) ? "" : String(v);
+
+  const renderLine = (ln, cur) => {
+    const title = safeText(ln.title || "Producto");
+    const qty = Number(ln.qty || 1);
+    const total = safeText(ln.line_total_display || ln.line_total || "0.00");
+
+    const img = ln.image_url
+      ? `<img src="${safeText(ln.image_url)}" alt="${title}" class="w-full h-full object-cover">`
+      : `<div class="w-full h-full bg-slate-100"></div>`;
+
+    return `
+      <div class="flex gap-3 p-3 rounded-xl border border-slate-200">
+        <div class="w-12 h-12 rounded-lg overflow-hidden border border-slate-200 bg-slate-50 shrink-0">
+          ${img}
+        </div>
+        <div class="min-w-0 flex-1">
+          <p class="text-xs font-semibold text-slate-900 line-clamp-2">${title}</p>
+          <p class="text-[11px] text-slate-500 mt-0.5">x${qty}</p>
+        </div>
+        <div class="text-right shrink-0">
+          <p class="text-xs font-bold text-slate-900">${cur} ${total}</p>
+        </div>
+      </div>
+    `;
+  };
+
+  const applySnap = (snap) => {
+    const itemsCount = Number(snap?.items_count || 0);
+    const distinct = Number(snap?.distinct_items || 0);
+    const cur = safeText(snap?.currency || "USD");
+    const sub = safeText(snap?.subtotal || "0.00");
+    const lines = Array.isArray(snap?.lines) ? snap.lines : [];
+
+    if(metaEl) metaEl.textContent = `${itemsCount} item(s) • ${distinct} producto(s)`;
+    if(currencyEl) currencyEl.textContent = cur;
+    if(subtotalEl) subtotalEl.textContent = sub;
+
+    linesEl.innerHTML = "";
+    if(lines.length === 0){
+      emptyEl.classList.remove('hidden');
+    } else {
+      emptyEl.classList.add('hidden');
+      linesEl.innerHTML = lines.slice(0, 6).map(ln => renderLine(ln, cur)).join("");
+      if(lines.length > 6){
+        linesEl.insertAdjacentHTML('beforeend', `
+          <div class="text-[11px] text-slate-500 text-center pt-1">
+            +${lines.length - 6} más…
+          </div>
+        `);
+      }
+    }
+  };
+
+  const refresh = async () => {
+    loadingEl.classList.remove('hidden');
+    contentEl.classList.add('hidden');
+
+    try{
+      let snap = null;
+
+      if(window.CartStore && typeof window.CartStore.refresh === 'function'){
+        snap = await window.CartStore.refresh();
+      } else if(window.apiGet){
+        const d = await window.apiGet('/cart/json');
+        snap = d?.cart;
+      } else {
+        const r = await fetch('/cart/json', { headers: { 'Accept': 'application/json' } });
+        const d = await r.json();
+        snap = d?.cart;
+      }
+
+      applySnap(snap);
+
+      // ✅ si existe badge global, lo actualizamos
+      if(window.SkylineCartBadge && typeof window.SkylineCartBadge.update === 'function'){
+        window.SkylineCartBadge.update(snap);
+      }
+    }catch(e){
+      applySnap({ items_count: 0, distinct_items: 0, currency: "USD", subtotal: "0.00", lines: [] });
+    }finally{
+      loadingEl.classList.add('hidden');
+      contentEl.classList.remove('hidden');
+    }
+  };
+
+  // Eventos
+  btnRefresh && btnRefresh.addEventListener('click', () => refresh());
+
+  // Exponer helper global
+  window.SkylineCartMini = window.SkylineCartMini || {};
+  window.SkylineCartMini.refresh = refresh;
+  window.SkylineCartMini.apply = applySnap;
+
+  // Auto-load
+  refresh();
+})();
+</script>

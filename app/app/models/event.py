@@ -1,0 +1,2 @@
+﻿# models\event.py
+

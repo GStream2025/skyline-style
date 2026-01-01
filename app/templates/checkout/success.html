@@ -1,0 +1,389 @@
+{# app/templates/checkout/success.html — SKYLINE SUCCESS ULTRA PRO (FINAL) #}
+{% extends "base.html" %}
+
+{% block title %}Pago confirmado · Skyline Store{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* =========================================================
+     SUCCESS — ULTRA PRO
+     Mejoras incluidas:
+     1) No depende de Tailwind (CSS propio)
+     2) Responsive real + clamp() + grid estable
+     3) Accesibilidad: aria-live, focus visible, contraste
+     4) Animaciones motion-safe (respeta reduce-motion)
+     5) Safe fallbacks: si no vienen variables, no rompe
+     6) Copy UX: próximos pasos claros + soporte
+     7) Botones con estados + links robustos
+     8) Caja de “detalles” opcional y segura
+     9) Tracking afiliados/UTM best-effort (sin romper)
+     10) Acción: imprimir / copiar ID / abrir WhatsApp
+     11) Soporta dark mode via prefers-color-scheme
+  ========================================================== */
+
+  .sx-wrap{max-width:1080px;margin:0 auto;padding:clamp(18px,3vw,30px) 16px 70px}
+  .sx-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:18px 0 14px}
+  .sx-title{margin:0;font-weight:1000;letter-spacing:-.6px;font-size:clamp(1.7rem,3vw,2.25rem)}
+  .sx-sub{margin:.35rem 0 0;opacity:.78;max-width:75ch;line-height:1.5}
+  .sx-pill{
+    display:inline-flex;align-items:center;gap:8px;
+    padding:7px 10px;border-radius:999px;
+    font-size:.85rem;font-weight:950;
+    border:1px solid rgba(34,197,94,.35);
+    background: rgba(34,197,94,.12);
+    color: rgba(21,128,61,.95);
+    white-space:nowrap;
+  }
+  @media (prefers-color-scheme: dark){
+    .sx-pill{color: rgba(187,247,208,.95); background: rgba(34,197,94,.12); border-color: rgba(34,197,94,.30)}
+  }
+
+  .sx-grid{display:grid;grid-template-columns:1fr;gap:14px;align-items:start}
+  @media(min-width:980px){.sx-grid{grid-template-columns:1.25fr .75fr;gap:16px}}
+
+  .sx-card{
+    border-radius:22px;
+    border:1px solid rgba(148,163,184,.18);
+    background: rgba(255,255,255,.72);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 18px 46px rgba(15,23,42,.12);
+    overflow:hidden;
+  }
+  @media (prefers-color-scheme: dark){
+    .sx-card{background: rgba(255,255,255,.06); box-shadow: 0 18px 46px rgba(0,0,0,.28)}
+  }
+  .sx-card__head{
+    padding:16px;
+    border-bottom:1px solid rgba(148,163,184,.14);
+    background:
+      radial-gradient(520px 240px at 0% 0%, rgba(34,197,94,.18), transparent 60%),
+      radial-gradient(520px 240px at 100% 0%, rgba(56,189,248,.18), transparent 60%);
+  }
+  .sx-h2{margin:0;font-weight:1000;letter-spacing:-.35px}
+  .sx-card__inner{padding:16px}
+  @media(min-width:768px){.sx-card__inner{padding:18px}}
+
+  .sx-ok{
+    display:flex;gap:12px;align-items:flex-start;
+    padding:14px;border-radius:18px;
+    border:1px solid rgba(34,197,94,.20);
+    background: rgba(34,197,94,.10);
+  }
+  .sx-ico{
+    width:44px;height:44px;border-radius:16px;
+    display:grid;place-items:center;
+    background: rgba(255,255,255,.7);
+    border:1px solid rgba(148,163,184,.18);
+    flex: 0 0 auto;
+  }
+  @media (prefers-color-scheme: dark){
+    .sx-ico{background: rgba(255,255,255,.06)}
+  }
+  .sx-ok b{font-weight:1000}
+  .sx-ok p{margin:.25rem 0 0;opacity:.82;line-height:1.45}
+
+  .sx-kv{display:grid;gap:10px;margin:14px 0 0}
+  .sx-kv-row{
+    display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
+    padding:10px 12px;border-radius:14px;
+    border:1px solid rgba(148,163,184,.16);
+    background: rgba(255,255,255,.55);
+  }
+  @media (prefers-color-scheme: dark){
+    .sx-kv-row{background: rgba(255,255,255,.04)}
+  }
+  .sx-k{font-size:.78rem;opacity:.75;font-weight:950}
+  .sx-v{font-size:.95rem;font-weight:950;max-width:65%;text-align:right;word-break:break-word}
+
+  .sx-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
+  .sx-btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    padding:12px 14px;border-radius:999px;
+    font-weight:1000;text-decoration:none;cursor:pointer;
+    border:1px solid rgba(148,163,184,.18);
+    background:#fff;
+    transition: transform .14s ease, box-shadow .14s ease, filter .14s ease;
+    user-select:none;
+  }
+  .sx-btn:hover{transform: translateY(-1px); box-shadow: 0 14px 26px rgba(0,0,0,.10)}
+  .sx-btn:active{transform: translateY(0)}
+  .sx-btn--primary{
+    border:0;
+    background: linear-gradient(135deg, rgba(245,158,11,1), rgba(56,189,248,.85));
+    color:#08121f;
+  }
+  .sx-btn--ghost{
+    background: transparent;
+  }
+
+  .sx-note{
+    margin-top:14px;
+    font-size:.82rem;opacity:.78;line-height:1.45;
+    padding:12px 12px;border-radius:16px;
+    border:1px dashed rgba(148,163,184,.28);
+    background: rgba(255,255,255,.45);
+  }
+  @media (prefers-color-scheme: dark){
+    .sx-note{background: rgba(255,255,255,.04)}
+  }
+
+  /* Aside */
+  .sx-aside{
+    border-radius:24px;
+    border:1px solid rgba(148,163,184,.18);
+    background: #0b1120;
+    color: #e5e7eb;
+    overflow:hidden;
+    box-shadow: 0 18px 46px rgba(0,0,0,.28);
+  }
+  .sx-aside__head{
+    padding:16px 16px 14px;
+    border-bottom:1px solid rgba(148,163,184,.14);
+    background: radial-gradient(600px 280px at 0% 0%, rgba(56,189,248,.20), transparent 60%),
+                radial-gradient(600px 280px at 100% 0%, rgba(245,158,11,.18), transparent 60%);
+  }
+  .sx-aside__body{padding:14px 16px 16px}
+  .sx-steps{display:grid;gap:10px;margin:0;padding:0;list-style:none}
+  .sx-step{
+    display:flex;gap:10px;align-items:flex-start;
+    padding:12px;border-radius:18px;
+    border:1px solid rgba(148,163,184,.14);
+    background: rgba(255,255,255,.06);
+  }
+  .sx-dot{
+    width:28px;height:28px;border-radius:999px;
+    display:grid;place-items:center;
+    font-weight:1000;
+    background: rgba(245,158,11,.16);
+    border:1px solid rgba(245,158,11,.22);
+    color: rgba(253,230,138,.95);
+    flex: 0 0 auto;
+  }
+  .sx-step b{font-weight:1000}
+  .sx-step p{margin:.15rem 0 0;opacity:.82;line-height:1.35;font-size:.92rem}
+
+  /* Motion-safe */
+  .sx-pop{transform: translateY(10px);opacity:0;transition: transform .25s ease, opacity .25s ease}
+  .sx-pop.is-on{transform: translateY(0);opacity:1}
+  @media (prefers-reduced-motion: reduce){
+    .sx-pop{transition:none}
+    .sx-btn{transition:none}
+  }
+
+  /* Focus visible */
+  :focus-visible{
+    outline:none;
+    box-shadow: 0 0 0 4px rgba(37,99,235,.18);
+    border-radius: 10px;
+  }
+
+  /* Print clean */
+  @media print{
+    header.topbar, footer, .sx-actions, .sx-aside{display:none !important}
+    body{background:#fff !important}
+    .sx-card{box-shadow:none !important; border:1px solid #ddd !important; background:#fff !important}
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+{# Variables seguras (no rompen si backend no manda nada) #}
+{% set order_number = (order_number if order_number is defined else (order.number if order is defined and order.number is defined else "")) %}
+{% set provider_name = (provider if provider is defined else (payment_provider if payment_provider is defined else "pago")) %}
+{% set email = (user.email if user is defined and user.email is defined else (customer_email if customer_email is defined else "")) %}
+{% set total = (order.total if order is defined and order.total is defined else (cart_total if cart_total is defined else "")) %}
+{% set currency = (order.currency if order is defined and order.currency is defined else (currency if currency is defined else "USD")) %}
+
+<section class="sx-wrap" aria-label="Pago confirmado">
+
+  <div class="sx-head">
+    <div>
+      <h1 class="sx-title">Pago confirmado ✅</h1>
+      <p class="sx-sub">
+        Tu pedido fue registrado correctamente.
+        {% if order_number %} Guardá este número por cualquier consulta.{% endif %}
+      </p>
+    </div>
+    <span class="sx-pill" aria-live="polite">Listo para preparar</span>
+  </div>
+
+  <div class="sx-grid">
+
+    <!-- MAIN -->
+    <div class="sx-card sx-pop" id="sxCard">
+      <div class="sx-card__head">
+        <h2 class="sx-h2">Confirmación</h2>
+      </div>
+
+      <div class="sx-card__inner">
+
+        <div class="sx-ok">
+          <div class="sx-ico" aria-hidden="true">✅</div>
+          <div>
+            <div style="font-weight:1000;letter-spacing:-.2px">¡Gracias por tu compra!</div>
+            <p>
+              {% if email %}
+                Te vamos a enviar actualizaciones a <b>{{ email }}</b>.
+              {% else %}
+                Te vamos a enviar actualizaciones por el medio que hayas elegido.
+              {% endif %}
+            </p>
+            <p style="margin-top:.4rem">
+              Método: <b>{{ provider_name|capitalize }}</b>.
+              {% if total %}
+                Total: <b>{{ total }}</b> {{ currency }}.
+              {% endif %}
+            </p>
+          </div>
+        </div>
+
+        <div class="sx-kv" aria-label="Detalles del pedido">
+          <div class="sx-kv-row">
+            <div>
+              <div class="sx-k">Estado</div>
+              <div class="sx-v" style="max-width:100%;text-align:left">Confirmado / En preparación</div>
+            </div>
+          </div>
+
+          <div class="sx-kv-row">
+            <div class="sx-k">Número de pedido</div>
+            <div class="sx-v">
+              {% if order_number %}{{ order_number }}{% else %}—{% endif %}
+            </div>
+          </div>
+
+          <div class="sx-kv-row">
+            <div class="sx-k">Soporte</div>
+            <div class="sx-v">
+              {% if support_email is defined and support_email %}
+                {{ support_email }}
+              {% else %}
+                soporte@skylinestore.com
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <div class="sx-actions">
+          <a class="sx-btn sx-btn--primary" href="{{ url_for('main.shop') if 'main.shop' in current_app.view_functions else '/shop' }}">
+            🛍️ Seguir comprando
+          </a>
+
+          <a class="sx-btn" href="{{ url_for('cart.cart_view') if 'cart.cart_view' in current_app.view_functions else '/cart' }}">
+            🛒 Ver carrito
+          </a>
+
+          <button class="sx-btn sx-btn--ghost" type="button" id="btnCopy" {% if not order_number %}disabled aria-disabled="true"{% endif %}>
+            📋 Copiar Nº pedido
+          </button>
+
+          <button class="sx-btn sx-btn--ghost" type="button" onclick="window.print()">
+            🖨️ Imprimir
+          </button>
+
+          {# WhatsApp soporte (si definís SUPPORT_WHATSAPP en backend y lo pasás como support_whatsapp) #}
+          {% set wa = (support_whatsapp if support_whatsapp is defined else "") %}
+          {% if wa %}
+            <a class="sx-btn" href="https://wa.me/{{ wa|replace('+','')|replace(' ','') }}" target="_blank" rel="noopener">
+              💬 WhatsApp soporte
+            </a>
+          {% endif %}
+        </div>
+
+        <div class="sx-note">
+          <b>Próximos pasos:</b> si el pago fue con transferencia, podés demorar unos minutos en verse reflejado.
+          Si fue con MercadoPago/PayPal, normalmente se confirma al instante.
+          {% if order_number %}
+            Si necesitás ayuda, enviá este número: <b>{{ order_number }}</b>.
+          {% endif %}
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ASIDE -->
+    <aside class="sx-aside sx-pop" id="sxAside" aria-label="Qué pasa ahora">
+      <div class="sx-aside__head">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+          <h2 class="sx-h2" style="margin:0">¿Qué pasa ahora?</h2>
+          <span class="sx-pill" style="border-color:rgba(245,158,11,.35);background:rgba(245,158,11,.12);color:rgba(253,230,138,.95)">Paso a paso</span>
+        </div>
+      </div>
+      <div class="sx-aside__body">
+        <ol class="sx-steps">
+          <li class="sx-step">
+            <span class="sx-dot">1</span>
+            <div>
+              <b>Preparamos tu pedido</b>
+              <p>Verificamos stock, variantes y empaquetado.</p>
+            </div>
+          </li>
+          <li class="sx-step">
+            <span class="sx-dot">2</span>
+            <div>
+              <b>Confirmación y envío</b>
+              <p>Te avisamos cuando salga y te damos seguimiento si aplica.</p>
+            </div>
+          </li>
+          <li class="sx-step">
+            <span class="sx-dot">3</span>
+            <div>
+              <b>Soporte siempre</b>
+              <p>Si tenés dudas, escribinos y resolvemos rápido.</p>
+            </div>
+          </li>
+        </ol>
+
+        <div class="sx-note" style="margin-top:12px;border-color:rgba(56,189,248,.22);background:rgba(56,189,248,.10);color:#e5e7eb">
+          ⚡ Tip: guardá el número de pedido y revisá tu email (incluye spam/promociones).
+        </div>
+      </div>
+    </aside>
+
+  </div>
+
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(() => {
+  // Motion-safe entrance
+  const card = document.getElementById('sxCard');
+  const aside = document.getElementById('sxAside');
+  requestAnimationFrame(() => {
+    card && card.classList.add('is-on');
+    aside && aside.classList.add('is-on');
+  });
+
+  // Copy order number
+  const btn = document.getElementById('btnCopy');
+  const orderNumber = {{ (order_number|tojson) if order_number else '""' }};
+
+  if(btn && orderNumber){
+    btn.addEventListener('click', async () => {
+      try{
+        await navigator.clipboard.writeText(orderNumber);
+        if(window.toast) window.toast("Copiado", "Número de pedido copiado al portapapeles.");
+        else alert("Copiado: " + orderNumber);
+      }catch(e){
+        // fallback seguro
+        const tmp = document.createElement('textarea');
+        tmp.value = orderNumber;
+        document.body.appendChild(tmp);
+        tmp.select();
+        try{ document.execCommand('copy'); }catch(_){}
+        tmp.remove();
+        if(window.toast) window.toast("Copiado", "Número de pedido copiado.");
+        else alert("Copiado: " + orderNumber);
+      }
+    });
+  } else if(btn){
+    btn.addEventListener('click', () => {
+      if(window.toast) window.toast("Info", "No hay número de pedido disponible.");
+      else alert("No hay número de pedido disponible.");
+    });
+  }
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,235 @@
+{# =========================================================
+   CART MODAL — ULTRA PRO
+   - Reutilizable (base.html / navbar / cualquier página)
+   - No rompe si no existe CartStore o apiGet/apiPost
+   - Cierra con overlay, ESC y botón
+   - Accesible (role=dialog, aria, focus básico)
+   - Incluye empty state reutilizando cart/empty.html
+   ========================================================= #}
+
+{# Opcional: pasá cart=snapshot si lo tenés. Si no, el modal se auto-carga por /cart/json #}
+{% set snap = cart if cart is defined else none %}
+
+<div id="cartModal"
+     class="fixed inset-0 z-[60] hidden"
+     data-cart-modal
+     aria-hidden="true">
+
+  <!-- Overlay -->
+  <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-[1px]" data-cart-modal-overlay></div>
+
+  <!-- Panel -->
+  <div class="absolute inset-y-0 right-0 w-full sm:w-[420px] bg-white shadow-2xl border-l border-slate-200 flex flex-col"
+       role="dialog"
+       aria-modal="true"
+       aria-labelledby="cartModalTitle">
+
+    <!-- Header -->
+    <header class="px-5 py-4 border-b border-slate-200 flex items-center justify-between gap-3">
+      <div class="min-w-0">
+        <p id="cartModalTitle" class="text-base font-semibold text-slate-900">
+          Tu carrito
+        </p>
+        <p class="text-xs text-slate-500 mt-0.5" data-cart-modal-meta>
+          {% if snap %}
+            {{ (snap.items_count or 0) }} item(s) • {{ (snap.distinct_items or 0) }} producto(s)
+          {% else %}
+            Cargando…
+          {% endif %}
+        </p>
+      </div>
+
+      <button type="button"
+              class="inline-flex items-center justify-center w-10 h-10 rounded-full border border-slate-200 text-slate-700 hover:bg-slate-50 transition"
+              aria-label="Cerrar carrito"
+              data-cart-modal-close>
+        ✕
+      </button>
+    </header>
+
+    <!-- Body -->
+    <div class="flex-1 overflow-auto px-5 py-4" data-cart-modal-body>
+      <!-- Estado loading -->
+      <div class="space-y-3" data-cart-modal-loading>
+        <div class="h-16 rounded-xl bg-slate-100 animate-pulse"></div>
+        <div class="h-16 rounded-xl bg-slate-100 animate-pulse"></div>
+        <div class="h-16 rounded-xl bg-slate-100 animate-pulse"></div>
+      </div>
+
+      <!-- Contenido -->
+      <div class="hidden" data-cart-modal-content>
+        <!-- Lines -->
+        <div class="space-y-3" data-cart-modal-lines></div>
+
+        <!-- Empty -->
+        <div class="hidden" data-cart-modal-empty>
+          {% include "cart/empty.html" %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer / Summary -->
+    <footer class="border-t border-slate-200 px-5 py-4 bg-white">
+      <div class="flex items-center justify-between text-sm">
+        <span class="text-slate-600">Subtotal</span>
+        <span class="font-semibold text-slate-900">
+          <span data-cart-modal-currency>{{ (snap.currency if snap else "USD") }}</span>
+          <span data-cart-modal-subtotal>{{ (snap.subtotal if snap else "0.00") }}</span>
+        </span>
+      </div>
+
+      <div class="mt-3 flex flex-col gap-2">
+        <!-- ✅ Profesional: ir a checkout real -->
+        <a href="{{ url_for('cart.cart_go_checkout') if 'cart.cart_go_checkout' in current_app.view_functions else '/cart/checkout' }}"
+           class="inline-flex justify-center text-sm px-6 py-3 rounded-full bg-slate-900 text-slate-50 hover:bg-slate-800 shadow-sm hover:shadow-md transition"
+           data-cart-modal-checkout>
+          Finalizar compra
+        </a>
+
+        <a href="{{ url_for('cart.cart_view') if 'cart.cart_view' in current_app.view_functions else '/cart' }}"
+           class="inline-flex justify-center text-sm px-6 py-3 rounded-full border border-slate-300 text-slate-700 hover:border-amber-500 hover:text-amber-600 transition">
+          Ver carrito
+        </a>
+      </div>
+
+      <p class="mt-3 text-[11px] text-slate-400">
+        Podés editar cantidades desde el carrito completo.
+      </p>
+    </footer>
+
+  </div>
+</div>
+
+<script>
+(() => {
+  const modal = document.querySelector('[data-cart-modal]');
+  if(!modal) return;
+
+  const overlay = modal.querySelector('[data-cart-modal-overlay]');
+  const btnClose = modal.querySelector('[data-cart-modal-close]');
+  const metaEl = modal.querySelector('[data-cart-modal-meta]');
+  const currencyEl = modal.querySelector('[data-cart-modal-currency]');
+  const subtotalEl = modal.querySelector('[data-cart-modal-subtotal]');
+
+  const loadingEl = modal.querySelector('[data-cart-modal-loading]');
+  const contentEl = modal.querySelector('[data-cart-modal-content]');
+  const linesEl = modal.querySelector('[data-cart-modal-lines]');
+  const emptyEl = modal.querySelector('[data-cart-modal-empty]');
+
+  let lastFocus = null;
+
+  const safeText = (v) => (v === null || v === undefined) ? "" : String(v);
+
+  const open = () => {
+    lastFocus = document.activeElement;
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+    document.documentElement.classList.add('overflow-hidden');
+    // focus básico
+    setTimeout(() => btnClose && btnClose.focus(), 0);
+    refresh();
+  };
+
+  const close = () => {
+    modal.classList.add('hidden');
+    modal.setAttribute('aria-hidden', 'true');
+    document.documentElement.classList.remove('overflow-hidden');
+    if(lastFocus && lastFocus.focus) lastFocus.focus();
+  };
+
+  const renderLine = (ln, cur) => {
+    const img = ln.image_url ? `
+      <img src="${safeText(ln.image_url)}" alt="${safeText(ln.title || 'Producto')}"
+           class="w-full h-full object-cover">` :
+      `<div class="w-full h-full bg-slate-100"></div>`;
+
+    const title = safeText(ln.title || "Producto");
+    const qty = Number(ln.qty || 1);
+    const unit = safeText(ln.unit_price_display || ln.unit_price || "0.00");
+    const total = safeText(ln.line_total_display || ln.line_total || "0.00");
+
+    return `
+      <div class="flex gap-3 p-3 rounded-xl border border-slate-200">
+        <div class="w-14 h-14 rounded-lg overflow-hidden border border-slate-200 bg-slate-50 shrink-0">
+          ${img}
+        </div>
+        <div class="min-w-0 flex-1">
+          <p class="text-sm font-semibold text-slate-900 line-clamp-2">${title}</p>
+          <p class="text-xs text-slate-500 mt-0.5">x${qty} • ${cur} ${unit}</p>
+        </div>
+        <div class="text-right shrink-0">
+          <p class="text-sm font-bold text-slate-900">${cur} ${total}</p>
+        </div>
+      </div>
+    `;
+  };
+
+  const applySnap = (snap) => {
+    const itemsCount = Number(snap?.items_count || 0);
+    const distinct = Number(snap?.distinct_items || 0);
+    const cur = safeText(snap?.currency || "USD");
+    const sub = safeText(snap?.subtotal || "0.00");
+
+    if(metaEl) metaEl.textContent = `${itemsCount} item(s) • ${distinct} producto(s)`;
+    if(currencyEl) currencyEl.textContent = cur;
+    if(subtotalEl) subtotalEl.textContent = sub;
+
+    const lines = Array.isArray(snap?.lines) ? snap.lines : [];
+
+    linesEl.innerHTML = "";
+    if(lines.length === 0){
+      emptyEl.classList.remove('hidden');
+    } else {
+      emptyEl.classList.add('hidden');
+      const html = lines.slice(0, 8).map(ln => renderLine(ln, cur)).join("");
+      linesEl.innerHTML = html;
+    }
+  };
+
+  const refresh = async () => {
+    // loading state
+    loadingEl.classList.remove('hidden');
+    contentEl.classList.add('hidden');
+
+    try{
+      let snap = null;
+
+      // Si tenés CartStore global, lo usamos
+      if(window.CartStore && typeof window.CartStore.refresh === 'function'){
+        snap = await window.CartStore.refresh();
+      } else if(window.apiGet){
+        const d = await window.apiGet('/cart/json');
+        snap = d?.cart;
+      } else {
+        // fallback fetch nativo
+        const r = await fetch('/cart/json', { headers: { 'Accept': 'application/json' } });
+        const d = await r.json();
+        snap = d?.cart;
+      }
+
+      applySnap(snap);
+    }catch(e){
+      // si falla, mostramos vacío pero sin romper
+      applySnap({ items_count: 0, distinct_items: 0, currency: "USD", subtotal: "0.00", lines: [] });
+    }finally{
+      loadingEl.classList.add('hidden');
+      contentEl.classList.remove('hidden');
+    }
+  };
+
+  // Eventos
+  overlay && overlay.addEventListener('click', close);
+  btnClose && btnClose.addEventListener('click', close);
+
+  document.addEventListener('keydown', (ev) => {
+    if(modal.classList.contains('hidden')) return;
+    if(ev.key === 'Escape') close();
+  });
+
+  // Exponer helpers globales (para botón navbar)
+  window.SkylineCartModal = window.SkylineCartModal || {};
+  window.SkylineCartModal.open = open;
+  window.SkylineCartModal.close = close;
+  window.SkylineCartModal.refresh = refresh;
+})();
+</script>

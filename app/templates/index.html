@@ -2,233 +2,149 @@
 {% block title %}Skyline Store · Moda urbana premium{% endblock %}
 
 {% block extra_head %}
+<!-- =========================
+ SEO / SHARE / PERFORMANCE
+========================= -->
+<meta name="description" content="Skyline Store · Moda urbana premium, accesorios y tecnología. Comprá fácil, rápido y seguro.">
+<link rel="canonical" href="{{ request.url }}">
+
+<meta property="og:title" content="Skyline Store · Moda urbana premium">
+<meta property="og:description" content="Moda urbana, accesorios y tecnología en un solo lugar.">
+<meta property="og:image" content="{{ url_for('static', filename='img/banners/hero_home.png', _external=True) }}">
+<meta property="og:type" content="website">
+
+<meta http-equiv="X-Content-Type-Options" content="nosniff">
+<meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
+
+<link rel="preload" as="image" href="{{ url_for('static', filename='img/banners/hero_home.png') }}">
+
 <style>
-  .home{background:#f6f7fb}
-  .section{max-width:1220px;margin:0 auto;padding: 0 18px 26px}
+/* =========================
+ BASE
+========================= */
+.home{background:#f6f7fb}
+.section{max-width:1220px;margin:0 auto;padding:0 18px 26px}
 
-  /* HERO */
-  .hero-wrap{padding:18px 0 10px}
-  .hero{
-    position:relative;
-    border-radius:18px;
-    overflow:hidden;
-    background:#fff;
-    box-shadow:0 14px 40px rgba(2,6,23,.10);
-    border:1px solid rgba(15,23,42,.10);
-  }
-  .hero-img{
-    width:100%;
-    height:min(460px,62vw);
-    object-fit:cover;
-    display:block;
-  }
-  .hero-overlay{
-    position:absolute; inset:0;
-    display:flex; align-items:center;
-    padding:20px clamp(18px,4vw,42px);
-  }
-  .hero-left{
-    max-width:540px;
-    background:linear-gradient(180deg, rgba(255,255,255,.86), rgba(255,255,255,.62));
-    border:1px solid rgba(15,23,42,.10);
-    box-shadow:0 18px 50px rgba(2,6,23,.10);
-    border-radius:18px;
-    padding:18px 18px 16px;
-  }
-  .hero-left h1{
-    margin:0;
-    font-weight:1000;
-    letter-spacing:-.9px;
-    line-height:1.02;
-    font-size:clamp(2rem,4.6vw,3.25rem);
-    color:#0b1220;
-  }
-  .hero-left h1 .accent{color:#f59e0b}
-  .hero-btn{
-    display:inline-flex;
-    margin-top:12px;
-    text-decoration:none;
-    font-weight:1000;
-    background:#f59e0b;
-    color:#111827;
-    padding:12px 16px;
-    border-radius:12px;
-    border:1px solid rgba(245,158,11,.35);
-    box-shadow:0 14px 30px rgba(245,158,11,.18);
-    transition: transform .2s cubic-bezier(.2,.9,.2,1);
-  }
-  .hero-btn:hover{transform: translateY(-2px)}
-  .dots{
-    position:absolute;left:0;right:0;bottom:10px;
-    display:flex;justify-content:center;gap:6px;
-  }
-  .dots span{width:7px;height:7px;border-radius:99px;background:rgba(255,255,255,.65)}
-  .dots span.on{background:#fff}
+/* =========================
+ HERO
+========================= */
+.hero-wrap{padding:18px 0 10px}
+.hero{
+  position:relative;border-radius:18px;overflow:hidden;background:#fff;
+  box-shadow:0 14px 40px rgba(2,6,23,.10);
+  border:1px solid rgba(15,23,42,.10)
+}
+.hero-img{
+  width:100%;height:min(460px,62vw);
+  object-fit:cover;display:block
+}
+.hero-overlay{
+  position:absolute;inset:0;
+  display:flex;align-items:center;
+  padding:20px clamp(18px,4vw,42px)
+}
+.hero-left{
+  max-width:540px;
+  background:linear-gradient(180deg,rgba(255,255,255,.88),rgba(255,255,255,.62));
+  border:1px solid rgba(15,23,42,.10);
+  box-shadow:0 18px 50px rgba(2,6,23,.10);
+  border-radius:18px;
+  padding:18px
+}
+.hero-left h1{
+  margin:0;font-weight:1000;
+  letter-spacing:-.9px;
+  line-height:1.02;
+  font-size:clamp(2rem,4.6vw,3.25rem);
+  color:#0b1220
+}
+.hero-left h1 .accent{color:#f59e0b}
+.hero-btn{
+  display:inline-flex;margin-top:12px;
+  text-decoration:none;font-weight:1000;
+  background:#f59e0b;color:#111827;
+  padding:12px 16px;border-radius:12px;
+  border:1px solid rgba(245,158,11,.35);
+  box-shadow:0 14px 30px rgba(245,158,11,.18)
+}
+.hero-btn:hover{transform:translateY(-2px)}
 
-  /* CATEGORÍAS */
-  .cats{display:grid;grid-template-columns:1fr;gap:12px;margin:14px 0 12px}
-  @media (min-width:860px){ .cats{grid-template-columns:repeat(4,1fr)} }
-  .cat{
-    position:relative;
-    border-radius:14px;
-    overflow:hidden;
-    border:1px solid rgba(15,23,42,.10);
-    box-shadow:0 10px 26px rgba(2,6,23,.08);
-    min-height:120px;
-    background:#fff;
-  }
-  .cat img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-  .cat .layer{position:absolute;inset:0;background:linear-gradient(90deg, rgba(0,0,0,.35), rgba(0,0,0,0))}
-  .cat .content{position:absolute;left:12px;bottom:12px;right:12px;color:#fff}
-  .cat .content b{display:block;font-size:1.05rem;font-weight:1000}
-  .cat .content a{
-    margin-top:6px;
-    display:inline-flex;
-    color:#fff;
-    text-decoration:none;
-    font-weight:1000;
-    background:rgba(255,255,255,.16);
-    border:1px solid rgba(255,255,255,.22);
-    padding:8px 10px;
-    border-radius:10px;
-  }
+/* =========================
+ CATEGORÍAS
+========================= */
+.cats{display:grid;grid-template-columns:1fr;gap:12px;margin:14px 0}
+@media (min-width:860px){.cats{grid-template-columns:repeat(4,1fr)}}
+.cat{
+  position:relative;border-radius:14px;overflow:hidden;
+  border:1px solid rgba(15,23,42,.10);
+  box-shadow:0 10px 26px rgba(2,6,23,.08);
+  min-height:120px
+}
+.cat img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.cat .layer{position:absolute;inset:0;background:linear-gradient(90deg,rgba(0,0,0,.35),transparent)}
+.cat .content{position:absolute;left:12px;bottom:12px;right:12px;color:#fff}
+.cat .content b{display:block;font-weight:1000}
+.cat .content a{
+  margin-top:6px;display:inline-flex;
+  color:#fff;text-decoration:none;
+  font-weight:1000;
+  background:rgba(255,255,255,.16);
+  border:1px solid rgba(255,255,255,.22);
+  padding:8px 10px;border-radius:10px
+}
 
-  /* TITULO SECCIÓN */
-  .block-title{
-    margin: 10px 0 10px;
-    font-weight:1000;
-    letter-spacing:-.5px;
-    color:#0b1220;
-    display:flex;align-items:center;justify-content:space-between;
-  }
+/* =========================
+ DESTACADOS
+========================= */
+.block-title{margin:10px 0;font-weight:1000;color:#0b1220}
+.gridP{display:grid;grid-template-columns:1fr;gap:12px}
+@media (min-width:860px){.gridP{grid-template-columns:repeat(4,1fr)}}
+.cardP{
+  background:#fff;border:1px solid rgba(15,23,42,.10);
+  box-shadow:0 10px 26px rgba(2,6,23,.08);
+  border-radius:14px;overflow:hidden
+}
+.cardP:hover{transform:translateY(-4px)}
+.ph{
+  background:#f1f5f9;height:165px;
+  position:relative;display:grid;place-items:center
+}
+.ph img{width:100%;height:100%;object-fit:cover}
+.sk{
+  position:absolute;inset:0;
+  background:linear-gradient(90deg,#e2e8f0,#f1f5f9,#e2e8f0);
+  background-size:200% 100%;
+  animation:sk 1.1s infinite
+}
+@keyframes sk{0%{background-position:0}100%{background-position:200%}}
+.fallback{
+  position:absolute;inset:0;display:none;
+  place-items:center;font-weight:1000;color:#475569
+}
+.body{padding:12px}
+.price{font-weight:1000}
+.buy{
+  margin-top:10px;display:inline-flex;
+  font-weight:1000;
+  background:#f59e0b;color:#111827;
+  padding:10px 12px;border-radius:10px;
+  text-decoration:none
+}
 
-  /* DESTACADOS */
-  .gridP{display:grid;grid-template-columns:1fr;gap:12px}
-  @media (min-width:860px){ .gridP{grid-template-columns:repeat(4,1fr)} }
-
-  .cardP{
-    background:#fff;
-    border:1px solid rgba(15,23,42,.10);
-    box-shadow:0 10px 26px rgba(2,6,23,.08);
-    border-radius:14px;
-    overflow:hidden;
-    transition: transform .2s cubic-bezier(.2,.9,.2,1);
-  }
-  .cardP:hover{transform: translateY(-4px)}
-
-  .ph{
-    background:#f1f5f9;
-    height:165px;
-    position:relative;
-    overflow:hidden;
-    display:grid;
-    place-items:center;
-  }
-  .ph img{
-    width:100%;height:100%;
-    object-fit:cover;
-    display:block;
-  }
-  .sk{
-    position:absolute; inset:0;
-    background: linear-gradient(90deg, rgba(226,232,240,.55) 0%, rgba(226,232,240,.25) 45%, rgba(226,232,240,.55) 100%);
-    background-size: 200% 100%;
-    animation: sk 1.1s ease-in-out infinite;
-  }
-  @keyframes sk{ 0%{background-position:0% 0} 100%{background-position:200% 0} }
-
-  .fallback{
-    position:absolute; inset:0;
-    display:none;
-    place-items:center;
-    text-align:center;
-    padding:10px;
-    color: rgba(11,18,32,.70);
-    font-weight:1000;
-  }
-
-  .body{padding:12px}
-  .topline{display:flex;align-items:center;justify-content:space-between;gap:10px}
-  .tag{
-    display:inline-flex;align-items:center;gap:6px;
-    padding:6px 10px;border-radius:999px;
-    font-weight:1000;font-size:.78rem;
-    border:1px solid rgba(15,23,42,.10);
-    background: rgba(255,255,255,.92);
-    color: rgba(11,18,32,.78);
-  }
-  .tag--cyan{border-color: rgba(6,182,212,.28)}
-  .tag--amber{border-color: rgba(245,158,11,.30)}
-  .tag--violet{border-color: rgba(168,85,247,.28)}
-  .tag--green{border-color: rgba(34,197,94,.28)}
-
-  .name{font-weight:1000;color:#0b1220;margin-top:8px}
-  .desc{margin-top:4px;color: rgba(11,18,32,.68);font-weight:800;font-size:.95rem;line-height:1.4}
-  .price{font-weight:1000;color:#0b1220}
-  .buy{
-    margin-top:10px;
-    display:inline-flex;
-    text-decoration:none;
-    font-weight:1000;
-    background:#f59e0b;
-    color:#111827;
-    padding:10px 12px;
-    border-radius:10px;
-    border:1px solid rgba(245,158,11,.35);
-  }
-
-  /* PROMO */
-  .ribbon{
-    margin:16px 0 10px;
-    border-radius:14px;
-    overflow:hidden;
-    border:1px solid rgba(15,23,42,.10);
-    box-shadow:0 10px 26px rgba(2,6,23,.08);
-  }
-  .ribbon img{width:100%;height:86px;object-fit:cover;display:block}
-
-  /* SERVICIOS */
-  .services{
-    display:grid;grid-template-columns:1fr;gap:10px;
-    background:#fff;border:1px solid rgba(15,23,42,.10);
-    border-radius:14px;padding:10px;
-    box-shadow:0 10px 26px rgba(2,6,23,.08);
-  }
-  @media (min-width:860px){ .services{grid-template-columns:repeat(3,1fr)} }
-  .svc{display:flex;align-items:center;gap:10px;padding:8px;border-radius:12px}
-  .svc img{width:54px;height:54px;object-fit:contain}
-  .svc b{display:block;font-weight:1000;color:#0b1220}
-  .svc span{display:block;color:rgba(11,18,32,.66);font-weight:800;font-size:.92rem}
-
-  /* BANNERS ABAJO */
-  .bottom{
-    margin:12px 0 0;
-    display:grid;grid-template-columns:1fr;gap:12px;
-  }
-  @media (min-width:860px){ .bottom{grid-template-columns:1fr 1fr} }
-  .bnr{
-    position:relative;
-    border-radius:14px;
-    overflow:hidden;
-    border:1px solid rgba(15,23,42,.10);
-    box-shadow:0 10px 26px rgba(2,6,23,.08);
-    background:#fff;
-  }
-  .bnr img{width:100%;height:180px;object-fit:cover;display:block}
-  .bnr .cta{
-    position:absolute;left:14px;bottom:14px;
-    background:rgba(255,255,255,.86);
-    border:1px solid rgba(15,23,42,.10);
-    border-radius:12px;
-    padding:10px 12px;
-  }
-  .bnr .cta b{display:block;font-weight:1000;color:#0b1220}
-  .bnr .cta a{
-    display:inline-flex;margin-top:6px;
-    text-decoration:none;font-weight:1000;
-    background:#2563eb;color:#fff;
-    padding:9px 11px;border-radius:10px
-  }
+/* =========================
+ SERVICIOS / PROMOS
+========================= */
+.services{
+  display:grid;grid-template-columns:1fr;gap:10px;
+  background:#fff;border:1px solid rgba(15,23,42,.10);
+  border-radius:14px;padding:10px;
+  box-shadow:0 10px 26px rgba(2,6,23,.08)
+}
+@media (min-width:860px){.services{grid-template-columns:repeat(3,1fr)}}
+.svc{display:flex;gap:10px;align-items:center}
+.svc img{width:54px;height:54px;object-fit:contain}
+.svc b{display:block;font-weight:1000}
+.svc span{display:block;color:rgba(11,18,32,.66);font-size:.92rem;font-weight:800}
 </style>
 {% endblock %}
 
@@ -238,177 +154,95 @@
 
     <!-- HERO -->
     <div class="hero-wrap">
-      <div class="hero" aria-label="Hero principal">
-        <img class="hero-img" src="{{ url_for('static', filename='img/banners/hero_home.png') }}" alt="Hero principal" loading="eager" decoding="async">
+      <div class="hero">
+        <img class="hero-img"
+             src="{{ url_for('static', filename='img/banners/hero_home.png') }}"
+             alt="Nueva colección urbana Skyline Store"
+             loading="eager" decoding="async">
         <div class="hero-overlay">
           <div class="hero-left">
-            <h1>NUEVA<br>COLECCIÓN<br><span class="accent">URBANA</span></h1>
-            <a class="hero-btn" href="/shop">COMPRAR AHORA</a>
+            <h1 aria-label="Nueva colección urbana Skyline Store">
+              NUEVA<br>COLECCIÓN<br><span class="accent">URBANA</span>
+            </h1>
+            <a class="hero-btn" href="{{ url_for('main.shop') }}">COMPRAR AHORA</a>
           </div>
-        </div>
-        <div class="dots" aria-hidden="true">
-          <span></span><span class="on"></span><span></span><span></span>
         </div>
       </div>
     </div>
 
     <!-- CATEGORÍAS -->
-    <div class="cats" aria-label="Categorías principales">
+    <div class="cats">
       <div class="cat">
-        <img src="{{ url_for('static', filename='img/banners/cat_men.png') }}" alt="Moda masculina" loading="lazy" decoding="async">
+        <img src="{{ url_for('static', filename='img/banners/cat_men.png') }}" alt="Moda masculina" loading="lazy">
         <div class="layer"></div>
-        <div class="content">
-          <b>Moda Masculina</b>
-          <a href="/shop?categoria=ropa&sub=masculina">VER MÁS ›</a>
+        <div class="content"><b>Moda Masculina</b>
+          <a href="{{ url_for('main.shop') }}?categoria=ropa&sub=masculina">VER MÁS</a>
         </div>
       </div>
-
       <div class="cat">
-        <img src="{{ url_for('static', filename='img/banners/cat_women.png') }}" alt="Moda femenina" loading="lazy" decoding="async">
+        <img src="{{ url_for('static', filename='img/banners/cat_women.png') }}" alt="Moda femenina" loading="lazy">
         <div class="layer"></div>
-        <div class="content">
-          <b>Moda Femenina</b>
-          <a href="/shop?categoria=ropa&sub=femenina">VER MÁS ›</a>
+        <div class="content"><b>Moda Femenina</b>
+          <a href="{{ url_for('main.shop') }}?categoria=ropa&sub=femenina">VER MÁS</a>
         </div>
       </div>
-
       <div class="cat">
-        <img src="{{ url_for('static', filename='img/banners/cat_accessories.png') }}" alt="Accesorios" loading="lazy" decoding="async">
+        <img src="{{ url_for('static', filename='img/banners/cat_accessories.png') }}" alt="Accesorios" loading="lazy">
         <div class="layer"></div>
-        <div class="content">
-          <b>Accesorios</b>
-          <a href="/shop?categoria=accesorios">VER MÁS ›</a>
+        <div class="content"><b>Accesorios</b>
+          <a href="{{ url_for('main.shop') }}?categoria=accesorios">VER MÁS</a>
         </div>
       </div>
-
       <div class="cat">
-        <img src="{{ url_for('static', filename='img/banners/cat_tech.png') }}" alt="Gadgets y tecnología" loading="lazy" decoding="async">
+        <img src="{{ url_for('static', filename='img/banners/cat_tech.png') }}" alt="Tecnología" loading="lazy">
         <div class="layer"></div>
-        <div class="content">
-          <b>Gadgets & Tech</b>
-          <a href="/shop?categoria=tecnologia">VER MÁS ›</a>
+        <div class="content"><b>Gadgets & Tech</b>
+          <a href="{{ url_for('main.shop') }}?categoria=tecnologia">VER MÁS</a>
         </div>
       </div>
     </div>
 
-    <!-- DESTACADOS (YA CONECTADO A TU "featured") -->
-    <div class="block-title">
-      <div>PRODUCTOS DESTACADOS</div>
-      <div style="opacity:.65;font-weight:900">‹ ›</div>
-    </div>
-
-    {# fallback por si alguna vez venís sin featured #}
-    {% set featured_list = featured if featured is defined else [] %}
-
+    <!-- DESTACADOS -->
+    <div class="block-title">PRODUCTOS DESTACADOS</div>
+    {% set featured_list = featured if featured is defined and featured is iterable else [] %}
     <div class="gridP">
       {% for p in featured_list %}
-      <article class="cardP" aria-label="Producto destacado">
+      <article class="cardP">
         <div class="ph">
-          <div class="sk" aria-hidden="true"></div>
-
-          {# ✅ Cambiá acá si tus imágenes están en otra carpeta #}
-          <img
-            src="{{ url_for('static', filename='img/products/' ~ p.img) }}"
-            alt="{{ p.title }}"
-            loading="lazy"
-            decoding="async"
-            data-fallback="1"
-          >
-
-          <div class="fallback" aria-hidden="true">
-            {{ p.title }}<br>
-            <span style="opacity:.7;font-size:.9rem;">Imagen faltante</span>
-          </div>
+          <div class="sk"></div>
+          <img src="{{ url_for('static', filename='img/products/' ~ p.img) }}"
+               alt="{{ p.title }}" loading="lazy" data-fallback>
+          <div class="fallback">Imagen no disponible</div>
         </div>
-
         <div class="body">
-          <div class="topline">
-            <span class="tag {{ p.tag_cls }}">{{ p.tag }}</span>
-            <span class="price">{{ p.price }}</span>
-          </div>
-
+          <div class="price">{{ p.price }}</div>
           <div class="name">{{ p.title }}</div>
-          <div class="desc">{{ p.desc }}</div>
-
           <a class="buy" href="{{ p.href }}">COMPRAR</a>
         </div>
       </article>
       {% endfor %}
-
-      {% if featured_list|length == 0 %}
-      <div style="padding:14px;background:#fff;border:1px solid rgba(15,23,42,.10);border-radius:14px;box-shadow:0 10px 26px rgba(2,6,23,.08);font-weight:900;color:rgba(11,18,32,.70)">
-        No hay destacados aún. Agregá productos a <code>featured</code> en tu ruta <code>/</code>.
-      </div>
-      {% endif %}
-    </div>
-
-    <!-- PROMO -->
-    <div class="ribbon" aria-label="Super ofertas">
-      <img src="{{ url_for('static', filename='img/banners/promo_week.png') }}" alt="Super ofertas de la semana" loading="lazy" decoding="async">
     </div>
 
     <!-- SERVICIOS -->
-    <div class="services" aria-label="Servicios">
-      <div class="svc">
-        <img src="{{ url_for('static', filename='img/banners/service_shipping.png') }}" alt="Envío rápido" loading="lazy" decoding="async">
-        <div><b>ENVÍO RÁPIDO</b><span>24/48hs</span></div>
-      </div>
-      <div class="svc">
-        <img src="{{ url_for('static', filename='img/banners/service_payment.png') }}" alt="Pago seguro" loading="lazy" decoding="async">
-        <div><b>PAGO SEGURO</b><span>con Mercado Pago</span></div>
-      </div>
-      <div class="svc">
-        <img src="{{ url_for('static', filename='img/banners/service_support.png') }}" alt="Soporte 24/7" loading="lazy" decoding="async">
-        <div><b>SOPORTE 24/7</b><span>Atención al Cliente</span></div>
-      </div>
-    </div>
-
-    <!-- BANNERS INFERIORES -->
-    <div class="bottom" aria-label="Secciones inferiores">
-      <div class="bnr">
-        <img src="{{ url_for('static', filename='img/banners/banner_new_arrivals.png') }}" alt="Nuevos ingresos" loading="lazy" decoding="async">
-        <div class="cta">
-          <b>NUEVOS INGRESOS</b>
-          <a href="/shop?nuevo=1">VER MÁS</a>
-        </div>
-      </div>
-
-      <div class="bnr">
-        <img src="{{ url_for('static', filename='img/banners/banner_blog.png') }}" alt="Últimos artículos" loading="lazy" decoding="async">
-        <div class="cta">
-          <b>ÚLTIMOS ARTÍCULOS</b>
-          <a href="/blog">LEER BLOG</a>
-        </div>
-      </div>
+    <div class="services" style="margin-top:14px">
+      <div class="svc"><img src="{{ url_for('static','img/banners/service_shipping.png') }}"><div><b>ENVÍO RÁPIDO</b><span>24/48hs</span></div></div>
+      <div class="svc"><img src="{{ url_for('static','img/banners/service_payment.png') }}"><div><b>PAGO SEGURO</b><span>Plataformas certificadas</span></div></div>
+      <div class="svc"><img src="{{ url_for('static','img/banners/service_support.png') }}"><div><b>SOPORTE 24/7</b><span>Atención al cliente</span></div></div>
     </div>
 
   </div>
 </div>
 
 <script>
-  // ✅ Quita skeleton + fallback si falta imagen (sin errores)
-  (function(){
-    const imgs = document.querySelectorAll('img[data-fallback="1"]');
-    imgs.forEach(img => {
-      const wrap = img.closest(".ph");
-      const sk = wrap ? wrap.querySelector(".sk") : null;
-      const fb = wrap ? wrap.querySelector(".fallback") : null;
-
-      const done = () => { if(sk) sk.style.display = "none"; };
-      const fail = () => {
-        if(fb) fb.style.display = "grid";
-        img.style.display = "none";
-        done();
-      };
-
-      img.addEventListener("load", done, { once:true });
-      img.addEventListener("error", fail, { once:true });
-
-      if(img.complete){
-        if(img.naturalWidth > 0) done();
-        else fail();
-      }
-    });
-  })();
+(function(){
+  document.querySelectorAll('img[data-fallback]').forEach(img=>{
+    const ph=img.closest('.ph'),sk=ph?.querySelector('.sk'),fb=ph?.querySelector('.fallback');
+    const ok=()=>sk&&(sk.style.display='none');
+    const bad=()=>{img.style.display='none';fb&&(fb.style.display='grid');ok();}
+    img.addEventListener('load',ok,{once:true});
+    img.addEventListener('error',bad,{once:true});
+    if(img.complete){img.naturalWidth?ok():bad();}
+  });
+})();
 </script>
 {% endblock %}

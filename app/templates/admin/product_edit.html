@@ -1,119 +1,178 @@
-{# app/templates/admin/product_edit.html — Editor PRO #}
+{# app/templates/admin/product_edit.html — PRODUCT EDITOR ULTRA PRO (FINAL) #}
 {% extends "admin/base_admin.html" %}
-{% block title %}{% if product %}Editar · {{ product.title if product.title is defined else product.name }}{% else %}Nuevo producto{% endif %}{% endblock %}
+
+{% block title %}
+  {% if product %}
+    Editar · {{ product.title if product.title is defined else product.name }}
+  {% else %}
+    Nuevo producto
+  {% endif %}
+{% endblock %}
 
 {% block content %}
-  <h1 style="margin:.2rem 0 0;font-weight:1000;letter-spacing:-.5px">
-    {% if product %}Editar producto{% else %}Nuevo producto{% endif %}
-  </h1>
-  <p class="muted" style="margin:.45rem 0 1rem">
-    Título, precio, stock, categoría, imagen y links externos (Temu/Dropshipping).
-  </p>
 
-  <form method="post"
-        enctype="multipart/form-data"
-        action="{% if product %}{{ url_for('admin.products_update', product_id=product.id) }}{% else %}{{ url_for('admin.products_create') }}{% endif %}">
+<h1 style="margin:.2rem 0 0;font-weight:1000;letter-spacing:-.5px">
+  {% if product %}Editar producto{% else %}Nuevo producto{% endif %}
+</h1>
 
-    <div class="row cols2">
-      <div>
-        <label>Título</label>
-        <input name="title" value="{{ (product.title if product and product.title is defined else (product.name if product else '')) }}" required>
-      </div>
-      <div>
-        <label>Slug</label>
-        <input name="slug" value="{{ product.slug if product and product.slug is defined else '' }}" placeholder="auto si lo dejás vacío">
-      </div>
+<p class="muted" style="margin:.45rem 0 1rem">
+  Gestión completa del producto: contenido, precio, stock, categoría, origen e imagen.
+</p>
+
+<form method="post"
+      enctype="multipart/form-data"
+      action="{% if product %}{{ url_for('admin.products_update', product_id=product.id) }}{% else %}{{ url_for('admin.products_create') }}{% endif %}">
+
+  <!-- ================= DATOS BÁSICOS ================= -->
+  <section class="row cols2">
+    <div>
+      <label>Título</label>
+      <input name="title"
+             required
+             value="{{ product.title if product and product.title is defined else (product.name if product else '') }}">
     </div>
 
-    <div class="row">
-      <div>
-        <label>Descripción</label>
-        <textarea name="description" placeholder="Descripción / detalles">{{ product.description if product and product.description is defined and product.description else '' }}</textarea>
-      </div>
+    <div>
+      <label>Slug (URL)</label>
+      <input name="slug"
+             value="{{ product.slug if product and product.slug is defined else '' }}"
+             placeholder="auto si lo dejás vacío">
+      <p class="muted" style="font-size:.85rem;margin-top:4px">
+        Se genera automáticamente si lo dejás vacío.
+      </p>
+    </div>
+  </section>
+
+  <section class="row">
+    <div>
+      <label>Descripción</label>
+      <textarea name="description"
+                placeholder="Descripción completa, detalles, especificaciones…">{{ product.description if product and product.description is defined else '' }}</textarea>
+    </div>
+  </section>
+
+  <!-- ================= PRECIO / STOCK ================= -->
+  <section class="row cols3">
+    <div>
+      <label>Precio</label>
+      <input name="price" type="number" step="0.01"
+             value="{{ product.price if product and product.price is defined else 0 }}">
     </div>
 
-    <div class="row cols3">
-      <div>
-        <label>Precio</label>
-        <input name="price" type="number" step="0.01" value="{{ product.price if product and product.price is defined else 0 }}">
-      </div>
-      <div>
-        <label>Stock</label>
-        <input name="stock" type="number" value="{{ product.stock if product and product.stock is defined else 0 }}">
-      </div>
-      <div>
-        <label>Estado</label>
-        <select name="status">
-          {% set st = (product.status if product and product.status is defined else 'active') %}
-          <option value="active" {% if st=='active' %}selected{% endif %}>active</option>
-          <option value="draft" {% if st=='draft' %}selected{% endif %}>draft</option>
-          <option value="hidden" {% if st=='hidden' %}selected{% endif %}>hidden</option>
-        </select>
-      </div>
+    <div>
+      <label>Stock</label>
+      <input name="stock" type="number"
+             value="{{ product.stock if product and product.stock is defined else 0 }}">
     </div>
 
-    <div class="row cols3">
-      <div>
-        <label>Categoría</label>
-        <select name="category_id">
-          <option value="">(sin categoría)</option>
-          {% for c in categories %}
-            <option value="{{ c.id }}" {% if product and product.category_id is defined and product.category_id==c.id %}selected{% endif %}>
-              {{ c.name }}
-            </option>
-          {% endfor %}
-        </select>
-      </div>
+    <div>
+      <label>Estado</label>
+      {% set st = product.status if product and product.status is defined else 'active' %}
+      <select name="status">
+        <option value="active" {% if st == 'active' %}selected{% endif %}>Activo</option>
+        <option value="draft" {% if st == 'draft' %}selected{% endif %}>Borrador</option>
+        <option value="hidden" {% if st == 'hidden' %}selected{% endif %}>Oculto</option>
+      </select>
+    </div>
+  </section>
 
-      <div>
-        <label>Origen (source)</label>
-        {% set src = (product.source if product and product.source is defined else 'manual') %}
-        <select name="source">
-          <option value="manual" {% if src=='manual' %}selected{% endif %}>manual</option>
-          <option value="printful" {% if src=='printful' %}selected{% endif %}>printful</option>
-          <option value="dropship" {% if src=='dropship' %}selected{% endif %}>dropship</option>
-          <option value="temu" {% if src=='temu' %}selected{% endif %}>temu</option>
-        </select>
-      </div>
-
-      <div>
-        <label>Link externo</label>
-        <input name="external_url" value="{{ product.external_url if product and product.external_url is defined and product.external_url else '' }}" placeholder="https://...">
-      </div>
+  <!-- ================= CATEGORÍA / ORIGEN ================= -->
+  <section class="row cols3">
+    <div>
+      <label>Categoría</label>
+      <select name="category_id">
+        <option value="">(sin categoría)</option>
+        {% for c in categories %}
+          <option value="{{ c.id }}"
+                  {% if product and product.category_id is defined and product.category_id == c.id %}selected{% endif %}>
+            {{ c.name }}
+          </option>
+        {% endfor %}
+      </select>
     </div>
 
-    <div class="row cols2" style="align-items:start">
-      <div>
-        <label>Imagen</label>
-        <input name="image" type="file" accept=".png,.jpg,.jpeg,.webp">
-        <p class="muted" style="margin:.6rem 0 0;font-size:.92rem">Se guarda en <code>/static/uploads/products</code></p>
-      </div>
-      <div>
-        <label>Preview</label>
-        <div style="border:1px solid rgba(148,163,184,.16);border-radius:16px;padding:10px;background:rgba(255,255,255,.04);display:flex;gap:10px;align-items:center">
-          <div style="width:70px;height:70px;border-radius:14px;overflow:hidden;border:1px solid rgba(148,163,184,.16);background:rgba(255,255,255,.06);display:grid;place-items:center">
-            {% if product and product.image_url is defined and product.image_url %}
-              <img src="{{ product.image_url }}" alt="img" style="width:100%;height:100%;object-fit:cover">
-            {% else %}
-              <span class="muted" style="font-size:.85rem">sin img</span>
-            {% endif %}
-          </div>
-          <div class="muted" style="font-size:.92rem">
-            {% if product and product.image_url is defined and product.image_url %}<div style="font-weight:950;color:#e5e7eb">OK</div>{% endif %}
-            <div style="word-break:break-all">{{ product.image_url if product and product.image_url is defined and product.image_url else '' }}</div>
-          </div>
+    <div>
+      <label>Origen del producto</label>
+      {% set src = product.source if product and product.source is defined else 'manual' %}
+      <select name="source">
+        <option value="manual" {% if src == 'manual' %}selected{% endif %}>Manual</option>
+        <option value="printful" {% if src == 'printful' %}selected{% endif %}>Printful</option>
+        <option value="dropship" {% if src == 'dropship' %}selected{% endif %}>Dropshipping</option>
+        <option value="temu" {% if src == 'temu' %}selected{% endif %}>Temu</option>
+      </select>
+    </div>
+
+    <div>
+      <label>Link externo (opcional)</label>
+      <input name="external_url"
+             placeholder="https://proveedor.com/producto"
+             value="{{ product.external_url if product and product.external_url is defined else '' }}">
+    </div>
+  </section>
+
+  <!-- ================= IMAGEN ================= -->
+  <section class="row cols2" style="align-items:start">
+    <div>
+      <label>Imagen del producto</label>
+      <input name="image" type="file" accept=".png,.jpg,.jpeg,.webp">
+      <p class="muted" style="margin:.5rem 0 0;font-size:.85rem">
+        Se guarda en <code>/static/uploads/products</code>
+      </p>
+    </div>
+
+    <div>
+      <label>Vista previa</label>
+      <div style="border:1px solid rgba(148,163,184,.16);
+                  border-radius:16px;
+                  padding:10px;
+                  background:rgba(255,255,255,.04);
+                  display:flex;
+                  gap:12px;
+                  align-items:center">
+
+        <div style="width:72px;height:72px;
+                    border-radius:14px;
+                    overflow:hidden;
+                    border:1px solid rgba(148,163,184,.16);
+                    background:rgba(255,255,255,.06);
+                    display:grid;place-items:center">
+          {% if product and product.image_url %}
+            <img src="{{ product.image_url }}"
+                 alt="Imagen producto"
+                 style="width:100%;height:100%;object-fit:cover">
+          {% else %}
+            <span class="muted" style="font-size:.8rem">Sin imagen</span>
+          {% endif %}
+        </div>
+
+        <div class="muted" style="font-size:.9rem;word-break:break-all">
+          {% if product and product.image_url %}
+            <div style="font-weight:950;color:#e5e7eb">Imagen cargada</div>
+            {{ product.image_url }}
+          {% else %}
+            No hay imagen asignada
+          {% endif %}
         </div>
       </div>
     </div>
+  </section>
 
-    <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">
-      <button class="btn" type="submit">Guardar</button>
-      <a class="btn2" href="{{ url_for('admin.products_list') }}">Volver</a>
-      {% if product %}
-        <form method="post" action="{{ url_for('admin.products_delete', product_id=product.id) }}" onsubmit="return confirm('Eliminar producto?')" style="margin:0">
-          <button class="btn2" type="submit">Eliminar</button>
-        </form>
-      {% endif %}
-    </div>
-  </form>
+  <!-- ================= ACCIONES ================= -->
+  <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">
+    <button class="btn" type="submit">💾 Guardar producto</button>
+    <a class="btn2" href="{{ url_for('admin.products_list') }}">⬅ Volver</a>
+
+    {% if product %}
+      <button class="btn2"
+              type="submit"
+              formaction="{{ url_for('admin.products_delete', product_id=product.id) }}"
+              formmethod="post"
+              onclick="return confirm('¿Eliminar este producto definitivamente?')">
+        🗑 Eliminar
+      </button>
+    {% endif %}
+  </div>
+
+</form>
+
 {% endblock %}

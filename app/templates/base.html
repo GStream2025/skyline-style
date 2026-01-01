@@ -7,7 +7,12 @@
   <meta name="color-scheme" content="light" />
   <title>{% block title %}Skyline Store{% endblock %}</title>
 
-  <!-- Mejoras: preconnect + fuentes seguras (sin depender de CDN obligatorio) -->
+  <!-- CSRF global (si existe en session). No rompe si no existe. -->
+  <meta name="csrf-token" content="{{ session.get('csrf_token','') if session else '' }}"/>
+
+  <!-- Opcional SEO básico -->
+  <meta name="description" content="Skyline Store — tienda online con estilo, ofertas y productos premium." />
+
   <style>
     :root{
       --bg:#f6f7fb;
@@ -43,7 +48,18 @@
     img{max-width:100%;display:block}
     .container{max-width:var(--max);margin:0 auto;padding:0 18px}
 
-    /* ===== TOPBAR (igual a la imagen) ===== */
+    /* Skip link (A11y) */
+    .skip{
+      position:absolute; left:-9999px; top:10px;
+      background:#fff; border:1px solid var(--stroke);
+      padding:10px 12px; border-radius:12px;
+      box-shadow: var(--shadow1);
+      font-weight:1000;
+      z-index:9999;
+    }
+    .skip:focus{left:10px}
+
+    /* ===== TOPBAR ===== */
     .topbar{
       position:sticky; top:0; z-index:50;
       background: rgba(255,255,255,.92);
@@ -123,6 +139,40 @@
     }
     .search button:hover{transform: translateY(-1px)}
 
+    .actions{display:flex; align-items:center; gap:10px}
+
+    /* Cart icon button */
+    .icon-btn{
+      position:relative;
+      width:44px;height:44px;
+      border-radius:999px;
+      border:1px solid rgba(15,23,42,.10);
+      background:#fff;
+      cursor:pointer;
+      display:grid; place-items:center;
+      text-decoration:none;
+      transition: transform .2s var(--ease), box-shadow .2s var(--ease);
+    }
+    .icon-btn:hover{transform: translateY(-1px); box-shadow: 0 10px 18px rgba(2,6,23,.10)}
+
+    .badge{
+      position:absolute;
+      top:-6px; right:-6px;
+      min-width:20px; height:20px;
+      padding:0 6px;
+      border-radius:999px;
+      background: linear-gradient(90deg, var(--a), var(--b), var(--c));
+      color:#fff;
+      display:none;
+      align-items:center;
+      justify-content:center;
+      font-size:12px;
+      font-weight:1000;
+      box-shadow: 0 8px 16px rgba(2,6,23,.14);
+      border: 2px solid #fff;
+    }
+    .badge.is-on{display:flex}
+
     /* Cuenta */
     .account{
       display:flex; align-items:center; gap:8px;
@@ -176,7 +226,7 @@
       .mobile{display:none!important}
     }
 
-    /* Flash messages (si tu backend los usa) */
+    /* Flash */
     .flash-wrap{padding: 10px 0}
     .flash{
       background:#fff;
@@ -188,7 +238,29 @@
       font-weight:900;
     }
 
-    /* Footer tipo imagen (simple y prolijo) */
+    /* Offline banner */
+    .offline{
+      display:none;
+      margin: 10px 0 0;
+      background: rgba(245,158,11,.12);
+      border: 1px solid rgba(245,158,11,.25);
+      color: rgba(11,18,32,.85);
+      border-radius: 14px;
+      padding: 10px 12px;
+      font-weight:950;
+      box-shadow: var(--shadow1);
+    }
+    .offline.is-on{display:flex;align-items:center;justify-content:space-between;gap:12px}
+    .offline button{
+      border:1px solid rgba(15,23,42,.12);
+      background:#fff;
+      border-radius:999px;
+      padding:8px 10px;
+      font-weight:1000;
+      cursor:pointer;
+    }
+
+    /* Footer */
     footer{
       margin-top: 30px;
       background: linear-gradient(180deg, #ffffff, #f3f6ff);
@@ -233,23 +305,67 @@
       font-size:.92rem;
     }
 
-    /* Accesibilidad: focus visible */
+    /* Focus visible */
     :focus-visible{
       outline:none;
       box-shadow: 0 0 0 4px rgba(37,99,235,.18);
       border-radius: 10px;
     }
-
-    /* Motion-safe */
     @media (prefers-reduced-motion: reduce){
       *{transition:none!important; scroll-behavior:auto!important}
     }
+
+    /* ===== Toaster ===== */
+    .toasts{
+      position: fixed;
+      right: 14px;
+      bottom: 14px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      z-index: 9999;
+      pointer-events:none;
+    }
+    .toast{
+      pointer-events:auto;
+      width: min(360px, calc(100vw - 28px));
+      background:#fff;
+      border:1px solid rgba(15,23,42,.10);
+      box-shadow: var(--shadow2);
+      border-radius: 14px;
+      padding: 12px 12px;
+      display:flex;
+      gap:10px;
+      align-items:flex-start;
+      transform: translateY(12px);
+      opacity:0;
+      transition: transform .25s var(--ease), opacity .25s var(--ease);
+    }
+    .toast.is-on{transform: translateY(0); opacity:1}
+    .toast .dot{
+      width:12px;height:12px;border-radius:999px;margin-top:4px;
+      background: linear-gradient(90deg, var(--a), var(--b), var(--c));
+      flex: 0 0 auto;
+    }
+    .toast .t-title{font-weight:1000; font-size:.95rem; color: rgba(11,18,32,.90)}
+    .toast .t-msg{font-weight:850; font-size:.86rem; color: rgba(11,18,32,.62); margin-top:2px; line-height:1.25}
+    .toast .t-close{
+      margin-left:auto;
+      border:0;
+      background:transparent;
+      cursor:pointer;
+      font-weight:1000;
+      opacity:.65;
+    }
+    .toast .t-close:hover{opacity:1}
   </style>
 
   {% block extra_head %}{% endblock %}
 </head>
 
 <body>
+  <a class="skip" href="#main">Saltar al contenido</a>
+
   <!-- TOPBAR -->
   <header class="topbar">
     <div class="container topbar-inner">
@@ -271,12 +387,19 @@
         <button type="submit" aria-label="Buscar">🔎</button>
       </form>
 
-      <a class="account" href="/account" aria-label="Mi cuenta">
-        <span class="acc-ico" aria-hidden="true">👤</span>
-        <span>Mi Cuenta</span>
-      </a>
+      <div class="actions">
+        <a class="icon-btn" href="/cart" aria-label="Carrito">
+          🛒
+          <span class="badge" data-cart-badge>0</span>
+        </a>
 
-      <button class="burger" type="button" aria-label="Abrir menú" aria-expanded="false" id="burger">☰</button>
+        <a class="account" href="/account" aria-label="Mi cuenta">
+          <span class="acc-ico" aria-hidden="true">👤</span>
+          <span>Mi Cuenta</span>
+        </a>
+
+        <button class="burger" type="button" aria-label="Abrir menú" aria-expanded="false" id="burger">☰</button>
+      </div>
     </div>
 
     <div class="mobile" id="mobileMenu" aria-label="Menú móvil">
@@ -285,11 +408,19 @@
       <a href="/shop?categoria=accesorios">Accesorios</a>
       <a href="/shop?categoria=tecnologia">Tecnología</a>
       <a href="/shop?ofertas=1">Ofertas</a>
+      <a href="/cart">Carrito</a>
       <a href="/account">Mi Cuenta</a>
+    </div>
+
+    <div class="container">
+      <div class="offline" id="offlineBanner" role="status" aria-live="polite">
+        <span>Estás sin conexión. Algunas acciones pueden fallar.</span>
+        <button type="button" id="offlineRetry">Reintentar</button>
+      </div>
     </div>
   </header>
 
-  <!-- FLASH (opcional si tu backend usa flashes) -->
+  <!-- FLASH -->
   <div class="container flash-wrap">
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
@@ -301,7 +432,7 @@
   </div>
 
   <!-- CONTENIDO -->
-  <main>
+  <main id="main">
     {% block content %}{% endblock %}
   </main>
 
@@ -329,21 +460,197 @@
     </div>
 
     <div class="copyright">
-      © {{ 2025 }} Skyline Store. Todos los derechos reservados.
+      © <span id="year"></span> Skyline Store. Todos los derechos reservados.
     </div>
   </footer>
 
+  <!-- TOASTER -->
+  <div class="toasts" aria-live="polite" aria-label="Notificaciones" id="toasts"></div>
+
   <script>
-    // Menú móvil sin errores
+    // ===== Año automático (sin tocar backend) =====
+    (function(){
+      const y = document.getElementById('year');
+      if(y) y.textContent = String(new Date().getFullYear());
+    })();
+
+    // ===== Menú móvil =====
     (function(){
       const btn = document.getElementById("burger");
       const menu = document.getElementById("mobileMenu");
       if(!btn || !menu) return;
-
       btn.addEventListener("click", () => {
         const open = menu.classList.toggle("is-open");
         btn.setAttribute("aria-expanded", open ? "true" : "false");
       });
+    })();
+
+    // ===== Toast global =====
+    (function(){
+      const host = document.getElementById('toasts');
+      if(!host) return;
+
+      const toast = (title, message, opts={}) => {
+        const t = document.createElement('div');
+        t.className = 'toast';
+        t.innerHTML = `
+          <div class="dot" aria-hidden="true"></div>
+          <div class="t-body">
+            <div class="t-title">${String(title || 'Listo')}</div>
+            ${message ? `<div class="t-msg">${String(message)}</div>` : ``}
+          </div>
+          <button class="t-close" aria-label="Cerrar">✕</button>
+        `;
+        host.appendChild(t);
+
+        const close = () => {
+          t.classList.remove('is-on');
+          setTimeout(() => t.remove(), 240);
+        };
+        t.querySelector('.t-close')?.addEventListener('click', close);
+
+        requestAnimationFrame(() => t.classList.add('is-on'));
+        const ms = Math.max(2200, Math.min(6500, parseInt(opts.timeout || 3200, 10)));
+        setTimeout(close, ms);
+      };
+
+      window.toast = toast;
+    })();
+
+    // ===== Offline banner =====
+    (function(){
+      const box = document.getElementById('offlineBanner');
+      const btn = document.getElementById('offlineRetry');
+      if(!box) return;
+
+      const set = () => box.classList.toggle('is-on', !navigator.onLine);
+      window.addEventListener('online', set);
+      window.addEventListener('offline', set);
+      set();
+
+      if(btn){
+        btn.addEventListener('click', () => {
+          window.location.reload();
+        });
+      }
+    })();
+
+    // ===== Fetch helpers (timeout + retry) =====
+    (function(){
+      const csrf = (document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '').trim();
+
+      const withTimeout = (ms, promise) => {
+        const c = new AbortController();
+        const t = setTimeout(() => c.abort(), ms);
+        return Promise.race([
+          promise(c.signal).finally(() => clearTimeout(t)),
+        ]);
+      };
+
+      const _req = async (method, url, body, tries=2) => {
+        const headers = {'Accept':'application/json'};
+        if(method !== 'GET') headers['Content-Type'] = 'application/json';
+        if(csrf) headers['X-CSRF-Token'] = csrf;
+
+        let lastErr = null;
+
+        for(let i=0;i<tries;i++){
+          try{
+            const res = await withTimeout(8000, (signal) => fetch(url, {
+              method,
+              headers,
+              body: (method === 'GET') ? undefined : JSON.stringify(body || {}),
+              credentials: 'same-origin',
+              signal
+            }));
+
+            let data = null;
+            try { data = await res.json(); } catch(e) {}
+
+            if(!res.ok){
+              const msg = (data && data.error && (data.error.message || data.error)) ? (data.error.message || data.error) : 'Ocurrió un error.';
+              throw new Error(msg);
+            }
+            return data;
+          }catch(e){
+            lastErr = e;
+            // retry solo en errores de red/timeout
+            const isAbort = (String(e && e.name) === 'AbortError');
+            const isNetwork = !navigator.onLine || isAbort || String(e.message || '').toLowerCase().includes('failed');
+            if(i < tries-1 && isNetwork){
+              await new Promise(r => setTimeout(r, 350 + i*350));
+              continue;
+            }
+            throw e;
+          }
+        }
+        throw lastErr || new Error('Error');
+      };
+
+      window.apiGet  = (url) => _req('GET', url, null, 2);
+      window.apiPost = (url, body) => _req('POST', url, body, 2);
+    })();
+
+    // ===== CartStore (cache + sincronización entre pestañas) =====
+    (function(){
+      const KEY = 'skyline:cart:snap:v1';
+      const badge = document.querySelector('[data-cart-badge]');
+      const bc = ('BroadcastChannel' in window) ? new BroadcastChannel('skyline_cart') : null;
+
+      const read = () => {
+        try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch(e){ return null; }
+      };
+      const write = (snap) => {
+        try { localStorage.setItem(KEY, JSON.stringify(snap)); } catch(e){}
+        if(bc) bc.postMessage({type:'cart', snap});
+        window.dispatchEvent(new CustomEvent('cart:updated', {detail:{snap}}));
+      };
+
+      const setBadge = (snap) => {
+        if(!badge) return;
+        const count = snap && typeof snap.items_count === 'number' ? snap.items_count : 0;
+        badge.textContent = String(count);
+        badge.classList.toggle('is-on', count > 0);
+      };
+
+      // init from cache
+      setBadge(read());
+
+      // sync across tabs
+      if(bc){
+        bc.onmessage = (ev) => {
+          if(ev && ev.data && ev.data.type === 'cart'){
+            setBadge(ev.data.snap);
+            try { localStorage.setItem(KEY, JSON.stringify(ev.data.snap)); } catch(e){}
+          }
+        };
+      }
+
+      // fetch fresh (best effort)
+      window.CartStore = {
+        async refresh(){
+          try{
+            const d = await window.apiGet('/cart/json');
+            const snap = d && d.cart ? d.cart : null;
+            if(snap) write(snap);
+            setBadge(snap);
+            return snap;
+          }catch(e){
+            // si falla, mantenemos cache
+            return read();
+          }
+        },
+        update(snap){
+          write(snap);
+          setBadge(snap);
+        },
+        get(){
+          return read();
+        }
+      };
+
+      // warmup
+      setTimeout(() => { window.CartStore.refresh(); }, 120);
     })();
   </script>
 

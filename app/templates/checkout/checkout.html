@@ -1,0 +1,583 @@
+{# app/templates/checkout.html — SKYLINE CHECKOUT ULTRA PRO (Final v2) #}
+{% extends "base.html" %}
+
+{% block title %}Finalizar compra · Skyline Store{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* =========================================================
+     SKYLINE CHECKOUT — ULTRA PRO (Final v2)
+     - Works with or without Tailwind
+     - Uses base.html global toast/api helpers if present
+     - Fallbacks for cart/cart_items/cart_total/payment_methods
+     - A11y + robust validation + no alerts
+  ========================================================== */
+
+  .ck-wrap{max-width:1120px;margin:0 auto;padding:clamp(18px,3vw,30px) 16px 70px}
+  .ck-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:18px 0 14px}
+  .ck-title{margin:0;font-weight:1000;letter-spacing:-.6px;font-size:clamp(1.75rem,3vw,2.35rem)}
+  .ck-sub{margin:.35rem 0 0;opacity:.78;max-width:70ch;line-height:1.5}
+
+  .ck-grid{display:grid;grid-template-columns:1fr;gap:16px;align-items:start}
+  @media(min-width:980px){.ck-grid{grid-template-columns:1.55fr .95fr;gap:18px}}
+
+  .ck-card{
+    border-radius:22px;
+    border:1px solid rgba(148,163,184,.18);
+    background: rgba(255,255,255,.72);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 18px 46px rgba(15,23,42,.12);
+    overflow:hidden;
+  }
+  @media (prefers-color-scheme: dark){
+    .ck-card{background: rgba(255,255,255,.06); box-shadow: 0 18px 46px rgba(0,0,0,.28)}
+  }
+
+  .ck-card__inner{padding:16px}
+  @media(min-width:768px){.ck-card__inner{padding:18px}}
+
+  .ck-card__head{
+    display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
+    padding:16px;
+    border-bottom:1px solid rgba(148,163,184,.14);
+    background: linear-gradient(180deg, rgba(56,189,248,.12), rgba(255,255,255,0));
+  }
+  @media (prefers-color-scheme: dark){
+    .ck-card__head{background: linear-gradient(180deg, rgba(56,189,248,.10), rgba(255,255,255,0))}
+  }
+
+  .ck-h2{margin:0;font-weight:1000;letter-spacing:-.35px}
+  .ck-badge{
+    display:inline-flex;align-items:center;gap:8px;
+    padding:7px 10px;border-radius:999px;
+    font-size:.85rem;font-weight:900;
+    border:1px solid rgba(245,158,11,.35);
+    background: rgba(245,158,11,.12);
+    color: rgba(161,98,7,.95);
+    white-space:nowrap;
+  }
+  @media (prefers-color-scheme: dark){
+    .ck-badge{color: rgba(253,230,138,.95); background: rgba(245,158,11,.12); border-color: rgba(245,158,11,.30)}
+  }
+
+  .ck-form{display:grid;gap:14px}
+  .ck-row{display:grid;gap:12px}
+  @media(min-width:720px){.ck-row.cols2{grid-template-columns:1fr 1fr}}
+  @media(min-width:980px){.ck-row.cols3{grid-template-columns:1fr 1fr 1fr}}
+
+  .ck-label{display:block;font-size:.78rem;font-weight:950;opacity:.78;margin:0 0 6px}
+  .ck-input, .ck-textarea, .ck-select{
+    width:100%;
+    border-radius:14px;
+    padding:12px 12px;
+    border:1px solid rgba(148,163,184,.28);
+    background: rgba(255,255,255,.8);
+    color: inherit;
+    outline:none;
+    transition: box-shadow .14s ease, border-color .14s ease, transform .14s ease;
+  }
+  @media (prefers-color-scheme: dark){
+    .ck-input, .ck-textarea, .ck-select{
+      background: rgba(255,255,255,.06);
+      border-color: rgba(148,163,184,.22);
+    }
+  }
+  .ck-input:focus, .ck-textarea:focus, .ck-select:focus{
+    border-color: rgba(245,158,11,.55);
+    box-shadow: 0 0 0 4px rgba(245,158,11,.18);
+  }
+  .ck-textarea{min-height:110px;resize:vertical}
+  .ck-help{font-size:.78rem;opacity:.72;line-height:1.4;margin-top:-6px}
+  .ck-note{
+    font-size:.75rem;opacity:.7;line-height:1.4;
+    padding:10px 12px;border-radius:14px;
+    border:1px solid rgba(56,189,248,.22);
+    background: rgba(56,189,248,.10);
+  }
+  @media (prefers-color-scheme: dark){
+    .ck-note{border-color: rgba(56,189,248,.18); background: rgba(56,189,248,.08)}
+  }
+
+  /* Inline error box (fallback if toast not available) */
+  .ck-error{
+    display:none;
+    border-radius:14px;
+    padding:10px 12px;
+    border:1px solid rgba(239,68,68,.30);
+    background: rgba(239,68,68,.10);
+    color: rgba(127,29,29,.95);
+    font-weight:900;
+    line-height:1.35;
+  }
+  .ck-error.is-on{display:block}
+
+  /* Payment methods */
+  .pay-wrap{display:grid;gap:10px}
+  .pay-item{
+    display:flex;gap:12px;align-items:flex-start;
+    padding:12px 12px;border-radius:16px;
+    border:1px solid rgba(148,163,184,.18);
+    background: rgba(255,255,255,.62);
+    transition: transform .14s ease, border-color .14s ease, box-shadow .14s ease, background .14s ease;
+    cursor:pointer;
+  }
+  @media (prefers-color-scheme: dark){
+    .pay-item{background: rgba(255,255,255,.05)}
+  }
+  .pay-item:hover{transform: translateY(-1px); box-shadow: 0 16px 34px rgba(0,0,0,.12)}
+  .pay-item:has(input:checked){
+    border-color: rgba(56,189,248,.42);
+    box-shadow: 0 0 0 4px rgba(56,189,248,.14);
+    background: linear-gradient(135deg, rgba(56,189,248,.12), rgba(245,158,11,.10));
+  }
+  .pay-radio{margin-top: 2px;width:18px;height:18px}
+  .pay-ic{
+    width:40px;height:40px;border-radius:14px;
+    display:grid;place-items:center;
+    background: rgba(255,255,255,.62);
+    border:1px solid rgba(148,163,184,.18);
+    flex: 0 0 auto;
+  }
+  @media (prefers-color-scheme: dark){
+    .pay-ic{background: rgba(255,255,255,.06)}
+  }
+  .pay-ic svg{width:18px;height:18px;display:block}
+  .pay-name{font-weight:1000;letter-spacing:-.2px;margin:0}
+  .pay-desc{margin:.15rem 0 0;opacity:.78;font-size:.9rem;line-height:1.35}
+  .pay-meta{
+    margin:.45rem 0 0;
+    font-size:.86rem;
+    opacity:.9;
+    padding:8px 10px;
+    border-radius:12px;
+    border:1px dashed rgba(148,163,184,.28);
+    background: rgba(255,255,255,.4);
+    white-space:pre-wrap;
+  }
+  @media (prefers-color-scheme: dark){
+    .pay-meta{background: rgba(255,255,255,.04)}
+  }
+
+  /* Order summary */
+  .sum{
+    border-radius:24px;
+    border:1px solid rgba(148,163,184,.18);
+    background: #0b1120;
+    color: #e5e7eb;
+    overflow:hidden;
+    box-shadow: 0 18px 46px rgba(0,0,0,.28);
+  }
+  .sum-head{
+    padding:16px 16px 14px;
+    border-bottom:1px solid rgba(148,163,184,.14);
+    background: radial-gradient(600px 280px at 0% 0%, rgba(56,189,248,.20), transparent 60%),
+                radial-gradient(600px 280px at 100% 0%, rgba(245,158,11,.18), transparent 60%);
+  }
+  .sum-h2{margin:0;font-weight:1000;letter-spacing:-.3px}
+  .sum-badge{
+    display:inline-flex;align-items:center;gap:8px;
+    padding:7px 10px;border-radius:999px;
+    font-size:.85rem;font-weight:900;
+    border:1px solid rgba(245,158,11,.35);
+    background: rgba(245,158,11,.12);
+    color: rgba(253,230,138,.95);
+  }
+  .sum-body{padding:14px 16px 16px}
+  .sum-list{display:grid;gap:10px;margin:0 0 12px}
+  .sum-item{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+  .sum-left{display:flex;flex-direction:column;gap:2px}
+  .sum-name{font-weight:850}
+  .sum-qty{font-size:.78rem;opacity:.74}
+  .sum-price{font-weight:950;color: rgba(253,230,138,.95)}
+  .sum-divider{border:0;border-top:1px solid rgba(148,163,184,.18);margin:12px 0}
+  .sum-row{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:.95rem}
+  .sum-muted{opacity:.78}
+  .sum-total{font-size:1.25rem;font-weight:1000;color: rgba(253,230,138,.95)}
+  .sum-actions{display:grid;gap:10px;margin-top:14px}
+
+  .sum-btn{
+    display:block;text-align:center;
+    padding:12px 14px;border-radius:999px;
+    font-weight:1000;
+    background: linear-gradient(135deg, rgba(245,158,11,1), rgba(56,189,248,.85));
+    color:#08121f;
+    text-decoration:none;
+    transition: transform .14s ease, filter .14s ease;
+  }
+  .sum-btn:hover{transform: translateY(-1px);filter:saturate(1.06)}
+  .sum-btn[aria-disabled="true"]{opacity:.70;pointer-events:none;filter:saturate(.9)}
+  .sum-link{
+    text-align:center;
+    font-size:.85rem;
+    color: rgba(253,230,138,.95);
+    text-decoration:none;
+    opacity:.9;
+  }
+  .sum-link:hover{opacity:1}
+
+  /* validation */
+  .is-invalid{
+    border-color: rgba(239,68,68,.65) !important;
+    box-shadow: 0 0 0 4px rgba(239,68,68,.16) !important;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+{% set cart_snap = cart if cart is defined else None %}
+{% set currency = (cart_snap.currency if cart_snap and cart_snap.currency is defined else "UYU") %}
+{% set lines = (cart_snap.lines if cart_snap and cart_snap.lines is defined else (cart_items if cart_items is defined else [])) %}
+{% set total_est = (cart_snap.total if cart_snap and cart_snap.total is defined else (cart_total if cart_total is defined else 0)) %}
+
+<section class="ck-wrap">
+
+  <div class="ck-head">
+    <div>
+      <h1 class="ck-title">Finalizar compra</h1>
+      <p class="ck-sub">
+        Completá tus datos y elegí el método de pago que te quede más cómodo.
+      </p>
+    </div>
+
+    <span class="ck-badge" title="Checkout listo">✅ Checkout PRO</span>
+  </div>
+
+  <div class="ck-grid">
+
+    <!-- LEFT -->
+    <div class="ck-card">
+      <div class="ck-card__head">
+        <div>
+          <h2 class="ck-h2">Datos y pago</h2>
+          <p class="ck-help">Todo queda guardado para procesar tu pedido de forma correcta.</p>
+        </div>
+        <span class="ck-badge" title="Métodos configurables desde Admin">Admin → Pagos</span>
+      </div>
+
+      <div class="ck-card__inner">
+
+        <div class="ck-error" id="ckErr" role="alert"></div>
+
+        {# action robusto: si endpoint no existe, queda '#' y JS evita submit real #}
+        <form class="ck-form"
+              method="post"
+              action="{{ url_for('shop.checkout_submit') if 'shop.checkout_submit' in current_app.view_functions else '#' }}"
+              id="checkoutForm"
+              novalidate>
+
+          {# CSRF hidden: lo tomamos del meta si existe (JS lo completa); fallback server-side si querés #}
+          <input type="hidden" name="csrf_token" id="csrf_token" value="">
+
+          <!-- Contact -->
+          <div class="ck-row cols2">
+            <div>
+              <label class="ck-label" for="full_name">Nombre completo</label>
+              <input id="full_name" name="full_name" type="text" class="ck-input" placeholder="Tu nombre"
+                     autocomplete="name" required>
+            </div>
+            <div>
+              <label class="ck-label" for="email">Correo electrónico</label>
+              <input id="email" name="email" type="email" class="ck-input" placeholder="tucorreo@email.com"
+                     autocomplete="email" required>
+            </div>
+          </div>
+
+          <!-- Address -->
+          <div>
+            <label class="ck-label" for="address">Dirección de envío</label>
+            <input id="address" name="address" type="text" class="ck-input" placeholder="Calle, número, apto"
+                   autocomplete="street-address" required>
+          </div>
+
+          <div class="ck-row cols3">
+            <div>
+              <label class="ck-label" for="city">Ciudad</label>
+              <input id="city" name="city" type="text" class="ck-input" autocomplete="address-level2" required>
+            </div>
+            <div>
+              <label class="ck-label" for="state">Departamento / Estado</label>
+              <input id="state" name="state" type="text" class="ck-input" autocomplete="address-level1" required>
+            </div>
+            <div>
+              <label class="ck-label" for="postal">Código postal</label>
+              <input id="postal" name="postal" type="text" class="ck-input" autocomplete="postal-code" required>
+            </div>
+          </div>
+
+          <div>
+            <label class="ck-label" for="notes">Notas para el pedido (opcional)</label>
+            <textarea id="notes" name="notes" class="ck-textarea" rows="3"
+                      placeholder="Indicaciones especiales para el envío..."></textarea>
+          </div>
+
+          <!-- PAYMENT METHODS -->
+          <div>
+            <h3 style="margin:8px 0 6px;font-weight:1000;letter-spacing:-.25px">Método de pago</h3>
+            <p class="ck-help">Elegí una opción. En el siguiente paso verás los datos exactos para pagar.</p>
+
+            {% set methods = payment_methods if payment_methods is defined else [
+              {"id":"mp_uy","name":"MercadoPago Uruguay","active":true,"note":"Link de pago / QR / tarjetas UY","link":""},
+              {"id":"mp_ar","name":"MercadoPago Argentina","active":true,"note":"Link de pago / QR / ARS","link":""},
+              {"id":"paypal","name":"PayPal","active":true,"note":"PayPal.me o email","link":""},
+              {"id":"transfer","name":"Transferencia","active":true,"note":"Bancos / IBAN / SWIFT / Wise","link":""},
+            ] %}
+
+            <div class="pay-wrap" role="radiogroup" aria-label="Métodos de pago" id="payGroup">
+              {% set active_methods = methods | selectattr("active") | list %}
+              {% if active_methods and active_methods|length > 0 %}
+                {% for m in active_methods %}
+                  <label class="pay-item" for="pm_{{ m.id }}">
+                    <input class="pay-radio" type="radio" name="payment_method" id="pm_{{ m.id }}"
+                           value="{{ m.id }}" {% if loop.first %}checked{% endif %} required>
+                    <span class="pay-ic" aria-hidden="true">
+                      {% if m.id == "mp_uy" or m.id == "mp_ar" %}
+                        <svg viewBox="0 0 24 24" fill="none">
+                          <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Z" stroke="currentColor" stroke-width="2" opacity=".85"/>
+                          <path d="M7.5 12c1.3-2.4 3-3.6 4.5-3.6S15.2 9.6 16.5 12c-1.3 2.4-3 3.6-4.5 3.6S8.8 14.4 7.5 12Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                        </svg>
+                      {% elif m.id == "paypal" %}
+                        <svg viewBox="0 0 24 24" fill="none">
+                          <path d="M7 20h7.2a5.2 5.2 0 0 0 0-10.4H9.6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                          <path d="M9.6 9.6H8.4a5.2 5.2 0 1 0 0 10.4H7" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity=".75"/>
+                        </svg>
+                      {% elif m.id == "transfer" %}
+                        <svg viewBox="0 0 24 24" fill="none">
+                          <path d="M3 7h18M6 11h12M8 15h8M10 19h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                      {% else %}
+                        <svg viewBox="0 0 24 24" fill="none">
+                          <path d="M4 12h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                          <path d="M12 4v16" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity=".7"/>
+                        </svg>
+                      {% endif %}
+                    </span>
+
+                    <span style="flex:1 1 auto">
+                      <div class="pay-name">{{ m.name }}</div>
+                      <div class="pay-desc">{{ m.note if m.note else "Método habilitado" }}</div>
+                      {% if m.preview is defined and m.preview %}
+                        <div class="pay-meta">{{ m.preview }}</div>
+                      {% endif %}
+                    </span>
+                  </label>
+                {% endfor %}
+              {% else %}
+                <div class="ck-note">
+                  ⚠️ No hay métodos de pago activos todavía. Entrá al Admin → Pagos y activá al menos uno.
+                </div>
+              {% endif %}
+            </div>
+          </div>
+
+          <div class="ck-note">
+            🔒 <b>Importante:</b> si elegís transferencia, te mostramos los datos completos para pagar.
+            Si elegís MercadoPago o PayPal, te mostramos el link/usuario configurado.
+          </div>
+
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:4px">
+            <button type="submit" class="sum-btn" style="width:auto;border:0;cursor:pointer"
+                    id="submitBtn">
+              Continuar / Confirmar
+            </button>
+
+            <a class="sum-link"
+               href="{{ url_for('cart.cart_view') if 'cart.cart_view' in current_app.view_functions else '/cart' }}">
+              Volver al carrito
+            </a>
+          </div>
+
+        </form>
+      </div>
+    </div>
+
+    <!-- RIGHT: SUMMARY -->
+    <aside class="sum" aria-label="Resumen del pedido">
+      <div class="sum-head">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+          <h2 class="sum-h2">Resumen del pedido</h2>
+          <span class="sum-badge">Seguro</span>
+        </div>
+      </div>
+
+      <div class="sum-body">
+        <div class="sum-list" id="sumList">
+          {% if lines and lines|length > 0 %}
+            {% for item in lines %}
+              {# soporta cart_snapshot lines (CartLine.to_dict) y también cart_items legacy #}
+              {% set name = item.title if item.title is defined else (item.name if item.name is defined else "Producto") %}
+              {% set qty  = item.qty if item.qty is defined else (item.quantity if item.quantity is defined else 1) %}
+              {% set price = item.line_total_display if item.line_total_display is defined else (item.total if item.total is defined else 0) %}
+              <div class="sum-item">
+                <div class="sum-left">
+                  <span class="sum-name">{{ name }}</span>
+                  <span class="sum-qty">Cantidad: {{ qty }}</span>
+                </div>
+                <span class="sum-price">{{ currency }} {{ price }}</span>
+              </div>
+            {% endfor %}
+          {% else %}
+            <div class="sum-muted" style="font-size:.9rem">
+              Tu carrito está vacío. Volvé a la tienda para agregar productos.
+            </div>
+          {% endif %}
+        </div>
+
+        <hr class="sum-divider">
+
+        <div class="sum-row">
+          <span class="sum-muted">Subtotal</span>
+          <span style="font-weight:900" id="sumSubtotal">{{ currency }} {{ total_est }}</span>
+        </div>
+        <div class="sum-row">
+          <span class="sum-muted">Envío</span>
+          <span class="sum-muted" style="font-size:.9rem">Se calcula según destino</span>
+        </div>
+
+        <hr class="sum-divider">
+
+        <div class="sum-row">
+          <span style="font-weight:1000">Total estimado</span>
+          <span class="sum-total" id="sumTotal">{{ currency }} {{ total_est }}</span>
+        </div>
+
+        <div class="sum-actions">
+          <a href="{{ url_for('main.order_success') if 'main.order_success' in current_app.view_functions else '#' }}"
+             class="sum-btn">
+            Confirmar pedido (demo)
+          </a>
+          <a href="{{ url_for('cart.cart_view') if 'cart.cart_view' in current_app.view_functions else '/cart' }}"
+             class="sum-link">
+            Volver al carrito
+          </a>
+        </div>
+
+        <div class="ck-note" style="margin-top:12px">
+          ⚡ Tip: en Admin → Pagos podés activar/desactivar métodos y pegar links/datos sin tocar código.
+        </div>
+      </div>
+    </aside>
+
+  </div>
+
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(() => {
+  const form = document.getElementById("checkoutForm");
+  if(!form) return;
+
+  const submitBtn = document.getElementById('submitBtn');
+  const errBox = document.getElementById('ckErr');
+
+  const req = ["full_name","email","address","city","state","postal"];
+
+  const toastOk = (t,m) => (window.toast ? window.toast(t,m) : null);
+  const toastBad = (t,m) => (window.toast ? window.toast(t,m) : null);
+
+  function setInlineError(msg){
+    if(!errBox) return;
+    if(!msg){ errBox.classList.remove('is-on'); errBox.textContent = ''; return; }
+    errBox.textContent = msg;
+    errBox.classList.add('is-on');
+  }
+
+  function byId(id){ return document.getElementById(id); }
+  function mark(el, bad){ if(!el) return; el.classList.toggle("is-invalid", !!bad); }
+
+  function validEmail(v){
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((v||"").trim());
+  }
+
+  // CSRF from meta -> hidden
+  try{
+    const csrf = (document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '').trim();
+    const hid = document.getElementById('csrf_token');
+    if(hid && csrf) hid.value = csrf;
+  }catch(e){}
+
+  // If action is '#', block real submit (so it never posts nowhere silently)
+  const action = (form.getAttribute('action') || '').trim();
+
+  let inFlight = false;
+
+  const disableSubmit = (on) => {
+    if(!submitBtn) return;
+    submitBtn.setAttribute('aria-disabled', on ? 'true' : 'false');
+    submitBtn.disabled = !!on;
+    submitBtn.textContent = on ? 'Procesando…' : 'Continuar / Confirmar';
+  };
+
+  const firstBadFocus = (ids) => {
+    for(const id of ids){
+      const el = byId(id);
+      if(el && el.classList.contains('is-invalid')){
+        el.focus({preventScroll:false});
+        return;
+      }
+    }
+  };
+
+  form.addEventListener("input", (e) => {
+    // limpia invalid al tipear
+    const t = e.target;
+    if(t && t.classList && t.classList.contains('is-invalid')){
+      t.classList.remove('is-invalid');
+      setInlineError('');
+    }
+  });
+
+  form.addEventListener("submit", async (e) => {
+    if(inFlight){
+      e.preventDefault();
+      return;
+    }
+
+    let ok = true;
+    setInlineError('');
+
+    req.forEach(id => {
+      const el = byId(id);
+      const v = (el?.value || "").trim();
+      const bad = !v || (id === "email" && !validEmail(v));
+      mark(el, bad);
+      if(bad) ok = false;
+    });
+
+    const pm = form.querySelector('input[name="payment_method"]:checked');
+    if(!pm){
+      ok = false;
+      setInlineError("Elegí un método de pago para continuar.");
+    }
+
+    if(!ok){
+      e.preventDefault();
+      toastBad("Revisá", "Faltan datos o el email no es válido.");
+      firstBadFocus(req);
+      return;
+    }
+
+    if(action === '#'){
+      e.preventDefault();
+      toastBad("Falta backend", "No existe el endpoint de checkout_submit todavía.");
+      setInlineError("⚠️ Backend pendiente: creá la ruta 'shop.checkout_submit' o cambiá el action.");
+      return;
+    }
+
+    // Submit single-flight (evita doble pedido)
+    inFlight = true;
+    disableSubmit(true);
+
+    // Si quisieras hacerlo por AJAX en el futuro, acá ya tenés base.
+    // Hoy dejamos submit normal para compatibilidad.
+  });
+
+  // (Opcional) Si el carrito se actualiza (desde otra pestaña), refrescá el badge ya lo hace base.html.
+  // Podés extender para refrescar el summary desde /cart/json si querés:
+  window.addEventListener('cart:updated', (ev) => {
+    // best-effort: no rompemos nada.
+  });
+})();
+</script>
+{% endblock %}
