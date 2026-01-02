@@ -3,64 +3,85 @@ document.addEventListener('DOMContentLoaded', () => {
   const root = document.querySelector('[data-cart-root]');
   if (!root) return;
 
-  const $  = (sel, ctx = document) => ctx.querySelector(sel);
-  const $$ = (sel, ctx = document) => Array.from(ctx.querySelectorAll(sel));
+  const $  = (sel, ctx = root) => ctx.querySelector(sel);
+  const $$ = (sel, ctx = root) => Array.from(ctx.querySelectorAll(sel));
 
   // ==========================================================
-  // A11y live region (no spam)
+  // A11y live region (no spam + throttle)
   // ==========================================================
-  const live = $('[data-cart-live]', root);
+  const live = $('[data-cart-live]');
   let lastLive = "";
+  let liveTimer = null;
+
   const say = (msg) => {
     if (!live) return;
-    const s = String(msg || "");
-    if (s === lastLive) return;
+    const s = String(msg || "").trim();
+    if (!s || s === lastLive) return;
     lastLive = s;
-    live.textContent = s;
+
+    // throttle para evitar spam a screenreaders
+    if (liveTimer) clearTimeout(liveTimer);
+    liveTimer = setTimeout(() => { live.textContent = s; }, 120);
   };
 
   // ==========================================================
-  // Summary nodes
+  // Summary nodes (null-safe)
   // ==========================================================
-  const metaEl      = $('[data-cart-meta]', root);
-  const subtotalEl  = $('[data-subtotal]', root);
-  const discountEl  = $('[data-discount]', root);
-  const discountRow = $('[data-discount-row]', root);
-  const totalEl     = $('[data-total]', root);
+  const metaEl      = $('[data-cart-meta]');
+  const subtotalEl  = $('[data-subtotal]');
+  const discountEl  = $('[data-discount]');
+  const discountRow = $('[data-discount-row]');
+  const totalEl     = $('[data-total]');
 
+  // ==========================================================
+  // Utils
+  // ==========================================================
   const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
   const toInt = (v, def = 1) => {
     const n = parseInt(String(v ?? ''), 10);
     return Number.isFinite(n) ? n : def;
   };
+  const safeStr = (v, def = "") => {
+    if (v === null || v === undefined) return def;
+    return String(v);
+  };
+  const nowMs = () => (Date.now ? Date.now() : new Date().getTime());
 
   // ==========================================================
-  // CSRF auto (si existe, se manda; si no, no rompe)
+  // Toast safe (no rompe nunca)
+  // ==========================================================
+  const toastSafe = (t, m) => {
+    try { if (window.toast) window.toast(String(t || "Info"), String(m || "")); } catch(e){}
+  };
+
+  // ==========================================================
+  // CSRF auto (si existe; si no, no rompe)
   // ==========================================================
   const readCsrf = () => {
-    const meta = document.querySelector('meta[name="csrf-token"]');
-    if (meta && meta.content) return meta.content;
-    const inp = document.querySelector('input[name="csrf_token"]');
-    if (inp && inp.value) return inp.value;
+    try{
+      const meta = document.querySelector('meta[name="csrf-token"]');
+      if (meta && meta.content) return meta.content;
+      const inp = document.querySelector('input[name="csrf_token"]');
+      if (inp && inp.value) return inp.value;
+    }catch(e){}
     return "";
   };
-  let csrf = readCsrf(); // lo re-leemos si falla por token rotado
+  let csrf = readCsrf();
 
   // ==========================================================
-  // Error helper
+  // Error message helper
   // ==========================================================
   const errMsg = (j) => {
     if (!j) return "Request failed";
     if (typeof j === "string") return j;
     if (j?.error?.message) return j.error.message;
-    if (j?.error?.code && j?.error?.message) return j.error.message;
     if (typeof j?.error === "string") return j.error;
     if (j?.message) return j.message;
     return "Request failed";
   };
 
   // ==========================================================
-  // Abort controllers (cancel requests anteriores por clave)
+  // Abort controllers (cancel prev by key)
   // ==========================================================
   const controllers = new Map();
   const abortPrev = (key) => {
@@ -72,12 +93,17 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   // ==========================================================
-  // Fetch helpers (fallback seguro si no hay window.apiGet/apiPost)
+  // API wrappers (fallback seguro)
+  // - soporta window.apiGet/apiPost
+  // - soporta /cart/json retornando {cart:...} o directo
   // ==========================================================
   const apiGet = async (url, key = "get") => {
     const ctrl = abortPrev(key);
 
-    if (window.apiGet) return window.apiGet(url);
+    if (typeof window.apiGet === "function") {
+      const d = await window.apiGet(url);
+      return d;
+    }
 
     const r = await fetch(url, {
       headers: { "Accept": "application/json" },
@@ -95,29 +121,35 @@ document.addEventListener('DOMContentLoaded', () => {
   const apiPost = async (url, body, key = "post") => {
     const ctrl = abortPrev(key);
 
-    if (window.apiPost) return window.apiPost(url, body);
+    if (typeof window.apiPost === "function") {
+      const d = await window.apiPost(url, body);
+      return d;
+    }
 
     const headers = {
       "Content-Type": "application/json",
       "Accept": "application/json"
     };
 
-    // Relee CSRF por si cambió después del DOMContentLoaded
     csrf = csrf || readCsrf();
     if (csrf) headers["X-CSRF-Token"] = csrf;
 
-    const r = await fetch(url, {
-      method: "POST",
-      headers,
-      credentials: "same-origin",
-      body: JSON.stringify(body || {}),
-      signal: ctrl.signal
-    });
+    const doReq = async () => {
+      const r = await fetch(url, {
+        method: "POST",
+        headers,
+        credentials: "same-origin",
+        body: JSON.stringify(body || {}),
+        signal: ctrl.signal
+      });
+      let j = {};
+      try { j = await r.json(); } catch(e) { j = {}; }
+      return { r, j };
+    };
 
-    let j = {};
-    try { j = await r.json(); } catch(e) { j = {}; }
+    const { r, j } = await doReq();
 
-    // Si falla por CSRF, reintenta 1 vez releyendo token (sin bucle infinito)
+    // retry 1 vez si parece CSRF
     const msg = errMsg(j);
     const looksCsrf = /csrf|token/i.test(msg);
     if ((!r.ok || j?.ok === false) && looksCsrf) {
@@ -126,17 +158,7 @@ document.addEventListener('DOMContentLoaded', () => {
         csrf = fresh;
         headers["X-CSRF-Token"] = csrf;
 
-        const r2 = await fetch(url, {
-          method: "POST",
-          headers,
-          credentials: "same-origin",
-          body: JSON.stringify(body || {}),
-          signal: ctrl.signal
-        });
-
-        let j2 = {};
-        try { j2 = await r2.json(); } catch(e) { j2 = {}; }
-
+        const { r: r2, j: j2 } = await doReq();
         if (!r2.ok || j2?.ok === false) throw new Error(errMsg(j2));
         return j2;
       }
@@ -146,96 +168,128 @@ document.addEventListener('DOMContentLoaded', () => {
     return j;
   };
 
-  const toastSafe = (t, m) => { try { window.toast && toast(t, m); } catch(e){} };
+  // ==========================================================
+  // Snapshot normalizer (cart payload flexible)
+  // ==========================================================
+  const pickCart = (d) => {
+    // soporta: {cart:{...}} o {...cart fields...}
+    if (!d) return null;
+    if (d.cart && typeof d.cart === "object") return d.cart;
+    return d;
+  };
 
   // ==========================================================
-  // UI apply snapshot
+  // Apply snapshot to UI
   // ==========================================================
   const setSummary = (snap) => {
     if (!snap) return;
-    if (metaEl) metaEl.textContent = `${snap.items_count || 0} item(s) • ${snap.distinct_items || 0} producto(s)`;
-    if (subtotalEl) subtotalEl.textContent = snap.subtotal || "0.00";
 
-    const disc = snap.discount_total || "0.00";
+    const itemsCount = safeStr(snap.items_count ?? 0, "0");
+    const distinct   = safeStr(snap.distinct_items ?? 0, "0");
+
+    if (metaEl) metaEl.textContent = `${itemsCount} item(s) • ${distinct} producto(s)`;
+    if (subtotalEl) subtotalEl.textContent = safeStr(snap.subtotal, "0.00");
+
+    const disc = safeStr(snap.discount_total, "0.00");
     if (discountEl) discountEl.textContent = disc;
     if (discountRow) discountRow.style.display = (disc && disc !== "0.00") ? "" : "none";
 
-    if (totalEl) totalEl.textContent = snap.total || snap.subtotal || "0.00";
+    if (totalEl) totalEl.textContent = safeStr(snap.total || snap.subtotal, "0.00");
   };
 
   const renderLines = (snap) => {
     if (!snap || !Array.isArray(snap.lines)) return;
 
-    // Update existentes
+    // update existentes (solo toca lo necesario)
     for (const ln of snap.lines) {
-      const row = root.querySelector(`[data-line][data-id="${ln.product_id}"]`);
+      const pid = safeStr(ln.product_id, "");
+      if (!pid) continue;
+
+      const row = root.querySelector(`[data-line][data-id="${CSS.escape(pid)}"]`);
       if (!row) continue;
 
       const qtyInput  = row.querySelector('[data-qty-input]');
       const lineTotal = row.querySelector('[data-line-total]');
       const unit      = row.querySelector('[data-unit]');
 
-      if (qtyInput)  qtyInput.value = String(ln.qty || 1);
-      if (lineTotal) lineTotal.textContent = ln.line_total_display || ln.line_total || "0.00";
-      if (unit)      unit.textContent = ln.unit_price_display || ln.unit_price || "0.00";
+      const qtyVal = safeStr(ln.qty ?? 1, "1");
+      if (qtyInput && qtyInput.value !== qtyVal) qtyInput.value = qtyVal;
+
+      const lt = safeStr(ln.line_total_display || ln.line_total, "0.00");
+      if (lineTotal && lineTotal.textContent !== lt) lineTotal.textContent = lt;
+
+      const up = safeStr(ln.unit_price_display || ln.unit_price, "0.00");
+      if (unit && unit.textContent !== up) unit.textContent = up;
     }
 
-    // Elimina del DOM líneas que ya no están
-    const ids = new Set(snap.lines.map(x => String(x.product_id)));
-    for (const el of $$('[data-line]', root)) {
+    // remove líneas inexistentes
+    const ids = new Set(snap.lines.map(x => safeStr(x.product_id, "")));
+    for (const el of $$('[data-line]')) {
       const id = el.getAttribute('data-id');
-      if (id && !ids.has(String(id))) {
+      if (id && !ids.has(id)) {
         el.classList.add('fade-out');
         setTimeout(() => el.remove(), 220);
       }
     }
   };
 
+  const emitUpdated = (snap) => {
+    try{
+      window.dispatchEvent(new CustomEvent('cart:updated', { detail: { cart: snap } }));
+    }catch(e){}
+  };
+
   const applySnap = (snap) => {
+    if (!snap) return;
+
     setSummary(snap);
     renderLines(snap);
 
+    // sync global store si existe
     if (window.CartStore && typeof window.CartStore.update === 'function') {
       try { window.CartStore.update(snap); } catch(e) {}
     }
 
-    // Si queda vacío, redirigimos a /cart para que el server renderice empty state bien
-    const hasItems = !!(snap?.has_items || (Number(snap?.items_count || 0) > 0));
-    if (!hasItems && window.location.pathname.includes('/cart')) {
-      // no hacemos nada agresivo acá para no “parpadear”;
-      // si querés, descomentá:
-      // window.location.reload();
-    }
+    emitUpdated(snap);
   };
 
   // ==========================================================
-  // Busy lock SOLO para acciones del carrito (NO checkout)
+  // Busy lock SOLO acciones carrito (checkout siempre libre)
   // ==========================================================
   let busy = false;
   const setBusy = (state) => {
     busy = !!state;
-    for (const b of $$('[data-action]', root)) {
+    for (const b of $$('[data-action]')) {
       const act = b.getAttribute('data-action');
-      if (act === 'go-checkout') continue; // checkout siempre libre
-      if (state) b.classList.add('btn-disabled');
-      else b.classList.remove('btn-disabled');
+      if (act === 'go-checkout') continue;
+      b.classList.toggle('btn-disabled', !!state);
+      if (state) b.setAttribute('aria-disabled','true');
+      else b.removeAttribute('aria-disabled');
     }
   };
 
   // ==========================================================
-  // Refresh (retry 1 vez)
+  // Refresh (retry 1 vez con backoff)
   // ==========================================================
+  let lastRefreshAt = 0;
   const refresh = async (retry = true) => {
+    // evita spamear refresh si se llama muchas veces (por errores)
+    const t = nowMs();
+    if (t - lastRefreshAt < 180) return;
+    lastRefreshAt = t;
+
     if (busy) return;
     setBusy(true);
     say("Actualizando carrito…");
+
     try {
       const d = await apiGet('/cart/json', 'refresh');
-      applySnap(d.cart);
+      const snap = pickCart(d);
+      applySnap(snap);
       say("Carrito actualizado.");
     } catch (e) {
       if (retry) {
-        setTimeout(() => refresh(false), 250);
+        setTimeout(() => refresh(false), 280);
       } else {
         toastSafe("Ups", e.message || "No se pudo actualizar");
         say("Error al actualizar.");
@@ -246,12 +300,37 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   // ==========================================================
-  // Debounce qty input
+  // Debounce map
   // ==========================================================
   const debounceMap = new Map();
   const debounce = (key, fn, ms = 320) => {
     if (debounceMap.has(key)) clearTimeout(debounceMap.get(key));
     debounceMap.set(key, setTimeout(fn, ms));
+  };
+
+  // ==========================================================
+  // Commit qty helper (reutilizable)
+  // ==========================================================
+  const commitQty = async (id, qty) => {
+    const pid = safeStr(id, "");
+    if (!pid) return;
+
+    const q = clamp(toInt(qty, 1), 1, 25);
+
+    try {
+      setBusy(true);
+      say("Actualizando cantidad…");
+      const d = await apiPost('/cart/update?json=1', { id: pid, qty: q }, 'qty');
+      const snap = pickCart(d);
+      applySnap(snap);
+      say("Cantidad actualizada.");
+    } catch (e) {
+      toastSafe("Ups", e.message || "No se pudo actualizar");
+      say("Error al actualizar.");
+      refresh(); // rollback seguro
+    } finally {
+      setBusy(false);
+    }
   };
 
   // ==========================================================
@@ -261,10 +340,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const btn = ev.target.closest('[data-action]');
     if (!btn) return;
 
-    const action = btn.getAttribute('data-action');
-    const id = btn.getAttribute('data-id');
+    const action = btn.getAttribute('data-action') || "";
+    const id = btn.getAttribute('data-id') || "";
 
-    // ✅ Checkout PRO (nunca bloqueado por busy)
+    // ✅ Checkout PRO (nunca bloqueado)
     if (action === 'go-checkout') {
       ev.preventDefault();
       if (btn.dataset.loading === '1') return;
@@ -275,10 +354,8 @@ document.addEventListener('DOMContentLoaded', () => {
       btn.classList.add('btn-disabled');
       say("Redirigiendo al checkout…");
 
-      // Siempre a tu puente seguro
       window.location.href = btn.getAttribute('href') || '/cart/checkout';
 
-      // Por si el navegador tarda o bloquea, revertimos UI (no rompe)
       setTimeout(() => {
         btn.textContent = original;
         btn.dataset.loading = '0';
@@ -295,7 +372,8 @@ document.addEventListener('DOMContentLoaded', () => {
         setBusy(true);
         say("Vaciando carrito…");
         const d = await apiPost('/cart/clear?json=1', {}, 'clear');
-        applySnap(d.cart);
+        const snap = pickCart(d);
+        applySnap(snap);
         toastSafe("Listo", "Carrito vacío ✅");
         say("Carrito vacío.");
         return;
@@ -303,67 +381,64 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (action === 'remove') {
         setBusy(true);
-        const row = root.querySelector(`[data-line][data-id="${id}"]`);
+
+        // optimistic UI remove
+        const row = root.querySelector(`[data-line][data-id="${CSS.escape(id)}"]`);
         if (row) { row.classList.add('fade-out'); setTimeout(() => row.remove(), 220); }
+
         say("Quitando producto…");
         const d = await apiPost('/cart/remove?json=1', { id }, 'remove');
-        applySnap(d.cart);
+        const snap = pickCart(d);
+        applySnap(snap);
         toastSafe("Listo", "Producto quitado ✅");
         say("Producto quitado.");
         return;
       }
 
       if (action === 'inc' || action === 'dec') {
-        setBusy(true);
-        const input = root.querySelector(`[data-qty-input][data-id="${id}"]`);
+        const input = root.querySelector(`[data-qty-input][data-id="${CSS.escape(id)}"]`);
         const current = input ? toInt(input.value, 1) : 1;
         const next = action === 'inc' ? current + 1 : current - 1;
         const qty = clamp(next, 1, 25);
         if (input) input.value = String(qty);
-
-        say("Actualizando cantidad…");
-        const d = await apiPost('/cart/update?json=1', { id, qty }, 'qty');
-        applySnap(d.cart);
-        say("Cantidad actualizada.");
+        await commitQty(id, qty);
         return;
       }
     } catch (e) {
       toastSafe("Ups", e.message || "Error");
       say("Ocurrió un error.");
-      refresh(); // fallback
-    } finally {
-      setBusy(false);
+      refresh();
     }
   });
 
   // ==========================================================
-  // Qty input manual (debounced)
+  // Qty input manual (debounced + commit on blur)
   // ==========================================================
   root.addEventListener('input', (ev) => {
     const inp = ev.target.closest('[data-qty-input]');
     if (!inp) return;
 
-    const id = inp.getAttribute('data-id');
+    const id = inp.getAttribute('data-id') || "";
     debounce(`qty:${id}`, async () => {
       if (busy) return;
 
       let qty = clamp(toInt(inp.value, 1), 1, 25);
       inp.value = String(qty);
-
-      try {
-        setBusy(true);
-        say("Actualizando cantidad…");
-        const d = await apiPost('/cart/update?json=1', { id, qty }, 'qty');
-        applySnap(d.cart);
-        say("Cantidad actualizada.");
-      } catch (e) {
-        toastSafe("Ups", e.message || "No se pudo actualizar");
-        refresh();
-      } finally {
-        setBusy(false);
-      }
-    }, 350);
+      await commitQty(id, qty);
+    }, 380);
   });
+
+  root.addEventListener('blur', (ev) => {
+    const inp = ev.target.closest('[data-qty-input]');
+    if (!inp) return;
+
+    const id = inp.getAttribute('data-id') || "";
+    let qty = clamp(toInt(inp.value, 1), 1, 25);
+    inp.value = String(qty);
+
+    // commit inmediato al salir del input (sin esperar debounce)
+    debounce(`qtyblur:${id}`, () => commitQty(id, qty), 0);
+  }, true);
 
   // Enter / Escape helpers
   root.addEventListener('keydown', (ev) => {

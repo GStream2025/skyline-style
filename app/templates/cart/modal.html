@@ -1,36 +1,96 @@
 {# =========================================================
-   CART MODAL — ULTRA PRO
+   CART MODAL — SKYLINE ULTRA PRO (LOCKED v2)
    - Reutilizable (base.html / navbar / cualquier página)
    - No rompe si no existe CartStore o apiGet/apiPost
    - Cierra con overlay, ESC y botón
-   - Accesible (role=dialog, aria, focus básico)
-   - Incluye empty state reutilizando cart/empty.html
+   - A11y real: role=dialog, aria, focus trap, restore focus
+   - Scroll lock robusto (sin romper layout)
+   - XSS-safe: nunca inyecta HTML del usuario sin escapar
+   - Auto-refresh: /cart/json + eventos (cart:updated)
+   - Dark mode + fallback CSS propio si no hay Tailwind
    ========================================================= #}
 
-{# Opcional: pasá cart=snapshot si lo tenés. Si no, el modal se auto-carga por /cart/json #}
 {% set snap = cart if cart is defined else none %}
 
+<style>
+  /* ✅ Fallback CSS si NO hay Tailwind (no molesta si sí hay) */
+  .sk-hidden{display:none !important}
+  .sk-fixed{position:fixed;inset:0}
+  .sk-z{z-index:60}
+  .sk-overlay{position:absolute;inset:0;background:rgba(15,23,42,.40);backdrop-filter: blur(1px)}
+  .sk-panel{position:absolute;inset-block:0;right:0;width:100%;max-width:420px;background:#fff;border-left:1px solid #e2e8f0;box-shadow:0 20px 60px rgba(0,0,0,.25);display:flex;flex-direction:column}
+  .sk-h{padding:16px 20px;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;gap:12px}
+  .sk-title{margin:0;font-size:15px;font-weight:800;color:#0f172a}
+  .sk-meta{margin:.25rem 0 0;font-size:12px;color:#64748b}
+  .sk-close{width:40px;height:40px;border-radius:999px;border:1px solid #e2e8f0;background:#fff;color:#334155;cursor:pointer}
+  .sk-close:hover{background:#f8fafc}
+  .sk-body{flex:1;overflow:auto;padding:16px 20px}
+  .sk-foot{padding:16px 20px;border-top:1px solid #e2e8f0;background:#fff}
+  .sk-row{display:flex;justify-content:space-between;gap:12px;font-size:14px}
+  .sk-subt{font-weight:900;color:#0f172a}
+  .sk-btn{display:inline-flex;justify-content:center;align-items:center;gap:8px;width:100%;padding:12px 14px;border-radius:999px;font-weight:900;text-decoration:none;cursor:pointer;user-select:none}
+  .sk-btn-primary{background:#0f172a;color:#f8fafc}
+  .sk-btn-primary:hover{background:#111c34}
+  .sk-btn-ghost{margin-top:8px;border:1px solid #cbd5e1;color:#334155;background:transparent}
+  .sk-btn-ghost:hover{border-color:#f59e0b;color:#b45309}
+  .sk-line{display:flex;gap:12px;padding:12px;border-radius:14px;border:1px solid #e2e8f0}
+  .sk-img{width:56px;height:56px;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0;background:#f8fafc;flex:0 0 auto}
+  .sk-name{margin:0;font-size:13px;font-weight:900;color:#0f172a;line-height:1.2}
+  .sk-mini{margin:.25rem 0 0;font-size:12px;color:#64748b}
+  .sk-price{font-size:13px;font-weight:950;color:#0f172a;white-space:nowrap}
+  .sk-skel{height:64px;border-radius:14px;background:#f1f5f9;animation: skPulse 1.1s ease-in-out infinite}
+  @keyframes skPulse{0%,100%{opacity:.65}50%{opacity:1}}
+  .sk-note{margin-top:12px;font-size:11px;color:#94a3b8}
+
+  /* dark mode */
+  @media (prefers-color-scheme: dark){
+    .sk-panel{background:rgba(2,6,23,.92);border-left-color:rgba(148,163,184,.18)}
+    .sk-h,.sk-foot{border-color:rgba(148,163,184,.16)}
+    .sk-title{color:#e5e7eb}
+    .sk-meta{color:rgba(148,163,184,.85)}
+    .sk-close{background:rgba(255,255,255,.04);border-color:rgba(148,163,184,.18);color:#e5e7eb}
+    .sk-close:hover{background:rgba(255,255,255,.07)}
+    .sk-line{border-color:rgba(148,163,184,.16);background:rgba(255,255,255,.03)}
+    .sk-img{border-color:rgba(148,163,184,.16);background:rgba(255,255,255,.04)}
+    .sk-name,.sk-price{color:#e5e7eb}
+    .sk-mini{color:rgba(148,163,184,.85)}
+    .sk-btn-primary{background:linear-gradient(135deg, rgba(245,158,11,1), rgba(56,189,248,.85));color:#08121f}
+    .sk-btn-primary:hover{filter:saturate(1.06)}
+    .sk-btn-ghost{border-color:rgba(148,163,184,.24);color:#e5e7eb}
+    .sk-btn-ghost:hover{border-color:rgba(245,158,11,.55);color:rgba(253,230,138,.95)}
+    .sk-skel{background:rgba(255,255,255,.06)}
+    .sk-note{color:rgba(148,163,184,.75)}
+  }
+
+  :focus-visible{
+    outline:none;
+    box-shadow: 0 0 0 4px rgba(37,99,235,.18);
+    border-radius: 12px;
+  }
+</style>
+
 <div id="cartModal"
-     class="fixed inset-0 z-[60] hidden"
+     class="sk-fixed sk-z sk-hidden"
      data-cart-modal
      aria-hidden="true">
 
   <!-- Overlay -->
-  <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-[1px]" data-cart-modal-overlay></div>
+  <div class="sk-overlay" data-cart-modal-overlay></div>
 
   <!-- Panel -->
-  <div class="absolute inset-y-0 right-0 w-full sm:w-[420px] bg-white shadow-2xl border-l border-slate-200 flex flex-col"
+  <div class="sk-panel"
        role="dialog"
        aria-modal="true"
-       aria-labelledby="cartModalTitle">
+       aria-labelledby="cartModalTitle"
+       aria-describedby="cartModalDesc"
+       tabindex="-1"
+       data-cart-modal-panel>
 
     <!-- Header -->
-    <header class="px-5 py-4 border-b border-slate-200 flex items-center justify-between gap-3">
+    <header class="sk-h">
       <div class="min-w-0">
-        <p id="cartModalTitle" class="text-base font-semibold text-slate-900">
-          Tu carrito
-        </p>
-        <p class="text-xs text-slate-500 mt-0.5" data-cart-modal-meta>
+        <p id="cartModalTitle" class="sk-title">Tu carrito</p>
+        <p id="cartModalDesc" class="sk-meta" data-cart-modal-meta>
           {% if snap %}
             {{ (snap.items_count or 0) }} item(s) • {{ (snap.distinct_items or 0) }} producto(s)
           {% else %}
@@ -40,7 +100,7 @@
       </div>
 
       <button type="button"
-              class="inline-flex items-center justify-center w-10 h-10 rounded-full border border-slate-200 text-slate-700 hover:bg-slate-50 transition"
+              class="sk-close"
               aria-label="Cerrar carrito"
               data-cart-modal-close>
         ✕
@@ -48,55 +108,49 @@
     </header>
 
     <!-- Body -->
-    <div class="flex-1 overflow-auto px-5 py-4" data-cart-modal-body>
-      <!-- Estado loading -->
+    <div class="sk-body" data-cart-modal-body>
+      <!-- Loading -->
       <div class="space-y-3" data-cart-modal-loading>
-        <div class="h-16 rounded-xl bg-slate-100 animate-pulse"></div>
-        <div class="h-16 rounded-xl bg-slate-100 animate-pulse"></div>
-        <div class="h-16 rounded-xl bg-slate-100 animate-pulse"></div>
+        <div class="sk-skel"></div>
+        <div class="sk-skel"></div>
+        <div class="sk-skel"></div>
       </div>
 
-      <!-- Contenido -->
-      <div class="hidden" data-cart-modal-content>
-        <!-- Lines -->
+      <!-- Content -->
+      <div class="sk-hidden" data-cart-modal-content>
         <div class="space-y-3" data-cart-modal-lines></div>
 
-        <!-- Empty -->
-        <div class="hidden" data-cart-modal-empty>
+        <div class="sk-hidden" data-cart-modal-empty>
           {% include "cart/empty.html" %}
         </div>
       </div>
     </div>
 
-    <!-- Footer / Summary -->
-    <footer class="border-t border-slate-200 px-5 py-4 bg-white">
-      <div class="flex items-center justify-between text-sm">
-        <span class="text-slate-600">Subtotal</span>
-        <span class="font-semibold text-slate-900">
+    <!-- Footer -->
+    <footer class="sk-foot">
+      <div class="sk-row">
+        <span style="color:rgba(100,116,139,.95)">Subtotal</span>
+        <span class="sk-subt">
           <span data-cart-modal-currency>{{ (snap.currency if snap else "USD") }}</span>
           <span data-cart-modal-subtotal>{{ (snap.subtotal if snap else "0.00") }}</span>
         </span>
       </div>
 
-      <div class="mt-3 flex flex-col gap-2">
-        <!-- ✅ Profesional: ir a checkout real -->
+      <div style="margin-top:12px">
         <a href="{{ url_for('cart.cart_go_checkout') if 'cart.cart_go_checkout' in current_app.view_functions else '/cart/checkout' }}"
-           class="inline-flex justify-center text-sm px-6 py-3 rounded-full bg-slate-900 text-slate-50 hover:bg-slate-800 shadow-sm hover:shadow-md transition"
+           class="sk-btn sk-btn-primary"
            data-cart-modal-checkout>
           Finalizar compra
         </a>
 
         <a href="{{ url_for('cart.cart_view') if 'cart.cart_view' in current_app.view_functions else '/cart' }}"
-           class="inline-flex justify-center text-sm px-6 py-3 rounded-full border border-slate-300 text-slate-700 hover:border-amber-500 hover:text-amber-600 transition">
+           class="sk-btn sk-btn-ghost">
           Ver carrito
         </a>
+
+        <p class="sk-note">Podés editar cantidades desde el carrito completo.</p>
       </div>
-
-      <p class="mt-3 text-[11px] text-slate-400">
-        Podés editar cantidades desde el carrito completo.
-      </p>
     </footer>
-
   </div>
 </div>
 
@@ -105,6 +159,7 @@
   const modal = document.querySelector('[data-cart-modal]');
   if(!modal) return;
 
+  const panel = modal.querySelector('[data-cart-modal-panel]');
   const overlay = modal.querySelector('[data-cart-modal-overlay]');
   const btnClose = modal.querySelector('[data-cart-modal-close]');
   const metaEl = modal.querySelector('[data-cart-modal-meta]');
@@ -116,58 +171,93 @@
   const linesEl = modal.querySelector('[data-cart-modal-lines]');
   const emptyEl = modal.querySelector('[data-cart-modal-empty]');
 
-  let lastFocus = null;
-
+  // ---------- utils ----------
   const safeText = (v) => (v === null || v === undefined) ? "" : String(v);
-
-  const open = () => {
-    lastFocus = document.activeElement;
-    modal.classList.remove('hidden');
-    modal.setAttribute('aria-hidden', 'false');
-    document.documentElement.classList.add('overflow-hidden');
-    // focus básico
-    setTimeout(() => btnClose && btnClose.focus(), 0);
-    refresh();
+  const clampInt = (n, def=0) => {
+    const x = Number(n);
+    return Number.isFinite(x) ? Math.max(0, Math.floor(x)) : def;
   };
 
-  const close = () => {
-    modal.classList.add('hidden');
-    modal.setAttribute('aria-hidden', 'true');
-    document.documentElement.classList.remove('overflow-hidden');
-    if(lastFocus && lastFocus.focus) lastFocus.focus();
+  // ✅ XSS safe: escapamos texto
+  const esc = (s) => safeText(s)
+    .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;").replaceAll("'","&#39;");
+
+  // ---------- scroll lock robusto ----------
+  let lastFocus = null;
+  let scrollY = 0;
+
+  const lockScroll = () => {
+    scrollY = window.scrollY || 0;
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.left = '0';
+    document.body.style.right = '0';
+    document.body.style.width = '100%';
   };
 
+  const unlockScroll = () => {
+    const y = scrollY;
+    document.body.style.position = '';
+    document.body.style.top = '';
+    document.body.style.left = '';
+    document.body.style.right = '';
+    document.body.style.width = '';
+    window.scrollTo(0, y);
+  };
+
+  // ---------- focus trap ----------
+  const getFocusable = () => {
+    if(!panel) return [];
+    const els = panel.querySelectorAll(
+      'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
+    );
+    return Array.from(els).filter(el => el.offsetParent !== null);
+  };
+
+  const trap = (ev) => {
+    if(ev.key !== 'Tab') return;
+    const f = getFocusable();
+    if(!f.length) return;
+    const first = f[0];
+    const last = f[f.length - 1];
+    if(ev.shiftKey && document.activeElement === first){
+      ev.preventDefault(); last.focus();
+    }else if(!ev.shiftKey && document.activeElement === last){
+      ev.preventDefault(); first.focus();
+    }
+  };
+
+  // ---------- render ----------
   const renderLine = (ln, cur) => {
-    const img = ln.image_url ? `
-      <img src="${safeText(ln.image_url)}" alt="${safeText(ln.title || 'Producto')}"
-           class="w-full h-full object-cover">` :
-      `<div class="w-full h-full bg-slate-100"></div>`;
+    const title = esc(ln?.title || "Producto");
+    const qty = clampInt(ln?.qty, 1) || 1;
+    const unit = esc(ln?.unit_price_display || ln?.unit_price || "0.00");
+    const total = esc(ln?.line_total_display || ln?.line_total || "0.00");
 
-    const title = safeText(ln.title || "Producto");
-    const qty = Number(ln.qty || 1);
-    const unit = safeText(ln.unit_price_display || ln.unit_price || "0.00");
-    const total = safeText(ln.line_total_display || ln.line_total || "0.00");
+    const imgUrl = safeText(ln?.image_url || "");
+    const img = imgUrl
+      ? `<img src="${esc(imgUrl)}" alt="${title}" style="width:100%;height:100%;object-fit:cover">`
+      : `<div style="width:100%;height:100%;background:rgba(148,163,184,.12)"></div>`;
 
     return `
-      <div class="flex gap-3 p-3 rounded-xl border border-slate-200">
-        <div class="w-14 h-14 rounded-lg overflow-hidden border border-slate-200 bg-slate-50 shrink-0">
-          ${img}
+      <div class="sk-line">
+        <div class="sk-img">${img}</div>
+        <div style="min-width:0;flex:1 1 auto">
+          <p class="sk-name">${title}</p>
+          <p class="sk-mini">x${qty} • ${esc(cur)} ${unit}</p>
         </div>
-        <div class="min-w-0 flex-1">
-          <p class="text-sm font-semibold text-slate-900 line-clamp-2">${title}</p>
-          <p class="text-xs text-slate-500 mt-0.5">x${qty} • ${cur} ${unit}</p>
-        </div>
-        <div class="text-right shrink-0">
-          <p class="text-sm font-bold text-slate-900">${cur} ${total}</p>
+        <div style="text-align:right;flex:0 0 auto">
+          <div class="sk-price">${esc(cur)} ${total}</div>
         </div>
       </div>
     `;
   };
 
   const applySnap = (snap) => {
-    const itemsCount = Number(snap?.items_count || 0);
-    const distinct = Number(snap?.distinct_items || 0);
-    const cur = safeText(snap?.currency || "USD");
+    const itemsCount = clampInt(snap?.items_count, 0);
+    const distinct = clampInt(snap?.distinct_items, 0);
+    const cur = safeText(snap?.currency || "USD").toUpperCase().slice(0,3) || "USD";
     const sub = safeText(snap?.subtotal || "0.00");
 
     if(metaEl) metaEl.textContent = `${itemsCount} item(s) • ${distinct} producto(s)`;
@@ -175,61 +265,113 @@
     if(subtotalEl) subtotalEl.textContent = sub;
 
     const lines = Array.isArray(snap?.lines) ? snap.lines : [];
-
     linesEl.innerHTML = "";
+
     if(lines.length === 0){
-      emptyEl.classList.remove('hidden');
+      emptyEl.classList.remove('sk-hidden');
+      emptyEl.classList.remove('hidden'); // tailwind compat
     } else {
-      emptyEl.classList.add('hidden');
-      const html = lines.slice(0, 8).map(ln => renderLine(ln, cur)).join("");
-      linesEl.innerHTML = html;
+      emptyEl.classList.add('sk-hidden');
+      emptyEl.classList.add('hidden'); // tailwind compat
+      linesEl.innerHTML = lines.slice(0, 10).map(ln => renderLine(ln, cur)).join("");
     }
   };
 
+  // ---------- data ----------
+  let inFlight = false;
   const refresh = async () => {
-    // loading state
-    loadingEl.classList.remove('hidden');
-    contentEl.classList.add('hidden');
+    if(inFlight) return;
+    inFlight = true;
+
+    // loading
+    loadingEl.classList.remove('sk-hidden'); loadingEl.classList.remove('hidden');
+    contentEl.classList.add('sk-hidden'); contentEl.classList.add('hidden');
 
     try{
       let snap = null;
 
-      // Si tenés CartStore global, lo usamos
+      // 1) CartStore
       if(window.CartStore && typeof window.CartStore.refresh === 'function'){
         snap = await window.CartStore.refresh();
-      } else if(window.apiGet){
+      }
+      // 2) apiGet helper
+      else if(typeof window.apiGet === 'function'){
         const d = await window.apiGet('/cart/json');
-        snap = d?.cart;
-      } else {
-        // fallback fetch nativo
-        const r = await fetch('/cart/json', { headers: { 'Accept': 'application/json' } });
+        snap = d?.cart || d;
+      }
+      // 3) fetch fallback
+      else {
+        const r = await fetch('/cart/json', { headers: { 'Accept': 'application/json' }, credentials:'same-origin' });
         const d = await r.json();
-        snap = d?.cart;
+        snap = d?.cart || d;
       }
 
-      applySnap(snap);
+      applySnap(snap || { items_count: 0, distinct_items: 0, currency: "USD", subtotal: "0.00", lines: [] });
     }catch(e){
-      // si falla, mostramos vacío pero sin romper
       applySnap({ items_count: 0, distinct_items: 0, currency: "USD", subtotal: "0.00", lines: [] });
     }finally{
-      loadingEl.classList.add('hidden');
-      contentEl.classList.remove('hidden');
+      loadingEl.classList.add('sk-hidden'); loadingEl.classList.add('hidden');
+      contentEl.classList.remove('sk-hidden'); contentEl.classList.remove('hidden');
+      inFlight = false;
     }
   };
 
-  // Eventos
+  // ---------- open/close ----------
+  const open = () => {
+    lastFocus = document.activeElement;
+    modal.classList.remove('sk-hidden');
+    modal.classList.remove('hidden'); // tailwind compat
+    modal.setAttribute('aria-hidden', 'false');
+    lockScroll();
+
+    document.addEventListener('keydown', onKeyDown);
+    panel && panel.addEventListener('keydown', trap);
+
+    // focus
+    setTimeout(() => (btnClose && btnClose.focus()), 0);
+
+    refresh();
+  };
+
+  const close = () => {
+    modal.classList.add('sk-hidden');
+    modal.classList.add('hidden'); // tailwind compat
+    modal.setAttribute('aria-hidden', 'true');
+    unlockScroll();
+
+    document.removeEventListener('keydown', onKeyDown);
+    panel && panel.removeEventListener('keydown', trap);
+
+    if(lastFocus && lastFocus.focus) lastFocus.focus();
+  };
+
+  const onKeyDown = (ev) => {
+    if(modal.classList.contains('sk-hidden') || modal.classList.contains('hidden')) return;
+    if(ev.key === 'Escape') close();
+  };
+
+  // ---------- events ----------
   overlay && overlay.addEventListener('click', close);
   btnClose && btnClose.addEventListener('click', close);
 
-  document.addEventListener('keydown', (ev) => {
-    if(modal.classList.contains('hidden')) return;
-    if(ev.key === 'Escape') close();
+  // Auto-refresh cuando tu app lo dispare
+  window.addEventListener('cart:updated', () => {
+    if(!(modal.classList.contains('sk-hidden') || modal.classList.contains('hidden'))) refresh();
   });
 
-  // Exponer helpers globales (para botón navbar)
+  // Exponer API global (navbar)
   window.SkylineCartModal = window.SkylineCartModal || {};
   window.SkylineCartModal.open = open;
   window.SkylineCartModal.close = close;
   window.SkylineCartModal.refresh = refresh;
+
+  // BONUS: abre con elementos con data-open-cart
+  document.addEventListener('click', (ev) => {
+    const t = ev.target?.closest?.('[data-open-cart]');
+    if(!t) return;
+    ev.preventDefault();
+    open();
+  });
+
 })();
 </script>

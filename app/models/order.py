@@ -5,14 +5,14 @@ from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Optional, Any, Dict
 
-from sqlalchemy import Index
+from sqlalchemy import Index, event
 from sqlalchemy.orm import validates
 
 from app.models import db
 
 
 # ============================================================
-# Time / Decimal helpers
+# Time / Decimal helpers (blindados)
 # ============================================================
 
 def utcnow() -> datetime:
@@ -20,7 +20,7 @@ def utcnow() -> datetime:
 
 
 def _d(v: Any, default: str = "0.00") -> Decimal:
-    """Decimal seguro para montos."""
+    """Decimal seguro (no rompe con None, '', floats, basura)."""
     try:
         if v is None or v == "":
             return Decimal(default)
@@ -32,7 +32,7 @@ def _d(v: Any, default: str = "0.00") -> Decimal:
 
 
 def _clamp_money(v: Decimal) -> Decimal:
-    """Evita valores negativos."""
+    """Evita montos negativos."""
     if v is None:
         return Decimal("0.00")
     return v if v >= Decimal("0.00") else Decimal("0.00")
@@ -47,10 +47,20 @@ MetaType = db.JSON().with_variant(db.Text(), "sqlite")
 # ============================================================
 
 class Order(db.Model):
+    """
+    Skyline Store — Order PRO (FINAL)
+
+    ✅ Estados claros
+    ✅ Pagos múltiples
+    ✅ Snapshot del cliente
+    ✅ Totales blindados
+    ✅ Compatible SQLite / Postgres
+    """
+
     __tablename__ = "orders"
 
     # -------------------------
-    # Estados
+    # Estados de orden
     # -------------------------
     STATUS_AWAITING_PAYMENT = "awaiting_payment"
     STATUS_PAID = "paid"
@@ -60,11 +70,17 @@ class Order(db.Model):
     STATUS_CANCELLED = "cancelled"
     STATUS_REFUNDED = "refunded"
 
+    # -------------------------
+    # Estados de pago
+    # -------------------------
     PAY_PENDING = "pending"
     PAY_PAID = "paid"
     PAY_FAILED = "failed"
     PAY_REFUNDED = "refunded"
 
+    # -------------------------
+    # Métodos de pago
+    # -------------------------
     PM_PAYPAL = "paypal"
     PM_MP_UY = "mercadopago_uy"
     PM_MP_AR = "mercadopago_ar"
@@ -80,9 +96,13 @@ class Order(db.Model):
         STATUS_CANCELLED,
         STATUS_REFUNDED,
     }
+
     _ALLOWED_PAY_STATUS = {PAY_PENDING, PAY_PAID, PAY_FAILED, PAY_REFUNDED}
     _ALLOWED_PM = {PM_PAYPAL, PM_MP_UY, PM_MP_AR, PM_BANK, PM_CASH}
 
+    # -------------------------
+    # Core
+    # -------------------------
     id = db.Column(db.Integer, primary_key=True)
 
     number = db.Column(db.String(40), unique=True, index=True, nullable=False)
@@ -95,7 +115,7 @@ class Order(db.Model):
     )
 
     # -------------------------
-    # Snapshot cliente
+    # Snapshot cliente (NO dependemos de User)
     # -------------------------
     customer_name = db.Column(db.String(120))
     customer_email = db.Column(db.String(255), index=True)
@@ -114,39 +134,81 @@ class Order(db.Model):
     # -------------------------
     # Estado / pago
     # -------------------------
-    status = db.Column(db.String(30), nullable=False, default=STATUS_AWAITING_PAYMENT, index=True)
-    payment_method = db.Column(db.String(30), nullable=False, default=PM_PAYPAL, index=True)
-    payment_status = db.Column(db.String(30), nullable=False, default=PAY_PENDING, index=True)
+    status = db.Column(
+        db.String(30),
+        nullable=False,
+        default=STATUS_AWAITING_PAYMENT,
+        index=True,
+    )
+
+    payment_method = db.Column(
+        db.String(30),
+        nullable=False,
+        default=PM_PAYPAL,
+        index=True,
+    )
+
+    payment_status = db.Column(
+        db.String(30),
+        nullable=False,
+        default=PAY_PENDING,
+        index=True,
+    )
 
     currency = db.Column(db.String(3), nullable=False, default="USD", index=True)
 
+    # -------------------------
+    # Totales
+    # -------------------------
     subtotal = db.Column(db.Numeric(12, 2), nullable=False, default=Decimal("0.00"))
     discount_total = db.Column(db.Numeric(12, 2), nullable=False, default=Decimal("0.00"))
     shipping_total = db.Column(db.Numeric(12, 2), nullable=False, default=Decimal("0.00"))
     tax_total = db.Column(db.Numeric(12, 2), nullable=False, default=Decimal("0.00"))
     total = db.Column(db.Numeric(12, 2), nullable=False, default=Decimal("0.00"))
 
+    # -------------------------
+    # Referencias externas
+    # -------------------------
     paypal_order_id = db.Column(db.String(120), index=True)
     mp_payment_id = db.Column(db.String(120), index=True)
     bank_transfer_ref = db.Column(db.String(120))
 
-    paid_at = db.Column(db.DateTime(timezone=True), index=True)
-    cancelled_at = db.Column(db.DateTime(timezone=True))
-    refunded_at = db.Column(db.DateTime(timezone=True))
-
+    # -------------------------
+    # Envío
+    # -------------------------
     carrier = db.Column(db.String(80))
     tracking_number = db.Column(db.String(120), index=True)
     tracking_url = db.Column(db.String(500))
 
+    # -------------------------
+    # Timestamps
+    # -------------------------
+    paid_at = db.Column(db.DateTime(timezone=True), index=True)
+    cancelled_at = db.Column(db.DateTime(timezone=True))
+    refunded_at = db.Column(db.DateTime(timezone=True))
+
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=utcnow,
+        index=True,
+    )
+
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=utcnow,
+        onupdate=utcnow,
+    )
+
+    # -------------------------
+    # Metadata libre
+    # -------------------------
     meta = db.Column(MetaType)
 
-    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, index=True)
-    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
-
     # -------------------------
-    # RELATIONSHIPS BLINDADAS
+    # Relationships
     # -------------------------
-    # ⚠️ NO rompe aunque User no esté cargado aún
     user = db.relationship(
         "User",
         back_populates="orders",
@@ -163,29 +225,29 @@ class Order(db.Model):
     )
 
     # -------------------------
-    # Validaciones
+    # Validaciones suaves
     # -------------------------
     @validates("currency")
-    def _v_currency(self, _k: str, v: str) -> str:
+    def _v_currency(self, _k, v: str) -> str:
         return (v or "USD").strip().upper()[:3]
 
     @validates("status")
-    def _v_status(self, _k: str, v: str) -> str:
+    def _v_status(self, _k, v: str) -> str:
         v = (v or "").strip().lower()
         return v if v in self._ALLOWED_STATUS else self.STATUS_AWAITING_PAYMENT
 
     @validates("payment_status")
-    def _v_payment_status(self, _k: str, v: str) -> str:
+    def _v_payment_status(self, _k, v: str) -> str:
         v = (v or "").strip().lower()
         return v if v in self._ALLOWED_PAY_STATUS else self.PAY_PENDING
 
     @validates("payment_method")
-    def _v_payment_method(self, _k: str, v: str) -> str:
+    def _v_payment_method(self, _k, v: str) -> str:
         v = (v or "").strip().lower()
         return v if v in self._ALLOWED_PM else self.PM_PAYPAL
 
     @validates("customer_email")
-    def _v_email(self, _k: str, v: Optional[str]) -> Optional[str]:
+    def _v_email(self, _k, v: Optional[str]) -> Optional[str]:
         return v.strip().lower()[:255] if v else None
 
     # -------------------------
@@ -275,7 +337,7 @@ class OrderItem(db.Model):
     order = db.relationship("Order", back_populates="items", lazy="select")
 
     @validates("qty")
-    def _v_qty(self, _k: str, v: int) -> int:
+    def _v_qty(self, _k, v: int) -> int:
         try:
             return max(1, int(v))
         except Exception:

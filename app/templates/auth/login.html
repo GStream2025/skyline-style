@@ -36,24 +36,15 @@
   box-shadow: var(--shadow2);
 }
 
-.auth-brand{
-  display:flex; align-items:center; gap:12px;
-}
+.auth-brand{display:flex; align-items:center; gap:12px;}
 .auth-mark{
   width:38px;height:28px;
   border-radius:12px;
   background: var(--grad);
   box-shadow: 0 12px 22px rgba(2,6,23,.16);
 }
-.auth-title{
-  font-weight: 950;
-  letter-spacing:-.4px;
-}
-.auth-sub{
-  font-weight:700;
-  color: rgba(11,18,32,.62);
-  font-size:.92rem;
-}
+.auth-title{font-weight: 950; letter-spacing:-.4px;}
+.auth-sub{font-weight:700; color: rgba(11,18,32,.62); font-size:.92rem;}
 
 .auth-left h1{
   margin: 16px 0 0;
@@ -86,16 +77,8 @@
   background: var(--grad);
   margin-top:6px;
 }
-.benefit b{
-  display:block;
-  font-weight:900;
-}
-.benefit span{
-  display:block;
-  font-weight:650;
-  color: rgba(11,18,32,.60);
-  font-size:.92rem;
-}
+.benefit b{display:block; font-weight:900;}
+.benefit span{display:block; font-weight:650; color: rgba(11,18,32,.60); font-size:.92rem;}
 
 /* ===== Right / Form ===== */
 .auth-right{
@@ -112,11 +95,7 @@
   justify-content:space-between;
   gap:12px;
 }
-.auth-head h2{
-  margin:0;
-  font-weight: 950;
-  letter-spacing:-.4px;
-}
+.auth-head h2{margin:0; font-weight: 950; letter-spacing:-.4px;}
 .secure{
   display:inline-flex; align-items:center; gap:8px;
   padding: 8px 10px;
@@ -127,11 +106,21 @@
   font-size:.82rem;
 }
 
-.form{
-  margin-top:16px;
-  display:grid;
-  gap:14px;
+.flash{
+  margin-top:12px;
+  padding:10px 12px;
+  border-radius:14px;
+  border:1px solid var(--stroke);
+  font-weight:850;
+  font-size:.92rem;
+  background: rgba(2,6,23,.03);
 }
+.flash.error{background: rgba(255,0,0,.06); border-color: rgba(255,0,0,.14);}
+.flash.warning{background: rgba(255,181,71,.10); border-color: rgba(255,181,71,.18);}
+.flash.success{background: rgba(34,197,94,.10); border-color: rgba(34,197,94,.18);}
+.flash.info{background: rgba(47,123,255,.08); border-color: rgba(47,123,255,.16);}
+
+.form{margin-top:16px; display:grid; gap:14px;}
 
 .field label{
   display:block;
@@ -183,6 +172,7 @@
   box-shadow: 0 16px 30px rgba(2,6,23,.16);
 }
 .submit:active{transform:translateY(1px)}
+.submit[disabled]{opacity:.85; cursor:not-allowed}
 
 .auth-links{
   margin-top:10px;
@@ -190,6 +180,8 @@
   justify-content:space-between;
   font-size:.9rem;
   font-weight:800;
+  gap:10px;
+  flex-wrap:wrap;
 }
 .auth-links a{text-decoration:none}
 </style>
@@ -234,41 +226,55 @@
         <span class="secure">🔒 Seguro</span>
       </div>
 
+      {# FLASH MESSAGES #}
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
-          <div style="margin-top:10px">
-            {% for category, msg in messages %}
-              <div style="margin-bottom:8px;padding:10px 12px;border-radius:14px;
-                border:1px solid var(--stroke);font-weight:700">
-                {{ msg }}
-              </div>
-            {% endfor %}
-          </div>
+          {% for category, msg in messages %}
+            <div class="flash {{ category|e }}">{{ msg }}</div>
+          {% endfor %}
         {% endif %}
       {% endwith %}
 
-      <form method="post" class="form">
+      <form method="post" action="{{ url_for('auth.login') }}" class="form" id="loginForm" novalidate>
+        {# CSRF token (CRÍTICO) #}
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
         {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
 
         <div class="field">
-          <label>Correo electrónico</label>
-          <input type="email" name="email" required placeholder="tu@email.com">
+          <label for="email">Correo electrónico</label>
+          <input id="email" type="email" name="email" required autocomplete="email"
+                 value="{{ request.form.get('email','') if request.method=='POST' else '' }}"
+                 placeholder="tu@email.com">
         </div>
 
         <div class="field">
-          <label>Contraseña</label>
+          <label for="password">Contraseña</label>
           <div class="pass-wrap">
-            <input type="password" name="password" id="password" required placeholder="Tu contraseña">
-            <button type="button" class="pass-toggle" id="togglePass">👁</button>
+            <input id="password" type="password" name="password" required autocomplete="current-password"
+                   placeholder="Tu contraseña">
+            <button type="button" class="pass-toggle" id="togglePass" aria-label="Mostrar contraseña">👁</button>
           </div>
         </div>
 
-        <button type="submit" class="submit">Entrar</button>
+        <button type="submit" class="submit" id="submitBtn">Entrar</button>
 
         <div class="auth-links">
           <a href="{{ url_for('auth.register') }}">Crear cuenta</a>
-          <a href="{{ url_for('shop.shop') }}">Seguir como invitado</a>
+
+          {# si más adelante agregás reset, esto no rompe #}
+          {% if 'auth.forgot' in current_app.view_functions %}
+            <a href="{{ url_for('auth.forgot') }}">Olvidé mi contraseña</a>
+          {% else %}
+            <a href="{{ url_for('shop.shop') }}">Seguir como invitado</a>
+          {% endif %}
         </div>
+
+        {% if 'auth.forgot' not in current_app.view_functions %}
+          <div class="auth-links" style="margin-top:0">
+            <a href="{{ url_for('shop.shop') }}">Seguir como invitado</a>
+          </div>
+        {% endif %}
       </form>
     </div>
 
@@ -279,9 +285,20 @@
 (function(){
   const pass = document.getElementById("password");
   const toggle = document.getElementById("togglePass");
+  const form = document.getElementById("loginForm");
+  const btn = document.getElementById("submitBtn");
+
   if(toggle && pass){
     toggle.addEventListener("click", () => {
       pass.type = pass.type === "password" ? "text" : "password";
+    });
+  }
+
+  // anti doble submit
+  if(form && btn){
+    form.addEventListener("submit", () => {
+      btn.disabled = true;
+      btn.textContent = "Entrando…";
     });
   }
 })();

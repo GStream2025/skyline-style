@@ -1,19 +1,15 @@
 # app/routes/__init__.py
 """
-Skyline Store · Routes Package (ULTRA PRO - FINAL / BULLETPROOF)
+Skyline Store · Routes Package (ULTRA PRO MAX++ / BULLETPROOF)
 
-Centraliza y registra todos los blueprints:
-✅ Safe-import con importlib
-✅ Valida Blueprint real
-✅ Anti-duplicados por name
-✅ Registro robusto (si falla NO tumba prod)
-✅ Report final prolijo
-✅ Modo estricto opcional en dev (ROUTES_STRICT=1)
-
-EXTRAS PRO:
-- ROUTES_DISABLE="admin,printful" -> desactiva blueprints por env
-- url_prefix opcional por spec (si querés forzar)
-- fallback: si el símbolo no existe pero el módulo trae 1 blueprint, lo detecta
+- Safe imports con cache
+- Validación real de Blueprint (isinstance) + fallback estructural
+- Anti duplicados (por name y por origin)
+- Disable por ENV (bp.name, símbolo o módulo) + wildcard (*)
+- Strict mode sólo dev (ROUTES_STRICT=1)
+- Reporte prolijo (retorna dict)
+- Prefijos opcionales por spec + override por ENV: ROUTES_PREFIX_<bpname>=/algo
+- Require opcional por ENV: ROUTES_REQUIRE="auth,shop" (para detectar faltantes)
 """
 
 from __future__ import annotations
@@ -25,66 +21,114 @@ from typing import TYPE_CHECKING, Optional, Set, Iterable, Tuple, Dict, List, An
 
 if TYPE_CHECKING:
     from flask import Flask
-    from flask.blueprints import Blueprint
 
 log = logging.getLogger("routes")
 
 _TRUE = {"1", "true", "yes", "y", "on"}
 
+_MODULE_CACHE: Dict[str, Any] = {}
+
 
 # ------------------------------------------------------------
-# Strict mode (solo dev)
+# ENV helpers
 # ------------------------------------------------------------
+def _env_bool(key: str, default: bool = False) -> bool:
+    v = os.getenv(key)
+    if v is None:
+        return default
+    return v.strip().lower() in _TRUE
+
+
+def _routes_debug() -> bool:
+    return _env_bool("ROUTES_DEBUG", False)
+
+
 def _strict_mode(app: "Flask") -> bool:
-    """
-    En dev, si ROUTES_STRICT=1 -> explota para detectar rápido errores.
-    En prod, nunca debería explotar por rutas.
-    """
-    v = (os.getenv("ROUTES_STRICT") or "").strip().lower()
-    if v not in _TRUE:
+    if not _env_bool("ROUTES_STRICT", False):
         return False
 
-    # Detecta env lo más robusto posible
     env = ""
     try:
         env = (app.config.get("ENV") or "").strip().lower()
     except Exception:
         env = ""
 
-    # soporte alternativo (FLASK_ENV / app.debug)
     if not env:
         env = (os.getenv("FLASK_ENV") or "").strip().lower()
 
     if env:
         return env in {"development", "dev"}
+
     try:
         return bool(getattr(app, "debug", False))
     except Exception:
         return False
 
 
-# ------------------------------------------------------------
-# Disable list by ENV
-# ------------------------------------------------------------
-def _disabled_set() -> Set[str]:
-    """
-    ROUTES_DISABLE="admin,printful,marketing"
-    Compara contra bp.name y/o símbolo.
-    """
-    raw = (os.getenv("ROUTES_DISABLE") or "").strip().lower()
+def _split_csv_env(key: str) -> List[str]:
+    raw = (os.getenv(key) or "").strip()
     if not raw:
-        return set()
-    items = {x.strip() for x in raw.split(",") if x.strip()}
-    return items
+        return []
+    return [x.strip() for x in raw.split(",") if x.strip()]
+
+
+def _disabled_patterns() -> List[str]:
+    # soporta wildcard: "admin*,printful,app.routes.admin_routes"
+    return [x.lower() for x in _split_csv_env("ROUTES_DISABLE")]
+
+
+def _required_names() -> Set[str]:
+    # "auth,shop" -> obliga a que existan (útil para detectar despliegues rotos)
+    return {x.lower() for x in _split_csv_env("ROUTES_REQUIRE")}
+
+
+def _matches_pattern(value: str, pattern: str) -> bool:
+    """
+    Wildcard simple:
+      - "admin*" matchea admin, admin_bp, adminpanel
+      - sin '*' compara exacto
+    """
+    value = value.lower()
+    pattern = pattern.lower()
+    if pattern.endswith("*"):
+        return value.startswith(pattern[:-1])
+    return value == pattern
+
+
+def _is_disabled(bp_name: str, sym_tail: str, mod_path: str, patterns: List[str]) -> bool:
+    for p in patterns:
+        if _matches_pattern(bp_name, p) or _matches_pattern(sym_tail, p) or _matches_pattern(mod_path, p):
+            return True
+    return False
+
+
+def _env_prefix_for(bp_name: str) -> Optional[str]:
+    """
+    Override por ENV:
+      ROUTES_PREFIX_admin=/admin
+      ROUTES_PREFIX_shop=/tienda
+    """
+    key = f"ROUTES_PREFIX_{bp_name}".upper()
+    v = (os.getenv(key) or "").strip()
+    if not v:
+        return None
+    if not v.startswith("/"):
+        v = "/" + v
+    return v
 
 
 # ------------------------------------------------------------
-# Import helpers
+# Import helpers (con cache)
 # ------------------------------------------------------------
 def _safe_import_module(path: str):
+    if path in _MODULE_CACHE:
+        return _MODULE_CACHE[path]
     try:
-        return import_module(path)
+        mod = import_module(path)
+        _MODULE_CACHE[path] = mod
+        return mod
     except Exception as e:
+        _MODULE_CACHE[path] = None
         log.debug("Import module failed: %s (%s)", path, e)
         return None
 
@@ -97,27 +141,20 @@ def _safe_getattr(mod, name: str):
 
 
 def _is_blueprint(obj: Any) -> bool:
-    """
-    Validación flexible y segura:
-    - no importa Flask en runtime
-    - chequea estructura típica
-    """
     if obj is None:
         return False
-    if obj.__class__.__name__ != "Blueprint":
-        return False
-    if not hasattr(obj, "name"):
-        return False
-    if not hasattr(obj, "register"):
-        return False
-    return True
+    try:
+        from flask.blueprints import Blueprint
+        return isinstance(obj, Blueprint)
+    except Exception:
+        return (
+            hasattr(obj, "name")
+            and hasattr(obj, "register")
+            and hasattr(obj, "deferred_functions")
+        )
 
 
 def _find_single_blueprint_in_module(mod) -> Optional[Any]:
-    """
-    Fallback: si no existe el símbolo, pero el módulo define 1 blueprint,
-    lo usamos. Si hay 0 o >1, no adivinamos.
-    """
     if not mod:
         return None
     found = []
@@ -132,41 +169,32 @@ def _find_single_blueprint_in_module(mod) -> Optional[Any]:
     return found[0] if len(found) == 1 else None
 
 
-def _safe_import_symbol(path: str, name: str) -> Any:
-    """
-    Importa mod + símbolo. Si no existe, intenta fallback por 1 blueprint.
-    """
-    mod = _safe_import_module(path)
+def _safe_import_symbol(mod_path: str, symbol: str) -> Any:
+    mod = _safe_import_module(mod_path)
     if not mod:
         return None
 
-    obj = _safe_getattr(mod, name)
+    obj = _safe_getattr(mod, symbol)
     if _is_blueprint(obj):
         return obj
 
-    # fallback: auto-detect 1 blueprint
-    auto_bp = _find_single_blueprint_in_module(mod)
-    return auto_bp
+    return _find_single_blueprint_in_module(mod)
 
 
 # ------------------------------------------------------------
-# Register
+# Register helper
 # ------------------------------------------------------------
 def _register_once(
     app: "Flask",
     bp: Any,
     *,
-    seen: Set[str],
+    seen_names: Set[str],
+    seen_origins: Set[str],
     report: Dict[str, List[str]],
     origin: str,
-    url_prefix: Optional[str] = None,
-    disabled: Set[str],
+    url_prefix: Optional[str],
+    disabled_patterns: List[str],
 ) -> None:
-    """
-    Registra blueprint evitando duplicados.
-    - no rompe en prod
-    - en strict dev levanta error
-    """
     if bp is None:
         report["missing"].append(origin)
         return
@@ -180,30 +208,47 @@ def _register_once(
         report["invalid"].append(origin)
         return
 
-    # disable by env (acepta bp.name o símbolo)
-    origin_tail = origin.split(".")[-1].strip().lower()
-    if bp_name.lower() in disabled or origin_tail in disabled:
+    mod_path = origin.rsplit(".", 1)[0].strip().lower()
+    sym_tail = origin.split(".")[-1].strip().lower()
+
+    if _is_disabled(bp_name, sym_tail, mod_path, disabled_patterns):
         report["disabled"].append(f"{bp_name} <- {origin}")
         return
 
-    if bp_name in seen:
-        report["duplicate"].append(f"{bp_name} <- {origin}")
+    if origin in seen_origins:
+        report["duplicate"].append(f"(origin) {bp_name} <- {origin}")
         return
 
+    if bp_name in seen_names:
+        report["duplicate"].append(f"(name) {bp_name} <- {origin}")
+        return
+
+    if not hasattr(app, "register_blueprint"):
+        raise RuntimeError("Objeto 'app' inválido: no tiene register_blueprint()")
+
+    # override url_prefix por ENV si existe
+    env_pref = _env_prefix_for(bp_name)
+    final_prefix = env_pref or url_prefix
+
     try:
-        if url_prefix:
-            # forzar prefijo si lo pedís en specs
-            app.register_blueprint(bp, url_prefix=url_prefix)
+        if final_prefix:
+            app.register_blueprint(bp, url_prefix=final_prefix)
         else:
             app.register_blueprint(bp)
-        seen.add(bp_name)
-        report["registered"].append(bp_name)
+
+        seen_names.add(bp_name)
+        seen_origins.add(origin)
+        report["registered"].append(f"{bp_name} <- {origin}" + (f" (prefix={final_prefix})" if final_prefix else ""))
 
     except Exception as e:
-        # no ensucia prod con stack
-        msg = f"{bp_name} <- {origin} :: {e}"
-        report["failed_register"].append(msg)
-        log.warning("⚠️ No se pudo registrar blueprint '%s' (%s): %s", bp_name, origin, e, exc_info=False)
+        report["failed_register"].append(f"{bp_name} <- {origin} :: {type(e).__name__}: {e}")
+        log.warning(
+            "⚠️ No se pudo registrar blueprint '%s' (%s): %s",
+            bp_name,
+            origin,
+            e,
+            exc_info=_routes_debug(),
+        )
         if _strict_mode(app):
             raise
 
@@ -211,13 +256,21 @@ def _register_once(
 # ------------------------------------------------------------
 # Public API
 # ------------------------------------------------------------
-def register_blueprints(app: "Flask") -> None:
+def register_blueprints(app: "Flask") -> Dict[str, List[str]]:
     """
-    Registra TODOS los blueprints en orden marketplace.
-    Si algo falta o rompe, NO tumba la app (salvo strict dev).
+    Registra todos los blueprints en orden.
+
+    Dev:
+      - ROUTES_STRICT=1 -> si algo falla, levanta excepción
+    Prod:
+      - nunca tumba la app por rutas
+
+    Retorna report dict para /health o debug.
     """
-    seen: Set[str] = set()
-    disabled = _disabled_set()
+    seen_names: Set[str] = set()
+    seen_origins: Set[str] = set()
+    disabled_patterns = _disabled_patterns()
+    required = _required_names()
 
     report: Dict[str, List[str]] = {
         "registered": [],
@@ -226,10 +279,9 @@ def register_blueprints(app: "Flask") -> None:
         "duplicate": [],
         "failed_register": [],
         "disabled": [],
+        "required_missing": [],
     }
 
-    # Specs:
-    # (module, symbol, url_prefix_override)
     specs: Iterable[Tuple[str, str, Optional[str]]] = (
         # Core
         ("app.routes.main_routes", "main_bp", None),
@@ -238,7 +290,6 @@ def register_blueprints(app: "Flask") -> None:
 
         # Account
         ("app.routes.account_routes", "account_bp", None),
-        ("app.routes.account_routes", "cuenta_bp", None),
         ("app.routes.profile_routes", "profile_bp", None),
         ("app.routes.address_routes", "address_bp", None),
 
@@ -260,34 +311,50 @@ def register_blueprints(app: "Flask") -> None:
         _register_once(
             app,
             bp,
-            seen=seen,
+            seen_names=seen_names,
+            seen_origins=seen_origins,
             report=report,
             origin=origin,
             url_prefix=pref,
-            disabled=disabled,
+            disabled_patterns=disabled_patterns,
         )
 
-    # -------- Summary logs (limpios) --------
-    try:
-        log.info("✅ Blueprints registrados (%d): %s", len(seen), ", ".join(sorted(seen)) if seen else "(ninguno)")
+    # required check (por bp.name)
+    if required:
+        have = {x.split(" <- ", 1)[0].strip().lower() for x in report["registered"]}
+        miss = sorted(list(required - have))
+        if miss:
+            report["required_missing"] = miss
+            # en strict dev, explotamos
+            if _strict_mode(app):
+                raise RuntimeError(f"ROUTES_REQUIRE faltantes: {', '.join(miss)}")
+            log.warning("⚠️ ROUTES_REQUIRE faltantes: %s", ", ".join(miss))
 
-        # solo si hay ruido
+    # Summary logs
+    try:
+        reg_names = [x.split(" <- ", 1)[0] for x in report["registered"]]
+        log.info("✅ Blueprints registrados (%d): %s", len(reg_names), ", ".join(reg_names) if reg_names else "(ninguno)")
+
         if report["disabled"]:
-            log.info("⛔ Blueprints deshabilitados por ENV: %s", ", ".join(report["disabled"]))
+            log.info("⛔ Deshabilitados (ENV): %s", ", ".join(report["disabled"]))
+
+        if report["failed_register"]:
+            log.warning("⚠️ Fallos al registrar (%d): %s", len(report["failed_register"]), " | ".join(report["failed_register"]))
+
+        if report["required_missing"]:
+            log.warning("⚠️ Required faltantes: %s", ", ".join(report["required_missing"]))
 
         if report["missing"]:
-            log.debug("ℹ️ Blueprints no encontrados: %s", ", ".join(report["missing"]))
-
+            log.debug("ℹ️ No encontrados: %s", ", ".join(report["missing"]))
         if report["invalid"]:
-            log.warning("⚠️ Blueprints inválidos (no Blueprint): %s", ", ".join(report["invalid"]))
-
+            log.debug("ℹ️ Inválidos: %s", ", ".join(report["invalid"]))
         if report["duplicate"]:
             log.debug("ℹ️ Duplicados evitados: %s", ", ".join(report["duplicate"]))
 
-        if report["failed_register"]:
-            log.warning("⚠️ Fallos al registrar: %s", " | ".join(report["failed_register"]))
     except Exception:
         pass
+
+    return report
 
 
 __all__ = ["register_blueprints"]

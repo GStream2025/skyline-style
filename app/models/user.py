@@ -7,11 +7,14 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 from flask_login import UserMixin
-from sqlalchemy import Index
+from sqlalchemy import Index, event
 from sqlalchemy.orm import validates
 
 from app.models import db
-from app.utils.security import hash_password, verify_password
+
+# ✅ IMPORT CORRECTO: engine de passwords (NO confundir con security de URLs)
+from app.utils.password_engine import hash_password, verify_and_maybe_rehash
+
 
 # ============================================================
 # Helpers
@@ -19,6 +22,7 @@ from app.utils.security import hash_password, verify_password
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
 
 EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 
@@ -41,11 +45,16 @@ def _safe_strip(v: Optional[str]) -> Optional[str]:
 
 class User(UserMixin, db.Model):
     """
-    Skyline Store — User ULTRA PRO (FINAL)
+    Skyline Store — User PRO 10X (FINAL / NO TOCAR)
+
     ✅ Flask-Login compatible
-    ✅ Cliente + Admin + Checkout + Marketing
-    ✅ Hash seguro + lockouts
-    ✅ Tokens 64 fixed (DB safe)
+    ✅ Password hashing + auto rehash (si cambia policy)
+    ✅ Lockouts + counters + helpers
+    ✅ Email verify + reset tokens (64 fixed)
+    ✅ Marketing opt-in + unsubscribe token
+    ✅ Relaciones blindadas
+    ✅ Validaciones suaves (no rompen DB vieja)
+    ✅ Hooks ultra safe
     """
 
     __tablename__ = "users"
@@ -137,22 +146,19 @@ class User(UserMixin, db.Model):
     )
 
     # ============================================================
-    # Flask-Login compatibility
+    # Flask-Login
     # ============================================================
 
     def get_id(self) -> str:
-        # Flask-Login usa string
         return str(self.id)
 
     @property
     def is_staff(self) -> bool:
-        # staff = admin o role staff
         r = (self.role or "").lower().strip()
         return bool(self.is_admin) or r in {"admin", "staff"}
 
     @property
     def role_effective(self) -> str:
-        # para UI / permisos: no rompe si role NULL
         if self.is_admin:
             return "admin"
         r = (self.role or "").lower().strip()
@@ -163,16 +169,25 @@ class User(UserMixin, db.Model):
     # ============================================================
 
     def set_password(self, raw_password: str) -> None:
-        raw_password = (raw_password or "").strip()
-        if not raw_password:
+        pwd = (raw_password or "").strip()
+        if not pwd:
             raise ValueError("Password vacío")
-        self.password_hash = hash_password(raw_password)
+        self.password_hash = hash_password(pwd)
         self.password_changed_at = utcnow()
 
     def check_password(self, raw_password: str) -> bool:
+        """
+        ✅ bool real
+        ✅ auto-rehash si cambiaste policy (PASSWORD_METHOD)
+        """
         if not self.password_hash:
             return False
-        return verify_password(raw_password or "", self.password_hash)
+
+        ok, new_hash = verify_and_maybe_rehash(raw_password or "", self.password_hash)
+        if ok and new_hash:
+            self.password_hash = new_hash
+            self.password_changed_at = utcnow()
+        return ok
 
     # ============================================================
     # Login / Lockouts
@@ -194,6 +209,19 @@ class User(UserMixin, db.Model):
         self.failed_login_count = int(self.failed_login_count or 0) + 1
         if self.failed_login_count >= int(lock_after):
             self.locked_until = utcnow() + timedelta(minutes=int(lock_minutes))
+
+    def lock_for(self, minutes: int = 15) -> None:
+        self.locked_until = utcnow() + timedelta(minutes=int(minutes))
+
+    def unlock(self) -> None:
+        self.locked_until = None
+        self.failed_login_count = 0
+
+    def lock_seconds_left(self) -> int:
+        if not self.locked_until:
+            return 0
+        delta = self.locked_until - utcnow()
+        return max(0, int(delta.total_seconds()))
 
     # ============================================================
     # Email verify / reset tokens
@@ -228,7 +256,7 @@ class User(UserMixin, db.Model):
         self.reset_password_expires_at = None
 
     # ============================================================
-    # Marketing helpers
+    # Marketing
     # ============================================================
 
     def subscribe_email(self) -> None:
@@ -269,13 +297,17 @@ class User(UserMixin, db.Model):
     @validates("email")
     def _v_email(self, _k, v: str) -> str:
         vv = self.normalize_email(v)
-        # No rompe: solo limpia
         return vv[:255] if vv else ""
 
     @validates("country")
     def _v_country(self, _k, v: Optional[str]) -> Optional[str]:
         vv = _safe_strip(v)
         return vv.upper()[:2] if vv else None
+
+    @validates("city")
+    def _v_city(self, _k, v: Optional[str]) -> Optional[str]:
+        vv = _safe_strip(v)
+        return vv[:80] if vv else None
 
     @validates("name")
     def _v_name(self, _k, v: Optional[str]) -> Optional[str]:
@@ -304,8 +336,13 @@ class User(UserMixin, db.Model):
             self.unsubscribe_token = _token64()
 
     def __repr__(self) -> str:
-        return f"<User id={self.id} email={self.email!r} role={self.role_effective!r} active={bool(self.is_active)}>"
+        return (
+            f"<User id={self.id} email={self.email!r} role={self.role_effective!r} "
+            f"active={bool(self.is_active)}>"
+        )
 
+
+# Índices extra (no rompen DB vieja)
 Index("ix_users_active_admin", User.is_active, User.is_admin)
 Index("ix_users_country_city", User.country, User.city)
 Index("ix_users_email_verified", User.email_verified)
@@ -376,7 +413,7 @@ class UserAddress(db.Model):
     def set_as_default(self) -> None:
         """
         Marca esta dirección como default y desmarca las demás.
-        ✅ Seguro: update masivo sin necesitar cargar todo.
+        ✅ update masivo, no necesita cargar todo
         """
         if not self.user_id:
             self.is_default = True
@@ -393,3 +430,33 @@ class UserAddress(db.Model):
         return f"<UserAddress id={self.id} user_id={self.user_id} default={bool(self.is_default)}>"
 
 Index("ix_user_addresses_user_default", UserAddress.user_id, UserAddress.is_default)
+
+
+# ============================================================
+# Hooks (ultra safe)
+# ============================================================
+
+@event.listens_for(User, "before_insert", propagate=True)
+def _user_before_insert(_mapper, _conn, target: User):
+    try:
+        target.email = User.normalize_email(target.email)
+    except Exception:
+        pass
+
+    try:
+        target.ensure_tokens()
+    except Exception:
+        pass
+
+
+@event.listens_for(User, "before_update", propagate=True)
+def _user_before_update(_mapper, _conn, target: User):
+    try:
+        target.email = User.normalize_email(target.email)
+    except Exception:
+        pass
+
+    try:
+        target.ensure_tokens()
+    except Exception:
+        pass

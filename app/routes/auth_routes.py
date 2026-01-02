@@ -5,37 +5,23 @@ import time
 from urllib.parse import urlparse
 from typing import Optional
 
-from flask import (
-    Blueprint,
-    flash,
-    redirect,
-    render_template,
-    request,
-    session,
-    url_for,
-)
+from flask import Blueprint, flash, redirect, render_template, request, session, url_for
+from werkzeug.routing import BuildError
 
 from app.models import db, User
 
-
-# ============================================================
-# Blueprint
-# ============================================================
-# SIN url_prefix → /login /register /logout
 auth_bp = Blueprint("auth", __name__)
 
-
-# ============================================================
-# Config / Seguridad
-# ============================================================
-
-MAX_LOGIN_ATTEMPTS = 5          # intentos antes de lock
-LOCK_TIME_SECONDS = 300         # 5 minutos
-RATE_LIMIT_SECONDS = 2          # 1 intento cada 2s por sesión
+# ----------------------------
+# Seguridad
+# ----------------------------
+MAX_LOGIN_ATTEMPTS = 5
+LOCK_TIME_SECONDS = 300
+RATE_LIMIT_SECONDS = 2
 
 
 # ============================================================
-# Helpers — Seguridad / Session
+# Helpers
 # ============================================================
 
 def _is_safe_next(nxt: str) -> bool:
@@ -58,17 +44,46 @@ def _clear_session() -> None:
     session.clear()
 
 
+def _safe_email(email_raw: str) -> str:
+    """Normaliza email sin romper si el modelo no tiene helper."""
+    email_raw = (email_raw or "").strip()
+    if not email_raw:
+        return ""
+    email = email_raw.lower()
+    if hasattr(User, "normalize_email"):
+        try:
+            email = User.normalize_email(email_raw)  # type: ignore[attr-defined]
+        except Exception:
+            pass
+    return (email or "").strip().lower()
+
+
+def _rate_limit_ok() -> bool:
+    now = time.time()
+    last = session.get("last_login_try", 0)
+    try:
+        last = float(last)
+    except Exception:
+        last = 0.0
+
+    if (now - last) < RATE_LIMIT_SECONDS:
+        return False
+
+    session["last_login_try"] = now
+    return True
+
+
 def _get_current_user() -> Optional[User]:
     uid = session.get("user_id")
     if not uid:
         return None
     try:
-        uid = int(uid)
+        uid_int = int(uid)
     except Exception:
         _clear_session()
         return None
 
-    u = db.session.get(User, uid)
+    u = db.session.get(User, uid_int)
     if not u:
         _clear_session()
         return None
@@ -76,30 +91,36 @@ def _get_current_user() -> Optional[User]:
 
 
 def _set_session_user(user: User) -> None:
-    """Session limpia, mínima y consistente."""
+    """Session mínima y consistente."""
     session.clear()
     session["user_id"] = int(user.id)
-    session["user_email"] = (user.email or "").lower()
+    session["user_email"] = (getattr(user, "email", "") or "").lower()
     session["is_admin"] = bool(getattr(user, "is_admin", False))
     session["login_at"] = int(time.time())
     session.permanent = True
 
 
 def _post_login_redirect(user: User) -> str:
-    """Destino post-login."""
-    if bool(getattr(user, "is_admin", False)):
-        return url_for("admin.dashboard")
-    return url_for("account.account_home")
+    """Destino post-login con fallback (no rompe si falta un endpoint)."""
+    try:
+        if bool(getattr(user, "is_admin", False)):
+            return url_for("admin.dashboard")
+        return url_for("account.account_home")
+    except BuildError:
+        # fallback duro
+        try:
+            return url_for("shop.shop")
+        except BuildError:
+            return "/"
 
 
-def _rate_limit_ok() -> bool:
-    """Anti brute-force simple por sesión."""
-    now = time.time()
-    last = session.get("last_login_try", 0)
-    if (now - last) < RATE_LIMIT_SECONDS:
+def _commit_safe() -> bool:
+    try:
+        db.session.commit()
+        return True
+    except Exception:
+        db.session.rollback()
         return False
-    session["last_login_try"] = now
-    return True
 
 
 # ============================================================
@@ -112,10 +133,7 @@ def login():
     if u:
         return redirect(_post_login_redirect(u))
 
-    return render_template(
-        "auth/login.html",
-        next=_next_url(url_for("shop.shop")),
-    )
+    return render_template("auth/login.html", next=_next_url(url_for("shop.shop")))
 
 
 @auth_bp.post("/login")
@@ -124,54 +142,85 @@ def login_post():
         flash("Esperá un momento antes de intentar de nuevo.", "warning")
         return redirect(url_for("auth.login"))
 
-    email_raw = (request.form.get("email") or "").strip()
+    email = _safe_email(request.form.get("email") or "")
     password = (request.form.get("password") or "").strip()
     nxt_safe = _next_url("")
 
-    email = (
-        User.normalize_email(email_raw)
-        if hasattr(User, "normalize_email")
-        else email_raw.lower()
-    )
-
-    if not email or "@" not in email:
+    if not email or "@" not in email or not password:
         flash("Email o contraseña incorrectos.", "error")
         return redirect(url_for("auth.login", next=nxt_safe))
 
     user = db.session.query(User).filter(User.email == email).first()
 
-    # Mensaje único → no filtra info
+    # Si existe lock, lo respetamos ANTES de chequear password (mejor anti brute-force)
+    if user and hasattr(user, "locked_until"):
+        try:
+            locked_until = float(getattr(user, "locked_until") or 0)
+        except Exception:
+            locked_until = 0
+        if locked_until and locked_until > time.time():
+            flash("Cuenta temporalmente bloqueada. Intentá más tarde.", "error")
+            return redirect(url_for("auth.login"))
+
+    # Mensaje único -> no filtra info
     if not user or not user.check_password(password):
+        # incrementa contador si existe
         if user and hasattr(user, "failed_login_count"):
-            user.failed_login_count += 1
-            if user.failed_login_count >= MAX_LOGIN_ATTEMPTS:
-                if hasattr(user, "locked_until"):
+            try:
+                user.failed_login_count = int(getattr(user, "failed_login_count") or 0) + 1
+            except Exception:
+                user.failed_login_count = 1
+
+            if user.failed_login_count >= MAX_LOGIN_ATTEMPTS and hasattr(user, "locked_until"):
+                try:
                     user.locked_until = time.time() + LOCK_TIME_SECONDS
-            db.session.commit()
+                except Exception:
+                    pass
+
+            _commit_safe()
+
         flash("Email o contraseña incorrectos.", "error")
         return redirect(url_for("auth.login", next=nxt_safe))
 
-    # Cuenta bloqueada
-    if hasattr(user, "can_login") and not user.can_login():
-        flash("Cuenta temporalmente bloqueada. Intentá más tarde.", "error")
-        return redirect(url_for("auth.login"))
+    # Si el modelo trae can_login, lo respetamos
+    if hasattr(user, "can_login"):
+        try:
+            if not user.can_login():
+                flash("Cuenta temporalmente bloqueada. Intentá más tarde.", "error")
+                return redirect(url_for("auth.login"))
+        except Exception:
+            pass
 
     # Activa
-    if hasattr(user, "is_active") and not user.is_active:
-        flash("Tu cuenta está desactivada.", "error")
-        return redirect(url_for("auth.login"))
+    if hasattr(user, "is_active"):
+        try:
+            if not bool(getattr(user, "is_active")):
+                flash("Tu cuenta está desactivada.", "error")
+                return redirect(url_for("auth.login"))
+        except Exception:
+            pass
 
-    # Login OK
-    try:
-        if hasattr(user, "mark_login"):
+    # Login OK: resetea contador si existe + marca login
+    if hasattr(user, "failed_login_count"):
+        try:
+            user.failed_login_count = 0
+        except Exception:
+            pass
+    if hasattr(user, "locked_until"):
+        try:
+            user.locked_until = 0
+        except Exception:
+            pass
+    if hasattr(user, "mark_login"):
+        try:
             user.mark_login()
-        db.session.commit()
-    except Exception:
-        db.session.rollback()
+        except Exception:
+            pass
+
+    _commit_safe()
 
     _set_session_user(user)
     flash("Bienvenido 👋", "success")
-
     return redirect(nxt_safe or _post_login_redirect(user))
 
 
@@ -185,24 +234,15 @@ def register():
     if u:
         return redirect(_post_login_redirect(u))
 
-    return render_template(
-        "auth/register.html",
-        next=_next_url(url_for("shop.shop")),
-    )
+    return render_template("auth/register.html", next=_next_url(url_for("shop.shop")))
 
 
 @auth_bp.post("/register")
 def register_post():
-    email_raw = (request.form.get("email") or "").strip()
+    email = _safe_email(request.form.get("email") or "")
     password = (request.form.get("password") or "").strip()
     name = (request.form.get("name") or "").strip()
     nxt_safe = _next_url("")
-
-    email = (
-        User.normalize_email(email_raw)
-        if hasattr(User, "normalize_email")
-        else email_raw.lower()
-    )
 
     if not email or "@" not in email:
         flash("Email inválido.", "warning")
@@ -212,32 +252,61 @@ def register_post():
         flash("La contraseña debe tener al menos 6 caracteres.", "warning")
         return redirect(url_for("auth.register", next=nxt_safe))
 
+    # nombre opcional, pero limpio
+    if name:
+        name = name[:120]
+
+    # ya existe
     if db.session.query(User).filter(User.email == email).first():
         flash("Ese email ya está registrado.", "info")
         return redirect(url_for("auth.login", next=nxt_safe))
 
+    # crear
     user = User(email=email)
-
     if hasattr(user, "name") and name:
-        user.name = name[:120]
+        try:
+            user.name = name
+        except Exception:
+            pass
 
+    # password
     user.set_password(password)
 
+    # flags opcionales
+    if hasattr(user, "is_active"):
+        try:
+            user.is_active = True
+        except Exception:
+            pass
+    if hasattr(user, "failed_login_count"):
+        try:
+            user.failed_login_count = 0
+        except Exception:
+            pass
+    if hasattr(user, "locked_until"):
+        try:
+            user.locked_until = 0
+        except Exception:
+            pass
+
+    # suscripción email si existe
     if hasattr(user, "subscribe_email"):
         try:
             user.subscribe_email()
         except Exception:
             pass
 
-    if hasattr(user, "is_active"):
-        user.is_active = True
-
-    db.session.add(user)
-    db.session.commit()
+    # persistir con rollback seguro
+    try:
+        db.session.add(user)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        flash("Error creando la cuenta. Probá de nuevo.", "error")
+        return redirect(url_for("auth.register", next=nxt_safe))
 
     _set_session_user(user)
     flash("Cuenta creada con éxito ✅", "success")
-
     return redirect(nxt_safe or _post_login_redirect(user))
 
 
@@ -249,7 +318,10 @@ def register_post():
 def logout():
     _clear_session()
     flash("Sesión cerrada.", "info")
-    return redirect(url_for("main.home"))
+    try:
+        return redirect(url_for("main.home"))
+    except BuildError:
+        return redirect("/")
 
 
 __all__ = ["auth_bp"]

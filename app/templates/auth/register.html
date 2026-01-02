@@ -12,7 +12,6 @@
   place-items:center;
   padding: 24px 18px;
 }
-
 .auth-card{
   width:100%;
   max-width: 980px;
@@ -20,11 +19,9 @@
   grid-template-columns: 1.1fr .9fr;
   gap:18px;
 }
-
 @media (max-width: 900px){
   .auth-card{grid-template-columns: 1fr}
 }
-
 .auth-left{
   background:
     radial-gradient(420px 260px at 20% 10%, rgba(47,123,255,.18), transparent 60%),
@@ -35,26 +32,14 @@
   padding: 26px;
   box-shadow: var(--shadow2);
 }
-
-.auth-brand{
-  display:flex; align-items:center; gap:12px;
-}
+.auth-brand{display:flex; align-items:center; gap:12px;}
 .auth-mark{
-  width:38px;height:28px;
-  border-radius:12px;
+  width:38px;height:28px;border-radius:12px;
   background: var(--grad);
   box-shadow: 0 12px 22px rgba(2,6,23,.16);
 }
-.auth-title{
-  font-weight: 950;
-  letter-spacing:-.4px;
-}
-.auth-sub{
-  font-weight:700;
-  color: rgba(11,18,32,.62);
-  font-size:.92rem;
-}
-
+.auth-title{font-weight: 950; letter-spacing:-.4px;}
+.auth-sub{font-weight:700; color: rgba(11,18,32,.62); font-size:.92rem;}
 .auth-left h1{
   margin: 16px 0 0;
   font-weight: 950;
@@ -68,12 +53,7 @@
   color: rgba(11,18,32,.62);
   font-weight: 650;
 }
-
-.auth-benefits{
-  margin-top:16px;
-  display:grid;
-  gap:10px;
-}
+.auth-benefits{margin-top:16px; display:grid; gap:10px;}
 .benefit{
   display:flex; gap:12px; align-items:flex-start;
   padding:12px;
@@ -86,16 +66,8 @@
   background: var(--grad);
   margin-top:6px;
 }
-.benefit b{
-  display:block;
-  font-weight:900;
-}
-.benefit span{
-  display:block;
-  font-weight:650;
-  color: rgba(11,18,32,.60);
-  font-size:.92rem;
-}
+.benefit b{display:block; font-weight:900;}
+.benefit span{display:block; font-weight:650; color: rgba(11,18,32,.60); font-size:.92rem;}
 
 /* ===== Right / Form ===== */
 .auth-right{
@@ -105,18 +77,10 @@
   padding: 26px;
   box-shadow: var(--shadow2);
 }
-
 .auth-head{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:12px;
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
 }
-.auth-head h2{
-  margin:0;
-  font-weight: 950;
-  letter-spacing:-.4px;
-}
+.auth-head h2{margin:0; font-weight: 950; letter-spacing:-.4px;}
 .secure{
   display:inline-flex; align-items:center; gap:8px;
   padding: 8px 10px;
@@ -127,20 +91,25 @@
   font-size:.82rem;
 }
 
-.form{
-  margin-top:16px;
-  display:grid;
-  gap:14px;
-}
-
-.field label{
-  display:block;
-  font-size:.8rem;
+.flash{
+  margin-top:12px;
+  padding:10px 12px;
+  border-radius:14px;
+  border:1px solid var(--stroke);
   font-weight:800;
-  color: rgba(11,18,32,.62);
-  margin-bottom:6px;
+  font-size:.92rem;
+  background: rgba(2,6,23,.03);
 }
+.flash.error{background: rgba(255,0,0,.06); border-color: rgba(255,0,0,.14);}
+.flash.warning{background: rgba(255,181,71,.10); border-color: rgba(255,181,71,.18);}
+.flash.success{background: rgba(34,197,94,.10); border-color: rgba(34,197,94,.18);}
+.flash.info{background: rgba(47,123,255,.08); border-color: rgba(47,123,255,.16);}
 
+.form{margin-top:16px; display:grid; gap:14px;}
+.field label{
+  display:block; font-size:.8rem; font-weight:800;
+  color: rgba(11,18,32,.62); margin-bottom:6px;
+}
 .field input{
   width:100%;
   padding: 14px 14px;
@@ -149,18 +118,14 @@
   font-weight:700;
   font-size:.95rem;
 }
-
 .field input:focus{
   outline:none;
   border-color: rgba(47,123,255,.35);
   box-shadow: 0 0 0 4px rgba(47,123,255,.14);
 }
-
 .pass-wrap{position:relative}
 .pass-toggle{
-  position:absolute;
-  right:10px;
-  top:50%;
+  position:absolute; right:10px; top:50%;
   transform:translateY(-50%);
   border:0;
   background: rgba(255,255,255,.85);
@@ -169,29 +134,22 @@
   cursor:pointer;
   font-weight:900;
 }
-
 .meter{
-  height:6px;
-  border-radius:999px;
-  background: #eef2ff;
-  overflow:hidden;
+  height:6px; border-radius:999px;
+  background: #eef2ff; overflow:hidden;
   border:1px solid var(--stroke);
 }
 .meter > span{
-  display:block;
-  height:100%;
+  display:block; height:100%;
   width:0%;
   background: var(--grad);
   transition: width .2s var(--ease);
 }
-
 .rules{
-  display:grid;
-  gap:4px;
+  display:grid; gap:4px;
   font-size:.78rem;
   color: rgba(11,18,32,.58);
 }
-
 .submit{
   margin-top:6px;
   width:100%;
@@ -205,7 +163,6 @@
   box-shadow: 0 16px 30px rgba(2,6,23,.16);
 }
 .submit:active{transform:translateY(1px)}
-
 .auth-links{
   margin-top:10px;
   display:flex;
@@ -260,19 +217,42 @@
         <span class="secure">🔒 Seguro</span>
       </div>
 
-      <form method="post" class="form" id="registerForm">
+      {# FLASH MESSAGES #}
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="flash {{ category|e }}">{{ message }}</div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+
+      <form method="post" action="{{ url_for('auth.register') }}" class="form" id="registerForm">
+        {# CSRF token (CRÍTICO) #}
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
         {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
 
         <div class="field">
+          <label>Nombre (opcional)</label>
+          <input type="text" name="name" maxlength="120"
+                 value="{{ request.form.get('name','') if request.method=='POST' else '' }}"
+                 placeholder="Tu nombre">
+        </div>
+
+        <div class="field">
           <label>Correo electrónico</label>
-          <input type="email" name="email" required placeholder="tu@email.com">
+          <input type="email" name="email" required autocomplete="email"
+                 value="{{ request.form.get('email','') if request.method=='POST' else '' }}"
+                 placeholder="tu@email.com">
         </div>
 
         <div class="field">
           <label>Contraseña</label>
           <div class="pass-wrap">
-            <input type="password" name="password" id="password" required placeholder="Mínimo 8 caracteres">
-            <button type="button" class="pass-toggle" id="togglePass">👁</button>
+            <input type="password" name="password" id="password" required minlength="8"
+                   autocomplete="new-password"
+                   placeholder="Mínimo 8 caracteres">
+            <button type="button" class="pass-toggle" id="togglePass" aria-label="Mostrar contraseña">👁</button>
           </div>
           <div class="meter"><span id="meter"></span></div>
           <div class="rules">
@@ -299,6 +279,7 @@
   const pass = document.getElementById("password");
   const meter = document.getElementById("meter");
   const toggle = document.getElementById("togglePass");
+  const form = document.getElementById("registerForm");
 
   function score(v){
     let s = 0;
@@ -317,6 +298,18 @@
   if(toggle && pass){
     toggle.addEventListener("click", () => {
       pass.type = pass.type === "password" ? "text" : "password";
+    });
+  }
+
+  // evita doble submit accidental
+  if(form){
+    form.addEventListener("submit", () => {
+      const btn = form.querySelector("button[type='submit']");
+      if(btn){
+        btn.disabled = true;
+        btn.style.opacity = "0.85";
+        btn.textContent = "Creando...";
+      }
     });
   }
 })();

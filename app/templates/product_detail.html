@@ -7,7 +7,13 @@
 {% block extra_head %}
 <style>
   /* ==========================================================
-     PRODUCT DETAIL — ULTRA PRO (Light · Premium · Safe)
+     PRODUCT DETAIL — ULTRA PRO (Light · Premium · Safe) — FINAL
+     +5 mejoras:
+     1) Add-to-cart real por POST (json=1) + fallback
+     2) Stepper qty (1–25) + keyboard
+     3) Estado loading + single-flight
+     4) Abre CartModal + refresh si existe
+     5) CSRF auto (meta/input) sin romper
   ========================================================== */
 
   .pd-hover{
@@ -21,13 +27,9 @@
   }
 
   .pill-badge{
-    display:inline-flex;
-    align-items:center;
-    gap:.45rem;
-    padding:.38rem .82rem;
-    border-radius:9999px;
-    font-size:.72rem;
-    line-height:1;
+    display:inline-flex;align-items:center;gap:.45rem;
+    padding:.38rem .82rem;border-radius:9999px;
+    font-size:.72rem;line-height:1;
     border:1px solid rgba(15,23,42,.10);
     background: rgba(255,255,255,.78);
     color: rgba(15,23,42,.66);
@@ -40,28 +42,68 @@
     box-shadow: 0 0 0 4px rgba(34,197,94,.12);
   }
 
-  .pd-img-wrap{
-    position:relative;
-    overflow:hidden;
-    border-radius: 1.75rem;
-  }
+  .pd-img-wrap{position:relative;overflow:hidden;border-radius: 1.75rem;}
   .pd-img-fallback{
-    display:none;
-    position:absolute;
-    inset:0;
-    place-items:center;
-    text-align:center;
-    padding:1.2rem;
-    color: rgba(15,23,42,.72);
-    font-weight: 800;
+    display:none;position:absolute;inset:0;place-items:center;text-align:center;padding:1.2rem;
+    color: rgba(15,23,42,.72);font-weight: 800;
     background:
       radial-gradient(900px 420px at 20% 20%, rgba(37,99,235,.12), transparent 55%),
       radial-gradient(720px 420px at 85% 20%, rgba(245,158,11,.10), transparent 58%),
       rgba(248,250,252,.9);
   }
 
+  /* Qty stepper */
+  .pd-qty{
+    display:inline-flex;align-items:center;gap:8px;
+    padding:8px 10px;border-radius:999px;
+    border:1px solid rgba(148,163,184,.35);
+    background: rgba(255,255,255,.8);
+  }
+  .pd-qty button{
+    width:34px;height:34px;border-radius:999px;
+    border:1px solid rgba(148,163,184,.30);
+    background:#fff;
+    cursor:pointer;
+    font-weight:900;
+    transition: transform .14s ease, filter .14s ease, box-shadow .14s ease;
+  }
+  .pd-qty button:hover{transform: translateY(-1px); filter:saturate(1.06); box-shadow: 0 10px 18px rgba(2,6,23,.08)}
+  .pd-qty button:active{transform: translateY(0)}
+  .pd-qty input{
+    width:54px;
+    text-align:center;
+    border:0;
+    outline:none;
+    background:transparent;
+    font-weight:900;
+    color:#0b1220;
+  }
+  .pd-qty input::-webkit-outer-spin-button,
+  .pd-qty input::-webkit-inner-spin-button{ -webkit-appearance: none; margin: 0; }
+  .pd-qty input[type=number]{ -moz-appearance:textfield; }
+
+  /* Add button loading */
+  .pd-btn{
+    position:relative;
+  }
+  .pd-btn[aria-busy="true"]{
+    opacity:.8;
+    pointer-events:none;
+    filter:saturate(.95);
+  }
+  .pd-spin{
+    display:none;
+    width:16px;height:16px;border-radius:999px;
+    border:2px solid rgba(255,255,255,.25);
+    border-top-color: rgba(255,255,255,.95);
+    animation: pd-rot .9s linear infinite;
+  }
+  .pd-btn[aria-busy="true"] .pd-spin{display:inline-block}
+  @keyframes pd-rot{to{transform: rotate(360deg)}}
+
   @media (prefers-reduced-motion: reduce){
     *{ transition:none!important; animation:none!important; scroll-behavior:auto!important; }
+    .pd-spin{animation:none!important}
   }
 </style>
 {% endblock %}
@@ -75,15 +117,14 @@
   {% set description = product.description if product and product.description else '' %}
   {% set image_url = product.image if product and product.image else '' %}
 
-  {# Precio safe: si viene string/none, no rompe #}
   {% set price_value = (product.price if product and product.price is not none else 0) %}
   {% set price_float = (price_value|float) %}
 
-  {# Link carrito safe: si no existe endpoint, mandamos a shop #}
-  {% set cart_href = url_for('main.shop') %}
-  {% if 'main.cart' in (current_app.view_functions.keys()|list) %}
-    {% set cart_href = url_for('main.cart') %}
-  {% endif %}
+  {# id seguro para cart/add #}
+  {% set product_id = (product.id if product and product.id is defined else (product.product_id if product and product.product_id is defined else "")) %}
+
+  {# Link fallback: si no hay API, redirigimos al carrito #}
+  {% set cart_fallback = url_for('cart.cart_view') if 'cart.cart_view' in current_app.view_functions else '/cart' %}
 
   {% if not product %}
     <div class="bg-white rounded-2xl border border-slate-200 p-8 text-center">
@@ -97,10 +138,8 @@
         Volver a la tienda
       </a>
     </div>
-
   {% else %}
 
-    <!-- Breadcrumb -->
     <nav class="flex items-center gap-2 text-[11px] md:text-xs text-slate-500 mb-6" aria-label="Breadcrumb">
       <a href="{{ url_for('main.shop') }}" class="hover:text-amber-600 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/40 rounded">
         Tienda
@@ -135,7 +174,6 @@
           </div>
         </div>
 
-        <!-- Mini info -->
         <div class="grid grid-cols-3 gap-3 text-[11px] text-slate-500">
           <div class="rounded-2xl border border-slate-100 bg-white/80 px-3 py-2">
             <p class="font-semibold text-slate-900 text-xs">Fit</p>
@@ -191,7 +229,6 @@
           </ul>
         </div>
 
-        <!-- Badges -->
         <div class="flex flex-wrap gap-2 text-[11px]">
           <span class="pill-badge"><span class="pill-dot"></span>Producción bajo demanda</span>
           <span class="pill-badge">Unisex</span>
@@ -199,20 +236,30 @@
           <span class="pill-badge">Envío gestionado por Printful</span>
         </div>
 
-        <!-- CTA -->
+        <!-- CTA + QTY -->
         <div class="pt-3 flex flex-wrap items-center gap-3">
-          <a href="{{ cart_href }}"
-             class="inline-flex items-center justify-center px-7 py-2.5 rounded-full bg-slate-900 text-slate-50 text-sm font-medium hover:bg-slate-800
-                    shadow-sm hover:shadow-md transition focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/20">
-            Agregar al carrito (demo)
-          </a>
+
+          <div class="pd-qty" aria-label="Cantidad">
+            <button type="button" data-qty-dec aria-label="Disminuir">−</button>
+            <input id="pdQty" type="number" inputmode="numeric" min="1" max="25" value="1" aria-label="Cantidad">
+            <button type="button" data-qty-inc aria-label="Aumentar">+</button>
+          </div>
+
+          <button type="button"
+                  id="btnAddToCart"
+                  class="pd-btn inline-flex items-center justify-center gap-2 px-7 py-2.5 rounded-full bg-slate-900 text-slate-50 text-sm font-medium hover:bg-slate-800
+                         shadow-sm hover:shadow-md transition focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/20"
+                  data-product-id="{{ product_id }}"
+                  aria-busy="false">
+            <span class="pd-spin" aria-hidden="true"></span>
+            <span data-btn-text>Agregar al carrito</span>
+          </button>
 
           <p class="text-[11px] text-slate-500 max-w-xs">
-            Vista demo. Después conectamos carrito + pagos + Printful automático.
+            Compra segura. Podés revisar tu carrito antes de pagar.
           </p>
         </div>
 
-        <!-- Fit & Care -->
         <div class="pt-2 border-t border-slate-100 text-[11px] md:text-xs text-slate-500 space-y-1">
           <p>
             <span class="font-semibold text-slate-700">Tip de fit:</span>
@@ -224,6 +271,13 @@
           </p>
         </div>
 
+        <noscript>
+          <div class="mt-3 text-xs text-slate-600">
+            Activá JavaScript para agregar al carrito desde esta página.
+            Podés hacerlo desde la tienda igualmente.
+          </div>
+        </noscript>
+
       </div>
     </div>
 
@@ -234,14 +288,16 @@
 {% block extra_js %}
 <script>
 /* ==========================================================
-   Product detail — Safe UX:
+   Product detail — FINAL JS
    - fallback imagen
-   - micro-animación sin librerías (no rompe)
+   - micro-animación
+   - qty stepper
+   - add-to-cart real (POST /cart/add?json=1) + fallback seguro
 ========================================================== */
 (function(){
+  // --------- image fallback ----------
   const img = document.getElementById("pd-img");
   const fb  = document.getElementById("pd-fallback");
-
   if(img && fb){
     img.addEventListener("error", () => {
       img.style.display = "none";
@@ -249,11 +305,10 @@
     }, { once:true });
   }
 
-  // micro-animación (sin GSAP)
+  // --------- micro-animación ----------
   const media = document.querySelector("[data-product-media]");
   const info  = document.querySelector("[data-product-info]");
   const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
   if(!reduce){
     [media, info].forEach((el, i) => {
       if(!el) return;
@@ -266,6 +321,121 @@
       }, 60 + i*80);
     });
   }
+
+  // --------- qty stepper ----------
+  const qty = document.getElementById("pdQty");
+  const inc = document.querySelector("[data-qty-inc]");
+  const dec = document.querySelector("[data-qty-dec]");
+
+  const clamp = (n,a,b) => Math.min(b, Math.max(a, n));
+  const readQty = () => clamp(parseInt(qty?.value || "1", 10) || 1, 1, 25);
+  const setQty = (v) => { if(qty) qty.value = String(clamp(v,1,25)); };
+
+  inc && inc.addEventListener("click", () => setQty(readQty()+1));
+  dec && dec.addEventListener("click", () => setQty(readQty()-1));
+  qty && qty.addEventListener("input", () => setQty(readQty()));
+  qty && qty.addEventListener("keydown", (ev) => {
+    if(ev.key === "ArrowUp"){ ev.preventDefault(); setQty(readQty()+1); }
+    if(ev.key === "ArrowDown"){ ev.preventDefault(); setQty(readQty()-1); }
+  });
+
+  // --------- CSRF ----------
+  const readCsrf = () => {
+    const m = document.querySelector('meta[name="csrf-token"]');
+    if(m && m.content) return m.content.trim();
+    const i = document.querySelector('input[name="csrf_token"]');
+    if(i && i.value) return i.value.trim();
+    return "";
+  };
+
+  // --------- add to cart ----------
+  const btn = document.getElementById("btnAddToCart");
+  if(!btn) return;
+
+  const fallbackCart = {{ (cart_fallback|tojson) }};
+  const pid = (btn.getAttribute("data-product-id") || "").trim();
+  let inFlight = false;
+
+  const setBusy = (on) => {
+    btn.setAttribute("aria-busy", on ? "true" : "false");
+    btn.disabled = !!on;
+    const t = btn.querySelector("[data-btn-text]");
+    if(t) t.textContent = on ? "Agregando…" : "Agregar al carrito";
+  };
+
+  const toast = (t,m) => { try{ window.toast && window.toast(t,m); }catch(e){} };
+
+  async function postAdd(){
+    // Si no hay id, no inventamos: vamos al carrito
+    if(!pid){
+      window.location.href = fallbackCart;
+      return;
+    }
+
+    // Preferimos apiPost si existe
+    const body = { id: pid, qty: readQty() };
+    const url = "/cart/add?json=1";
+
+    // headers + csrf
+    const headers = { "Content-Type":"application/json", "Accept":"application/json" };
+    const csrf = readCsrf();
+    if(csrf) headers["X-CSRF-Token"] = csrf;
+
+    // apiPost global
+    if(window.apiPost){
+      const res = await window.apiPost(url, body);
+      return res;
+    }
+
+    const r = await fetch(url, {
+      method: "POST",
+      headers,
+      credentials: "same-origin",
+      body: JSON.stringify(body)
+    });
+
+    let j = {};
+    try{ j = await r.json(); }catch(e){ j = {}; }
+
+    if(!r.ok || j?.ok === false){
+      const msg = (j?.error?.message || j?.message || "No se pudo agregar al carrito");
+      throw new Error(msg);
+    }
+    return j;
+  }
+
+  btn.addEventListener("click", async () => {
+    if(inFlight) return;
+    inFlight = true;
+    setBusy(true);
+
+    try{
+      await postAdd();
+
+      toast("Listo", "Agregado al carrito ✅");
+
+      // Refresh + open cart modal si existe
+      try{
+        if(window.SkylineCartModal){
+          if(typeof window.SkylineCartModal.refresh === "function") await window.SkylineCartModal.refresh();
+          if(typeof window.SkylineCartModal.open === "function") window.SkylineCartModal.open();
+        } else if(window.CartStore && typeof window.CartStore.refresh === "function"){
+          await window.CartStore.refresh();
+        }
+      }catch(e){}
+
+      // Notificar al resto de la app
+      try{ window.dispatchEvent(new CustomEvent("cart:updated")); }catch(e){}
+
+    }catch(e){
+      toast("Ups", (e && e.message) ? e.message : "Error");
+      // fallback suave: llevar al carrito
+      setTimeout(() => { window.location.href = fallbackCart; }, 650);
+    }finally{
+      setBusy(false);
+      inFlight = false;
+    }
+  });
 })();
 </script>
 {% endblock %}

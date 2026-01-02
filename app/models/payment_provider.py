@@ -2,12 +2,19 @@ from __future__ import annotations
 
 import re
 from datetime import datetime
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy import Index, CheckConstraint
+from sqlalchemy import Index, CheckConstraint, UniqueConstraint
 from sqlalchemy.orm import validates
 
 from app.models import db
+
+# ============================================================
+# Payment Providers (GLOBAL) + User Preferred Payment (PER USER)
+# - Estilo MercadoLibre/Temu: el usuario elige "método preferido"
+# - NO se guardan tarjetas (PCI). Solo preferencia + metadatos no sensibles.
+# ============================================================
+
 
 # -------------------------------------------------
 # Regex / Constantes
@@ -31,9 +38,12 @@ _ALLOWED_CODES = {
     "paxum",
 }
 
+# Tipos UI (para que el front los dibuje lindo)
+_ALLOWED_KINDS = {"wallet", "card", "bank_transfer", "cash", "other"}
+
 
 # -------------------------------------------------
-# Utils internos (no tocar)
+# Utils internos
 # -------------------------------------------------
 def _utcnow() -> datetime:
     return datetime.utcnow()
@@ -55,7 +65,10 @@ def _deep_merge(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
 
 def _is_secret_key(k: str) -> bool:
     k2 = (k or "").lower()
-    return k2 in _SECRET_KEYS_HINT or any(x in k2 for x in ("token", "secret", "key", "password"))
+    return (
+        k2 in _SECRET_KEYS_HINT
+        or any(x in k2 for x in ("token", "secret", "key", "password", "bearer"))
+    )
 
 
 def _mask(v: Any, keep: int = 4) -> str:
@@ -91,33 +104,71 @@ def _clean_email(v: Any) -> str:
     return s
 
 
+def _clean_kind(v: Any) -> str:
+    s = _clean_str(v, 30).lower()
+    return s if s in _ALLOWED_KINDS else "other"
+
+
+def _as_bool(v: Any) -> bool:
+    if isinstance(v, bool):
+        return v
+    s = str(v or "").strip().lower()
+    return s in {"1", "true", "yes", "y", "on"}
+
+
+def _as_int(v: Any, default: int = 0) -> int:
+    try:
+        return int(str(v).strip())
+    except Exception:
+        return default
+
+
 # =================================================
-# MODEL
+# MODEL: PaymentProvider (GLOBAL)
 # =================================================
 class PaymentProvider(db.Model):
     """
-    PaymentProvider — ULTRA PRO FINAL (NO TOCAR MÁS)
+    PaymentProvider — ULTRA PRO FINAL
 
-    - Admin 100% visual
-    - Checkout seguro
-    - Multi país
-    - Multi billetera
+    Objetivo:
+    - Admin configura métodos (habilitar, ordenar, recomendar)
+    - Checkout lista solo "enabled + config válida"
+    - Multi-país / multi-wallet / transferencias
+    - Config JSON con schema validable
+
+    Importante:
+    - Este modelo NO guarda datos sensibles del cliente (tarjetas).
+    - Eso va en pasarela (MercadoPago/Stripe/PayPal).
     """
 
     __tablename__ = "payment_providers"
 
     id = db.Column(db.Integer, primary_key=True)
 
+    # Identidad
     code = db.Column(db.String(40), unique=True, nullable=False, index=True)
     name = db.Column(db.String(80), nullable=False)
 
+    # UI / Checkout
     enabled = db.Column(db.Boolean, default=False, nullable=False, index=True)
-    sort_order = db.Column(db.Integer, default=100, nullable=False, index=True)
     recommended = db.Column(db.Boolean, default=False, nullable=False, index=True)
+    sort_order = db.Column(db.Integer, default=100, nullable=False, index=True)
 
+    # Tipo visual y país (para filtros)
+    kind = db.Column(db.String(20), nullable=False, default="other", index=True)  # wallet/card/bank_transfer/...
+    country = db.Column(db.String(2), nullable=False, default="UY", index=True)  # ISO2, ej "UY", "AR"
+
+    # UX pro
+    fee_percent = db.Column(db.Integer, nullable=False, default=0)     # % comisión estimada (solo info UI)
+    eta_minutes = db.Column(db.Integer, nullable=False, default=0)     # tiempo estimado confirmación
+    min_amount = db.Column(db.Integer, nullable=False, default=0)      # mínimo (en moneda base UI)
+    max_amount = db.Column(db.Integer, nullable=False, default=0)      # 0 = sin máximo
+
+    # Extras
     notes = db.Column(db.String(500), nullable=False, default="")
     config = db.Column(db.JSON, nullable=False, default=dict)
 
+    # Auditoría (admin)
     updated_by = db.Column(db.String(120), nullable=False, default="")
     updated_ip = db.Column(db.String(64), nullable=False, default="")
 
@@ -128,7 +179,13 @@ class PaymentProvider(db.Model):
         CheckConstraint("length(code) >= 2", name="ck_pp_code_len"),
         CheckConstraint("length(name) >= 2", name="ck_pp_name_len"),
         CheckConstraint("sort_order BETWEEN 0 AND 9999", name="ck_pp_sort"),
+        CheckConstraint("fee_percent BETWEEN 0 AND 100", name="ck_pp_fee"),
+        CheckConstraint("eta_minutes BETWEEN 0 AND 100000", name="ck_pp_eta"),
+        CheckConstraint("min_amount BETWEEN 0 AND 1000000000", name="ck_pp_min"),
+        CheckConstraint("max_amount BETWEEN 0 AND 1000000000", name="ck_pp_max"),
         Index("ix_pp_enabled_sort", "enabled", "sort_order"),
+        Index("ix_pp_country_enabled", "country", "enabled"),
+        Index("ix_pp_kind_enabled", "kind", "enabled"),
     )
 
     # -------------------------
@@ -155,6 +212,19 @@ class PaymentProvider(db.Model):
     def _validate_config(self, _, value: Any) -> Dict[str, Any]:
         return _safe_dict(value)
 
+    @validates("kind")
+    def _validate_kind(self, _, value: Any) -> str:
+        return _clean_kind(value)
+
+    @validates("country")
+    def _validate_country(self, _, value: Any) -> str:
+        v = _clean_str(value, 2).upper()
+        return v if len(v) == 2 else "UY"
+
+    @validates("fee_percent", "eta_minutes", "min_amount", "max_amount", "sort_order")
+    def _validate_ints(self, _k, value: Any) -> int:
+        return max(0, _as_int(value, 0))
+
     # -------------------------
     # Config helpers
     # -------------------------
@@ -176,15 +246,19 @@ class PaymentProvider(db.Model):
         self.config = _deep_merge(cur, data) if deep else {**cur, **data}
 
     # -------------------------
-    # VALIDACIÓN REAL
+    # VALIDACIÓN REAL por schema
     # -------------------------
     def validate_config(self) -> Tuple[bool, List[str]]:
         errors: List[str] = []
         cfg = self.ensure_config()
 
-        for f in self.config_schema_for(self.code):
+        schema = self.config_schema_for(self.code)
+        for f in schema:
             k = f["key"]
-            if f.get("required") and not cfg.get(k):
+            typ = f.get("type", "text")
+            required = bool(f.get("required"))
+
+            if required and not cfg.get(k):
                 errors.append(f"Falta: {k}")
                 continue
 
@@ -192,10 +266,16 @@ class PaymentProvider(db.Model):
                 continue
 
             try:
-                if f["type"] == "url":
+                if typ == "url":
                     cfg[k] = _clean_url(cfg[k])
-                elif f["type"] == "email":
+                elif typ == "email":
                     cfg[k] = _clean_email(cfg[k])
+                elif typ == "bool":
+                    cfg[k] = _as_bool(cfg[k])
+                elif typ == "int":
+                    cfg[k] = max(0, _as_int(cfg[k], 0))
+                else:
+                    cfg[k] = _clean_str(cfg[k], 500)
             except Exception as e:
                 errors.append(f"{k}: {e}")
 
@@ -210,10 +290,21 @@ class PaymentProvider(db.Model):
         return bool(self.enabled and ok)
 
     def checkout_link(self) -> str:
+        """
+        Para flujos tipo "link de pago".
+        Si integrás API (MP/Stripe), esto puede estar vacío y usar tu service.
+        """
         return self.get("checkout_url") or self.get("paypal_me") or ""
 
     def get_label_for_checkout(self) -> str:
         return self.get("label_checkout") or self.name
+
+    def icon_hint(self) -> str:
+        """
+        Hint para UI (no obligatorio):
+        - mp / paypal / bank / card
+        """
+        return self.get("icon") or self.code
 
     # -------------------------
     # ADMIN
@@ -225,9 +316,11 @@ class PaymentProvider(db.Model):
         }
 
     def admin_preview(self) -> Dict[str, Any]:
+        ok, errs = self.validate_config()
         return {
             **self.as_dict(masked=True),
-            "ready": self.is_ready_for_checkout(),
+            "ready": bool(self.enabled and ok),
+            "errors": errs,
         }
 
     # -------------------------
@@ -241,34 +334,75 @@ class PaymentProvider(db.Model):
             "enabled": self.enabled,
             "recommended": self.recommended,
             "sort_order": self.sort_order,
+            "kind": self.kind,
+            "country": self.country,
+            "fee_percent": self.fee_percent,
+            "eta_minutes": self.eta_minutes,
+            "min_amount": self.min_amount,
+            "max_amount": self.max_amount,
             "notes": self.notes,
             "config": self.masked_config() if masked else self.ensure_config(),
-            "created_at": self.created_at.isoformat(),
-            "updated_at": self.updated_at.isoformat(),
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
 
     def __repr__(self) -> str:
         return f"<PaymentProvider {self.code} enabled={self.enabled}>"
 
     # -------------------------
-    # SCHEMA ADMIN
+    # SCHEMA ADMIN (editable + validable)
     # -------------------------
     @staticmethod
     def config_schema_for(code: str) -> List[Dict[str, Any]]:
+        """
+        Schema mínimo para validar config y ayudar al admin.
+        Tipos soportados: text | url | email | bool | int
+        """
         if code == "mercadopago_uy":
             return [
-                {"key": "checkout_url", "type": "url", "required": True},
-                {"key": "currency", "type": "text", "required": True},
+                {"key": "mode", "type": "text", "required": False},  # live/test
+                {"key": "checkout_url", "type": "url", "required": False},  # si usás link directo
+                {"key": "public_key", "type": "text", "required": False},
+                {"key": "access_token", "type": "text", "required": False},
+                {"key": "currency", "type": "text", "required": True},  # UYU
+                {"key": "label_checkout", "type": "text", "required": False},
+                {"key": "icon", "type": "text", "required": False},
             ]
         if code == "mercadopago_ar":
             return [
-                {"key": "checkout_url", "type": "url", "required": True},
-                {"key": "currency", "type": "text", "required": True},
+                {"key": "mode", "type": "text", "required": False},
+                {"key": "checkout_url", "type": "url", "required": False},
+                {"key": "public_key", "type": "text", "required": False},
+                {"key": "access_token", "type": "text", "required": False},
+                {"key": "currency", "type": "text", "required": True},  # ARS
+                {"key": "label_checkout", "type": "text", "required": False},
+                {"key": "icon", "type": "text", "required": False},
             ]
         if code == "paypal":
             return [
                 {"key": "paypal_me", "type": "url", "required": False},
                 {"key": "business_email", "type": "email", "required": False},
+                {"key": "mode", "type": "text", "required": False},  # live/sandbox
+                {"key": "label_checkout", "type": "text", "required": False},
+                {"key": "icon", "type": "text", "required": False},
+            ]
+        if code == "transferencia":
+            return [
+                {"key": "title", "type": "text", "required": True},
+                {"key": "instructions", "type": "text", "required": True},
+                {"key": "bank_name", "type": "text", "required": False},
+                {"key": "account_name", "type": "text", "required": False},
+                {"key": "account_number", "type": "text", "required": False},
+                {"key": "label_checkout", "type": "text", "required": False},
+                {"key": "icon", "type": "text", "required": False},
+            ]
+        if code in {"wise", "payoneer", "paxum"}:
+            return [
+                {"key": "title", "type": "text", "required": True},
+                {"key": "instructions", "type": "text", "required": True},
+                {"key": "checkout_url", "type": "url", "required": False},
+                {"key": "label_checkout", "type": "text", "required": False},
+                {"key": "icon", "type": "text", "required": False},
             ]
         return [
             {"key": "title", "type": "text", "required": True},
@@ -276,39 +410,224 @@ class PaymentProvider(db.Model):
         ]
 
     # -------------------------
-    # BOOTSTRAP
+    # BOOTSTRAP DEFAULTS (GLOBAL)
     # -------------------------
     @staticmethod
     def boot_defaults() -> List["PaymentProvider"]:
+        """
+        Crea providers base si no existen.
+        No los habilita automáticamente (seguridad).
+        """
         defaults = [
-            ("mercadopago_uy", "Mercado Pago Uruguay", 10),
-            ("mercadopago_ar", "Mercado Pago Argentina", 20),
-            ("paypal", "PayPal", 30),
-            ("transferencia", "Transferencia", 40),
+            # code, name, kind, country, sort
+            ("mercadopago_uy", "Mercado Pago Uruguay", "wallet", "UY", 10),
+            ("mercadopago_ar", "Mercado Pago Argentina", "wallet", "AR", 20),
+            ("paypal", "PayPal", "wallet", "WW", 30),
+            ("transferencia", "Transferencia bancaria", "bank_transfer", "UY", 40),
+            ("wise", "Wise", "bank_transfer", "WW", 50),
+            ("payoneer", "Payoneer", "wallet", "WW", 60),
+            ("paxum", "Paxum", "wallet", "WW", 70),
         ]
-        items = []
-        for code, name, order in defaults:
-            if not PaymentProvider.query.filter_by(code=code).first():
-                items.append(PaymentProvider(code=code, name=name, sort_order=order))
+        items: List[PaymentProvider] = []
+        for code, name, kind, country, order in defaults:
+            exists = PaymentProvider.query.filter_by(code=code).first()
+            if not exists:
+                items.append(
+                    PaymentProvider(
+                        code=code,
+                        name=name,
+                        kind=kind,
+                        country=country if country != "WW" else "UY",
+                        sort_order=order,
+                        enabled=False,
+                        recommended=False,
+                        config={},
+                    )
+                )
         return items
+
+
+# =================================================
+# MODEL: UserPreferredPayment (PER USER)
+# Guarda SOLO preferencia + metadatos NO sensibles
+# =================================================
+class UserPreferredPayment(db.Model):
+    """
+    Preferencia de pago del usuario (tipo MercadoLibre/Temu).
+
+    - Un usuario tiene 1 preferido (simple, rápido, sin vueltas).
+    - NO guardar tarjetas, NO guardar tokens sensibles.
+    - Si algún día integrás vault (MP/Stripe), guardás solo alias/last4/brand.
+    """
+
+    __tablename__ = "user_preferred_payments"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # code debe ser uno de PaymentProvider.code (ej: mercadopago_uy)
+    provider_code = db.Column(db.String(40), nullable=False, index=True)
+
+    # UI info (no sensible)
+    label = db.Column(db.String(80), nullable=False, default="")
+    brand = db.Column(db.String(40), nullable=False, default="")   # Visa/Mastercard/etc (si aplica)
+    last4 = db.Column(db.String(8), nullable=False, default="")    # últimos 4 (si aplica)
+
+    # Extra data NO sensible (ej: "debit"/"credit", cuotas preferidas, etc.)
+    meta = db.Column(db.JSON, nullable=False, default=dict)
+
+    created_at = db.Column(db.DateTime, default=_utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", name="uq_user_preferred_payment_user"),
+        CheckConstraint("length(provider_code) >= 2", name="ck_upp_code_len"),
+        Index("ix_upp_user_code", "user_id", "provider_code"),
+    )
+
+    @validates("provider_code")
+    def _v_provider_code(self, _k, v: str) -> str:
+        vv = _clean_str(v, 40).lower().replace("-", "_").replace(" ", "_")
+        vv = re.sub(r"__+", "_", vv)
+        if not _CODE_RE.match(vv):
+            raise ValueError("provider_code inválido.")
+        return vv
+
+    @validates("label")
+    def _v_label(self, _k, v: Any) -> str:
+        return _clean_str(v, 80)
+
+    @validates("brand")
+    def _v_brand(self, _k, v: Any) -> str:
+        return _clean_str(v, 40)
+
+    @validates("last4")
+    def _v_last4(self, _k, v: Any) -> str:
+        s = _clean_str(v, 8)
+        # permitir vacío o 4 dígitos
+        if s and not re.fullmatch(r"\d{4,8}", s):
+            return ""
+        return s
+
+    @validates("meta")
+    def _v_meta(self, _k, v: Any) -> Dict[str, Any]:
+        return _safe_dict(v)
+
+    def as_dict(self) -> Dict[str, Any]:
+        return {
+            "user_id": self.user_id,
+            "provider_code": self.provider_code,
+            "label": self.label,
+            "brand": self.brand,
+            "last4": self.last4,
+            "meta": _safe_dict(self.meta),
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+    def __repr__(self) -> str:
+        return f"<UserPreferredPayment user_id={self.user_id} provider={self.provider_code}>"
 
 
 # =================================================
 # SERVICE
 # =================================================
 class PaymentProviderService:
+    """
+    Service pro:
+    - lista providers habilitados y listos
+    - obtiene provider preferido del usuario
+    - setea preferido del usuario (validando que exista y esté listo)
+    """
+
     @staticmethod
-    def get_enabled_for_checkout() -> List[PaymentProvider]:
+    def get_enabled_for_checkout(country: Optional[str] = None) -> List[PaymentProvider]:
         try:
+            q = PaymentProvider.query.filter(PaymentProvider.enabled.is_(True))
+
+            # filtro país (si lo usás en UI)
+            if country:
+                cc = _clean_str(country, 2).upper()
+                if len(cc) == 2:
+                    # deja WW: hoy simplificado (si querés WW real, lo expandimos)
+                    q = q.filter(PaymentProvider.country.in_([cc, "UY", "AR"]))
+
             providers = (
-                PaymentProvider.query
-                .filter(PaymentProvider.enabled.is_(True))
-                .order_by(
+                q.order_by(
                     PaymentProvider.recommended.desc(),
-                    PaymentProvider.sort_order.asc()
+                    PaymentProvider.sort_order.asc(),
+                    PaymentProvider.name.asc(),
                 )
                 .all()
             )
             return [p for p in providers if p.is_ready_for_checkout()]
         except Exception:
             return []
+
+    @staticmethod
+    def get_by_code(code: str) -> Optional[PaymentProvider]:
+        try:
+            c = _clean_str(code, 40).lower().replace("-", "_").replace(" ", "_")
+            c = re.sub(r"__+", "_", c)
+            return PaymentProvider.query.filter_by(code=c).first()
+        except Exception:
+            return None
+
+    @staticmethod
+    def get_user_preferred(user_id: int) -> Optional[UserPreferredPayment]:
+        try:
+            return UserPreferredPayment.query.filter_by(user_id=int(user_id)).first()
+        except Exception:
+            return None
+
+    @staticmethod
+    def set_user_preferred(
+        user_id: int,
+        provider_code: str,
+        *,
+        label: str = "",
+        brand: str = "",
+        last4: str = "",
+        meta: Optional[Dict[str, Any]] = None,
+        require_ready: bool = True,
+    ) -> Tuple[bool, str]:
+        """
+        Guarda preferido del usuario.
+        - require_ready=True: solo permite providers habilitados y listos (recomendado)
+        """
+        provider = PaymentProviderService.get_by_code(provider_code)
+        if not provider:
+            return False, "Método no existe."
+
+        if require_ready and not provider.is_ready_for_checkout():
+            return False, "Método no está listo para checkout."
+
+        pref = PaymentProviderService.get_user_preferred(user_id)
+        if not pref:
+            pref = UserPreferredPayment(user_id=int(user_id), provider_code=provider.code)
+
+        pref.provider_code = provider.code
+        pref.label = _clean_str(label, 80) or provider.get_label_for_checkout()
+        pref.brand = _clean_str(brand, 40)
+        pref.last4 = _clean_str(last4, 8)
+        pref.meta = _safe_dict(meta)
+
+        db.session.add(pref)
+        db.session.commit()
+        return True, "Preferencia guardada."
+
+    @staticmethod
+    def bootstrap_defaults() -> Tuple[int, int]:
+        """
+        Crea providers base si faltan.
+        Retorna: (creados, total)
+        """
+        created = 0
+        items = PaymentProvider.boot_defaults()
+        for it in items:
+            db.session.add(it)
+            created += 1
+        if created:
+            db.session.commit()
+        total = PaymentProvider.query.count()
+        return created, total

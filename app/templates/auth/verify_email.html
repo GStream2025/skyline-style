@@ -1,39 +1,345 @@
 {% extends "base.html" %}
 
-{% block title %}Verificar correo - Skyline Style{% endblock %}
+{% block title %}Verificar correo · Skyline Store{% endblock %}
+
+{% block extra_head %}
+{# CSRF en meta para fetch (si base.html no lo incluye) #}
+<meta name="csrf-token" content="{{ csrf_token }}">
+
+<style>
+  /* =========================================================
+     VERIFY EMAIL — ULTRA PRO (FINAL)
+     - Endpoints robustos
+     - CSRF real
+     - Reenvío best-effort
+     - Cooldown UI
+     - Accesible
+  ========================================================= */
+
+  .ve-wrap{min-height:70vh;display:grid;place-items:center;padding:40px 16px}
+  .ve-card{
+    width:100%;
+    max-width:520px;
+    border-radius:26px;
+    border:1px solid rgba(148,163,184,.22);
+    background: rgba(255,255,255,.86);
+    box-shadow: 0 22px 60px rgba(2,6,23,.12);
+    overflow:hidden;
+  }
+  .ve-head{
+    padding:18px 18px 14px;
+    background:
+      radial-gradient(520px 240px at 0% 0%, rgba(245,158,11,.18), transparent 60%),
+      radial-gradient(520px 240px at 100% 0%, rgba(56,189,248,.16), transparent 60%),
+      linear-gradient(180deg, rgba(255,255,255,.82), rgba(255,255,255,.75));
+    border-bottom:1px solid rgba(148,163,184,.16);
+  }
+  .ve-body{padding:16px 18px 18px}
+  @media(min-width:520px){.ve-body{padding:18px 20px 20px}.ve-head{padding:20px 20px 16px}}
+
+  .ve-icon{
+    width:54px;height:54px;border-radius:18px;
+    display:grid;place-items:center;
+    background: rgba(245,158,11,.12);
+    border:1px solid rgba(245,158,11,.25);
+    box-shadow: 0 10px 22px rgba(2,6,23,.08);
+  }
+  .ve-title{margin:10px 0 0;font-weight:1000;letter-spacing:-.6px;color:#0b1220;font-size:clamp(1.4rem,3vw,1.85rem)}
+  .ve-sub{margin:.45rem 0 0;color:rgba(11,18,32,.68);font-weight:850;line-height:1.55}
+
+  .ve-note{
+    margin-top:12px;
+    padding:12px 12px;
+    border-radius:16px;
+    border:1px dashed rgba(148,163,184,.32);
+    background: rgba(248,250,252,.78);
+    color: rgba(11,18,32,.75);
+    font-size:.86rem;
+    line-height:1.45;
+    font-weight:850;
+  }
+
+  .ve-actions{display:grid;gap:10px;margin-top:14px}
+  .ve-btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:10px;
+    padding:12px 14px;
+    border-radius:999px;
+    border:1px solid rgba(15,23,42,.12);
+    background:#0b1220;
+    color: rgba(253,230,138,.95);
+    font-weight:1000;
+    cursor:pointer;
+    transition: transform .14s ease, box-shadow .14s ease, filter .14s ease;
+    user-select:none;
+    text-decoration:none;
+  }
+  .ve-btn:hover{transform: translateY(-1px); box-shadow: 0 14px 26px rgba(2,6,23,.14); filter:saturate(1.05)}
+  .ve-btn:active{transform: translateY(0)}
+  .ve-btn[disabled]{opacity:.7;cursor:not-allowed;transform:none;box-shadow:none}
+
+  .ve-btn--ghost{
+    background: transparent;
+    color: rgba(11,18,32,.86);
+  }
+
+  .ve-row{
+    display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;
+    margin-top:12px;
+  }
+  .ve-link{
+    display:inline-flex;align-items:center;gap:8px;
+    font-size:.88rem;
+    color: rgba(245,158,11,.92);
+    text-decoration:none;
+    font-weight:950;
+  }
+  .ve-link:hover{opacity:.9;text-decoration:underline}
+
+  .ve-small{margin:12px 0 0;color:rgba(11,18,32,.56);font-size:.82rem;font-weight:850;line-height:1.45}
+
+  .ve-live{
+    margin-top:10px;
+    border-radius:14px;
+    padding:10px 12px;
+    border:1px solid rgba(148,163,184,.20);
+    background: rgba(255,255,255,.72);
+    color: rgba(11,18,32,.78);
+    font-weight:900;
+    font-size:.86rem;
+    display:none;
+  }
+  .ve-live.is-on{display:block}
+
+  .ve-spin{
+    width:16px;height:16px;border-radius:999px;
+    border:2px solid rgba(253,230,138,.25);
+    border-top-color: rgba(253,230,138,.95);
+    animation: ve-rot .9s linear infinite;
+  }
+  @keyframes ve-rot{to{transform: rotate(360deg)}}
+
+  .flash{
+    margin-top:12px;
+    padding:10px 12px;
+    border-radius:14px;
+    border:1px solid rgba(148,163,184,.20);
+    background: rgba(255,255,255,.72);
+    color: rgba(11,18,32,.78);
+    font-weight:900;
+    font-size:.86rem;
+  }
+
+  :focus-visible{
+    outline:none;
+    box-shadow: 0 0 0 4px rgba(37,99,235,.18);
+    border-radius: 12px;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{transition:none!important}
+    .ve-spin{animation:none!important}
+  }
+
+  @media print{
+    header.topbar, footer{display:none!important}
+    .ve-wrap{min-height:auto;padding:0}
+    .ve-card{box-shadow:none;border:1px solid #ddd;background:#fff}
+  }
+</style>
+{% endblock %}
 
 {% block content %}
-<section class="min-h-[70vh] flex items-center justify-center px-4 pt-10 pb-16">
-    <div class="w-full max-w-md bg-white border border-slate-200 rounded-3xl p-8 shadow-xl text-center">
+{# Datos seguros #}
+{% set email = (user.email if user is defined and user and user.email is defined else (customer_email if customer_email is defined else "")) %}
+{% set support_email = (support_email if support_email is defined else "soporte@skylinestore.com") %}
 
-        <div class="inline-flex items-center justify-center h-12 w-12 rounded-full bg-amber-500/10 border border-amber-400 mb-4">
-            <svg class="h-6 w-6 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
-                <path stroke-linecap="round" stroke-linejoin="round"
-                      d="M3 8l9 6 9-6M5 19h14a2 2 0 002-2V7a2 2 0 00-1-1.732L12 2 4 5.268A2 2 0 003 7v10a2 2 0 002 2z"/>
-            </svg>
-        </div>
+{# Endpoints robustos: usa url_for si existen, sino fallback fijo #}
+{% set home_url = (url_for('main.home') if 'main.home' in current_app.view_functions else '/') %}
+{% set shop_url = (url_for('shop.shop') if 'shop.shop' in current_app.view_functions else '/shop') %}
 
-        <h1 class="text-2xl font-semibold text-slate-900 mb-2">
-            Verificá tu correo
-        </h1>
-        <p class="text-sm text-slate-500 mb-4">
-            En la versión real, te enviaríamos un enlace para confirmar tu cuenta.  
-            Este paso ayuda a mantener tu perfil más seguro.
-        </p>
+{# Endpoint de reenvío: si no existe, queda vacío y el botón se deshabilita #}
+{% if 'auth.resend_verification' in current_app.view_functions %}
+  {% set resend_endpoint = url_for('auth.resend_verification', json=1) %}
+{% else %}
+  {% set resend_endpoint = '' %}
+{% endif %}
 
-        <button type="button"
-                class="w-full max-w-xs mx-auto px-6 py-2.5 rounded-full bg-slate-900 text-amber-400 text-sm font-semibold hover:bg-black transition">
-            Reenviar correo (demo)
+<section class="ve-wrap" aria-label="Verificar correo">
+  <div class="ve-card" role="region" aria-label="Verificación de email">
+
+    <div class="ve-head">
+      <div class="ve-icon" aria-hidden="true">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="color:rgba(245,158,11,.95)" stroke-width="1.8">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3 8l9 6 9-6M5 19h14a2 2 0 002-2V7a2 2 0 00-1-1.732L12 2 4 5.268A2 2 0 003 7v10a2 2 0 002 2z"/>
+        </svg>
+      </div>
+
+      <h1 class="ve-title">Verificá tu correo</h1>
+      <p class="ve-sub">
+        {% if email %}
+          Te enviamos un enlace a <b>{{ email }}</b> para confirmar tu cuenta.
+        {% else %}
+          Te enviamos un enlace para confirmar tu cuenta.
+        {% endif %}
+        Este paso ayuda a mantener tu perfil más seguro.
+      </p>
+    </div>
+
+    <div class="ve-body">
+
+      {# FLASH (por si venís de redirect) #}
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="flash">{{ message }}</div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+
+      <div class="ve-note">
+        🔒 <b>Tip:</b> revisá “Spam/Promociones”. A veces el correo cae ahí.
+        Si pedís reenvío, esperá 30–60 segundos antes de volver a intentarlo.
+      </div>
+
+      <div id="veLive" class="ve-live" role="status" aria-live="polite"></div>
+
+      <div class="ve-actions">
+        <button id="btnResend" type="button" class="ve-btn" aria-busy="false" {% if not resend_endpoint %}disabled{% endif %}>
+          <span id="veSpin" class="ve-spin" style="display:none" aria-hidden="true"></span>
+          <span id="btnTxt">{% if resend_endpoint %}Reenviar correo{% else %}Reenvío no disponible{% endif %}</span>
         </button>
 
-        <p class="text-xs text-slate-500 mt-5">
-            Podés cerrar esta página y volver a la tienda mientras tanto.
-        </p>
-
-        <a href="{{ url_for('main.index') }}"
-           class="mt-3 inline-flex text-xs text-amber-500 hover:text-amber-400">
-            Ir al inicio
+        <a class="ve-btn ve-btn--ghost" href="{{ home_url }}">
+          Volver al inicio
         </a>
+      </div>
+
+      <div class="ve-row">
+        <a class="ve-link" href="mailto:{{ support_email }}">
+          ✉️ Soporte: {{ support_email }}
+        </a>
+
+        <a class="ve-link" href="{{ shop_url }}">
+          🛍️ Ir a la tienda
+        </a>
+      </div>
+
+      <p class="ve-small">
+        Si ya verificaste tu cuenta y seguís viendo esta pantalla, cerrá sesión y volvé a entrar.
+      </p>
+
+      {# CSRF hidden por si algún helper lo quiere leer #}
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     </div>
+
+  </div>
 </section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(() => {
+  const btn  = document.getElementById('btnResend');
+  const live = document.getElementById('veLive');
+  const spin = document.getElementById('veSpin');
+  const txt  = document.getElementById('btnTxt');
+
+  const endpoint = {{ resend_endpoint|tojson }};
+  const email = {{ (email|tojson) if email else '""' }};
+
+  const say = (m) => {
+    if(!live) return;
+    live.textContent = m;
+    live.classList.add('is-on');
+  };
+
+  const readCsrf = () => {
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    if (meta && meta.content) return meta.content.trim();
+    const inp = document.querySelector('input[name="csrf_token"]');
+    if (inp && inp.value) return inp.value.trim();
+    return "";
+  };
+
+  let cooldownUntil = 0;
+  let tickTimer = null;
+
+  const setBusy = (on) => {
+    if(!btn) return;
+    btn.disabled = !!on;
+    btn.setAttribute('aria-busy', on ? 'true' : 'false');
+    if(spin) spin.style.display = on ? 'inline-block' : 'none';
+    if(txt) txt.textContent = on ? 'Enviando…' : 'Reenviar correo';
+  };
+
+  const startCooldown = (ms) => {
+    cooldownUntil = Date.now() + ms;
+    if(tickTimer) clearInterval(tickTimer);
+
+    tickTimer = setInterval(() => {
+      const left = Math.ceil((cooldownUntil - Date.now()) / 1000);
+      if(left <= 0){
+        clearInterval(tickTimer);
+        tickTimer = null;
+        txt.textContent = "Reenviar correo";
+        btn.disabled = false;
+        return;
+      }
+      txt.textContent = `Reenviar en ${left}s`;
+      btn.disabled = true;
+    }, 250);
+  };
+
+  const send = async () => {
+    if(!endpoint){
+      say("El reenvío automático no está habilitado en este servidor.");
+      return;
+    }
+
+    // cooldown anti-spam
+    if(Date.now() < cooldownUntil){
+      const left = Math.ceil((cooldownUntil - Date.now()) / 1000);
+      say(`Esperá ${left}s para reenviar de nuevo.`);
+      return;
+    }
+
+    setBusy(true);
+    say("Enviando correo de verificación…");
+
+    try{
+      const headers = {
+        "Accept":"application/json",
+        "Content-Type":"application/json"
+      };
+      const csrf = readCsrf();
+      if(csrf) headers["X-CSRF-Token"] = csrf;
+
+      const r = await fetch(endpoint, {
+        method: "POST",
+        headers,
+        credentials: "same-origin",
+        body: JSON.stringify({ email: email || undefined })
+      });
+
+      let data = {};
+      try{ data = await r.json(); }catch(e){}
+
+      if(!r.ok || data?.ok === false){
+        const msg = (data?.message || data?.error || "No se pudo reenviar");
+        throw new Error(msg);
+      }
+
+      say("Listo ✅ Te reenviamos el email. Revisá tu bandeja y spam/promociones.");
+      startCooldown(30000);
+
+    }catch(e){
+      say("No está disponible el reenvío automático en este momento. Probá más tarde o escribinos a soporte.");
+    }finally{
+      setBusy(false);
+    }
+  };
+
+  if(btn) btn.addEventListener('click', send);
+})();
+</script>
 {% endblock %}

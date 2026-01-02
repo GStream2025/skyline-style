@@ -1,30 +1,37 @@
-{# app/templates/checkout/success.html — SKYLINE SUCCESS ULTRA PRO (FINAL) #}
+{# app/templates/checkout/success.html — SKYLINE SUCCESS ULTRA PRO v2 (LOCKED) #}
 {% extends "base.html" %}
 
 {% block title %}Pago confirmado · Skyline Store{% endblock %}
 
 {% block extra_head %}
+<meta name="checkout-success-version" content="skyline-ultra-pro-v2">
 <style>
   /* =========================================================
-     SUCCESS — ULTRA PRO
-     Mejoras incluidas:
-     1) No depende de Tailwind (CSS propio)
-     2) Responsive real + clamp() + grid estable
-     3) Accesibilidad: aria-live, focus visible, contraste
-     4) Animaciones motion-safe (respeta reduce-motion)
-     5) Safe fallbacks: si no vienen variables, no rompe
-     6) Copy UX: próximos pasos claros + soporte
-     7) Botones con estados + links robustos
-     8) Caja de “detalles” opcional y segura
-     9) Tracking afiliados/UTM best-effort (sin romper)
-     10) Acción: imprimir / copiar ID / abrir WhatsApp
-     11) Soporta dark mode via prefers-color-scheme
+     SUCCESS — ULTRA PRO v2 (LOCKED)
+     16 mejoras reales:
+     1) Sin Tailwind, CSS propio consistente con checkout/pending
+     2) Variables seguras (no rompe si falta order/user/provider)
+     3) Endpoints safe: si no existen, fallback path
+     4) A11y: aria-live, roles, focus-visible, contraste
+     5) Motion-safe: respeta reduce-motion
+     6) Sin alerts: toast si existe + fallback inline
+     7) Copiar Nº pedido robusto + fallback
+     8) Botones: imprimir, compartir, seguir comprando, ver pedidos (si existe)
+     9) Panel “próximos pasos” pro + estado claro
+     10) Compatible dark mode real
+     11) Print clean
+     12) UX anti-confusión: “no pagues de nuevo” si llega desde pending
+     13) Anti-rotura: no depende de JS
+     14) Micro-animación de entrada suave
+     15) Soporte WhatsApp/email opcional
+     16) Semántica y layout estable (grid/responsive)
   ========================================================== */
 
-  .sx-wrap{max-width:1080px;margin:0 auto;padding:clamp(18px,3vw,30px) 16px 70px}
+  .sx-wrap{max-width:1120px;margin:0 auto;padding:clamp(18px,3vw,30px) 16px 74px}
   .sx-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:18px 0 14px}
-  .sx-title{margin:0;font-weight:1000;letter-spacing:-.6px;font-size:clamp(1.7rem,3vw,2.25rem)}
-  .sx-sub{margin:.35rem 0 0;opacity:.78;max-width:75ch;line-height:1.5}
+  .sx-title{margin:0;font-weight:1000;letter-spacing:-.6px;font-size:clamp(1.75rem,3vw,2.35rem)}
+  .sx-sub{margin:.35rem 0 0;opacity:.78;max-width:78ch;line-height:1.5}
+
   .sx-pill{
     display:inline-flex;align-items:center;gap:8px;
     padding:7px 10px;border-radius:999px;
@@ -35,16 +42,16 @@
     white-space:nowrap;
   }
   @media (prefers-color-scheme: dark){
-    .sx-pill{color: rgba(187,247,208,.95); background: rgba(34,197,94,.12); border-color: rgba(34,197,94,.30)}
+    .sx-pill{color: rgba(187,247,208,.95); background: rgba(34,197,94,.10); border-color: rgba(34,197,94,.28)}
   }
 
   .sx-grid{display:grid;grid-template-columns:1fr;gap:14px;align-items:start}
-  @media(min-width:980px){.sx-grid{grid-template-columns:1.25fr .75fr;gap:16px}}
+  @media(min-width:980px){.sx-grid{grid-template-columns:1.28fr .72fr;gap:16px}}
 
   .sx-card{
     border-radius:22px;
     border:1px solid rgba(148,163,184,.18);
-    background: rgba(255,255,255,.72);
+    background: rgba(255,255,255,.74);
     backdrop-filter: blur(10px);
     box-shadow: 0 18px 46px rgba(15,23,42,.12);
     overflow:hidden;
@@ -52,6 +59,7 @@
   @media (prefers-color-scheme: dark){
     .sx-card{background: rgba(255,255,255,.06); box-shadow: 0 18px 46px rgba(0,0,0,.28)}
   }
+
   .sx-card__head{
     padding:16px;
     border-bottom:1px solid rgba(148,163,184,.14);
@@ -75,12 +83,28 @@
     background: rgba(255,255,255,.7);
     border:1px solid rgba(148,163,184,.18);
     flex: 0 0 auto;
+    font-size:20px;
   }
   @media (prefers-color-scheme: dark){
     .sx-ico{background: rgba(255,255,255,.06)}
   }
   .sx-ok b{font-weight:1000}
-  .sx-ok p{margin:.25rem 0 0;opacity:.82;line-height:1.45}
+  .sx-ok p{margin:.25rem 0 0;opacity:.84;line-height:1.45}
+
+  /* Inline message (fallback if no toast) */
+  .sx-msg{
+    display:none;
+    margin-top:12px;
+    padding:10px 12px;border-radius:14px;
+    border:1px solid rgba(56,189,248,.20);
+    background: rgba(56,189,248,.10);
+    font-weight:950;
+    line-height:1.35;
+  }
+  .sx-msg.is-on{display:block}
+  @media (prefers-color-scheme: dark){
+    .sx-msg{border-color: rgba(56,189,248,.18); background: rgba(56,189,248,.08)}
+  }
 
   .sx-kv{display:grid;gap:10px;margin:14px 0 0}
   .sx-kv-row{
@@ -112,9 +136,8 @@
     background: linear-gradient(135deg, rgba(245,158,11,1), rgba(56,189,248,.85));
     color:#08121f;
   }
-  .sx-btn--ghost{
-    background: transparent;
-  }
+  .sx-btn--ghost{background: transparent}
+  .sx-btn[aria-disabled="true"]{opacity:.70;pointer-events:none;filter:saturate(.9)}
 
   .sx-note{
     margin-top:14px;
@@ -187,12 +210,22 @@
 {% endblock %}
 
 {% block content %}
-{# Variables seguras (no rompen si backend no manda nada) #}
+{# -------------------------
+   Variables seguras (NO rompen)
+-------------------------- #}
 {% set order_number = (order_number if order_number is defined else (order.number if order is defined and order.number is defined else "")) %}
 {% set provider_name = (provider if provider is defined else (payment_provider if payment_provider is defined else "pago")) %}
 {% set email = (user.email if user is defined and user.email is defined else (customer_email if customer_email is defined else "")) %}
 {% set total = (order.total if order is defined and order.total is defined else (cart_total if cart_total is defined else "")) %}
-{% set currency = (order.currency if order is defined and order.currency is defined else (currency if currency is defined else "USD")) %}
+{% set currency_ = (order.currency if order is defined and order.currency is defined else (currency if currency is defined else "USD")) %}
+{% set support_email_ = (support_email if support_email is defined and support_email else "soporte@skylinestore.com") %}
+{% set wa_ = (support_whatsapp if support_whatsapp is defined else "") %}
+
+{# Safe urls (no explota si no existen endpoints) #}
+{% set shop_url = (url_for('main.shop') if 'main.shop' in current_app.view_functions else (url_for('main.index') if 'main.index' in current_app.view_functions else '/')) %}
+{% set cart_url = (url_for('cart.cart_view') if 'cart.cart_view' in current_app.view_functions else '/cart') %}
+{% set checkout_url = (url_for('checkout.checkout_home') if 'checkout.checkout_home' in current_app.view_functions else '/checkout') %}
+{% set orders_url = (url_for('account.orders') if 'account.orders' in current_app.view_functions else '') %}
 
 <section class="sx-wrap" aria-label="Pago confirmado">
 
@@ -204,7 +237,7 @@
         {% if order_number %} Guardá este número por cualquier consulta.{% endif %}
       </p>
     </div>
-    <span class="sx-pill" aria-live="polite">Listo para preparar</span>
+    <span class="sx-pill" aria-live="polite" role="status">Confirmado</span>
   </div>
 
   <div class="sx-grid">
@@ -217,7 +250,7 @@
 
       <div class="sx-card__inner">
 
-        <div class="sx-ok">
+        <div class="sx-ok" role="status" aria-live="polite">
           <div class="sx-ico" aria-hidden="true">✅</div>
           <div>
             <div style="font-weight:1000;letter-spacing:-.2px">¡Gracias por tu compra!</div>
@@ -231,11 +264,16 @@
             <p style="margin-top:.4rem">
               Método: <b>{{ provider_name|capitalize }}</b>.
               {% if total %}
-                Total: <b>{{ total }}</b> {{ currency }}.
+                Total: <b>{{ total }}</b> {{ currency_ }}.
               {% endif %}
+            </p>
+            <p style="margin-top:.4rem;opacity:.82">
+              Si venís desde “pendiente”, ya no pagues de nuevo: este pedido está confirmado.
             </p>
           </div>
         </div>
+
+        <div class="sx-msg" id="sxMsg" role="alert"></div>
 
         <div class="sx-kv" aria-label="Detalles del pedido">
           <div class="sx-kv-row">
@@ -247,55 +285,56 @@
 
           <div class="sx-kv-row">
             <div class="sx-k">Número de pedido</div>
-            <div class="sx-v">
-              {% if order_number %}{{ order_number }}{% else %}—{% endif %}
-            </div>
+            <div class="sx-v">{% if order_number %}{{ order_number }}{% else %}—{% endif %}</div>
           </div>
 
           <div class="sx-kv-row">
             <div class="sx-k">Soporte</div>
-            <div class="sx-v">
-              {% if support_email is defined and support_email %}
-                {{ support_email }}
-              {% else %}
-                soporte@skylinestore.com
-              {% endif %}
-            </div>
+            <div class="sx-v">{{ support_email_ }}</div>
           </div>
         </div>
 
-        <div class="sx-actions">
-          <a class="sx-btn sx-btn--primary" href="{{ url_for('main.shop') if 'main.shop' in current_app.view_functions else '/shop' }}">
-            🛍️ Seguir comprando
-          </a>
+        <div class="sx-actions" aria-label="Acciones">
+          <a class="sx-btn sx-btn--primary" href="{{ shop_url }}">🛍️ Seguir comprando</a>
+          <a class="sx-btn" href="{{ cart_url }}">🛒 Ver carrito</a>
 
-          <a class="sx-btn" href="{{ url_for('cart.cart_view') if 'cart.cart_view' in current_app.view_functions else '/cart' }}">
-            🛒 Ver carrito
-          </a>
-
-          <button class="sx-btn sx-btn--ghost" type="button" id="btnCopy" {% if not order_number %}disabled aria-disabled="true"{% endif %}>
+          <button class="sx-btn sx-btn--ghost" type="button" id="btnCopy"
+                  {% if not order_number %}disabled aria-disabled="true"{% endif %}>
             📋 Copiar Nº pedido
           </button>
 
-          <button class="sx-btn sx-btn--ghost" type="button" onclick="window.print()">
+          <button class="sx-btn sx-btn--ghost" type="button" id="btnPrint">
             🖨️ Imprimir
           </button>
 
-          {# WhatsApp soporte (si definís SUPPORT_WHATSAPP en backend y lo pasás como support_whatsapp) #}
-          {% set wa = (support_whatsapp if support_whatsapp is defined else "") %}
-          {% if wa %}
-            <a class="sx-btn" href="https://wa.me/{{ wa|replace('+','')|replace(' ','') }}" target="_blank" rel="noopener">
+          <button class="sx-btn sx-btn--ghost" type="button" id="btnShare">
+            🔗 Compartir
+          </button>
+
+          {% if orders_url %}
+            <a class="sx-btn" href="{{ orders_url }}">📦 Mis pedidos</a>
+          {% endif %}
+
+          {% if wa_ %}
+            <a class="sx-btn"
+               href="https://wa.me/{{ wa_|replace('+','')|replace(' ','') }}"
+               target="_blank" rel="noopener">
               💬 WhatsApp soporte
             </a>
           {% endif %}
         </div>
 
         <div class="sx-note">
-          <b>Próximos pasos:</b> si el pago fue con transferencia, podés demorar unos minutos en verse reflejado.
-          Si fue con MercadoPago/PayPal, normalmente se confirma al instante.
+          <b>Próximos pasos:</b> preparamos tu pedido y te avisamos cuando salga.
+          Revisá “Spam/Promociones” por las dudas.
           {% if order_number %}
             Si necesitás ayuda, enviá este número: <b>{{ order_number }}</b>.
           {% endif %}
+          <div style="margin-top:.35rem">
+            <a href="{{ checkout_url }}" style="text-decoration:none;font-weight:950">Volver a checkout</a>
+            <span style="opacity:.65">·</span>
+            <a href="{{ shop_url }}" style="text-decoration:none;font-weight:950">Volver a la tienda</a>
+          </div>
         </div>
 
       </div>
@@ -306,16 +345,19 @@
       <div class="sx-aside__head">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
           <h2 class="sx-h2" style="margin:0">¿Qué pasa ahora?</h2>
-          <span class="sx-pill" style="border-color:rgba(245,158,11,.35);background:rgba(245,158,11,.12);color:rgba(253,230,138,.95)">Paso a paso</span>
+          <span class="sx-pill" style="border-color:rgba(245,158,11,.35);background:rgba(245,158,11,.12);color:rgba(253,230,138,.95)">
+            Paso a paso
+          </span>
         </div>
       </div>
+
       <div class="sx-aside__body">
-        <ol class="sx-steps">
+        <ul class="sx-steps">
           <li class="sx-step">
             <span class="sx-dot">1</span>
             <div>
               <b>Preparamos tu pedido</b>
-              <p>Verificamos stock, variantes y empaquetado.</p>
+              <p>Verificamos stock/variantes y dejamos todo listo para despacho.</p>
             </div>
           </li>
           <li class="sx-step">
@@ -329,13 +371,13 @@
             <span class="sx-dot">3</span>
             <div>
               <b>Soporte siempre</b>
-              <p>Si tenés dudas, escribinos y resolvemos rápido.</p>
+              <p>Escribinos con tu Nº de pedido y resolvemos rápido.</p>
             </div>
           </li>
-        </ol>
+        </ul>
 
         <div class="sx-note" style="margin-top:12px;border-color:rgba(56,189,248,.22);background:rgba(56,189,248,.10);color:#e5e7eb">
-          ⚡ Tip: guardá el número de pedido y revisá tu email (incluye spam/promociones).
+          ⚡ Tip: guardá el Nº de pedido y revisá tu email.
         </div>
       </div>
     </aside>
@@ -348,24 +390,39 @@
 {% block extra_js %}
 <script>
 (() => {
-  // Motion-safe entrance
-  const card = document.getElementById('sxCard');
-  const aside = document.getElementById('sxAside');
+  const $ = (s, ctx=document) => ctx.querySelector(s);
+
+  const card = $('#sxCard');
+  const aside = $('#sxAside');
   requestAnimationFrame(() => {
     card && card.classList.add('is-on');
     aside && aside.classList.add('is-on');
   });
 
-  // Copy order number
-  const btn = document.getElementById('btnCopy');
+  const msg = $('#sxMsg');
+  const showMsg = (text) => {
+    if(!msg) return;
+    if(!text){ msg.classList.remove('is-on'); msg.textContent=''; return; }
+    msg.textContent = text;
+    msg.classList.add('is-on');
+  };
+  const toast = (t,m) => (window.toast ? window.toast(t,m) : null);
+
   const orderNumber = {{ (order_number|tojson) if order_number else '""' }};
 
-  if(btn && orderNumber){
-    btn.addEventListener('click', async () => {
+  // Copy
+  const btnCopy = $('#btnCopy');
+  if(btnCopy){
+    btnCopy.addEventListener('click', async () => {
+      if(!orderNumber){
+        toast("Info","No hay número de pedido disponible.");
+        showMsg("No hay número de pedido disponible.");
+        return;
+      }
       try{
         await navigator.clipboard.writeText(orderNumber);
-        if(window.toast) window.toast("Copiado", "Número de pedido copiado al portapapeles.");
-        else alert("Copiado: " + orderNumber);
+        toast("Copiado","Número de pedido copiado.");
+        showMsg("Número de pedido copiado al portapapeles.");
       }catch(e){
         // fallback seguro
         const tmp = document.createElement('textarea');
@@ -374,16 +431,38 @@
         tmp.select();
         try{ document.execCommand('copy'); }catch(_){}
         tmp.remove();
-        if(window.toast) window.toast("Copiado", "Número de pedido copiado.");
-        else alert("Copiado: " + orderNumber);
+        toast("Copiado","Número de pedido copiado.");
+        showMsg("Número de pedido copiado.");
       }
     });
-  } else if(btn){
-    btn.addEventListener('click', () => {
-      if(window.toast) window.toast("Info", "No hay número de pedido disponible.");
-      else alert("No hay número de pedido disponible.");
-    });
   }
+
+  // Print
+  const btnPrint = $('#btnPrint');
+  btnPrint && btnPrint.addEventListener('click', () => window.print());
+
+  // Share
+  const btnShare = $('#btnShare');
+  btnShare && btnShare.addEventListener('click', async () => {
+    const url = window.location.href;
+    const text = orderNumber ? `Pedido ${orderNumber} confirmado.` : `Pedido confirmado.`;
+    try{
+      if(navigator.share){
+        await navigator.share({title: document.title, text, url});
+        toast("Listo","Compartido.");
+        showMsg("");
+        return;
+      }
+    }catch(_){}
+    // fallback: copia url
+    try{
+      await navigator.clipboard.writeText(url);
+      toast("Copiado","Link copiado.");
+      showMsg("Link copiado al portapapeles.");
+    }catch(_){
+      showMsg("Copiá este link manualmente: " + url);
+    }
+  });
 })();
 </script>
 {% endblock %}

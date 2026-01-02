@@ -1,14 +1,21 @@
 ﻿# =====================================================
-# SKYLINE STYLE — .gitignore (PRO / FINAL)
+# SKYLINE STYLE — .gitignore (ULTRA PRO / FINAL)
 # Python · Flask · Render · Production Ready
 # =====================================================
 
 # -----------------------------------------------------
-# PYTHON / BYTECODE
+# PYTHON / BYTECODE / CACHE
 # -----------------------------------------------------
 __pycache__/
 *.py[cod]
 *$py.class
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.dmypy.json
+.pyre/
+.pytype/
 
 # -----------------------------------------------------
 # VIRTUAL ENVIRONMENTS
@@ -21,33 +28,67 @@ env.bak/
 venv.bak/
 
 # -----------------------------------------------------
-# BUILD / TOOLING / TEST
+# BUILD / PACKAGING
 # -----------------------------------------------------
 build/
 dist/
 *.egg-info/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
+pip-wheel-metadata/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Coverage / reports
 .coverage
 coverage.xml
 htmlcov/
+*.cover
 
 # -----------------------------------------------------
 # ENVIRONMENT / SECRETS (CRÍTICO)
 # -----------------------------------------------------
+# Nunca subir secretos
 .env
 .env.*
 .env.production
 .env.prod
+.env.development
+.env.dev
+.env.local
+.env.test
+.env.staging
+.env.render
+render.env
+
+# Permitimos ejemplo
 !.env.example
 
+# Keys / certs / tokens
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+*.jks
+*.keystore
+secrets.*
+secret.*
+credentials.*
+service-account*.json
+
 # -----------------------------------------------------
-# LOGS
+# LOGS / RUNTIME FILES
 # -----------------------------------------------------
 *.log
 logs/
 *.out
+*.pid
+
+# Flask runtime folder (si lo usás)
+instance/
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
 
 # -----------------------------------------------------
 # OS / EDITORS
@@ -60,6 +101,9 @@ desktop.ini
 .idea/
 *.swp
 *.swo
+*.swn
+*.bak
+*.tmp
 
 # -----------------------------------------------------
 # NODE / FRONTEND (actual y futuro)
@@ -68,9 +112,12 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+.pnpm-debug.log*
 .parcel-cache/
 .next/
 .nuxt/
+dist/
+.cache/
 
 # -----------------------------------------------------
 # ARCHIVOS PESADOS / BACKUPS
@@ -80,11 +127,15 @@ yarn-error.log*
 *.7z
 *.tar
 *.gz
-*.bak
 _backup_*/
+backups/
+backup/
+*.dump
+*.sql.gz
+*.tgz
 
 # -----------------------------------------------------
-# UPLOADS (USUARIOS)
+# UPLOADS (USUARIOS) / MEDIA DINÁMICA
 # -----------------------------------------------------
 # Assets oficiales → app/static/img/ (versionar)
 # Uploads dinámicos → NO versionar
@@ -93,32 +144,42 @@ app/static/uploads/**
 !app/static/uploads/products/
 !app/static/uploads/products/.gitkeep
 
-# -----------------------------------------------------
-# CACHE / RUNTIME
-# -----------------------------------------------------
-instance/
-.cache/
-tmp/
-temp/
+# Si en algún momento generás thumbnails/exports
+app/static/uploads/**/thumbs/**
+app/static/uploads/**/tmp/**
 
 # -----------------------------------------------------
 # DATABASE LOCAL (SQLite dev)
 # -----------------------------------------------------
 *.sqlite
 *.sqlite3
+*.db
 skyline_local.db
 
-# -----------------------------------------------------
-# PIP / PYTHON TOOLS
-# -----------------------------------------------------
-pip-wheel-metadata/
-pip-log.txt
-pip-delete-this-directory.txt
+# (si llegás a usar alembic)
+alembic/versions/*.pyc
 
 # -----------------------------------------------------
-# RENDER / DEPLOY
+# DEPLOY / PLATFORM CACHES
 # -----------------------------------------------------
-.env.render
-render.env
 .render/
 .render-cache/
+.vercel/
+.netlify/
+.railway/
+.fly/
+.docker/
+docker-compose.override.yml
+
+# -----------------------------------------------------
+# PYTHON TOOLING / LOCKS (opcional)
+# -----------------------------------------------------
+# Si usás Poetry
+poetry.lock
+# Si usás Pipenv
+Pipfile.lock
+
+# Si querés versionar requirements.lock, dejalo fuera.
+# -----------------------------------------------------
+# FIN
+# -----------------------------------------------------
