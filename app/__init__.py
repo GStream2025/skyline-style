@@ -29,7 +29,7 @@ def _bool_env(key: str, default: bool = False) -> bool:
     v = os.getenv(key)
     if v is None:
         return default
-    s = v.strip().lower()
+    s = str(v).strip().lower()
     if s in _TRUE:
         return True
     if s in _FALSE:
@@ -55,9 +55,10 @@ def _str_env(key: str, default: str = "") -> str:
 def _normalize_database_url(url: Optional[str]) -> Optional[str]:
     if not url:
         return None
-    if url.startswith("postgres://"):
-        return url.replace("postgres://", "postgresql://", 1)
-    return url
+    u = str(url).strip()
+    if u.startswith("postgres://"):
+        return u.replace("postgres://", "postgresql://", 1)
+    return u
 
 
 def _env_name(debug: bool) -> str:
@@ -155,7 +156,7 @@ def _get_current_user():
     if not uid:
         return None
     try:
-        from app.models import User  # se resuelve vía models hub
+        from app.models import User  # proxy -> se resuelve vía hub
         return db.session.get(User, int(uid))
     except Exception:
         return None
@@ -194,7 +195,6 @@ def _merge_dict(base: Dict[str, Any], raw: Any) -> Dict[str, Any]:
             if k in out and isinstance(out.get(k), dict) and isinstance(v, dict):
                 out[k].update(v)
             elif k in out:
-                # no dejamos meter claves nuevas raras
                 continue
     return out
 
@@ -235,7 +235,7 @@ def save_payments(app: Flask, data: Dict[str, Any]) -> None:
 
 
 # ============================================================
-# CSRF minimal (sin libs) — ahora VALIDADO en POST/PUT/PATCH/DELETE
+# CSRF minimal (sin libs) — validado en POST/PUT/PATCH/DELETE
 # ============================================================
 
 def _ensure_csrf_token() -> str:
@@ -247,7 +247,6 @@ def _ensure_csrf_token() -> str:
 
 
 def _csrf_ok() -> bool:
-    # Solo valida en métodos mutables
     if request.method in {"GET", "HEAD", "OPTIONS"}:
         return True
     st = session.get("csrf_token") or ""
@@ -258,11 +257,10 @@ def _csrf_ok() -> bool:
 
 
 # ============================================================
-# App Factory (ULTRA PRO MAX)
+# App Factory (ULTRA PRO MAX — FINAL)
 # ============================================================
 
 def create_app() -> Flask:
-    # ✅ instance_relative_config True: instance_path consistente en Render/local
     app = Flask(
         __name__,
         template_folder="templates",
@@ -276,23 +274,21 @@ def create_app() -> Flask:
     env_raw = (os.getenv("ENV") or os.getenv("FLASK_ENV") or "production").strip().lower()
     debug = _bool_env("DEBUG", env_raw in {"dev", "development"}) or _bool_env("FLASK_DEBUG", False)
 
-    # ProxyFix (Render) — configurable por env si querés
+    # ProxyFix (Render)
     if _bool_env("TRUST_PROXY_HEADERS", True):
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
 
     # -------------------------
-    # Database
+    # Database URI
     # -------------------------
     db_url = _normalize_database_url(os.getenv("DATABASE_URL"))
-    db_uri = db_url or os.getenv("SQLALCHEMY_DATABASE_URI") or "sqlite:///skyline.db"
+    db_uri = (db_url or os.getenv("SQLALCHEMY_DATABASE_URI") or "sqlite:///skyline.db").strip()
 
-    # En prod, recomendación fuerte: DB real (Postgres)
+    # En prod, recomendación fuerte: Postgres
     if not debug and db_uri.startswith("sqlite"):
-        # no rompo por default, pero aviso fuerte
-        # (si querés hacerlo CRÍTICO, setea REQUIRE_POSTGRES=1)
         if _bool_env("REQUIRE_POSTGRES", False):
             raise RuntimeError("Producción con SQLite no permitido. Configurá DATABASE_URL (Postgres).")
-        app.logger.warning("⚠️ Producción con SQLite detectado. Recomendado Postgres en Render.")
+        # Logging todavía no está listo aquí; igual dejamos aviso más abajo
 
     # -------------------------
     # Cookies / sesiones
@@ -304,14 +300,9 @@ def create_app() -> Flask:
     if session_samesite not in {"Lax", "Strict", "None"}:
         session_samesite = "Lax"
 
-    max_mb = _int_env("MAX_UPLOAD_MB", 20)
-    if max_mb < 1:
-        max_mb = 20
-
-    # ✅ En prod exigimos SECRET_KEY
+    max_mb = max(1, _int_env("MAX_UPLOAD_MB", 20))
     secret = _secure_default_secret(debug)
 
-    # Engine options PRO (pool_pre_ping evita conexiones muertas en Postgres)
     engine_opts: Dict[str, Any] = {
         "pool_pre_ping": True,
         "pool_recycle": _int_env("DB_POOL_RECYCLE", 280),
@@ -343,8 +334,10 @@ def create_app() -> Flask:
         MAX_CONTENT_LENGTH=max_mb * 1024 * 1024,
     )
 
-    # Flask lee debug desde config; no fuerces app.debug manualmente
     _setup_logging(app)
+
+    if not debug and db_uri.startswith("sqlite"):
+        app.logger.warning("⚠️ Producción con SQLite detectado. Recomendado Postgres en Render.")
 
     app.logger.info(
         "🚀 create_app() ENV=%s DEBUG=%s DB=%s",
@@ -364,7 +357,6 @@ def create_app() -> Flask:
     def _talisman():
         from flask_talisman import Talisman
         force_https = _bool_env("FORCE_HTTPS", app.config["ENV"] == "production")
-        # CSP None para no romper assets; podés setear CSP más adelante
         Talisman(app, force_https=force_https, content_security_policy=None)
     _safe_init(app, "Flask-Talisman", _talisman)
 
@@ -402,17 +394,11 @@ def create_app() -> Flask:
     _safe_init(app, "Flask-Limiter", _limiter)
 
     # -------------------------
-    # DB init + MODELS HUB (CRÍTICO)
+    # DB + MODELS HUB (CRÍTICO)
+    # - init_models ya hace db.init_app(app) si hace falta (según tu hub)
     # -------------------------
-    def _db_bootstrap():
-        db.init_app(app)
-        return True
-    _critical_init(app, "DB init", _db_bootstrap)
-
     def _models_bootstrap():
-        # 🔥 CRÍTICO: si esto falla, mejor cortar el arranque.
-        # Acá fue tu error real: 'User' no cargado.
-        return init_models(app, create_admin=True, auto_create_tables=None)
+        return init_models(app, create_admin=True, auto_create_tables=None, log_loaded_models=True)
 
     _critical_init(app, "Models hub", _models_bootstrap)
 
@@ -427,15 +413,21 @@ def create_app() -> Flask:
         except Exception:
             pass
 
-        # Validación CSRF en mutaciones (excepto /health)
-        if request.path != "/health" and request.method in {"POST", "PUT", "PATCH", "DELETE"}:
-            if not _csrf_ok():
-                if _wants_json():
-                    return jsonify({"error": "csrf_failed"}), 400
-                return render_template("400.html", message="CSRF inválido. Recargá e intentá de nuevo."), 400
+        # Validación CSRF en mutaciones (excepto /health y webhooks)
+        if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+            p = request.path or ""
+            if p not in {"/health"} and not p.startswith("/webhook"):
+                if not _csrf_ok():
+                    if _wants_json():
+                        return jsonify({"error": "csrf_failed"}), 400
+                    # ✅ tu proyecto tiene templates/errors/*
+                    try:
+                        return render_template("errors/400.html"), 400
+                    except Exception:
+                        return render_template("error.html", message="CSRF inválido. Recargá e intentá de nuevo."), 400
 
-        # No-cache en admin si querés
-        if _bool_env("ADMIN_NO_CACHE", True) and request.path.startswith("/admin"):
+        # No-cache en admin (opcional)
+        if _bool_env("ADMIN_NO_CACHE", True) and (request.path or "").startswith("/admin"):
             try:
                 request._admin_no_cache = True  # type: ignore[attr-defined]
             except Exception:
@@ -477,9 +469,9 @@ def create_app() -> Flask:
         }
 
     # -------------------------
-    # Blueprints (CRÍTICO SUAVE)
-    # - Si fallan, no “tumba” prod, pero deja log + lista
-    # - Opción: ROUTES_STRICT=1 en dev para explotar
+    # Blueprints
+    # - Default: safe (no tumba)
+    # - Si querés modo estricto: ROUTES_STRICT=1
     # -------------------------
     registered: List[str] = []
 
@@ -489,7 +481,10 @@ def create_app() -> Flask:
         registered[:] = sorted(app.blueprints.keys())
         return True
 
-    _safe_init(app, "Register Blueprints", _register_all_routes)
+    if _bool_env("ROUTES_STRICT", False):
+        _critical_init(app, "Register Blueprints", _register_all_routes)
+    else:
+        _safe_init(app, "Register Blueprints", _register_all_routes)
 
     # -------------------------
     # Health + errors
@@ -521,18 +516,17 @@ def create_app() -> Flask:
         if _wants_json():
             return jsonify({"error": "not_found", "path": request.path}), 404
         try:
-            return render_template("404.html"), 404
+            return render_template("errors/404.html"), 404
         except Exception:
             return jsonify({"error": "not_found", "path": request.path}), 404
 
     @app.errorhandler(500)
     def server_error(e):
-        # 🔥 esto sí con stack siempre (debug o prod) para que nunca quede “ciego”
         app.logger.exception("🔥 Error 500: %s", e)
         if _wants_json():
             return jsonify({"error": "server_error"}), 500
         try:
-            return render_template("500.html"), 500
+            return render_template("errors/500.html"), 500
         except Exception:
             return jsonify({"error": "server_error"}), 500
 

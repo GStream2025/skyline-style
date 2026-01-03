@@ -1,3 +1,28 @@
-﻿<!doctype html><html><body style="font-family:system-ui;padding:24px;">
-<h2>500 - Error del servidor</h2><p>Revisá los logs. Volvé al <a href="/">inicio</a>.</p>
-</body></html>
+﻿{% extends "base.html" %}
+{% block title %}Solicitud inválida · {{ APP_NAME }}{% endblock %}
+
+{% block content %}
+<section class="container" style="padding:48px 0;">
+  <div style="max-width:760px;margin:0 auto;">
+    <div style="display:flex;gap:14px;align-items:center;margin-bottom:14px;">
+      <div style="font-size:34px;line-height:1;">⚠️</div>
+      <div>
+        <h1 style="margin:0;font-size:28px;">Solicitud inválida</h1>
+        <p style="margin:6px 0 0;opacity:.8;">
+          El formulario expiró o el token de seguridad no coincide.
+        </p>
+      </div>
+    </div>
+
+    <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);border-radius:14px;padding:16px;margin:18px 0;">
+      <p style="margin:0;opacity:.9;">
+        Solución rápida: recargá la página e intentá nuevamente.
+      </p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
+        <a href="javascript:location.reload()" class="btn" style="text-decoration:none;">🔄 Recargar</a>
+        <a href="/" class="btn" style="text-decoration:none;">🏠 Ir al inicio</a>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

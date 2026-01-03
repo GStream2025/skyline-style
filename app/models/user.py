@@ -7,14 +7,11 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 from flask_login import UserMixin
-from sqlalchemy import Index, event
+from sqlalchemy import Index, event, CheckConstraint
 from sqlalchemy.orm import validates
 
 from app.models import db
-
-# ✅ IMPORT CORRECTO: engine de passwords (NO confundir con security de URLs)
 from app.utils.password_engine import hash_password, verify_and_maybe_rehash
-
 
 # ============================================================
 # Helpers
@@ -28,15 +25,35 @@ EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 
 
 def _token64() -> str:
-    """Token EXACTO 64 chars (hex)."""
+    """Token EXACTO 64 chars hex (32 bytes)."""
     return secrets.token_hex(32)
 
 
 def _safe_strip(v: Optional[str]) -> Optional[str]:
     if v is None:
         return None
-    vv = v.strip()
+    vv = str(v).strip()
     return vv if vv else None
+
+
+def _clean_phone(v: Optional[str]) -> Optional[str]:
+    vv = _safe_strip(v)
+    if not vv:
+        return None
+    cleaned = "".join(ch for ch in vv if ch.isdigit() or ch in {"+", " ", "(", ")", "-"}).strip()
+    return cleaned[:40] if cleaned else None
+
+
+def _clamp_int(v: Optional[int], lo: int = 0, hi: int = 10_000) -> int:
+    try:
+        n = int(v or 0)
+    except Exception:
+        n = 0
+    if n < lo:
+        return lo
+    if n > hi:
+        return hi
+    return n
 
 
 # ============================================================
@@ -45,16 +62,17 @@ def _safe_strip(v: Optional[str]) -> Optional[str]:
 
 class User(UserMixin, db.Model):
     """
-    Skyline Store — User PRO 10X (FINAL / NO TOCAR)
+    Skyline Store — User ULTRA PRO (FINAL / NO BREAK)
 
     ✅ Flask-Login compatible
-    ✅ Password hashing + auto rehash (si cambia policy)
-    ✅ Lockouts + counters + helpers
+    ✅ Password hashing + auto rehash
+    ✅ Lockouts robustos
     ✅ Email verify + reset tokens (64 fixed)
     ✅ Marketing opt-in + unsubscribe token
-    ✅ Relaciones blindadas
+    ✅ Relaciones rápidas (selectin) y sin loops
     ✅ Validaciones suaves (no rompen DB vieja)
     ✅ Hooks ultra safe
+    ✅ Direcciones: 1 sola default real (sin migración)
     """
 
     __tablename__ = "users"
@@ -82,13 +100,8 @@ class User(UserMixin, db.Model):
     # Estado / roles
     # -------------------------
     is_active = db.Column(db.Boolean, nullable=False, default=True, index=True)
-
-    # Legacy/admin boolean (tu app ya lo usa)
     is_admin = db.Column(db.Boolean, nullable=False, default=False, index=True)
-
-    # Role string (opcional, PRO). No rompe: puede ser NULL.
-    # Si lo usás: "admin" / "staff" / "customer"
-    role = db.Column(db.String(20), nullable=True, index=True)
+    role = db.Column(db.String(20), nullable=True, index=True)  # "admin"/"staff"/"customer"
 
     # -------------------------
     # Email verification
@@ -128,21 +141,30 @@ class User(UserMixin, db.Model):
     )
 
     # -------------------------
-    # Relaciones (BLINDADAS)
+    # Relaciones (RÁPIDAS + BLINDADAS)
     # -------------------------
     addresses = db.relationship(
         "UserAddress",
         back_populates="user",
         cascade="all, delete-orphan",
-        lazy="select",
+        lazy="selectin",
         passive_deletes=True,
     )
 
+    # ✅ CLAVE ANTI-CRASH:
+    # - Order NO define relationship a User (para no romper mapper).
+    # - Desde User creamos:
+    #   - User.orders
+    #   - y automáticamente Order.user via backref.
     orders = db.relationship(
         "Order",
-        back_populates="user",
-        lazy="select",
+        lazy="selectin",
         passive_deletes=True,
+        backref=db.backref("user", lazy="select"),
+    )
+
+    __table_args__ = (
+        CheckConstraint("failed_login_count >= 0", name="ck_users_failed_login_nonneg"),
     )
 
     # ============================================================
@@ -176,13 +198,8 @@ class User(UserMixin, db.Model):
         self.password_changed_at = utcnow()
 
     def check_password(self, raw_password: str) -> bool:
-        """
-        ✅ bool real
-        ✅ auto-rehash si cambiaste policy (PASSWORD_METHOD)
-        """
         if not self.password_hash:
             return False
-
         ok, new_hash = verify_and_maybe_rehash(raw_password or "", self.password_hash)
         if ok and new_hash:
             self.password_hash = new_hash
@@ -194,7 +211,7 @@ class User(UserMixin, db.Model):
     # ============================================================
 
     def can_login(self) -> bool:
-        if not self.is_active:
+        if not bool(self.is_active):
             return False
         if self.locked_until and utcnow() < self.locked_until:
             return False
@@ -206,8 +223,9 @@ class User(UserMixin, db.Model):
         self.locked_until = None
 
     def mark_failed_login(self, lock_after: int = 8, lock_minutes: int = 15) -> None:
-        self.failed_login_count = int(self.failed_login_count or 0) + 1
-        if self.failed_login_count >= int(lock_after):
+        cnt = _clamp_int(self.failed_login_count, 0, 9999) + 1
+        self.failed_login_count = cnt
+        if cnt >= int(lock_after):
             self.locked_until = utcnow() + timedelta(minutes=int(lock_minutes))
 
     def lock_for(self, minutes: int = 15) -> None:
@@ -261,7 +279,8 @@ class User(UserMixin, db.Model):
 
     def subscribe_email(self) -> None:
         self.email_opt_in = True
-        self.email_opt_in_at = utcnow()
+        if not self.email_opt_in_at:
+            self.email_opt_in_at = utcnow()
 
     def unsubscribe_email(self) -> None:
         self.email_opt_in = False
@@ -280,7 +299,7 @@ class User(UserMixin, db.Model):
         return "Usuario"
 
     def default_address(self) -> Optional["UserAddress"]:
-        addrs = self.addresses or []
+        addrs = list(self.addresses or [])
         for a in addrs:
             if a.is_default:
                 return a
@@ -297,7 +316,9 @@ class User(UserMixin, db.Model):
     @validates("email")
     def _v_email(self, _k, v: str) -> str:
         vv = self.normalize_email(v)
-        return vv[:255] if vv else ""
+        # validación suave: no rompe DB vieja, pero evita basura obvia
+        vv = vv[:255] if vv else ""
+        return vv
 
     @validates("country")
     def _v_country(self, _k, v: Optional[str]) -> Optional[str]:
@@ -316,11 +337,7 @@ class User(UserMixin, db.Model):
 
     @validates("phone")
     def _v_phone(self, _k, v: Optional[str]) -> Optional[str]:
-        vv = _safe_strip(v)
-        if not vv:
-            return None
-        cleaned = "".join(ch for ch in vv if ch.isdigit() or ch in {"+", " ", "(", ")", "-"}).strip()
-        return cleaned[:40] if cleaned else None
+        return _clean_phone(v)
 
     @validates("role")
     def _v_role(self, _k, v: Optional[str]) -> Optional[str]:
@@ -404,11 +421,7 @@ class UserAddress(db.Model):
 
     @validates("phone")
     def _v_phone(self, _k, v: Optional[str]) -> Optional[str]:
-        vv = _safe_strip(v)
-        if not vv:
-            return None
-        cleaned = "".join(ch for ch in vv if ch.isdigit() or ch in {"+", " ", "(", ")", "-"}).strip()
-        return cleaned[:40] if cleaned else None
+        return _clean_phone(v)
 
     def set_as_default(self) -> None:
         """
@@ -429,6 +442,7 @@ class UserAddress(db.Model):
     def __repr__(self) -> str:
         return f"<UserAddress id={self.id} user_id={self.user_id} default={bool(self.is_default)}>"
 
+
 Index("ix_user_addresses_user_default", UserAddress.user_id, UserAddress.is_default)
 
 
@@ -448,6 +462,18 @@ def _user_before_insert(_mapper, _conn, target: User):
     except Exception:
         pass
 
+    try:
+        target.phone = _clean_phone(target.phone)
+    except Exception:
+        pass
+
+    try:
+        # opt-in timestamp coherente
+        if target.email_opt_in and not target.email_opt_in_at:
+            target.email_opt_in_at = utcnow()
+    except Exception:
+        pass
+
 
 @event.listens_for(User, "before_update", propagate=True)
 def _user_before_update(_mapper, _conn, target: User):
@@ -458,5 +484,32 @@ def _user_before_update(_mapper, _conn, target: User):
 
     try:
         target.ensure_tokens()
+    except Exception:
+        pass
+
+    try:
+        target.phone = _clean_phone(target.phone)
+    except Exception:
+        pass
+
+    try:
+        if target.email_opt_in and not target.email_opt_in_at:
+            target.email_opt_in_at = utcnow()
+    except Exception:
+        pass
+
+
+# ------------------------------------------------------------
+# Garantiza 1 default address por usuario (sin migraciones)
+# ------------------------------------------------------------
+@event.listens_for(UserAddress, "before_insert", propagate=True)
+@event.listens_for(UserAddress, "before_update", propagate=True)
+def _addr_ensure_single_default(_mapper, _conn, target: UserAddress):
+    try:
+        if target.is_default and target.user_id:
+            db.session.query(UserAddress).filter(
+                UserAddress.user_id == target.user_id,
+                UserAddress.id != (target.id or 0),
+            ).update({"is_default": False}, synchronize_session=False)
     except Exception:
         pass

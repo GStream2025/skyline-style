@@ -5,11 +5,10 @@ from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Optional, Any, Dict
 
-from sqlalchemy import Index, event
+from sqlalchemy import Index, CheckConstraint, event
 from sqlalchemy.orm import validates
 
 from app.models import db
-
 
 # ============================================================
 # Time / Decimal helpers (blindados)
@@ -31,11 +30,10 @@ def _d(v: Any, default: str = "0.00") -> Decimal:
         return Decimal(default)
 
 
-def _clamp_money(v: Decimal) -> Decimal:
-    """Evita montos negativos."""
-    if v is None:
-        return Decimal("0.00")
-    return v if v >= Decimal("0.00") else Decimal("0.00")
+def _clamp_money(v: Any) -> Decimal:
+    """Evita montos negativos y normaliza a Decimal."""
+    dv = _d(v)
+    return dv if dv >= Decimal("0.00") else Decimal("0.00")
 
 
 # JSON portable: JSON real en Postgres, TEXT en SQLite
@@ -48,13 +46,14 @@ MetaType = db.JSON().with_variant(db.Text(), "sqlite")
 
 class Order(db.Model):
     """
-    Skyline Store — Order PRO (FINAL)
+    Skyline Store — Order ULTRA PRO (FINAL / ZERO-CRASH)
 
-    ✅ Estados claros
-    ✅ Pagos múltiples
-    ✅ Snapshot del cliente
-    ✅ Totales blindados
-    ✅ Compatible SQLite / Postgres
+    ✅ No depende de User para mapear (evita el error 'User failed to locate a name')
+    ✅ Totales blindados + auto-recompute
+    ✅ CheckConstraints de no-negativos
+    ✅ Snapshot de cliente (checkout sin cuenta)
+    ✅ Compatible SQLite/Postgres
+    ✅ Relación con User se crea desde User (backref="user") -> ver parche en user.py
     """
 
     __tablename__ = "orders"
@@ -86,6 +85,9 @@ class Order(db.Model):
     PM_MP_AR = "mercadopago_ar"
     PM_BANK = "bank_transfer"
     PM_CASH = "cash"
+    PM_WISE = "wise"
+    PM_PAYONEER = "payoneer"
+    PM_PAXUM = "paxum"
 
     _ALLOWED_STATUS = {
         STATUS_AWAITING_PAYMENT,
@@ -96,17 +98,21 @@ class Order(db.Model):
         STATUS_CANCELLED,
         STATUS_REFUNDED,
     }
-
     _ALLOWED_PAY_STATUS = {PAY_PENDING, PAY_PAID, PAY_FAILED, PAY_REFUNDED}
-    _ALLOWED_PM = {PM_PAYPAL, PM_MP_UY, PM_MP_AR, PM_BANK, PM_CASH}
+    _ALLOWED_PM = {
+        PM_PAYPAL, PM_MP_UY, PM_MP_AR, PM_BANK, PM_CASH,
+        PM_WISE, PM_PAYONEER, PM_PAXUM,
+    }
 
     # -------------------------
     # Core
     # -------------------------
     id = db.Column(db.Integer, primary_key=True)
 
+    # número humano de orden (lo seteás en service/checkout)
     number = db.Column(db.String(40), unique=True, index=True, nullable=False)
 
+    # FK (no rompe si User no existe cargado todavía)
     user_id = db.Column(
         db.Integer,
         db.ForeignKey("users.id", ondelete="SET NULL"),
@@ -115,7 +121,7 @@ class Order(db.Model):
     )
 
     # -------------------------
-    # Snapshot cliente (NO dependemos de User)
+    # Snapshot cliente
     # -------------------------
     customer_name = db.Column(db.String(120))
     customer_email = db.Column(db.String(255), index=True)
@@ -134,31 +140,14 @@ class Order(db.Model):
     # -------------------------
     # Estado / pago
     # -------------------------
-    status = db.Column(
-        db.String(30),
-        nullable=False,
-        default=STATUS_AWAITING_PAYMENT,
-        index=True,
-    )
-
-    payment_method = db.Column(
-        db.String(30),
-        nullable=False,
-        default=PM_PAYPAL,
-        index=True,
-    )
-
-    payment_status = db.Column(
-        db.String(30),
-        nullable=False,
-        default=PAY_PENDING,
-        index=True,
-    )
+    status = db.Column(db.String(30), nullable=False, default=STATUS_AWAITING_PAYMENT, index=True)
+    payment_method = db.Column(db.String(30), nullable=False, default=PM_PAYPAL, index=True)
+    payment_status = db.Column(db.String(30), nullable=False, default=PAY_PENDING, index=True)
 
     currency = db.Column(db.String(3), nullable=False, default="USD", index=True)
 
     # -------------------------
-    # Totales
+    # Totales (Numeric)
     # -------------------------
     subtotal = db.Column(db.Numeric(12, 2), nullable=False, default=Decimal("0.00"))
     discount_total = db.Column(db.Numeric(12, 2), nullable=False, default=Decimal("0.00"))
@@ -172,6 +161,7 @@ class Order(db.Model):
     paypal_order_id = db.Column(db.String(120), index=True)
     mp_payment_id = db.Column(db.String(120), index=True)
     bank_transfer_ref = db.Column(db.String(120))
+    wise_transfer_id = db.Column(db.String(120), index=True)
 
     # -------------------------
     # Envío
@@ -187,34 +177,20 @@ class Order(db.Model):
     cancelled_at = db.Column(db.DateTime(timezone=True))
     refunded_at = db.Column(db.DateTime(timezone=True))
 
-    created_at = db.Column(
-        db.DateTime(timezone=True),
-        nullable=False,
-        default=utcnow,
-        index=True,
-    )
-
-    updated_at = db.Column(
-        db.DateTime(timezone=True),
-        nullable=False,
-        default=utcnow,
-        onupdate=utcnow,
-    )
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, index=True)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
 
     # -------------------------
     # Metadata libre
     # -------------------------
     meta = db.Column(MetaType)
 
-    # -------------------------
+    # ----------------------------------------------------------
     # Relationships
-    # -------------------------
-    user = db.relationship(
-        "User",
-        back_populates="orders",
-        lazy="select",
-        passive_deletes=True,
-    )
+    # ----------------------------------------------------------
+    # ❌ NO relationship("User") ACÁ.
+    # ✅ La relación con User se define desde User con backref="user".
+    # Resultado: Order.user existe, pero NO rompe el mapper al arrancar.
 
     items = db.relationship(
         "OrderItem",
@@ -222,6 +198,14 @@ class Order(db.Model):
         cascade="all, delete-orphan",
         lazy="select",
         passive_deletes=True,
+    )
+
+    __table_args__ = (
+        CheckConstraint("subtotal >= 0", name="ck_orders_subtotal_nonneg"),
+        CheckConstraint("discount_total >= 0", name="ck_orders_discount_nonneg"),
+        CheckConstraint("shipping_total >= 0", name="ck_orders_shipping_nonneg"),
+        CheckConstraint("tax_total >= 0", name="ck_orders_tax_nonneg"),
+        CheckConstraint("total >= 0", name="ck_orders_total_nonneg"),
     )
 
     # -------------------------
@@ -250,18 +234,28 @@ class Order(db.Model):
     def _v_email(self, _k, v: Optional[str]) -> Optional[str]:
         return v.strip().lower()[:255] if v else None
 
+    @validates("number")
+    def _v_number(self, _k, v: str) -> str:
+        # evita vacío/espacios
+        vv = (v or "").strip()
+        if not vv:
+            # NO generamos acá para no sorprender; lo ideal es en servicio.
+            # Pero igual devolvemos algo para no romper inserts.
+            vv = f"ORD-{int(time.time())}"
+        return vv[:40]
+
     # -------------------------
     # Helpers PRO
     # -------------------------
     def recompute_totals(self) -> None:
         sub = Decimal("0.00")
-        for it in self.items or []:
+        for it in (self.items or []):
             it.recompute_line_total()
             sub += _d(it.line_total)
 
         self.subtotal = _clamp_money(sub)
         self.total = _clamp_money(
-            self.subtotal
+            _d(self.subtotal)
             - _d(self.discount_total)
             + _d(self.shipping_total)
             + _d(self.tax_total)
@@ -291,8 +285,12 @@ class Order(db.Model):
             "payment_method": self.payment_method,
             "currency": self.currency,
             "subtotal": str(_d(self.subtotal)),
+            "discount_total": str(_d(self.discount_total)),
+            "shipping_total": str(_d(self.shipping_total)),
+            "tax_total": str(_d(self.tax_total)),
             "total": str(_d(self.total)),
             "created_at": self.created_at.isoformat() if self.created_at else None,
+            "paid_at": self.paid_at.isoformat() if self.paid_at else None,
         }
 
     def __repr__(self) -> str:
@@ -343,8 +341,31 @@ class OrderItem(db.Model):
         except Exception:
             return 1
 
+    @validates("currency")
+    def _v_cur(self, _k, v: str) -> str:
+        return (v or "USD").strip().upper()[:3]
+
     def recompute_line_total(self) -> None:
         self.line_total = _clamp_money(_d(self.unit_price) * Decimal(self.qty or 1))
+
+
+# ============================================================
+# Eventos: auto-recompute de totales
+# ============================================================
+
+@event.listens_for(OrderItem, "before_insert")
+@event.listens_for(OrderItem, "before_update")
+def _oi_before_save(_mapper, _connection, target: OrderItem) -> None:
+    target.recompute_line_total()
+
+
+@event.listens_for(Order, "before_insert")
+@event.listens_for(Order, "before_update")
+def _o_before_save(_mapper, _connection, target: Order) -> None:
+    try:
+        target.recompute_totals()
+    except Exception:
+        pass
 
 
 # ============================================================

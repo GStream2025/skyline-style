@@ -1,20 +1,13 @@
 # app/routes/main_routes.py
 """
-Skyline Store · Main Routes (ULTRA PRO MAX / FINAL / BULLETPROOF)
+Skyline Store · Main Routes (ULTRA PRO FINAL / ZERO-500)
 
-Mejoras reales:
-1) Render SAFE + fallback HTML/JSON sin 500 por template faltante
-2) Cache home con TTL + invalidación por firma DB (best-effort) + lock anti stampede
-3) Featured real con selectinload + fallback estático
-4) JSON mode robusto (Accept / XHR / ?json=1)
-5) SEO centralizado + canonical + OG abs + robots
-6) Healthcheck DB robusto + rollback safe
-7) Helpers blindados (title/img/href/price) + sanitize básico
-8) Compatible con Product legacy y media list/relationship
-9) Orden estable + clamp limits
-10) Sitemap/robots seguros (sin explotar por endpoints faltantes)
-11) Evita query pesada: limita sitemap y featured
-12) No filtra internals en prod (logs controlados)
+✅ NO importa modelos al import-time (evita mapper/init issues)
+✅ DB signature compatible SQLite/Postgres (sin NOW())
+✅ Featured + cache bulletproof (anti-stampede + TTL + firma best-effort)
+✅ Render seguro: template faltante -> HTML/JSON fallback sin 500
+✅ Sitemap/robots ultra safe
+✅ Health separado (/healthz) para no chocar con create_app
 """
 
 from __future__ import annotations
@@ -24,25 +17,26 @@ import logging
 import os
 import threading
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from flask import Blueprint, current_app, jsonify, make_response, render_template, request, url_for
 from sqlalchemy import text
-from sqlalchemy.orm import selectinload
 
-from app.models import db, Product
+from app.models import db  # ✅ solo db (no Product proxy)
 
 main_bp = Blueprint("main", __name__)
 log = logging.getLogger("main_routes")
 
 _TRUE = {"1", "true", "yes", "y", "on"}
 
-# Cache featured
+# -------------------------
+# Cache home
+# -------------------------
 _HOME_CACHE_TTL = int(os.getenv("HOME_CACHE_TTL", "120") or "120")
 _HOME_CACHE_TTL = max(10, min(_HOME_CACHE_TTL, 3600))
 
 _HOME_CACHE: Dict[str, Any] = {"ts": 0.0, "featured": [], "sig": ""}
-_HOME_CACHE_LOCK = threading.Lock()
+_HOME_LOCK = threading.Lock()
 
 SEO_DEFAULTS = {
     "meta_title": os.getenv("SEO_TITLE", "Skyline Store · Moda urbana, accesorios y tecnología"),
@@ -54,13 +48,11 @@ SEO_DEFAULTS = {
     "robots": os.getenv("SEO_ROBOTS", "index,follow"),
 }
 
-
 # ============================================================
 # Helpers
 # ============================================================
 
 def _is_json_request() -> bool:
-    # más robusto: Accept, XHR o ?json=1
     if request.args.get("json") == "1":
         return True
     accept = (request.headers.get("Accept") or "").lower()
@@ -68,7 +60,6 @@ def _is_json_request() -> bool:
         return True
     if (request.headers.get("X-Requested-With") or "").lower() == "xmlhttprequest":
         return True
-    # /api/* si algún día lo usás
     if (request.path or "").lower().startswith("/api/"):
         return True
     return False
@@ -97,7 +88,6 @@ def _abs_url(path_or_url: str) -> str:
         return s
     if not s.startswith("/"):
         s = "/" + s
-    # usar request.url_root es más directo que url_for("main.home", _external=True)
     try:
         return request.url_root.rstrip("/") + s
     except Exception:
@@ -105,7 +95,6 @@ def _abs_url(path_or_url: str) -> str:
 
 
 def _safe_text(s: Any, max_len: int = 200) -> str:
-    """Evita inyección en fallback HTML."""
     try:
         out = str(s or "").strip()
     except Exception:
@@ -168,14 +157,37 @@ def _render_safe(template: str, *, status: int = 200, **ctx):
     return html_doc, status, {"Content-Type": "text/html; charset=utf-8"}
 
 
-def _product_title(p: Product) -> str:
+# ============================================================
+# Model resolver (CRÍTICO: evita mapper/init issues)
+# ============================================================
+
+def _get_model(name: str):
+    """
+    Resuelve modelos desde el hub SIN forzar imports al import-time.
+    Si el hub no está listo aún, devuelve None (y caemos a fallback).
+    """
+    try:
+        from app.models import init_models  # lazy import
+        # no llamamos init_models acá; create_app ya lo hace.
+        from app.models import __dict__ as models_ns  # type: ignore
+        m = models_ns.get(name)
+        # m puede ser _ModelProxy: si no está cargado, puede tirar RuntimeError en _resolve()
+        return m
+    except Exception:
+        return None
+
+
+# ============================================================
+# Product helpers (no tipamos Product para no atar a la clase)
+# ============================================================
+
+def _product_title(p: Any) -> str:
     t = getattr(p, "title", None) or getattr(p, "name", None) or "Producto"
     s = str(t).strip()
     return (s[:120] or "Producto")
 
 
-def _product_image(p: Product) -> str:
-    # 1) método pro
+def _product_image(p: Any) -> str:
     try:
         if hasattr(p, "main_image_url") and callable(p.main_image_url):
             img = p.main_image_url()
@@ -184,7 +196,6 @@ def _product_image(p: Product) -> str:
     except Exception:
         pass
 
-    # 2) media list / relationship
     try:
         media = getattr(p, "media", None)
         if media:
@@ -195,7 +206,6 @@ def _product_image(p: Product) -> str:
     except Exception:
         pass
 
-    # 3) legacy
     img = getattr(p, "image_url", None)
     if img:
         return str(img)
@@ -203,7 +213,7 @@ def _product_image(p: Product) -> str:
     return "/static/img/banners/hero_home.png"
 
 
-def _product_href(p: Product) -> str:
+def _product_href(p: Any) -> str:
     slug = (getattr(p, "slug", "") or "").strip()
     if not slug:
         return "/shop"
@@ -213,7 +223,7 @@ def _product_href(p: Product) -> str:
         return f"/shop?q={slug}"
 
 
-def _money(p: Product) -> str:
+def _money(p: Any) -> str:
     price = getattr(p, "price", None)
     if price is None:
         return ""
@@ -224,7 +234,7 @@ def _money(p: Product) -> str:
         return f"{cur} {str(price)}"
 
 
-def _is_active_product(p: Product) -> bool:
+def _is_active_product(p: Any) -> bool:
     try:
         if hasattr(p, "is_active"):
             return bool(getattr(p, "is_active"))
@@ -246,24 +256,29 @@ def _limit_clamp(n: Any, lo: int = 1, hi: int = 24, default: int = 8) -> int:
 
 
 # ============================================================
-# Featured builder + cache signature
+# Featured builder + cache signature (SQLite/Postgres safe)
 # ============================================================
 
 def _db_signature() -> str:
     """
-    Firma para invalidar cache (best-effort).
-    - Si falla, devuelve "" y el cache queda sólo por TTL
+    Firma best-effort para invalidar cache.
+    ✅ SQLite-safe (sin NOW()).
+    Si falla: "" (cache sólo por TTL).
     """
     try:
-        if hasattr(Product, "updated_at"):
-            row = db.session.execute(
-                text("SELECT COALESCE(MAX(updated_at), NOW()) AS mx, COUNT(*) AS ct FROM products")
-            ).first()
-            if row:
-                return f"{row[0]}|{row[1]}"
+        # 1) count siempre
         row = db.session.execute(text("SELECT COUNT(*) FROM products")).first()
-        if row:
-            return f"count:{row[0]}"
+        ct = int(row[0]) if row else 0
+
+        # 2) max updated_at si existe columna (puede fallar si no existe)
+        mx = None
+        try:
+            row2 = db.session.execute(text("SELECT MAX(updated_at) FROM products")).first()
+            mx = row2[0] if row2 else None
+        except Exception:
+            mx = None
+
+        return f"{ct}|{mx}"
     except Exception:
         try:
             db.session.rollback()
@@ -275,29 +290,36 @@ def _db_signature() -> str:
 def _build_featured(limit: int = 8) -> List[Dict[str, Any]]:
     limit = _limit_clamp(limit, 1, 24, 8)
 
+    ProductModel = _get_model("Product")
+    if not ProductModel:
+        return []
+
     try:
-        q = Product.query
+        # si es proxy y todavía no está cargado -> puede explotar acá
+        try:
+            q = ProductModel.query  # type: ignore[attr-defined]
+        except Exception:
+            return []
 
         # filtro activo
-        if hasattr(Product, "status"):
-            q = q.filter(Product.status == "active")
-        elif hasattr(Product, "is_active"):
-            try:
-                q = q.filter(Product.is_active.is_(True))  # type: ignore[attr-defined]
-            except Exception:
-                pass
-
-        # carga media eficiente
-        if hasattr(Product, "media"):
-            q = q.options(selectinload(Product.media))
+        try:
+            if hasattr(ProductModel, "status"):
+                q = q.filter(ProductModel.status == "active")  # type: ignore[attr-defined]
+            elif hasattr(ProductModel, "is_active"):
+                q = q.filter(ProductModel.is_active.is_(True))  # type: ignore[attr-defined]
+        except Exception:
+            pass
 
         # ordering
-        if hasattr(Product, "updated_at"):
-            q = q.order_by(Product.updated_at.desc())
-        elif hasattr(Product, "created_at"):
-            q = q.order_by(Product.created_at.desc())
-        else:
-            q = q.order_by(Product.id.desc())
+        try:
+            if hasattr(ProductModel, "updated_at"):
+                q = q.order_by(ProductModel.updated_at.desc())  # type: ignore[attr-defined]
+            elif hasattr(ProductModel, "created_at"):
+                q = q.order_by(ProductModel.created_at.desc())  # type: ignore[attr-defined]
+            else:
+                q = q.order_by(ProductModel.id.desc())  # type: ignore[attr-defined]
+        except Exception:
+            pass
 
         items = q.limit(limit).all()
 
@@ -316,7 +338,7 @@ def _build_featured(limit: int = 8) -> List[Dict[str, Any]]:
         return out
 
     except Exception as e:
-        # en prod: info corto; en debug podés subir loglevel
+        # IMPORTANTE: no spamear en prod, pero dejar pista.
         log.info("Featured dinámico falló: %s", e)
         try:
             db.session.rollback()
@@ -327,19 +349,19 @@ def _build_featured(limit: int = 8) -> List[Dict[str, Any]]:
 
 def _static_featured() -> List[Dict[str, Any]]:
     return [
-        {"img": "/static/img/hero/hero-hoodie.png", "title": "Hoodies Premium", "price": "UYU 1990", "href": "/shop"},
-        {"img": "/static/img/hero/hero-sneakers.png", "title": "Zapatillas Urbanas", "price": "UYU 2590", "href": "/shop"},
-        {"img": "/static/img/hero/hero-headphones.png", "title": "Audio Inalámbrico", "price": "UYU 1290", "href": "/shop"},
-        {"img": "/static/img/hero/hero-watch.png", "title": "Smartwatch", "price": "UYU 1490", "href": "/shop"},
+        {"img": "/static/img/products/hero-hoodie.png", "title": "Hoodies Premium", "price": "UYU 1990", "href": "/shop"},
+        {"img": "/static/img/products/hero-sneakers.png", "title": "Zapatillas Urbanas", "price": "UYU 2590", "href": "/shop"},
+        {"img": "/static/img/products/hero-headphones.png", "title": "Audio Inalámbrico", "price": "UYU 1290", "href": "/shop"},
+        {"img": "/static/img/products/hero-watch.png", "title": "Smartwatch", "price": "UYU 1490", "href": "/shop"},
     ]
 
 
 def _get_cached_featured() -> Optional[List[Dict[str, Any]]]:
     ts = float(_HOME_CACHE.get("ts") or 0.0)
-    ttl_ok = (time.time() - ts) <= _HOME_CACHE_TTL
-    if not ttl_ok:
+    if (time.time() - ts) > _HOME_CACHE_TTL:
         return None
 
+    # firma best-effort
     try:
         sig = _db_signature()
         old = _HOME_CACHE.get("sig") or ""
@@ -348,8 +370,8 @@ def _get_cached_featured() -> Optional[List[Dict[str, Any]]]:
     except Exception:
         pass
 
-    featured = _HOME_CACHE.get("featured") or None
-    return featured
+    featured = _HOME_CACHE.get("featured")
+    return featured if isinstance(featured, list) and featured else None
 
 
 def _set_cached_featured(items: List[Dict[str, Any]]) -> None:
@@ -367,12 +389,14 @@ def _set_cached_featured(items: List[Dict[str, Any]]) -> None:
 
 @main_bp.get("/")
 def home():
-    # lock anti-stampede para cuando llegan muchas requests juntas
-    with _HOME_CACHE_LOCK:
-        featured = _get_cached_featured()
-        if not featured:
-            featured = _build_featured(limit=8) or _static_featured()
-            _set_cached_featured(featured)
+    # double-checked locking: rápido sin lock cuando cache sirve
+    featured = _get_cached_featured()
+    if not featured:
+        with _HOME_LOCK:
+            featured = _get_cached_featured()
+            if not featured:
+                featured = _build_featured(limit=8) or _static_featured()
+                _set_cached_featured(featured)
 
     ctx = {
         "featured": featured,
@@ -402,11 +426,11 @@ def contact():
 
 
 # ============================================================
-# Healthcheck (nota: ya tenés /health en create_app, pero no rompe)
+# Health (separado para no chocar con create_app)
 # ============================================================
 
-@main_bp.get("/health")
-def health():
+@main_bp.get("/healthz")
+def healthz():
     try:
         db.session.execute(text("SELECT 1"))
         return {
@@ -455,37 +479,42 @@ def sitemap_xml():
 
     limit = _limit_clamp(os.getenv("SITEMAP_LIMIT", "500"), 1, 2000, 500)
 
-    try:
-        q = Product.query
+    ProductModel = _get_model("Product")
+    if ProductModel:
+        try:
+            q = ProductModel.query  # type: ignore[attr-defined]
 
-        if hasattr(Product, "status"):
-            q = q.filter(Product.status == "active")
-        elif hasattr(Product, "is_active"):
             try:
-                q = q.filter(Product.is_active.is_(True))  # type: ignore[attr-defined]
+                if hasattr(ProductModel, "status"):
+                    q = q.filter(ProductModel.status == "active")  # type: ignore[attr-defined]
+                elif hasattr(ProductModel, "is_active"):
+                    q = q.filter(ProductModel.is_active.is_(True))  # type: ignore[attr-defined]
             except Exception:
                 pass
 
-        if hasattr(Product, "updated_at"):
-            q = q.order_by(Product.updated_at.desc())
-        else:
-            q = q.order_by(Product.id.desc())
-
-        items = q.limit(limit).all()
-        for p in items:
-            slug = (getattr(p, "slug", "") or "").strip()
-            if not slug:
-                continue
             try:
-                add(url_for("shop.product_detail", slug=slug))
+                if hasattr(ProductModel, "updated_at"):
+                    q = q.order_by(ProductModel.updated_at.desc())  # type: ignore[attr-defined]
+                else:
+                    q = q.order_by(ProductModel.id.desc())  # type: ignore[attr-defined]
             except Exception:
-                add(f"/shop?q={slug}")
+                pass
 
-    except Exception:
-        try:
-            db.session.rollback()
+            items = q.limit(limit).all()
+            for p in items:
+                slug = (getattr(p, "slug", "") or "").strip()
+                if not slug:
+                    continue
+                try:
+                    add(url_for("shop.product_detail", slug=slug))
+                except Exception:
+                    add(f"/shop?q={slug}")
+
         except Exception:
-            pass
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
 
     xml_items = "\n".join([f"  <url><loc>{_safe_text(u, 300)}</loc></url>" for u in urls])
     xml = f"""<?xml version="1.0" encoding="UTF-8"?>

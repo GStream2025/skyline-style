@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Dict, Optional, Type, cast
+from typing import Any, Dict, Optional
 
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
@@ -57,49 +57,91 @@ def _db_uri(app: Flask) -> str:
 
 
 # ==========================================================
-# Import seguro (SIN romper el proceso)
+# Import helpers
 # ==========================================================
-def _try_import(module: str, name: str):
+def _import_required(module: str, name: str, *, debug: bool) -> Any:
+    """
+    Import obligatorio:
+    - Si falla, levanta error (en prod y dev)
+    - En debug loguea stacktrace, en prod log corto
+    """
+    try:
+        mod = __import__(module, fromlist=[name])
+        obj = getattr(mod, name)
+        return obj
+    except Exception as e:
+        if debug:
+            log.exception("❌ Required model import failed: %s.%s", module, name)
+        else:
+            log.error("❌ Required model import failed: %s.%s (%s)", module, name, e)
+        raise
+
+
+def _try_import_optional(module: str, name: str, *, debug: bool) -> Any:
+    """
+    Import opcional:
+    - Si falla NO rompe el proceso
+    - En debug muestra exception, en prod solo debug
+    """
     try:
         mod = __import__(module, fromlist=[name])
         return getattr(mod, name)
     except Exception as e:
-        # en prod no spameamos; en debug sirve
-        log.debug("Model import failed: %s.%s (%s)", module, name, e)
+        if debug:
+            log.debug("Optional model import failed: %s.%s (%s)", module, name, e, exc_info=True)
+        else:
+            log.debug("Optional model import failed: %s.%s (%s)", module, name, e)
         return None
 
 
-def _load_models(*, force: bool = False) -> Dict[str, Any]:
+# ==========================================================
+# Loader con ORDEN GARANTIZADO y CORES OBLIGATORIOS
+# ==========================================================
+def _load_models(app: Flask, *, force: bool = False) -> Dict[str, Any]:
     """
     Carga modelos SOLO cuando init_models(app) lo pide.
     Cache por proceso para performance.
+
+    ✔️ Orden fijo
+    ✔️ Core models obligatorios (si faltan → mejor fallar claro)
+    ✔️ Opcionales no rompen
     """
     global _LOADED_CACHE
     if _LOADED_CACHE is not None and not force:
         return _LOADED_CACHE
 
+    debug = bool(app.debug) or _app_env(app) == "development"
+
     models: Dict[str, Any] = {}
 
-    # ⚠️ ORDEN IMPORTA: User antes que Order
-    models["User"] = _try_import("app.models.user", "User")
-    models["UserAddress"] = _try_import("app.models.user", "UserAddress")
+    # -------------------------
+    # CORE (OBLIGATORIOS)
+    # -------------------------
+    # 1) User siempre primero (evita: relationship("User") not found)
+    models["User"] = _import_required("app.models.user", "User", debug=debug)
+    models["UserAddress"] = _import_required("app.models.user", "UserAddress", debug=debug)
 
-    models["Category"] = _try_import("app.models.category", "Category")
+    # 2) Catálogo
+    models["Category"] = _import_required("app.models.category", "Category", debug=debug)
 
-    models["Product"] = _try_import("app.models.product", "Product")
-    models["ProductMedia"] = _try_import("app.models.product", "ProductMedia")
-    models["Tag"] = _try_import("app.models.product", "Tag")
+    models["Product"] = _import_required("app.models.product", "Product", debug=debug)
+    models["ProductMedia"] = _try_import_optional("app.models.product", "ProductMedia", debug=debug)
+    models["Tag"] = _try_import_optional("app.models.product", "Tag", debug=debug)
 
-    models["Order"] = _try_import("app.models.order", "Order")
-    models["OrderItem"] = _try_import("app.models.order", "OrderItem")
+    # 3) Orders al final (dependen de User/Product)
+    models["Order"] = _import_required("app.models.order", "Order", debug=debug)
+    models["OrderItem"] = _import_required("app.models.order", "OrderItem", debug=debug)
 
-    # Opcionales
-    models["Offer"] = _try_import("app.models.offer", "Offer")
-    models["Media"] = _try_import("app.models.media", "Media")
-    models["Event"] = _try_import("app.models.event", "Event")
-    models["Campaign"] = _try_import("app.models.campaign", "Campaign")
-    models["CampaignSend"] = _try_import("app.models.campaign", "CampaignSend")
+    # -------------------------
+    # OPCIONALES
+    # -------------------------
+    models["Offer"] = _try_import_optional("app.models.offer", "Offer", debug=debug)
+    models["Media"] = _try_import_optional("app.models.media", "Media", debug=debug)
+    models["Event"] = _try_import_optional("app.models.event", "Event", debug=debug)
+    models["Campaign"] = _try_import_optional("app.models.campaign", "Campaign", debug=debug)
+    models["CampaignSend"] = _try_import_optional("app.models.campaign", "CampaignSend", debug=debug)
 
+    # Filtrar None
     _LOADED_CACHE = {k: v for k, v in models.items() if v is not None}
     return _LOADED_CACHE
 
@@ -123,7 +165,7 @@ class _ModelProxy:
         if m is None:
             raise RuntimeError(
                 f"Model '{self._name}' no está cargado. "
-                "Llamá init_models(app) al iniciar la app (create_app)."
+                "Llamá init_models(app) dentro de create_app() antes de usar modelos."
             )
         return m
 
@@ -154,7 +196,7 @@ CampaignSend = _ModelProxy("CampaignSend")
 
 
 # ==========================================================
-# Init principal (LO ÚNICO que registra modelos)
+# Init principal
 # ==========================================================
 def init_models(
     app: Flask,
@@ -170,11 +212,22 @@ def init_models(
     if not _db_is_initialized(app):
         db.init_app(app)
 
-    # cargar modelos (ordena User antes que Order)
-    loaded = _load_models(force=force_reload_models)
-
     env = _app_env(app)
     uri = _db_uri(app)
+    debug = bool(app.debug) or env == "development"
+
+    # cargar modelos (ordena User antes que Order)
+    loaded = _load_models(app, force=force_reload_models)
+
+    # sanity check (core)
+    required = ["User", "Category", "Product", "Order", "OrderItem"]
+    missing = [m for m in required if m not in loaded]
+    if missing:
+        msg = f"Faltan modelos core: {', '.join(missing)}"
+        # en prod no seguimos: mejor fallar rápido que romper routes
+        if _is_production(app):
+            raise RuntimeError(msg)
+        warnings.append(msg)
 
     if not uri:
         warnings.append("SQLALCHEMY_DATABASE_URI vacío. Revisá DATABASE_URL/SQLite config.")
@@ -198,6 +251,7 @@ def init_models(
         "models": sorted(list(loaded.keys())),
         "auto_create_tables": bool(auto_create_tables),
         "warnings": warnings,
+        "debug": debug,
     }
 
     if create_admin:
@@ -216,7 +270,7 @@ def create_admin_if_missing(app: Flask) -> Dict[str, Any]:
     if not _db_uri(app):
         return {"ok": False, "msg": "No hay SQLALCHEMY_DATABASE_URI configurado."}
 
-    loaded = _load_models()
+    loaded = _LOADED_CACHE or {}
     UserModel = loaded.get("User")
     if UserModel is None:
         return {"ok": False, "msg": "User model no encontrado (app/models/user.py)"}
@@ -283,6 +337,7 @@ __all__ = [
     "Offer",
     "Media",
     "Event",
+    "Campaign",
     "Campaign",
     "CampaignSend",
 ]
