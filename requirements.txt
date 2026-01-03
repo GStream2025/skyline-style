@@ -1,118 +1,137 @@
 ﻿# ============================================================
-# Skyline Store — Production Requirements (ULTRA PRO / FINAL)
+# SKYLINE STORE — PRODUCTION REQUIREMENTS (10× PRO / FINAL)
 # ============================================================
-# ✔ Estable
-# ✔ Probado con Flask 3.x
-# ✔ Render / Railway / Docker / Local
-# ✔ Sin dependencias rotas ni experimentales
-# ✔ Listo para no tocar más
+# ✔ Flask 3.x estable
+# ✔ Render / Docker / Railway / Local
+# ✔ Migraciones seguras
+# ✔ Seguridad + Performance reales
+# ✔ Listo para escalar
+# ✔ NO experimental
+# ✔ NO dependencias rotas
 # ============================================================
 
 
-# =========================
-# Core Web
-# =========================
+# ============================================================
+# CORE WEB (Framework)
+# ============================================================
 Flask==3.0.3
 Werkzeug==3.0.3
-python-dotenv==1.0.1
+Jinja2==3.1.4
 itsdangerous==2.2.0
 click==8.1.7
-Jinja2==3.1.4
+python-dotenv==1.0.1
 
 
-# =========================
-# WSGI / Producción
-# =========================
+# ============================================================
+# WSGI / PRODUCCIÓN
+# ============================================================
 gunicorn==22.0.0
-# waitress (opcional Windows)
-# waitress==3.0.0
+# waitress==3.0.0  # solo Windows (opcional)
 
 
-# =========================
-# HTTP / APIs
-# =========================
+# ============================================================
+# HTTP / CLIENTES API
+# ============================================================
 requests==2.32.3
 urllib3==2.2.3
 certifi==2024.8.30
+charset-normalizer==3.4.4
+idna==3.11
 
 
-# =========================
-# Database / ORM / Migraciones
-# =========================
+# ============================================================
+# DATABASE / ORM / MIGRATIONS
+# ============================================================
 Flask-SQLAlchemy==3.1.1
 SQLAlchemy==2.0.36
 Flask-Migrate==4.0.7
 alembic==1.14.0
+greenlet==3.3.0
 
 # PostgreSQL (Render / Producción)
 psycopg[binary]==3.2.3
 
-# SQLite -> incluido en Python (local/dev)
+# SQLite → incluido en Python (local/dev)
 
 
-# =========================
-# Performance / Frontend
-# =========================
-Flask-Compress==1.17
-Flask-Caching==2.3.0
-whitenoise==6.8.2
-flask-minify==0.42
-
-
-# =========================
-# Seguridad
-# =========================
-Flask-Talisman==1.1.0
-bcrypt==4.2.0
-argon2-cffi==23.1.0
-
-
-# =========================
-# Auth / Usuarios / Formularios
-# =========================
+# ============================================================
+# AUTH / USERS / FORMS
+# ============================================================
 Flask-Login==0.6.3
 Flask-WTF==1.2.2
 WTForms==3.2.1
 email-validator==2.2.0
 
 
-# =========================
-# Admin Panel (REAL)
-# =========================
+# ============================================================
+# SECURITY (PRO REAL)
+# ============================================================
+Flask-Talisman==1.1.0
+bcrypt==4.2.0
+argon2-cffi==23.1.0
+argon2-cffi-bindings==25.1.0
+blinker==1.9.0
+
+
+# ============================================================
+# PERFORMANCE / STATIC / CACHE
+# ============================================================
+Flask-Compress==1.17
+Flask-Caching==2.3.0
+cachelib==0.9.0
+whitenoise==6.8.2
+flask-minify==0.42
+htmlmin==0.1.12
+jsmin==3.0.1
+rcssmin==1.2.2
+brotli==1.2.0
+xxhash==3.6.0
+zstandard==0.25.0
+
+
+# ============================================================
+# ADMIN PANEL (REAL)
+# ============================================================
 Flask-Admin==1.6.1
 
 
-# =========================
-# Email (confirmaciones / reset)
-# =========================
+# ============================================================
+# EMAIL / NOTIFICATIONS
+# ============================================================
 Flask-Mail==0.10.0
+dnspython==2.8.0
 
 
-# =========================
-# Imágenes / Uploads
-# =========================
+# ============================================================
+# IMAGES / UPLOADS
+# ============================================================
 Pillow==10.4.0
 
 
-# =========================
-# Utilidades
-# =========================
+# ============================================================
+# UTILITIES
+# ============================================================
 python-slugify==8.0.4
 python-dateutil==2.9.0.post0
+six==1.17.0
+typing-extensions==4.15.0
+MarkupSafe==3.0.3
+packaging==25.0
 
 
-# =========================
-# Opcionales (NO obligatorios)
-# =========================
-# Sentry (errores en producción)
-# sentry-sdk[flask]==2.19.2
+# ============================================================
+# OPTIONAL / FUTURE (COMMENTED)
+# ============================================================
 
-# Rate limiting
+# Rate limiting (cuando quieras activarlo)
 # Flask-Limiter==3.8.0
 
 # Background jobs
 # rq==1.16.2
 # redis==5.0.8
 
-# Stripe / pagos futuros
+# Monitoring / Errors
+# sentry-sdk[flask]==2.19.2
+
+# Payments
 # stripe==10.12.0
