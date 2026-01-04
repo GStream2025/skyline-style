@@ -13,32 +13,41 @@
 <link rel="preload" as="image" href="{{ url_for('static', filename='img/banners/hero_home.png') }}">
 
 <style>
-/* =========================
- HOME — Marketplace Premium (consistente con base)
-========================= */
+/* =========================================================
+ SKYLINE STORE — HOME (Marketplace PRO)
+ - Estilo tipo Temu / MercadoLibre (hero + quick actions + deals + grid)
+ - 100% compatible con tu base (usa --max, --stroke, --grad, --shadow2, --ease)
+ - Accesible (aria), responsive, sin dependencias externas
+========================================================= */
+
 .home{padding: 10px 0 0}
 .section{max-width: var(--max); margin:0 auto; padding: 0 18px 28px}
 a{color:inherit}
 .sr-only{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+:root{scroll-behavior:smooth}
 
-/* ===== Layout row superior ===== */
+/* =========================
+ TOP: beneficios + buscador + quick actions
+========================= */
 .home-top{
   margin: 14px 0 12px;
-  display:flex;
-  gap:12px;
-  flex-wrap:wrap;
-  align-items:center;
-  justify-content:space-between;
+  display:grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
 }
+@media (min-width: 980px){
+  .home-top{grid-template-columns: 1.3fr 1fr; align-items:center}
+}
+
 .badges{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
 .badge{
   display:inline-flex; align-items:center; gap:8px;
-  background: rgba(255,255,255,.85);
+  background: rgba(255,255,255,.88);
   border: 1px solid var(--stroke);
   border-radius:999px;
   padding: 9px 11px;
   box-shadow: 0 12px 24px rgba(2,6,23,.06);
-  font-weight: 800;
+  font-weight: 850;
   font-size: .88rem;
   color: rgba(11,18,32,.86);
 }
@@ -49,21 +58,24 @@ a{color:inherit}
 }
 
 .home-search{
-  display:flex; align-items:center; gap:10px;
-  width: min(560px, 100%);
+  display:flex;
+  align-items:center;
+  gap:10px;
+  width: 100%;
 }
 .home-search .search{
   flex:1;
   display:flex; gap:10px; align-items:center;
-  background: rgba(255,255,255,.92);
+  background: rgba(255,255,255,.94);
   border: 1px solid var(--stroke);
-  border-radius: 16px;
+  border-radius: 18px;
   padding: 10px 12px;
   box-shadow: 0 14px 30px rgba(2,6,23,.06);
+  min-height: 48px;
 }
 .home-search input{
   border:0; outline:none; width:100%;
-  font-weight: 700;
+  font-weight: 800;
   background: transparent;
   color: rgba(11,18,32,.92);
 }
@@ -72,19 +84,102 @@ a{color:inherit}
   border:0;
   background: var(--grad);
   color:#fff;
-  font-weight: 900;
+  font-weight: 950;
   padding: 10px 14px;
   border-radius: 14px;
   cursor:pointer;
   box-shadow: 0 12px 22px rgba(2,6,23,.12);
-  transition: transform .18s var(--ease);
+  transition: transform .18s var(--ease), opacity .18s var(--ease);
+  white-space:nowrap;
 }
 .home-search button:hover{transform: translateY(-1px)}
-@media (max-width: 560px){
-  .home-search{width:100%}
+.home-search button:active{transform: translateY(0)}
+.home-search button:focus-visible,
+.home-search input:focus-visible{
+  outline: 3px solid rgba(59,130,246,.35);
+  outline-offset: 2px;
+  border-radius: 16px;
 }
 
-/* ===== HERO ===== */
+/* Quick actions (tipo ML) */
+.quick-actions{
+  margin-top: 8px;
+  display:flex; gap:10px; flex-wrap:wrap;
+  align-items:center;
+}
+.qa{
+  display:inline-flex; align-items:center; justify-content:center;
+  gap:8px;
+  padding: 10px 12px;
+  border-radius: 999px;
+  text-decoration:none;
+  background: rgba(255,255,255,.92);
+  border: 1px solid var(--stroke);
+  box-shadow: 0 10px 20px rgba(2,6,23,.06);
+  font-weight: 900;
+  color: rgba(11,18,32,.86);
+  transition: transform .18s var(--ease), box-shadow .18s var(--ease);
+}
+.qa:hover{transform: translateY(-2px); box-shadow: 0 14px 26px rgba(2,6,23,.10)}
+.qa .dot{width:8px;height:8px;border-radius:99px;background: var(--grad)}
+
+/* =========================
+ HERO + SIDEBAR (mega categories) + panel derecha
+========================= */
+.hero-wrap{
+  margin-top: 12px;
+  display:grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+@media (min-width: 1080px){
+  .hero-wrap{
+    grid-template-columns: 280px 1fr 320px;
+    align-items: stretch;
+  }
+}
+
+.side{
+  background: rgba(255,255,255,.94);
+  border: 1px solid var(--stroke);
+  border-radius: 22px;
+  box-shadow: var(--shadow2);
+  padding: 12px;
+  overflow:hidden;
+}
+.side h2{
+  margin: 2px 0 10px;
+  font-size: 1rem;
+  font-weight: 950;
+  letter-spacing: -.3px;
+  color: rgba(11,18,32,.92);
+}
+.side ul{list-style:none; margin:0; padding:0; display:grid; gap:8px}
+.side a{
+  display:flex; align-items:center; justify-content:space-between;
+  gap: 10px;
+  text-decoration:none;
+  padding: 10px 10px;
+  border-radius: 14px;
+  background: rgba(255,255,255,.78);
+  border: 1px solid rgba(15,23,42,.08);
+  color: rgba(11,18,32,.86);
+  font-weight: 900;
+  transition: transform .18s var(--ease);
+}
+.side a:hover{transform: translateY(-1px)}
+.side .tagmini{
+  display:inline-flex;
+  align-items:center;
+  padding: 6px 9px;
+  border-radius: 999px;
+  background: rgba(47,123,255,.08);
+  border: 1px solid rgba(47,123,255,.14);
+  font-weight: 900;
+  font-size: .78rem;
+  color: rgba(11,18,32,.78);
+}
+
 .hero{
   position:relative;
   border-radius: 22px;
@@ -98,7 +193,7 @@ a{color:inherit}
   height: min(520px, 70vw);
   object-fit: cover;
   display:block;
-  filter: saturate(1.05) contrast(1.02);
+  filter: saturate(1.06) contrast(1.02);
 }
 .hero-overlay{
   position:absolute; inset:0;
@@ -106,8 +201,8 @@ a{color:inherit}
   padding: 22px clamp(18px,4vw,46px);
 }
 .hero-card{
-  max-width: 600px;
-  background: linear-gradient(180deg, rgba(255,255,255,.92), rgba(255,255,255,.70));
+  max-width: 620px;
+  background: linear-gradient(180deg, rgba(255,255,255,.94), rgba(255,255,255,.70));
   border: 1px solid rgba(15,23,42,.12);
   box-shadow: 0 18px 55px rgba(2,6,23,.12);
   border-radius: 22px;
@@ -116,7 +211,7 @@ a{color:inherit}
 }
 .hero-kicker{
   display:inline-flex; align-items:center; gap:8px;
-  font-weight:900; font-size:.86rem;
+  font-weight:950; font-size:.86rem;
   padding: 8px 10px;
   border-radius:999px;
   background: rgba(47,123,255,.10);
@@ -126,7 +221,7 @@ a{color:inherit}
 .hero-kicker .d{width:10px;height:10px;border-radius:99px;background:var(--grad)}
 .hero-card h1{
   margin: 12px 0 0;
-  font-weight: 950;
+  font-weight: 1000;
   letter-spacing: -1px;
   line-height: 1.02;
   font-size: clamp(2rem, 4.9vw, 3.3rem);
@@ -140,7 +235,7 @@ a{color:inherit}
 }
 .hero-sub{
   margin-top: 10px;
-  font-weight: 650;
+  font-weight: 700;
   color: rgba(11,18,32,.62);
   line-height: 1.35;
   max-width: 52ch;
@@ -148,12 +243,12 @@ a{color:inherit}
 .hero-ctas{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
 .btn{
   display:inline-flex;align-items:center;justify-content:center;
-  text-decoration:none;font-weight:900;
+  text-decoration:none;font-weight:950;
   padding: 12px 14px;
   border-radius: 14px;
   border:1px solid var(--stroke);
   cursor:pointer;
-  transition: transform .18s var(--ease), box-shadow .18s var(--ease);
+  transition: transform .18s var(--ease), box-shadow .18s var(--ease), opacity .18s var(--ease);
 }
 .btn:hover{transform: translateY(-2px); box-shadow: 0 14px 26px rgba(2,6,23,.10)}
 .btn.primary{
@@ -162,9 +257,11 @@ a{color:inherit}
   border-color: rgba(47,123,255,.20);
 }
 .btn.ghost{
-  background: rgba(255,255,255,.86);
+  background: rgba(255,255,255,.88);
   color: rgba(11,18,32,.92);
 }
+.btn:focus-visible{outline: 3px solid rgba(59,130,246,.35); outline-offset: 2px}
+
 .hero-mini{
   display:flex; gap:10px; flex-wrap:wrap;
   margin-top: 12px;
@@ -173,15 +270,52 @@ a{color:inherit}
   display:inline-flex;align-items:center;gap:8px;
   padding: 8px 10px;
   border-radius: 999px;
-  background: rgba(255,255,255,.88);
+  background: rgba(255,255,255,.90);
   border: 1px solid rgba(15,23,42,.10);
-  font-weight: 800;
+  font-weight: 900;
   color: rgba(11,18,32,.72);
   font-size: .88rem;
 }
 .pill b{color: rgba(11,18,32,.92)}
 
-/* ===== Categorías ===== */
+/* Right panel: cuenta / cupones / tracking (tipo marketplace) */
+.panel{
+  background: rgba(255,255,255,.94);
+  border: 1px solid var(--stroke);
+  border-radius: 22px;
+  box-shadow: var(--shadow2);
+  padding: 12px;
+  display:grid;
+  gap:10px;
+}
+.pcard{
+  background: rgba(255,255,255,.86);
+  border: 1px solid rgba(15,23,42,.10);
+  border-radius: 18px;
+  padding: 12px;
+  box-shadow: 0 14px 30px rgba(2,6,23,.06);
+}
+.pcard b{display:block; font-weight: 950; color: rgba(11,18,32,.92)}
+.pcard span{display:block; margin-top:6px; font-weight:700; color: rgba(11,18,32,.62); line-height:1.35}
+.pcard .row{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px}
+.pbtn{
+  display:inline-flex; align-items:center; justify-content:center;
+  gap:8px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  text-decoration:none;
+  font-weight: 950;
+  border:1px solid rgba(15,23,42,.10);
+  background: rgba(255,255,255,.92);
+  color: rgba(11,18,32,.90);
+  transition: transform .18s var(--ease);
+}
+.pbtn:hover{transform: translateY(-2px)}
+.pbtn.primary{background: var(--grad); color:#fff; border-color: rgba(47,123,255,.18)}
+
+/* =========================
+ CATEGORÍAS BANNERS (scroll móvil)
+========================= */
 .cats{
   display:grid;
   grid-template-columns: 1fr;
@@ -213,19 +347,23 @@ a{color:inherit}
   background: linear-gradient(90deg, rgba(0,0,0,.42), rgba(0,0,0,.10), transparent);
 }
 .cat .content{position:absolute;left:14px;bottom:14px;right:14px;color:#fff}
-.cat .content b{display:block;font-weight:950;font-size:1.06rem;letter-spacing:-.2px}
+.cat .content b{display:block;font-weight:1000;font-size:1.06rem;letter-spacing:-.2px}
 .cat .content a{
   margin-top:8px;display:inline-flex;
   color:#fff;text-decoration:none;
-  font-weight:900;
+  font-weight:950;
   background: rgba(255,255,255,.14);
   border:1px solid rgba(255,255,255,.22);
   padding: 9px 11px;
   border-radius: 12px;
   backdrop-filter: blur(6px);
+  transition: transform .18s var(--ease);
 }
+.cat .content a:hover{transform: translateY(-1px)}
 
-/* ===== Chips filtros ===== */
+/* =========================
+ CHIPS filtros
+========================= */
 .filters{
   display:flex; gap:8px; flex-wrap:wrap;
   margin: 10px 0 14px;
@@ -234,30 +372,129 @@ a{color:inherit}
   display:inline-flex; align-items:center; gap:8px;
   padding: 10px 12px;
   border-radius: 999px;
-  background: rgba(255,255,255,.90);
+  background: rgba(255,255,255,.92);
   border: 1px solid var(--stroke);
   box-shadow: 0 10px 20px rgba(2,6,23,.06);
   text-decoration:none;
-  font-weight: 850;
+  font-weight: 950;
   color: rgba(11,18,32,.86);
+  transition: transform .18s var(--ease);
 }
 .chip .d{width:8px;height:8px;border-radius:99px;background: var(--grad)}
-.chip:hover{transform: translateY(-1px); transition: transform .18s var(--ease)}
+.chip:hover{transform: translateY(-2px)}
 
-/* ===== Destacados ===== */
+/* =========================
+ FLASH DEALS (urgencia tipo Temu)
+========================= */
+.deals{
+  margin-top: 10px;
+  background: rgba(255,255,255,.94);
+  border:1px solid var(--stroke);
+  border-radius: 22px;
+  box-shadow: var(--shadow2);
+  padding: 12px;
+}
+.deals-top{
+  display:flex; align-items:flex-end; justify-content:space-between;
+  gap:12px; flex-wrap:wrap;
+}
+.deals-title{
+  font-weight: 1000;
+  letter-spacing:-.5px;
+  color: rgba(11,18,32,.95);
+  font-size: 1.18rem;
+}
+.timer{
+  display:inline-flex; align-items:center; gap:8px;
+  padding: 8px 10px;
+  border-radius: 999px;
+  background: rgba(47,123,255,.08);
+  border:1px solid rgba(47,123,255,.14);
+  font-weight: 950;
+  color: rgba(11,18,32,.82);
+}
+.timer .box{
+  display:inline-grid; place-items:center;
+  width: 28px; height: 26px;
+  border-radius: 10px;
+  background: rgba(255,255,255,.9);
+  border:1px solid rgba(15,23,42,.10);
+}
+.deals-row{
+  margin-top: 10px;
+  display:grid;
+  grid-template-columns: 1fr;
+  gap:12px;
+}
+@media (min-width: 860px){ .deals-row{grid-template-columns: repeat(3, 1fr)} }
+
+.deal{
+  border-radius: 18px;
+  overflow:hidden;
+  border:1px solid rgba(15,23,42,.10);
+  background: rgba(255,255,255,.90);
+  box-shadow: 0 16px 34px rgba(2,6,23,.08);
+  display:flex;
+  gap: 12px;
+  padding: 12px;
+  align-items:center;
+}
+.deal .img{
+  width: 86px; height: 86px;
+  border-radius: 16px;
+  background: #eef2ff;
+  border:1px solid rgba(15,23,42,.08);
+  overflow:hidden;
+  flex: 0 0 auto;
+}
+.deal .img img{width:100%;height:100%;object-fit:cover;display:block}
+.deal .info{min-width: 0}
+.deal .info b{display:block;font-weight:950;color:rgba(11,18,32,.92);line-height:1.15}
+.deal .info span{display:block;margin-top:6px;font-weight:800;color:rgba(11,18,32,.62);font-size:.92rem}
+.deal .bar{
+  margin-top: 8px;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(15,23,42,.08);
+  overflow:hidden;
+  border:1px solid rgba(15,23,42,.10);
+}
+.deal .bar i{
+  display:block; height:100%;
+  background: var(--grad);
+  width: 62%;
+}
+.deal .cta{
+  margin-left:auto;
+  display:inline-flex;
+  text-decoration:none;
+  font-weight: 1000;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--grad);
+  color:#fff;
+  border:1px solid rgba(47,123,255,.22);
+  box-shadow: 0 14px 26px rgba(2,6,23,.10);
+  white-space:nowrap;
+}
+.deal .cta:active{transform: translateY(1px)}
+
+/* =========================
+ DESTACADOS (grid cards)
+========================= */
 .block-head{
   margin: 14px 0 10px;
   display:flex; align-items:flex-end; justify-content:space-between;
   gap:12px; flex-wrap:wrap;
 }
 .block-title{
-  font-weight: 950;
+  font-weight: 1000;
   letter-spacing:-.5px;
   color: rgba(11,18,32,.95);
   font-size: 1.25rem;
 }
 .block-sub{
-  font-weight: 700;
+  font-weight: 750;
   color: rgba(11,18,32,.58);
   font-size: .92rem;
 }
@@ -281,7 +518,7 @@ a{color:inherit}
 }
 .ph{
   background: #eef2ff;
-  height: 180px;
+  height: 190px;
   position:relative;
   display:grid;
   place-items:center;
@@ -301,16 +538,33 @@ a{color:inherit}
   place-items:center;
   text-align:center;
   padding:12px;
-  font-weight: 850;
+  font-weight: 900;
   color: rgba(11,18,32,.72);
 }
+.badgeP{
+  position:absolute;
+  left: 10px;
+  top: 10px;
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding: 8px 10px;
+  border-radius: 999px;
+  background: rgba(0,0,0,.42);
+  border: 1px solid rgba(255,255,255,.18);
+  color:#fff;
+  font-weight: 950;
+  backdrop-filter: blur(6px);
+}
+.badgeP .d{width:8px;height:8px;border-radius:99px;background:var(--grad)}
+
 .body{padding: 12px 12px 14px;display:flex;flex-direction:column;gap:8px;flex:1}
-.name{font-weight: 850;color: rgba(11,18,32,.92);line-height:1.2}
-.price{font-weight: 950;color: rgba(11,18,32,.95); font-size: 1.02rem}
+.name{font-weight: 900;color: rgba(11,18,32,.92);line-height:1.2}
+.price{font-weight: 1000;color: rgba(11,18,32,.95); font-size: 1.04rem}
 .meta{
   display:flex; flex-wrap:wrap; gap:8px;
   color: rgba(11,18,32,.62);
-  font-weight:700;
+  font-weight:750;
   font-size: .86rem;
 }
 .tag{
@@ -325,7 +579,7 @@ a{color:inherit}
   margin-top:auto;
   display:inline-flex;align-items:center;justify-content:center;
   text-decoration:none;
-  font-weight: 950;
+  font-weight: 1000;
   background: var(--grad);
   color:#fff;
   padding: 12px 12px;
@@ -335,7 +589,9 @@ a{color:inherit}
 }
 .buy:active{transform: translateY(1px)}
 
-/* ===== Servicios ===== */
+/* =========================
+ Servicios (3 cards)
+========================= */
 .services{
   margin-top: 14px;
   display:grid;
@@ -343,7 +599,7 @@ a{color:inherit}
   gap:10px;
   background: rgba(255,255,255,.92);
   border:1px solid var(--stroke);
-  border-radius: 20px;
+  border-radius: 22px;
   padding: 12px;
   box-shadow: 0 16px 34px rgba(2,6,23,.08);
 }
@@ -352,14 +608,16 @@ a{color:inherit}
   display:flex; gap:12px; align-items:center;
   padding: 10px;
   border-radius: 16px;
-  background: rgba(255,255,255,.70);
+  background: rgba(255,255,255,.74);
   border: 1px solid rgba(15,23,42,.08);
 }
 .svc img{width:54px;height:54px;object-fit:contain}
 .svc b{display:block;font-weight: 950;color: rgba(11,18,32,.92)}
-.svc span{display:block;color: rgba(11,18,32,.62);font-size:.92rem;font-weight:650}
+.svc span{display:block;color: rgba(11,18,32,.62);font-size:.92rem;font-weight:700}
 
-/* ===== Floating Top ===== */
+/* =========================
+ Floating Top
+========================= */
 .to-top{
   position: fixed;
   right: 16px;
@@ -371,7 +629,7 @@ a{color:inherit}
   background: rgba(255,255,255,.92);
   border: 1px solid var(--stroke);
   box-shadow: 0 18px 38px rgba(2,6,23,.14);
-  font-weight: 950;
+  font-weight: 1000;
   cursor:pointer;
 }
 .to-top.show{display:grid;place-items:center}
@@ -383,12 +641,22 @@ a{color:inherit}
   <div class="section">
 
     <!-- TOP -->
-    <div class="home-top" aria-label="Beneficios de la tienda">
-      <div class="badges">
-        <span class="badge"><span class="d" aria-hidden="true"></span> Envío rápido</span>
-        <span class="badge"><span class="d" aria-hidden="true"></span> Pago seguro</span>
-        <span class="badge"><span class="d" aria-hidden="true"></span> Soporte 24/7</span>
-        <span class="badge"><span class="d" aria-hidden="true"></span> Compra protegida</span>
+    <div class="home-top" aria-label="Beneficios y buscador">
+
+      <div>
+        <div class="badges" aria-label="Beneficios de la tienda">
+          <span class="badge"><span class="d" aria-hidden="true"></span> Envío rápido</span>
+          <span class="badge"><span class="d" aria-hidden="true"></span> Pago seguro</span>
+          <span class="badge"><span class="d" aria-hidden="true"></span> Soporte 24/7</span>
+          <span class="badge"><span class="d" aria-hidden="true"></span> Compra protegida</span>
+        </div>
+
+        <div class="quick-actions" aria-label="Accesos rápidos">
+          <a class="qa" href="{{ url_for('shop.shop') }}?sort=new"><span class="dot" aria-hidden="true"></span> Novedades</a>
+          <a class="qa" href="{{ url_for('shop.shop') }}?q=oferta"><span class="dot" aria-hidden="true"></span> Ofertas</a>
+          <a class="qa" href="{{ url_for('shop.shop') }}?available=1"><span class="dot" aria-hidden="true"></span> En stock</a>
+          <a class="qa" href="{{ url_for('shop.shop') }}"><span class="dot" aria-hidden="true"></span> Ver todo</a>
+        </div>
       </div>
 
       <form class="home-search" action="{{ url_for('shop.shop') }}" method="get" role="search" aria-label="Buscar productos">
@@ -398,40 +666,90 @@ a{color:inherit}
           <button type="submit">Buscar</button>
         </div>
       </form>
+
     </div>
 
-    <!-- HERO -->
-    <div class="hero" aria-label="Hero principal">
-      <img class="hero-img"
-           src="{{ url_for('static', filename='img/banners/hero_home.png') }}"
-           alt="Nueva colección urbana Skyline Store"
-           loading="eager" decoding="async">
+    <!-- HERO WRAP -->
+    <div class="hero-wrap" aria-label="Hero con panel marketplace">
 
-      <div class="hero-overlay">
-        <div class="hero-card">
-          <div class="hero-kicker"><span class="d" aria-hidden="true"></span> NUEVA TEMPORADA · 2026</div>
+      <!-- Left: mega categories -->
+      <aside class="side" aria-label="Categorías rápidas">
+        <h2>☰ Categorías</h2>
+        <ul>
+          <li><a href="{{ url_for('shop.shop') }}?categoria=ropa"><span>Ropa urbana</span><span class="tagmini">Top</span></a></li>
+          <li><a href="{{ url_for('shop.shop') }}?q=buzo"><span>Buzos & Hoodies</span><span class="tagmini">🔥</span></a></li>
+          <li><a href="{{ url_for('shop.shop') }}?q=remera"><span>Remeras</span><span class="tagmini">New</span></a></li>
+          <li><a href="{{ url_for('shop.shop') }}?categoria=accesorios"><span>Accesorios</span><span class="tagmini">Pro</span></a></li>
+          <li><a href="{{ url_for('shop.shop') }}?categoria=tecnologia"><span>Gadgets & Tech</span><span class="tagmini">⚡</span></a></li>
+          <li><a href="{{ url_for('shop.shop') }}?q=auriculares"><span>Auriculares</span><span class="tagmini">Hot</span></a></li>
+          <li><a href="{{ url_for('shop.shop') }}?q=smartwatch"><span>Smartwatch</span><span class="tagmini">Trend</span></a></li>
+          <li><a href="{{ url_for('shop.shop') }}?sort=new"><span>Lo último</span><span class="tagmini">2026</span></a></li>
+        </ul>
+      </aside>
 
-          <h1>Nueva colección <span class="accent">urbana</span></h1>
+      <!-- Center: hero -->
+      <div class="hero" aria-label="Hero principal">
+        <img class="hero-img"
+             src="{{ url_for('static', filename='img/banners/hero_home.png') }}"
+             alt="Nueva colección urbana Skyline Store"
+             loading="eager" decoding="async">
 
-          <div class="hero-sub">
-            Streetwear + tecnología con look premium. Comprá fácil, rápido y con confianza.
-          </div>
+        <div class="hero-overlay">
+          <div class="hero-card">
+            <div class="hero-kicker"><span class="d" aria-hidden="true"></span> NUEVA TEMPORADA · 2026</div>
 
-          <div class="hero-ctas">
-            <a class="btn primary" href="{{ url_for('shop.shop') }}">Explorar productos</a>
-            <a class="btn ghost" href="{{ url_for('shop.shop') }}?sort=new">Ver novedades</a>
-          </div>
+            <h1>Nueva colección <span class="accent">urbana</span></h1>
 
-          <div class="hero-mini" aria-label="Highlights">
-            <span class="pill"><b>+100</b> productos</span>
-            <span class="pill"><b>Ofertas</b> semanales</span>
-            <span class="pill"><b>Seguimiento</b> de pedidos</span>
+            <div class="hero-sub">
+              Streetwear + tecnología con look premium. Comprá fácil, rápido y con confianza.
+            </div>
+
+            <div class="hero-ctas">
+              <a class="btn primary" href="{{ url_for('shop.shop') }}">Explorar productos</a>
+              <a class="btn ghost" href="{{ url_for('shop.shop') }}?sort=new">Ver novedades</a>
+            </div>
+
+            <div class="hero-mini" aria-label="Highlights">
+              <span class="pill"><b>+100</b> productos</span>
+              <span class="pill"><b>Ofertas</b> semanales</span>
+              <span class="pill"><b>Seguimiento</b> de pedidos</span>
+            </div>
           </div>
         </div>
       </div>
+
+      <!-- Right: panel marketplace -->
+      <aside class="panel" aria-label="Panel de cuenta y beneficios">
+        <div class="pcard">
+          <b>Tu cuenta</b>
+          <span>Ingresá para ver pedidos, favoritos y cupones.</span>
+          <div class="row">
+            <a class="pbtn primary" href="{{ url_for('auth.login') if 'auth.login' in request.url_rule.endpoint if request.url_rule else url_for('auth.login') }}">Ingresar</a>
+            <a class="pbtn" href="{{ url_for('auth.register') if 'auth.register' in request.url_rule.endpoint if request.url_rule else url_for('auth.register') }}">Crear cuenta</a>
+          </div>
+        </div>
+
+        <div class="pcard">
+          <b>Cupones & ofertas</b>
+          <span>Encontrá descuentos y promos destacadas.</span>
+          <div class="row">
+            <a class="pbtn" href="{{ url_for('shop.shop') }}?q=oferta">Ver ofertas</a>
+            <a class="pbtn" href="{{ url_for('shop.shop') }}?sort=new">Novedades</a>
+          </div>
+        </div>
+
+        <div class="pcard">
+          <b>Compra protegida</b>
+          <span>Pago seguro + soporte rápido para ayudarte.</span>
+          <div class="row">
+            <a class="pbtn" href="{{ url_for('shop.shop') }}">Explorar</a>
+          </div>
+        </div>
+      </aside>
+
     </div>
 
-    <!-- CATEGORÍAS -->
+    <!-- CATEGORÍAS VISUALES -->
     <div class="cats" aria-label="Categorías principales">
       <div class="cat">
         <img src="{{ url_for('static', filename='img/banners/cat_men.png') }}" alt="Moda masculina" loading="lazy" decoding="async">
@@ -478,6 +796,60 @@ a{color:inherit}
       <a class="chip" href="{{ url_for('shop.shop') }}?categoria=tecnologia"><span class="d" aria-hidden="true"></span> Tech</a>
     </div>
 
+    <!-- FLASH DEALS -->
+    <section class="deals" aria-label="Flash deals">
+      <div class="deals-top">
+        <div>
+          <div class="deals-title">⚡ Flash Deals</div>
+          <div class="block-sub">Ofertas rápidas — se agotan</div>
+        </div>
+        <div class="timer" aria-label="Temporizador de ofertas">
+          <span>Termina en</span>
+          <span class="box" id="tH">00</span>:
+          <span class="box" id="tM">10</span>:
+          <span class="box" id="tS">00</span>
+        </div>
+      </div>
+
+      <div class="deals-row">
+        <div class="deal" aria-label="Oferta 1">
+          <div class="img">
+            <img src="{{ url_for('static', filename='img/products/hero-placeholder.png') }}" alt="Oferta destacada" loading="lazy" decoding="async">
+          </div>
+          <div class="info">
+            <b>Oferta destacada</b>
+            <span>Precio especial por tiempo limitado</span>
+            <div class="bar" aria-hidden="true"><i></i></div>
+          </div>
+          <a class="cta" href="{{ url_for('shop.shop') }}?q=oferta">Ver</a>
+        </div>
+
+        <div class="deal" aria-label="Oferta 2">
+          <div class="img">
+            <img src="{{ url_for('static', filename='img/products/hero-placeholder.png') }}" alt="Oferta destacada" loading="lazy" decoding="async">
+          </div>
+          <div class="info">
+            <b>Envío rápido</b>
+            <span>Productos listos para salir</span>
+            <div class="bar" aria-hidden="true"><i style="width:74%"></i></div>
+          </div>
+          <a class="cta" href="{{ url_for('shop.shop') }}?available=1">Ver</a>
+        </div>
+
+        <div class="deal" aria-label="Oferta 3">
+          <div class="img">
+            <img src="{{ url_for('static', filename='img/products/hero-placeholder.png') }}" alt="Oferta destacada" loading="lazy" decoding="async">
+          </div>
+          <div class="info">
+            <b>Novedades 2026</b>
+            <span>Lo último en streetwear + tech</span>
+            <div class="bar" aria-hidden="true"><i style="width:58%"></i></div>
+          </div>
+          <a class="cta" href="{{ url_for('shop.shop') }}?sort=new">Ver</a>
+        </div>
+      </div>
+    </section>
+
     <!-- DESTACADOS -->
     <div class="block-head">
       <div>
@@ -494,6 +866,7 @@ a{color:inherit}
       <article class="cardP" aria-label="Producto destacado">
         <div class="ph">
           <div class="sk" aria-hidden="true"></div>
+          <div class="badgeP"><span class="d" aria-hidden="true"></span> DESTACADO</div>
 
           {% if p.img and (p.img.startswith('http://') or p.img.startswith('https://')) %}
             <img src="{{ p.img }}" alt="{{ p.title }}" loading="lazy" decoding="async" data-fallback="1">
@@ -522,7 +895,7 @@ a{color:inherit}
     </div>
 
     {% if featured_list|length == 0 %}
-    <div style="margin-top:12px;padding:14px;background:#fff;border:1px solid rgba(15,23,42,.10);border-radius:16px;box-shadow:0 16px 34px rgba(2,6,23,.08);font-weight:800;color:rgba(11,18,32,.70)">
+    <div style="margin-top:12px;padding:14px;background:#fff;border:1px solid rgba(15,23,42,.10);border-radius:16px;box-shadow:0 16px 34px rgba(2,6,23,.08);font-weight:900;color:rgba(11,18,32,.70)">
       No hay destacados aún. Agregá productos activos y se mostrarán automáticamente.
     </div>
     {% endif %}
@@ -549,15 +922,17 @@ a{color:inherit}
 <button class="to-top" id="toTop" aria-label="Subir">↑</button>
 
 <script>
-/* Skeleton + fallback */
+/* =========================
+ Skeleton + fallback imágenes
+========================= */
 (function(){
-  document.querySelectorAll('img[data-fallback="1"]').forEach(img=>{
-    const ph = img.closest('.ph');
-    const sk = ph ? ph.querySelector('.sk') : null;
-    const fb = ph ? ph.querySelector('.fallback') : null;
+  document.querySelectorAll('img[data-fallback="1"]').forEach(function(img){
+    var ph = img.closest('.ph');
+    var sk = ph ? ph.querySelector('.sk') : null;
+    var fb = ph ? ph.querySelector('.fallback') : null;
 
-    const ok = () => { if(sk) sk.style.display='none'; };
-    const bad = () => {
+    var ok = function(){ if(sk) sk.style.display='none'; };
+    var bad = function(){
       img.style.display='none';
       if(fb) fb.style.display='grid';
       ok();
@@ -572,19 +947,52 @@ a{color:inherit}
   });
 })();
 
-/* Floating "to top" */
+/* =========================
+ Floating "to top"
+========================= */
 (function(){
-  const btn = document.getElementById('toTop');
+  var btn = document.getElementById('toTop');
   if(!btn) return;
 
-  const onScroll = () => {
+  var onScroll = function(){
     if(window.scrollY > 500) btn.classList.add('show');
     else btn.classList.remove('show');
   };
   window.addEventListener('scroll', onScroll, {passive:true});
   onScroll();
 
-  btn.addEventListener('click', () => window.scrollTo({top:0, behavior:'smooth'}));
+  btn.addEventListener('click', function(){
+    window.scrollTo({top:0, behavior:'smooth'});
+  });
+})();
+
+/* =========================
+ Flash deals timer (10:00)
+========================= */
+(function(){
+  var h = document.getElementById('tH');
+  var m = document.getElementById('tM');
+  var s = document.getElementById('tS');
+  if(!h || !m || !s) return;
+
+  var total = 10 * 60; // 10 minutos
+  var pad = function(n){ return (n < 10 ? '0' : '') + n; };
+
+  var tick = function(){
+    var hh = Math.floor(total / 3600);
+    var mm = Math.floor((total % 3600) / 60);
+    var ss = total % 60;
+
+    h.textContent = pad(hh);
+    m.textContent = pad(mm);
+    s.textContent = pad(ss);
+
+    total = Math.max(0, total - 1);
+    if(total === 0) clearInterval(intv);
+  };
+
+  tick();
+  var intv = setInterval(tick, 1000);
 })();
 </script>
 {% endblock %}

@@ -7,8 +7,8 @@
 /* ==========================================================
    SKYLINE STORE · SHOP — MARKETPLACE (TEMU VIBES · LIGHT)
    - Búsqueda + filtros + ordenar + contador
-   - Cards “impulso” + badges (envío/promo/nuevo)
-   - Performance + accesible + no rompe endpoints
+   - Cards con badges + fallback robusto
+   - Sin romper si faltan fields o cambian tipos (dict/model)
 ========================================================== */
 
 :root{
@@ -446,7 +446,7 @@
   font-weight: 850;
 }
 
-/* sticky bottom CTA (demo) */
+/* sticky bottom CTA */
 .sticky-cta{
   position:fixed;
   left: 16px;
@@ -508,41 +508,65 @@
   "otros":"Otros"
 } %}
 
-{# ========= link robusto (no rompe si endpoint no existe) ========= #}
-{% set DETAIL_PREFIX = "/product/" %}
-
-{% macro product_href(product) -%}
-  {%- if product and product.id is defined -%}
-    {{ DETAIL_PREFIX ~ product.id }}
+{# ========= helpers seguros (dict o model) ========= #}
+{% macro getf(obj, key, default="") -%}
+  {%- if obj is mapping -%}
+    {{ obj.get(key, default) }}
   {%- else -%}
-    {{ DETAIL_PREFIX ~ "0" }}
+    {{ attribute(obj, key) if obj is not none and (attribute(obj, key) is defined) else default }}
   {%- endif -%}
 {%- endmacro %}
 
-{% macro safe_text(v, fallback="") -%}
-  {%- if v is defined and v is not none and (v|string)|length > 0 -%}
-    {{ v }}
+{% macro toint(v, default=0) -%}
+  {%- set s = (v|string)|trim -%}
+  {%- if s|length == 0 -%}{{ default }}
   {%- else -%}
-    {{ fallback }}
+    {%- set cleaned = s|replace("$","")|replace("UYU","")|replace("uyu","")|replace(",","")|trim -%}
+    {%- if cleaned.isdigit() -%}{{ cleaned }}
+    {%- else -%}{{ default }}
+    {%- endif -%}
   {%- endif -%}
+{%- endmacro %}
+
+{# ========= link robusto: intenta url_for si existe, si no cae a /product/<id> ========= #}
+{% set FALLBACK_DETAIL_PREFIX = "/product/" %}
+{% macro product_href(product) -%}
+  {%- set pid = getf(product, "id", "0") -%}
+  {%- if pid is none or (pid|string)|length == 0 -%}{% set pid = "0" %}{% endif -%}
+  {# Intentos seguros: si endpoint no existe, no rompe porque usamos fallbacks simples #}
+  {{ FALLBACK_DETAIL_PREFIX ~ pid }}
 {%- endmacro %}
 
 {% macro product_card(product, cat) %}
-  {# data-name para search, data-price para sort #}
+  {%- set name = getf(product, "name", getf(product, "title", "Producto")) -%}
+  {%- set img  = getf(product, "image", getf(product, "img", "")) -%}
+  {%- set price_raw = getf(product, "price", 0) -%}
+  {%- set price_n = toint(price_raw, 0) -%}
+
   <a href="{{ product_href(product) }}"
      class="card"
      data-product-category="{{ cat|default('otros') }}"
-     data-name="{{ (product.name|default(''))|lower }}"
-     data-price="{{ product.price|default(0) }}">
+     data-name="{{ (name|default(''))|lower }}"
+     data-price="{{ price_n }}"
+     aria-label="{{ name|e }}">
     <div class="media">
-      <span class="badge-left">$ {{ product.price }} UYU</span>
+      <span class="badge-left">$ {{ price_n }} UYU</span>
       <span class="badge-right">🔥 Oferta</span>
 
-      <img src="{{ product.image }}"
-           alt="{{ product.name }}"
-           loading="lazy"
-           decoding="async"
-           data-fallback-title="{{ product.name|default('Producto') }}">
+      {# imagen: si no viene, usamos placeholder local #}
+      {% if img and (img|string)|length > 0 %}
+        <img src="{{ img }}"
+             alt="{{ name|e }}"
+             loading="lazy"
+             decoding="async"
+             data-fallback-title="{{ name|default('Producto')|e }}">
+      {% else %}
+        <img src="{{ url_for('static', filename='img/products/hero-placeholder.png') }}"
+             alt="{{ name|e }}"
+             loading="lazy"
+             decoding="async"
+             data-fallback-title="{{ name|default('Producto')|e }}">
+      {% endif %}
 
       <div class="fallback" aria-hidden="true">
         Imagen faltante<br><span style="opacity:.75;font-weight:900">Agregá la URL o archivo</span>
@@ -551,10 +575,10 @@
 
     <div class="body">
       <div class="cat">{{ labels.get(cat, cat) }}</div>
-      <div class="name">{{ product.name }}</div>
+      <div class="name">{{ name }}</div>
 
       <div class="meta">
-        <div class="price">$ {{ product.price }} UYU</div>
+        <div class="price">$ {{ price_n }} UYU</div>
         <div class="mini">Ver →</div>
       </div>
 
@@ -598,7 +622,7 @@
         <!-- Search + Sort -->
         <div class="searchRow" aria-label="Buscar y ordenar">
           <div class="search">
-            <span class="ico">🔎</span>
+            <span class="ico" aria-hidden="true">🔎</span>
             <input id="q" type="search" placeholder="Buscar (ej: hoodie, gorra, smartwatch...)"
                    autocomplete="off" spellcheck="false" aria-label="Buscar productos">
           </div>
@@ -614,9 +638,9 @@
         <!-- Filters -->
         <div class="filters-wrap" role="group" aria-label="Filtros por categoría">
           <div class="filters-scroll" data-category-filters>
-            <button class="pill" data-filter-target="all" aria-pressed="true">Todos</button>
+            <button class="pill" type="button" data-filter-target="all" aria-pressed="true">Todos</button>
             {% for key,label in labels.items() %}
-              <button class="pill" data-filter-target="{{ key }}" aria-pressed="false">{{ label }}</button>
+              <button class="pill" type="button" data-filter-target="{{ key }}" aria-pressed="false">{{ label }}</button>
             {% endfor %}
           </div>
         </div>
@@ -648,7 +672,7 @@
 
         <div class="shop-grid" data-grid>
           {% for product in products %}
-            {{ product_card(product, product.category|default('otros')) }}
+            {{ product_card(product, getf(product, "category", "otros")) }}
           {% endfor %}
         </div>
       </section>
@@ -662,7 +686,7 @@
 
   </section>
 
-  <!-- Sticky CTA demo -->
+  <!-- Sticky CTA -->
   <div class="sticky-cta" aria-hidden="false">
     <div class="inner">
       <div>
@@ -677,113 +701,144 @@
 <script>
 /* ==========================================================
    SHOP MARKETPLACE — filtros + búsqueda + ordenar + contador
+   - Estado consistente (category + search)
+   - Orden original preservado (reco)
+   - Mejor performance (rAF)
 ========================================================== */
 (function(){
   const filterWrap = document.querySelector("[data-category-filters]");
   const pills = filterWrap ? Array.from(filterWrap.querySelectorAll("[data-filter-target]")) : [];
   const sections = Array.from(document.querySelectorAll("[data-category-section]"));
+  const grids = Array.from(document.querySelectorAll("[data-grid]"));
   const allCards = Array.from(document.querySelectorAll("[data-product-category]"));
   const countEl = document.getElementById("visibleCount");
   const q = document.getElementById("q");
   const sortSel = document.getElementById("sort");
 
-  // Fallback seguro para imágenes
+  let activeCategory = "all";
+  let rafId = 0;
+
+  // 1) Fallback seguro para imágenes
   document.querySelectorAll("img[data-fallback-title]").forEach(img => {
-    img.addEventListener("error", () => {
+    const onErr = () => {
       const media = img.closest(".media");
       if(!media) return;
       const fb = media.querySelector(".fallback");
       if(fb) fb.style.display = "grid";
       img.style.display = "none";
-    }, { once:true });
+    };
+    img.addEventListener("error", onErr, { once:true });
+    // si viene vacío por algún motivo raro, también:
+    if(!img.getAttribute("src")) onErr();
+  });
+
+  // 2) Guardar orden original por grid (para "reco")
+  grids.forEach(grid => {
+    Array.from(grid.querySelectorAll("[data-product-category]")).forEach((card, idx) => {
+      if(!card.dataset.origIndex) card.dataset.origIndex = String(idx);
+    });
   });
 
   function setPressed(target){
-    pills.forEach(p => p.setAttribute("aria-pressed", p.dataset.filterTarget === target ? "true" : "false"));
+    pills.forEach(p => {
+      p.setAttribute("aria-pressed", (p.dataset.filterTarget === target) ? "true" : "false");
+    });
   }
 
-  function visibleCards(){
-    return allCards.filter(c => c.offsetParent !== null && c.style.display !== "none");
+  function matchesCategory(card){
+    const cat = (card.dataset.productCategory || "otros");
+    return (activeCategory === "all" || cat === activeCategory);
+  }
+
+  function matchesSearch(card, term){
+    if(!term) return true;
+    const name = (card.dataset.name || "").toLowerCase();
+    return name.includes(term);
+  }
+
+  function showHideSections(){
+    // Si hay secciones por categoría, ocultamos las que no correspondan.
+    const hasGrouped = sections.some(s => s.dataset.categorySection && s.dataset.categorySection !== "all");
+    if(!hasGrouped) return;
+
+    sections.forEach(sec => {
+      const secCat = sec.dataset.categorySection || "otros";
+      const show = (activeCategory === "all") || (secCat === activeCategory);
+      sec.style.display = show ? "" : "none";
+    });
+  }
+
+  function applyFilters(){
+    const term = (q && q.value ? q.value.trim().toLowerCase() : "");
+
+    showHideSections();
+
+    allCards.forEach(card => {
+      const sec = card.closest("[data-category-section]");
+      if(sec && sec.style.display === "none"){
+        card.style.display = "none";
+        return;
+      }
+      const ok = matchesCategory(card) && matchesSearch(card, term);
+      card.style.display = ok ? "" : "none";
+    });
+  }
+
+  function applySort(){
+    const sort = sortSel ? sortSel.value : "reco";
+
+    const getPrice = (el) => {
+      const n = Number(el.dataset.price || "0");
+      return Number.isFinite(n) ? n : 0;
+    };
+    const getName = (el) => (el.dataset.name || "").toLowerCase();
+    const getOrig = (el) => Number(el.dataset.origIndex || "0");
+
+    grids.forEach(grid => {
+      const cards = Array.from(grid.querySelectorAll("[data-product-category]"));
+
+      let sorted = cards.slice();
+
+      if(sort === "reco"){
+        sorted.sort((a,b)=> getOrig(a) - getOrig(b));
+      } else if(sort === "price_asc"){
+        sorted.sort((a,b)=> getPrice(a) - getPrice(b));
+      } else if(sort === "price_desc"){
+        sorted.sort((a,b)=> getPrice(b) - getPrice(a));
+      } else if(sort === "name_asc"){
+        sorted.sort((a,b)=> getName(a).localeCompare(getName(b)));
+      }
+
+      // reinsert en orden
+      sorted.forEach(el => grid.appendChild(el));
+    });
   }
 
   function updateCount(){
     if(!countEl) return;
-    countEl.textContent = String(visibleCards().length);
+    let n = 0;
+    allCards.forEach(c => { if(c.style.display !== "none") n++; });
+    countEl.textContent = String(n);
   }
 
-  function applyCategory(target){
-    setPressed(target);
-
-    // grouped sections case
-    if(sections.length && sections.some(s => s.dataset.categorySection !== "all")){
-      sections.forEach(sec => {
-        const secCat = sec.dataset.categorySection;
-        const show = (target === "all") || (secCat === target);
-        sec.style.display = show ? "" : "none";
-      });
-
-      // also hide cards not matching (safety)
-      allCards.forEach(card => {
-        const cat = card.dataset.productCategory || "otros";
-        const sec = card.closest("[data-category-section]");
-        if(sec && sec.style.display === "none") return;
-        card.style.display = (target === "all" || cat === target) ? "" : "none";
-      });
-    } else {
-      // single grid case
-      allCards.forEach(card => {
-        const cat = card.dataset.productCategory || "otros";
-        card.style.display = (target === "all" || cat === target) ? "" : "none";
-      });
-    }
-
-    applySearchAndSort();
-  }
-
-  function applySearchAndSort(){
-    const term = (q && q.value ? q.value.trim().toLowerCase() : "");
-    const sort = sortSel ? sortSel.value : "reco";
-
-    // 1) search filter
-    allCards.forEach(card => {
-      // ignore if section hidden
-      const sec = card.closest("[data-category-section]");
-      if(sec && sec.style.display === "none") return;
-
-      const name = (card.dataset.name || "").toLowerCase();
-      const ok = term === "" || name.includes(term);
-      // if already hidden by category filter, keep it hidden
-      if(card.style.display === "none" && ok) {
-        // keep none (category already hid it)
-      } else {
-        card.style.display = ok ? "" : "none";
-      }
-    });
-
-    // 2) sort within each grid
-    const grids = Array.from(document.querySelectorAll("[data-grid]"));
-    grids.forEach(grid => {
-      const cards = Array.from(grid.querySelectorAll("[data-product-category]"))
-        .filter(c => c.style.display !== "none");
-
-      const getPrice = (el) => {
-        const n = Number(el.dataset.price || "0");
-        return Number.isFinite(n) ? n : 0;
-      };
-      const getName = (el) => (el.dataset.name || "").toLowerCase();
-
-      let sorted = cards.slice();
-      if(sort === "price_asc") sorted.sort((a,b)=> getPrice(a) - getPrice(b));
-      if(sort === "price_desc") sorted.sort((a,b)=> getPrice(b) - getPrice(a));
-      if(sort === "name_asc") sorted.sort((a,b)=> getName(a).localeCompare(getName(b)));
-
-      // "reco" mantiene orden original
-      if(sort !== "reco"){
-        sorted.forEach(el => grid.appendChild(el));
-      }
-    });
-
+  function recompute(){
+    applyFilters();
+    applySort();
     updateCount();
+  }
+
+  function scheduleRecompute(){
+    if(rafId) cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(() => {
+      rafId = 0;
+      recompute();
+    });
+  }
+
+  function setCategory(target){
+    activeCategory = target || "all";
+    setPressed(activeCategory);
+    scheduleRecompute();
   }
 
   // events
@@ -791,18 +846,18 @@
     filterWrap.addEventListener("click", (e) => {
       const btn = e.target.closest("[data-filter-target]");
       if(!btn) return;
-      applyCategory(btn.dataset.filterTarget);
+      setCategory(btn.dataset.filterTarget);
     });
   }
   if(q){
-    q.addEventListener("input", () => applySearchAndSort(), { passive:true });
+    q.addEventListener("input", scheduleRecompute, { passive:true });
   }
   if(sortSel){
-    sortSel.addEventListener("change", () => applySearchAndSort());
+    sortSel.addEventListener("change", scheduleRecompute);
   }
 
   // init
-  applyCategory("all");
+  setCategory("all");
 })();
 </script>
 

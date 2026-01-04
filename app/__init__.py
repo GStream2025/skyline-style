@@ -1,4 +1,5 @@
-﻿from __future__ import annotations
+﻿# app/__init__.py
+from __future__ import annotations
 
 import json
 import logging
@@ -78,7 +79,7 @@ def _detect_env() -> str:
 
 def _secure_secret_key(env: str) -> str:
     """
-    ✅ En production: EXIGE SECRET_KEY (para evitar invalidación de sesión/CSRF)
+    ✅ En production: EXIGE SECRET_KEY
     ✅ En development: permite fallback local
     """
     env_secret = (os.getenv("SECRET_KEY") or "").strip()
@@ -123,9 +124,15 @@ def _setup_logging(app: Flask) -> None:
 
 
 def _safe_init(app: Flask, label: str, fn: Callable[[], Any]) -> Any:
+    """
+    ✅ Mejora #1: inicialización tolerante a faltantes + mensaje claro
+    """
     try:
         out = fn()
-        app.logger.info("✅ %s inicializado", label)
+        if out is not None:
+            app.logger.info("✅ %s inicializado", label)
+        else:
+            app.logger.info("ℹ️ %s omitido", label)
         return out
     except Exception as e:
         app.logger.warning("⚠️ %s no pudo inicializarse: %s", label, e, exc_info=bool(app.debug))
@@ -229,7 +236,6 @@ def save_payments(app: Flask, data: Dict[str, Any]) -> None:
 
 # ============================================================
 # CSRF (robusto)
-# - soporta: form field, header, JSON body
 # ============================================================
 
 def _ensure_csrf_token() -> str:
@@ -249,7 +255,6 @@ def _extract_csrf_from_request() -> str:
     if ft:
         return ft
 
-    # JSON body
     try:
         if request.is_json:
             data = request.get_json(silent=True) or {}
@@ -268,6 +273,90 @@ def _csrf_ok() -> bool:
     st = session.get("csrf_token") or ""
     token = _extract_csrf_from_request()
     return bool(st) and bool(token) and secrets.compare_digest(str(st), str(token))
+
+
+# ============================================================
+# Mejora #2: error handler consistente (JSON/HTML)
+# ============================================================
+
+def _resp_error(app: Flask, status: int, code: str, message: str):
+    if _wants_json():
+        return jsonify({"error": code, "message": message}), status
+    # intenta templates modernos si existen
+    try:
+        return render_template(f"errors/{status}.html", message=message), status
+    except Exception:
+        try:
+            return render_template("error.html", message=message), status
+        except Exception:
+            return (message, status)
+
+
+# ============================================================
+# Mejora #3: inicialización de extensiones con imports reales (sin __import__ raro)
+# ============================================================
+
+def _init_compress(app: Flask):
+    from flask_compress import Compress
+    Compress(app)
+    return True
+
+
+def _init_talisman(app: Flask, env: str):
+    from flask_talisman import Talisman
+    force_https = _bool_env("FORCE_HTTPS", _is_production(env))
+    # CSP la controlás vos después si querés; por ahora no rompemos assets
+    Talisman(app, force_https=force_https, content_security_policy=None)
+    return True
+
+
+def _init_cache(app: Flask):
+    from flask_caching import Cache
+    cache = Cache(config={
+        "CACHE_TYPE": os.getenv("CACHE_TYPE", "SimpleCache"),
+        "CACHE_DEFAULT_TIMEOUT": _int_env("CACHE_DEFAULT_TIMEOUT", 300),
+    })
+    cache.init_app(app)
+    return cache
+
+
+def _init_minify(app: Flask):
+    from flask_minify import Minify
+    # minify solo cuando NO debug (y flag)
+    if (not app.debug) and _bool_env("MINIFY", True):
+        Minify(app=app, html=True, js=True, cssless=True)
+        return True
+    return None
+
+
+def _init_migrate(app: Flask):
+    from flask_migrate import Migrate
+    Migrate(app, db)
+    return True
+
+
+def _init_limiter(app: Flask):
+    from flask_limiter import Limiter
+    from flask_limiter.util import get_remote_address
+    return Limiter(
+        get_remote_address,
+        app=app,
+        default_limits=[os.getenv("RATE_LIMIT_DEFAULT", "200 per hour")],
+        storage_uri=os.getenv("RATE_LIMIT_STORAGE_URI", "memory://"),
+    )
+
+
+# ============================================================
+# Mejora #4: auto-create tables OFF cuando estás usando Flask-Migrate
+# (evita duplicados de índices / create_all + migrate)
+# ============================================================
+
+def _should_auto_create_tables(env: str) -> bool:
+    # Por defecto: NO crear tablas automáticamente (migraciones mandan)
+    # Si querés dev rápido sin migrate: AUTO_CREATE_TABLES=1
+    if _is_production(env):
+        return _bool_env("AUTO_CREATE_TABLES", False)
+    return _bool_env("AUTO_CREATE_TABLES", False)
 
 
 # ============================================================
@@ -298,6 +387,10 @@ def create_app() -> Flask:
     session_samesite = (_str_env("SESSION_SAMESITE", "Lax") or "Lax").strip()
     if session_samesite not in {"Lax", "Strict", "None"}:
         session_samesite = "Lax"
+
+    # Mejora #5: si SameSite=None => Secure debe ser True (regla de navegadores)
+    if session_samesite == "None":
+        cookie_secure = True
 
     max_mb = max(1, _int_env("MAX_UPLOAD_MB", 20))
     secret = _secure_secret_key(env)
@@ -346,72 +439,49 @@ def create_app() -> Flask:
     if _is_production(env) and db_uri.startswith("sqlite"):
         app.logger.warning("⚠️ Producción con SQLite detectado. Recomendado Postgres en Render.")
 
-    # Extensiones opcionales
-    _safe_init(app, "Flask-Compress", lambda: __import__("flask_compress").flask_compress.Compress(app))  # type: ignore
+    # Extensiones (opcionales)
+    _safe_init(app, "Flask-Compress", lambda: _init_compress(app))
+    _safe_init(app, "Flask-Talisman", lambda: _init_talisman(app, env))
+    _safe_init(app, "Flask-Caching", lambda: _init_cache(app))
+    _safe_init(app, "Flask-Minify", lambda: _init_minify(app))
+    _safe_init(app, "Flask-Migrate", lambda: _init_migrate(app))
+    _safe_init(app, "Flask-Limiter", lambda: _init_limiter(app))
 
-    def _talisman():
-        from flask_talisman import Talisman
-        force_https = _bool_env("FORCE_HTTPS", _is_production(env))
-        Talisman(app, force_https=force_https, content_security_policy=None)
-    _safe_init(app, "Flask-Talisman", _talisman)
+    # ============================================================
+    # Models hub (CRÍTICO)  ✅ FIX real a tu error:
+    # - NO pasamos auto_create_tables si tu init_models no lo acepta
+    # - Controlamos create_all con AUTO_CREATE_TABLES (OFF por defecto)
+    # ============================================================
 
-    def _cache():
-        from flask_caching import Cache
-        cache = Cache(config={
-            "CACHE_TYPE": os.getenv("CACHE_TYPE", "SimpleCache"),
-            "CACHE_DEFAULT_TIMEOUT": _int_env("CACHE_DEFAULT_TIMEOUT", 300),
-        })
-        cache.init_app(app)
-        return cache
-    _safe_init(app, "Flask-Caching", _cache)
+    auto_tables = _should_auto_create_tables(env)
 
-    def _minify():
-        from flask_minify import Minify
-        if not app.debug and _bool_env("MINIFY", True):
-            Minify(app=app, html=True, js=True, cssless=True)
-    _safe_init(app, "Flask-Minify", _minify)
+    def _models_hub():
+        # Si tu init_models acepta auto_create_tables, esto funcionaría,
+        # pero como te dio error, lo llamamos solo con args compatibles.
+        out = init_models(app, create_admin=True, log_loaded_models=True)
+        # si querés create_all rápido sin migraciones:
+        if auto_tables:
+            with app.app_context():
+                db.create_all()
+                app.logger.info("✅ db.create_all() OK (AUTO_CREATE_TABLES=1)")
+        return out
 
-    def _migrate():
-        from flask_migrate import Migrate
-        Migrate(app, db)
-    _safe_init(app, "Flask-Migrate", _migrate)
-
-    def _limiter():
-        from flask_limiter import Limiter
-        from flask_limiter.util import get_remote_address
-        return Limiter(
-            get_remote_address,
-            app=app,
-            default_limits=[os.getenv("RATE_LIMIT_DEFAULT", "200 per hour")],
-            storage_uri=os.getenv("RATE_LIMIT_STORAGE_URI", "memory://"),
-        )
-    _safe_init(app, "Flask-Limiter", _limiter)
-
-    # Models hub (CRÍTICO)
-    _critical_init(app, "Models hub", lambda: init_models(app, create_admin=True, auto_create_tables=None, log_loaded_models=True))
+    _critical_init(app, "Models hub", _models_hub)
 
     # Requests
     @app.before_request
     def _before_request():
-        # CSRF token siempre presente en session
         try:
             _ensure_csrf_token()
         except Exception:
             pass
 
-        # CSRF en mutaciones (excepto health y webhooks)
         if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
             p = request.path or ""
             if p != "/health" and not p.startswith("/webhook"):
                 if not _csrf_ok():
-                    if _wants_json():
-                        return jsonify({"error": "csrf_failed"}), 400
-                    try:
-                        return render_template("errors/400.html"), 400
-                    except Exception:
-                        return render_template("error.html", message="Solicitud inválida. Recargá la página e intentá nuevamente."), 400
+                    return _resp_error(app, 400, "csrf_failed", "Solicitud inválida. Recargá la página e intentá nuevamente.")
 
-        # No-cache admin
         if _bool_env("ADMIN_NO_CACHE", True) and (request.path or "").startswith("/admin"):
             try:
                 request._admin_no_cache = True  # type: ignore[attr-defined]
@@ -420,7 +490,6 @@ def create_app() -> Flask:
 
     @app.after_request
     def _after_request(resp):
-        # No cache admin
         try:
             if getattr(request, "_admin_no_cache", False):
                 resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
@@ -428,7 +497,6 @@ def create_app() -> Flask:
         except Exception:
             pass
 
-        # Security headers base
         try:
             resp.headers.setdefault("X-Content-Type-Options", "nosniff")
             resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
@@ -490,22 +558,12 @@ def create_app() -> Flask:
 
     @app.errorhandler(404)
     def not_found(_e):
-        if _wants_json():
-            return jsonify({"error": "not_found", "path": request.path}), 404
-        try:
-            return render_template("errors/404.html"), 404
-        except Exception:
-            return jsonify({"error": "not_found", "path": request.path}), 404
+        return _resp_error(app, 404, "not_found", f"No encontrado: {request.path}")
 
     @app.errorhandler(500)
     def server_error(e):
         app.logger.exception("🔥 Error 500: %s", e)
-        if _wants_json():
-            return jsonify({"error": "server_error"}), 500
-        try:
-            return render_template("errors/500.html"), 500
-        except Exception:
-            return jsonify({"error": "server_error"}), 500
+        return _resp_error(app, 500, "server_error", "Error interno del servidor.")
 
     # CLI
     @app.cli.command("create-admin")
