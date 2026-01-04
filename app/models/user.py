@@ -1,4 +1,4 @@
-﻿# app/models/user.py
+﻿# app/models/user.py — Skyline Store (PRO / FINAL / NO BREAK)
 from __future__ import annotations
 
 import re
@@ -62,7 +62,7 @@ def _clamp_int(v: Optional[int], lo: int = 0, hi: int = 10_000) -> int:
 
 class User(UserMixin, db.Model):
     """
-    Skyline Store — User ULTRA PRO (FINAL / NO BREAK)
+    Skyline Store — User (PRO / FINAL)
 
     ✅ Flask-Login compatible
     ✅ Password hashing + auto rehash
@@ -106,6 +106,8 @@ class User(UserMixin, db.Model):
     # -------------------------
     # Email verification
     # -------------------------
+    # ✅ IMPORTANTE: index=True YA crea ix_users_email_verified
+    # ❌ NO crear Index(...) manual con el mismo nombre (causa el error que tenías)
     email_verified = db.Column(db.Boolean, nullable=False, default=False, index=True)
     email_verified_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
@@ -151,11 +153,6 @@ class User(UserMixin, db.Model):
         passive_deletes=True,
     )
 
-    # ✅ CLAVE ANTI-CRASH:
-    # - Order NO define relationship a User (para no romper mapper).
-    # - Desde User creamos:
-    #   - User.orders
-    #   - y automáticamente Order.user via backref.
     orders = db.relationship(
         "Order",
         lazy="selectin",
@@ -164,6 +161,7 @@ class User(UserMixin, db.Model):
     )
 
     __table_args__ = (
+        # ✅ Mejora 1: constraint DB real (nunca negativo)
         CheckConstraint("failed_login_count >= 0", name="ck_users_failed_login_nonneg"),
     )
 
@@ -316,9 +314,7 @@ class User(UserMixin, db.Model):
     @validates("email")
     def _v_email(self, _k, v: str) -> str:
         vv = self.normalize_email(v)
-        # validación suave: no rompe DB vieja, pero evita basura obvia
-        vv = vv[:255] if vv else ""
-        return vv
+        return vv[:255] if vv else ""
 
     @validates("country")
     def _v_country(self, _k, v: Optional[str]) -> Optional[str]:
@@ -349,20 +345,21 @@ class User(UserMixin, db.Model):
     # ============================================================
 
     def ensure_tokens(self) -> None:
+        # ✅ Mejora 2: asegura tokens críticos siempre
         if not self.unsubscribe_token:
             self.unsubscribe_token = _token64()
 
     def __repr__(self) -> str:
-        return (
-            f"<User id={self.id} email={self.email!r} role={self.role_effective!r} "
-            f"active={bool(self.is_active)}>"
-        )
+        return f"<User id={self.id} email={self.email!r} role={self.role_effective!r} active={bool(self.is_active)}>"
 
 
-# Índices extra (no rompen DB vieja)
+# ============================================================
+# Índices extra
+# ============================================================
+# ✅ Mejora 3: índices útiles sin duplicar nombres de index=True
 Index("ix_users_active_admin", User.is_active, User.is_admin)
 Index("ix_users_country_city", User.country, User.city)
-Index("ix_users_email_verified", User.email_verified)
+# ❌ NO crear Index("ix_users_email_verified"...). Ya lo crea index=True del campo.
 
 
 # ============================================================
@@ -452,23 +449,26 @@ Index("ix_user_addresses_user_default", UserAddress.user_id, UserAddress.is_defa
 
 @event.listens_for(User, "before_insert", propagate=True)
 def _user_before_insert(_mapper, _conn, target: User):
+    # ✅ Mejora 4: normalización segura (nunca rompe)
     try:
         target.email = User.normalize_email(target.email)
     except Exception:
         pass
 
+    # ✅ Mejora 5: tokens siempre presentes
     try:
         target.ensure_tokens()
     except Exception:
         pass
 
+    # ✅ Mejora 6: phone normalizado
     try:
         target.phone = _clean_phone(target.phone)
     except Exception:
         pass
 
+    # ✅ Mejora 7: timestamp coherente de opt-in
     try:
-        # opt-in timestamp coherente
         if target.email_opt_in and not target.email_opt_in_at:
             target.email_opt_in_at = utcnow()
     except Exception:
