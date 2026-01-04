@@ -1,3 +1,92 @@
-* text=auto eol=lf
-*.ps1 text eol=crlf
-*.bat text eol=crlf
+# =====================================================
+# SKYLINE STORE — .gitattributes (ULTRA PRO / FINAL)
+# Windows + Render/Linux friendly · NO MÁS ERRORES DE EOL
+# =====================================================
+# Objetivo:
+# - Evitar diffs falsos por saltos de línea
+# - Mantener scripts de Windows en CRLF
+# - Mantener servidor (Linux/Render) en LF
+# - Proteger binarios (no tocar)
+# - Mejorar merges de archivos grandes y locks
+# =====================================================
+
+# -----------------------------------------------------
+# 1) DEFAULTS (todo texto normalizado)
+# -----------------------------------------------------
+* text=auto
+
+# -----------------------------------------------------
+# 2) CÓDIGO (SIEMPRE LF para Linux/Render)
+# -----------------------------------------------------
+*.py      text eol=lf
+*.wsgi    text eol=lf
+*.jinja   text eol=lf
+*.j2      text eol=lf
+*.html    text eol=lf
+*.css     text eol=lf
+*.js      text eol=lf
+*.mjs     text eol=lf
+*.json    text eol=lf
+*.yml     text eol=lf
+*.yaml    text eol=lf
+*.toml    text eol=lf
+*.ini     text eol=lf
+*.cfg     text eol=lf
+*.md      text eol=lf
+*.txt     text eol=lf
+*.env*    text eol=lf
+Dockerfile text eol=lf
+*.sh      text eol=lf
+
+# -----------------------------------------------------
+# 3) WINDOWS SCRIPTS (CRLF para PowerShell/CMD)
+# -----------------------------------------------------
+*.ps1     text eol=crlf
+*.psm1    text eol=crlf
+*.psd1    text eol=crlf
+*.cmd     text eol=crlf
+*.bat     text eol=crlf
+
+# -----------------------------------------------------
+# 4) BINARIOS (NUNCA CONVERTIR / NUNCA DIFF)
+# -----------------------------------------------------
+*.png     -text
+*.jpg     -text
+*.jpeg    -text
+*.webp    -text
+*.gif     -text
+*.ico     -text
+*.pdf     -text
+*.zip     -text
+*.rar     -text
+*.7z      -text
+*.tar     -text
+*.gz      -text
+*.tgz     -text
+*.woff    -text
+*.woff2   -text
+*.ttf     -text
+*.otf     -text
+*.eot     -text
+*.mp4     -text
+*.mov     -text
+*.avi     -text
+*.mp3     -text
+*.wav     -text
+
+# -----------------------------------------------------
+# 5) MERGE / DIFF (evita conflictos y ruido)
+# -----------------------------------------------------
+# Locks: que no intente mergear (gana uno u otro)
+*.lock    -text merge=ours
+poetry.lock -text merge=ours
+Pipfile.lock -text merge=ours
+
+# SQLite (local): si existiera (no se debe versionar igual)
+*.db      -text
+*.sqlite  -text
+*.sqlite3 -text
+
+# -----------------------------------------------------
+# FIN
+# -----------------------------------------------------

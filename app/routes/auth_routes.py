@@ -1,11 +1,13 @@
 # app/routes/auth_routes.py
 from __future__ import annotations
 
+import re
 import time
+import secrets
 from urllib.parse import urlparse
 from typing import Optional
 
-from flask import Blueprint, flash, redirect, render_template, request, session, url_for
+from flask import Blueprint, flash, redirect, render_template, request, session, url_for, jsonify
 from werkzeug.routing import BuildError
 
 from app.models import db, User
@@ -13,16 +15,41 @@ from app.models import db, User
 auth_bp = Blueprint("auth", __name__)
 
 # ----------------------------
-# Seguridad
+# Seguridad / anti-abuso
 # ----------------------------
 MAX_LOGIN_ATTEMPTS = 5
 LOCK_TIME_SECONDS = 300
 RATE_LIMIT_SECONDS = 2
 
+# ✅ Mejora real #1: Anti-bot / double submit simple (sin librerías)
+FORM_NONCE_TTL = 20 * 60  # 20 min
+
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
 
 # ============================================================
 # Helpers
 # ============================================================
+
+def _wants_json() -> bool:
+    p = (request.path or "").lower()
+    if p.startswith("/api/"):
+        return True
+    accept = (request.headers.get("Accept") or "").lower()
+    if "application/json" in accept:
+        return True
+    if (request.headers.get("X-Requested-With") or "").lower() == "xmlhttprequest":
+        return True
+    return False
+
+
+def _json_or_redirect(message: str, category: str, endpoint: str, **kwargs):
+    if _wants_json():
+        status = 400 if category in {"error", "warning"} else 200
+        return jsonify({"ok": category not in {"error"}, "message": message}), status
+    flash(message, category)
+    return redirect(url_for(endpoint, **kwargs))
+
 
 def _is_safe_next(nxt: str) -> bool:
     """Previene open-redirect: solo paths internos."""
@@ -40,8 +67,12 @@ def _next_url(default: str) -> str:
     return nxt if _is_safe_next(nxt) else default
 
 
-def _clear_session() -> None:
+def _clear_session_keep_csrf() -> None:
+    """✅ Mejora real #2: no rompe CSRF (no borra el token)"""
+    csrf = session.get("csrf_token")
     session.clear()
+    if csrf:
+        session["csrf_token"] = csrf
 
 
 def _safe_email(email_raw: str) -> str:
@@ -80,19 +111,23 @@ def _get_current_user() -> Optional[User]:
     try:
         uid_int = int(uid)
     except Exception:
-        _clear_session()
+        _clear_session_keep_csrf()
         return None
 
     u = db.session.get(User, uid_int)
     if not u:
-        _clear_session()
+        _clear_session_keep_csrf()
         return None
     return u
 
 
 def _set_session_user(user: User) -> None:
-    """Session mínima y consistente."""
+    """Session mínima y consistente (sin romper CSRF)."""
+    csrf = session.get("csrf_token")
     session.clear()
+    if csrf:
+        session["csrf_token"] = csrf
+
     session["user_id"] = int(user.id)
     session["user_email"] = (getattr(user, "email", "") or "").lower()
     session["is_admin"] = bool(getattr(user, "is_admin", False))
@@ -107,7 +142,6 @@ def _post_login_redirect(user: User) -> str:
             return url_for("admin.dashboard")
         return url_for("account.account_home")
     except BuildError:
-        # fallback duro
         try:
             return url_for("shop.shop")
         except BuildError:
@@ -123,6 +157,45 @@ def _commit_safe() -> bool:
         return False
 
 
+# ✅ Mejora real #3: nonce por formulario (anti doble submit / bots)
+def _new_form_nonce(key: str) -> str:
+    tok = secrets.token_urlsafe(20)
+    session[f"nonce:{key}"] = {"v": tok, "ts": int(time.time())}
+    return tok
+
+
+def _check_form_nonce(key: str) -> bool:
+    raw = session.get(f"nonce:{key}") or {}
+    if not isinstance(raw, dict):
+        return False
+    v = (raw.get("v") or "").strip()
+    ts = raw.get("ts") or 0
+    try:
+        ts = int(ts)
+    except Exception:
+        ts = 0
+
+    token = (request.form.get("nonce") or "").strip()
+    if not v or not token:
+        return False
+    if not secrets.compare_digest(v, token):
+        return False
+    if (int(time.time()) - ts) > FORM_NONCE_TTL:
+        return False
+
+    # one-time
+    session.pop(f"nonce:{key}", None)
+    return True
+
+
+def _valid_email(email: str) -> bool:
+    if not email:
+        return False
+    if len(email) > 254:
+        return False
+    return bool(EMAIL_RE.match(email))
+
+
 # ============================================================
 # Login
 # ============================================================
@@ -133,38 +206,60 @@ def login():
     if u:
         return redirect(_post_login_redirect(u))
 
-    return render_template("auth/login.html", next=_next_url(url_for("shop.shop")))
+    nxt = _next_url(url_for("shop.shop"))
+    nonce = _new_form_nonce("login")
+    return render_template("auth/login.html", next=nxt, nonce=nonce)
 
 
 @auth_bp.post("/login")
 def login_post():
+    # ✅ si faltó nonce -> evita doble submit / bots
+    if not _check_form_nonce("login"):
+        return _json_or_redirect(
+            "Solicitud inválida. Recargá la página e intentá de nuevo.",
+            "error",
+            "auth.login",
+            next=_next_url(""),
+        )
+
     if not _rate_limit_ok():
-        flash("Esperá un momento antes de intentar de nuevo.", "warning")
-        return redirect(url_for("auth.login"))
+        return _json_or_redirect(
+            "Esperá un momento antes de intentar de nuevo.",
+            "warning",
+            "auth.login",
+            next=_next_url(""),
+        )
 
     email = _safe_email(request.form.get("email") or "")
     password = (request.form.get("password") or "").strip()
     nxt_safe = _next_url("")
 
-    if not email or "@" not in email or not password:
-        flash("Email o contraseña incorrectos.", "error")
-        return redirect(url_for("auth.login", next=nxt_safe))
+    # Validaciones sin filtrar info
+    if not _valid_email(email) or not password:
+        return _json_or_redirect(
+            "Email o contraseña incorrectos.",
+            "error",
+            "auth.login",
+            next=nxt_safe,
+        )
 
     user = db.session.query(User).filter(User.email == email).first()
 
-    # Si existe lock, lo respetamos ANTES de chequear password (mejor anti brute-force)
+    # lock antes de password
     if user and hasattr(user, "locked_until"):
         try:
             locked_until = float(getattr(user, "locked_until") or 0)
         except Exception:
             locked_until = 0
         if locked_until and locked_until > time.time():
-            flash("Cuenta temporalmente bloqueada. Intentá más tarde.", "error")
-            return redirect(url_for("auth.login"))
+            return _json_or_redirect(
+                "Cuenta temporalmente bloqueada. Intentá más tarde.",
+                "error",
+                "auth.login",
+            )
 
-    # Mensaje único -> no filtra info
+    # Mensaje único -> no filtra si existe el email
     if not user or not user.check_password(password):
-        # incrementa contador si existe
         if user and hasattr(user, "failed_login_count"):
             try:
                 user.failed_login_count = int(getattr(user, "failed_login_count") or 0) + 1
@@ -179,28 +274,38 @@ def login_post():
 
             _commit_safe()
 
-        flash("Email o contraseña incorrectos.", "error")
-        return redirect(url_for("auth.login", next=nxt_safe))
+        return _json_or_redirect(
+            "Email o contraseña incorrectos.",
+            "error",
+            "auth.login",
+            next=nxt_safe,
+        )
 
-    # Si el modelo trae can_login, lo respetamos
+    # can_login opcional
     if hasattr(user, "can_login"):
         try:
             if not user.can_login():
-                flash("Cuenta temporalmente bloqueada. Intentá más tarde.", "error")
-                return redirect(url_for("auth.login"))
+                return _json_or_redirect(
+                    "Cuenta temporalmente bloqueada. Intentá más tarde.",
+                    "error",
+                    "auth.login",
+                )
         except Exception:
             pass
 
-    # Activa
+    # is_active opcional
     if hasattr(user, "is_active"):
         try:
             if not bool(getattr(user, "is_active")):
-                flash("Tu cuenta está desactivada.", "error")
-                return redirect(url_for("auth.login"))
+                return _json_or_redirect(
+                    "Tu cuenta está desactivada.",
+                    "error",
+                    "auth.login",
+                )
         except Exception:
             pass
 
-    # Login OK: resetea contador si existe + marca login
+    # Login OK: reset counters + mark_login
     if hasattr(user, "failed_login_count"):
         try:
             user.failed_login_count = 0
@@ -220,6 +325,9 @@ def login_post():
     _commit_safe()
 
     _set_session_user(user)
+    if _wants_json():
+        return jsonify({"ok": True, "redirect": (nxt_safe or _post_login_redirect(user))}), 200
+
     flash("Bienvenido 👋", "success")
     return redirect(nxt_safe or _post_login_redirect(user))
 
@@ -234,35 +342,52 @@ def register():
     if u:
         return redirect(_post_login_redirect(u))
 
-    return render_template("auth/register.html", next=_next_url(url_for("shop.shop")))
+    nxt = _next_url(url_for("shop.shop"))
+    nonce = _new_form_nonce("register")
+    return render_template("auth/register.html", next=nxt, nonce=nonce)
 
 
 @auth_bp.post("/register")
 def register_post():
+    if not _check_form_nonce("register"):
+        return _json_or_redirect(
+            "Solicitud inválida. Recargá la página e intentá de nuevo.",
+            "error",
+            "auth.register",
+            next=_next_url(""),
+        )
+
     email = _safe_email(request.form.get("email") or "")
     password = (request.form.get("password") or "").strip()
     name = (request.form.get("name") or "").strip()
     nxt_safe = _next_url("")
 
-    if not email or "@" not in email:
-        flash("Email inválido.", "warning")
-        return redirect(url_for("auth.register", next=nxt_safe))
+    if not _valid_email(email):
+        return _json_or_redirect("Email inválido.", "warning", "auth.register", next=nxt_safe)
 
-    if len(password) < 6:
-        flash("La contraseña debe tener al menos 6 caracteres.", "warning")
-        return redirect(url_for("auth.register", next=nxt_safe))
+    # ✅ Mejora real #4: política mínima + mejor UX (sin complejidad absurda)
+    if len(password) < 8:
+        return _json_or_redirect(
+            "La contraseña debe tener al menos 8 caracteres.",
+            "warning",
+            "auth.register",
+            next=nxt_safe,
+        )
 
-    # nombre opcional, pero limpio
     if name:
         name = name[:120]
 
     # ya existe
     if db.session.query(User).filter(User.email == email).first():
-        flash("Ese email ya está registrado.", "info")
-        return redirect(url_for("auth.login", next=nxt_safe))
+        return _json_or_redirect(
+            "Ese email ya está registrado. Iniciá sesión.",
+            "info",
+            "auth.login",
+            next=nxt_safe,
+        )
 
-    # crear
     user = User(email=email)
+
     if hasattr(user, "name") and name:
         try:
             user.name = name
@@ -270,7 +395,16 @@ def register_post():
             pass
 
     # password
-    user.set_password(password)
+    try:
+        user.set_password(password)
+    except Exception:
+        # si tu modelo no lo soporta por alguna razón, evitamos crashear
+        return _json_or_redirect(
+            "No se pudo crear la cuenta (password inválida). Probá otra.",
+            "error",
+            "auth.register",
+            next=nxt_safe,
+        )
 
     # flags opcionales
     if hasattr(user, "is_active"):
@@ -289,23 +423,30 @@ def register_post():
         except Exception:
             pass
 
-    # suscripción email si existe
     if hasattr(user, "subscribe_email"):
         try:
             user.subscribe_email()
         except Exception:
             pass
 
-    # persistir con rollback seguro
+    # ✅ Mejora real #5: commit robusto + mensaje claro
     try:
         db.session.add(user)
         db.session.commit()
     except Exception:
         db.session.rollback()
-        flash("Error creando la cuenta. Probá de nuevo.", "error")
-        return redirect(url_for("auth.register", next=nxt_safe))
+        return _json_or_redirect(
+            "Error creando la cuenta. Probá de nuevo.",
+            "error",
+            "auth.register",
+            next=nxt_safe,
+        )
 
     _set_session_user(user)
+
+    if _wants_json():
+        return jsonify({"ok": True, "redirect": (nxt_safe or _post_login_redirect(user))}), 200
+
     flash("Cuenta creada con éxito ✅", "success")
     return redirect(nxt_safe or _post_login_redirect(user))
 
@@ -316,7 +457,9 @@ def register_post():
 
 @auth_bp.get("/logout")
 def logout():
-    _clear_session()
+    _clear_session_keep_csrf()
+    if _wants_json():
+        return jsonify({"ok": True}), 200
     flash("Sesión cerrada.", "info")
     try:
         return redirect(url_for("main.home"))

@@ -1,13 +1,13 @@
 ﻿# ============================================================
-# SKYLINE STORE — PRODUCTION REQUIREMENTS (10× PRO / FINAL)
+# SKYLINE STORE — PRODUCTION REQUIREMENTS (PRO / FINAL)
 # ============================================================
 # ✔ Flask 3.x estable
 # ✔ Render / Docker / Railway / Local
-# ✔ Migraciones seguras
+# ✔ Postgres (psycopg v3) + migraciones
 # ✔ Seguridad + Performance reales
-# ✔ Listo para escalar
-# ✔ NO experimental
-# ✔ NO dependencias rotas
+# ✔ Admin + Email + Uploads
+# ✔ Rate limiting (ya incluido para que NO rompa)
+# ✔ Opcionales listos (Sentry / Redis jobs) sin activar
 # ============================================================
 
 
@@ -49,9 +49,8 @@ alembic==1.14.0
 greenlet==3.3.0
 
 # PostgreSQL (Render / Producción)
-psycopg[binary]==3.2.3
-
-# SQLite → incluido en Python (local/dev)
+psycopg==3.2.3
+psycopg-binary==3.2.3
 
 
 # ============================================================
@@ -67,10 +66,20 @@ email-validator==2.2.0
 # SECURITY (PRO REAL)
 # ============================================================
 Flask-Talisman==1.1.0
+
+# Hashing (tenés soporte para bcrypt y argon2)
 bcrypt==4.2.0
 argon2-cffi==23.1.0
 argon2-cffi-bindings==25.1.0
+
+# Señales internas Flask (ya lo usás)
 blinker==1.9.0
+
+
+# ============================================================
+# RATE LIMITING (FIX: para que no rompa en Render)
+# ============================================================
+Flask-Limiter==3.9.2
 
 
 # ============================================================
@@ -80,10 +89,12 @@ Flask-Compress==1.17
 Flask-Caching==2.3.0
 cachelib==0.9.0
 whitenoise==6.8.2
+
 flask-minify==0.42
 htmlmin==0.1.12
 jsmin==3.0.1
 rcssmin==1.2.2
+
 brotli==1.2.0
 xxhash==3.6.0
 zstandard==0.25.0
@@ -120,18 +131,15 @@ packaging==25.0
 
 
 # ============================================================
-# OPTIONAL / FUTURE (COMMENTED)
+# OPTIONAL (LISTO PARA ESCALAR) — NO ACTIVO POR DEFECTO
 # ============================================================
 
-# Rate limiting (cuando quieras activarlo)
-# Flask-Limiter==3.8.0
-
-# Background jobs
-# rq==1.16.2
+# Background jobs + cache distribuida
 # redis==5.0.8
+# rq==1.16.2
 
-# Monitoring / Errors
+# Monitoring / errores en producción (recomendado si vendés de verdad)
 # sentry-sdk[flask]==2.19.2
 
-# Payments
+# Payments (cuando conectes gateways reales)
 # stripe==10.12.0

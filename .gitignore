@@ -1,6 +1,6 @@
 ﻿# =====================================================
-# SKYLINE STYLE — .gitignore (ULTRA PRO / FINAL)
-# Python · Flask · Render · Production Ready
+# SKYLINE STORE — .gitignore (ULTRA PRO / FINAL)
+# Flask · SQLAlchemy · Render · Postgres · Production Ready
 # =====================================================
 
 # -----------------------------------------------------
@@ -10,12 +10,28 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.pyo
+
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 .dmypy.json
 .pyre/
 .pytype/
+.pyright/
+.pyrightcache/
+.pycoverage/
+coverage.xml
+.coverage
+htmlcov/
+*.cover
+
+# Python build artifacts
+build/
+dist/
+*.egg-info/
+pip-wheel-metadata/
+pip-log.txt
+pip-delete-this-directory.txt
 
 # -----------------------------------------------------
 # VIRTUAL ENVIRONMENTS
@@ -26,22 +42,6 @@ env/
 ENV/
 env.bak/
 venv.bak/
-
-# -----------------------------------------------------
-# BUILD / PACKAGING
-# -----------------------------------------------------
-build/
-dist/
-*.egg-info/
-pip-wheel-metadata/
-pip-log.txt
-pip-delete-this-directory.txt
-
-# Coverage / reports
-.coverage
-coverage.xml
-htmlcov/
-*.cover
 
 # -----------------------------------------------------
 # ENVIRONMENT / SECRETS (CRÍTICO)
@@ -55,6 +55,7 @@ htmlcov/
 .env.dev
 .env.local
 .env.test
+.env.testing
 .env.staging
 .env.render
 render.env
@@ -62,7 +63,7 @@ render.env
 # Permitimos ejemplo
 !.env.example
 
-# Keys / certs / tokens
+# Keys / certs / tokens / creds (comunes)
 *.pem
 *.key
 *.p12
@@ -71,10 +72,15 @@ render.env
 *.cer
 *.jks
 *.keystore
+
 secrets.*
 secret.*
 credentials.*
 service-account*.json
+firebase*.json
+google*.json
+gcp*.json
+aws*.json
 
 # -----------------------------------------------------
 # LOGS / RUNTIME FILES
@@ -83,12 +89,31 @@ service-account*.json
 logs/
 *.out
 *.pid
+*.sock
+*.socket
+*.lock
 
 # Flask runtime folder (si lo usás)
 instance/
+
+# -----------------------------------------------------
+# SQLITE LOCAL (DEV) — NUNCA versionar
+# -----------------------------------------------------
+*.sqlite
+*.sqlite3
+*.db
 *.sqlite-journal
 *.sqlite-wal
 *.sqlite-shm
+skyline_local.db
+
+# -----------------------------------------------------
+# ALEMBIC / MIGRATIONS (cache)
+# -----------------------------------------------------
+alembic/versions/*.pyc
+**/alembic/__pycache__/
+**/migrations/__pycache__/
+**/migrations/versions/*.pyc
 
 # -----------------------------------------------------
 # OS / EDITORS
@@ -106,7 +131,7 @@ desktop.ini
 *.tmp
 
 # -----------------------------------------------------
-# NODE / FRONTEND (actual y futuro)
+# NODE / FRONTEND (si lo agregás ahora o después)
 # -----------------------------------------------------
 node_modules/
 npm-debug.log*
@@ -116,23 +141,25 @@ yarn-error.log*
 .parcel-cache/
 .next/
 .nuxt/
-dist/
 .cache/
+dist/
 
 # -----------------------------------------------------
-# ARCHIVOS PESADOS / BACKUPS
+# ARCHIVOS PESADOS / BACKUPS / DUMPS
 # -----------------------------------------------------
 *.zip
 *.rar
 *.7z
 *.tar
 *.gz
+*.tgz
+
 _backup_*/
 backups/
 backup/
 *.dump
+*.sql
 *.sql.gz
-*.tgz
 
 # -----------------------------------------------------
 # UPLOADS (USUARIOS) / MEDIA DINÁMICA
@@ -140,24 +167,15 @@ backup/
 # Assets oficiales → app/static/img/ (versionar)
 # Uploads dinámicos → NO versionar
 app/static/uploads/**
+
+# mantenemos estructura con gitkeep
 !app/static/uploads/.gitkeep
 !app/static/uploads/products/
 !app/static/uploads/products/.gitkeep
 
-# Si en algún momento generás thumbnails/exports
+# thumbnails / temporales si se generan
 app/static/uploads/**/thumbs/**
 app/static/uploads/**/tmp/**
-
-# -----------------------------------------------------
-# DATABASE LOCAL (SQLite dev)
-# -----------------------------------------------------
-*.sqlite
-*.sqlite3
-*.db
-skyline_local.db
-
-# (si llegás a usar alembic)
-alembic/versions/*.pyc
 
 # -----------------------------------------------------
 # DEPLOY / PLATFORM CACHES
@@ -172,14 +190,11 @@ alembic/versions/*.pyc
 docker-compose.override.yml
 
 # -----------------------------------------------------
-# PYTHON TOOLING / LOCKS (opcional)
+# NOTEBOOKS / DATA SCI (si usás)
 # -----------------------------------------------------
-# Si usás Poetry
-poetry.lock
-# Si usás Pipenv
-Pipfile.lock
+.ipynb_checkpoints/
+*.ipynb
 
-# Si querés versionar requirements.lock, dejalo fuera.
 # -----------------------------------------------------
 # FIN
 # -----------------------------------------------------

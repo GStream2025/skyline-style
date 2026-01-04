@@ -6,6 +6,7 @@
 # ✔ Herramientas modernas y estables
 # ✔ No rompe Render / CI / Local
 # ✔ Compatible Flask 3 + SQLAlchemy 2
+# ✔ Evita dependencias pesadas innecesarias en prod
 # ============================================================
 
 
@@ -16,12 +17,21 @@
 
 
 # =========================
-# Testing (robusto)
+# Testing (robusto + rápido)
 # =========================
 pytest==8.3.4
 pytest-cov==6.0.0
 pytest-mock==3.14.0
 pytest-env==1.1.5
+
+# ✅ Mejora #1: tests en paralelo (mucho más rápido)
+pytest-xdist==3.6.1
+
+# ✅ Mejora #2: orden aleatorio para detectar tests frágiles
+pytest-randomly==3.16.0
+
+# ✅ Mejora #3: testear tiempo/fechas (locks, expiraciones, promos, etc.)
+freezegun==1.5.1
 
 
 # =========================
@@ -30,7 +40,10 @@ pytest-env==1.1.5
 ruff==0.8.4          # lint ultra rápido (reemplaza flake8/isort)
 black==24.10.0       # formato estable y predecible
 mypy==1.13.0         # type checking (opcional pero PRO)
+
 types-requests==2.32.0.20241016
+types-python-dateutil==2.9.0.20241206
+types-six==1.17.0.20241205
 
 
 # =========================
@@ -39,6 +52,9 @@ types-requests==2.32.0.20241016
 ipython==8.31.0
 rich==13.9.4         # logs y prints lindos en dev
 watchdog==6.0.0      # reload inteligente (Windows/Linux/Mac)
+
+# Debugger remoto (VSCode) — no afecta prod si no lo usás
+debugpy==1.8.11
 
 
 # =========================
@@ -54,10 +70,16 @@ coverage[toml]==7.6.9
 sqlalchemy-utils==0.41.2
 faker==33.1.0        # seeds / datos fake
 
+# ✅ Mejora #4: factories reales para modelos (User/Product/Order)
+factory-boy==3.3.1
+
 
 # =========================
-# Opcionales (NO obligatorios)
+# Tooling opcional (NO obligatorio)
 # =========================
+# ✅ Mejora #5: congelar deps de forma PRO (compile/sync)
+pip-tools==7.4.1
+
 # Pre-commit hooks
 # pre-commit==4.0.1
 
