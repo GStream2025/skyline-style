@@ -4,6 +4,7 @@
 
 {% block content %}
 {% set nxt = next|default('') %}
+
 <section class="ss-account" aria-label="Acceso a tu cuenta">
   <div class="ss-account__bg" aria-hidden="true">
     <span class="blob b1"></span>
@@ -12,9 +13,10 @@
   </div>
 
   <div class="ss-account__container">
+
     <!-- Left / Hero -->
-    <div class="ss-account__hero">
-      <div class="brand">
+    <div class="ss-account__hero" aria-label="Beneficios de tener cuenta">
+      <div class="brand" role="banner" aria-label="Skyline Store">
         <div class="logo-mark" aria-hidden="true">
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none">
             <path d="M4 14.5 12 4l8 10.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -24,16 +26,16 @@
         </div>
         <div class="brand-text">
           <div class="brand-name">Skyline Store</div>
-          <div class="brand-tag">Tu tienda premium de tech + streetwear</div>
+          <div class="brand-tag">Marketplace premium de Tech + Streetwear</div>
         </div>
       </div>
 
       <h1>Entrá a tu cuenta</h1>
       <p class="lead">
-        Guardá tus compras, seguí pedidos, administrá tu perfil y accedé a ofertas exclusivas.
+        Guardá compras, seguí pedidos y accedé a ofertas exclusivas. Todo pensado para comprar rápido (tipo marketplace).
       </p>
 
-      <ul class="perks" role="list">
+      <ul class="perks" role="list" aria-label="Beneficios">
         <li>
           <span class="perk-ic" aria-hidden="true">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
@@ -61,71 +63,135 @@
           Acceso a promos y drops exclusivos
         </li>
       </ul>
+
+      <div class="trust" aria-label="Confianza y soporte">
+        <div class="trust-item"><span class="t-dot" aria-hidden="true"></span> Pago seguro</div>
+        <div class="trust-item"><span class="t-dot" aria-hidden="true"></span> Envíos rápidos</div>
+        <div class="trust-item"><span class="t-dot" aria-hidden="true"></span> Soporte real</div>
+      </div>
     </div>
 
     <!-- Right / Card -->
-    <div class="ss-account__card">
+    <div class="ss-account__card" aria-label="Opciones de acceso">
       <div class="card-head">
         <div>
           <div class="card-title">Continuar</div>
-          <div class="card-sub">Elegí una opción para seguir</div>
+          <div class="card-sub">Iniciá sesión o creá tu cuenta</div>
         </div>
         <span class="secure-pill" title="Conexión segura">
           <span class="dot"></span> Seguro
         </span>
       </div>
 
-      <div class="actions">
-        <a class="btn primary"
-           href="{{ url_for('auth.login', next=nxt) }}">
-          <span class="btn-ic" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
-              <path d="M10 17l5-5-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M15 12H3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              <path d="M21 21V3" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity=".7"/>
-            </svg>
-          </span>
+      <!-- Tabs -->
+      <div class="tabs" role="tablist" aria-label="Acciones">
+        <button class="tab is-active" id="tab-login" type="button" role="tab" aria-selected="true" aria-controls="panel-login">
           Iniciar sesión
-          <span class="btn-meta">Ya tengo cuenta</span>
-        </a>
-
-        <a class="btn ghost"
-           href="{{ url_for('auth.register', next=nxt) }}">
-          <span class="btn-ic" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
-              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              <path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" stroke="currentColor" stroke-width="2"/>
-              <path d="M19 8v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              <path d="M16 11h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-            </svg>
-          </span>
+        </button>
+        <button class="tab" id="tab-register" type="button" role="tab" aria-selected="false" aria-controls="panel-register">
           Crear cuenta
-          <span class="btn-meta">Es rápido, 1 minuto</span>
-        </a>
+        </button>
       </div>
 
-      <div class="divider" aria-hidden="true">
-        <span>o</span>
-      </div>
+      <!-- Panel: Login -->
+      <div class="panel" id="panel-login" role="tabpanel" aria-labelledby="tab-login">
+        <div class="actions">
+          <a class="btn primary" href="{{ url_for('auth.login', next=nxt) }}">
+            <span class="btn-ic" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
+                <path d="M10 17l5-5-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M15 12H3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <path d="M21 21V3" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity=".7"/>
+              </svg>
+            </span>
+            Iniciar sesión
+            <span class="btn-meta">Ya tengo cuenta</span>
+          </a>
+        </div>
 
-      <div class="secondary">
-        <a class="link" href="{{ url_for('shop.shop') }}">
-          Seguir como invitado
-        </a>
+        <div class="divider" aria-hidden="true"><span>o</span></div>
 
-        <div class="fineprint">
-          Al continuar aceptás nuestros
-          <a class="link2" href="{{ url_for('main.about') }}">términos</a>
-          y
-          <a class="link2" href="{{ url_for('main.contact') }}">soporte</a>.
+        {# Social login: solo mostrar si existen endpoints. No rompe. #}
+        {% set has_google = false %}
+        {% set has_apple = false %}
+        {% if false %}{% set has_google = true %}{% endif %}
+        {% if false %}{% set has_apple = true %}{% endif %}
+
+        {% if has_google or has_apple %}
+        <div class="social" aria-label="Inicio rápido">
+          {% if has_google %}
+            <a class="btn ghost" href="{{ url_for('auth.google', next=nxt) }}">
+              <span class="btn-ic" aria-hidden="true">G</span>
+              Continuar con Google
+              <span class="btn-meta">1 click</span>
+            </a>
+          {% endif %}
+          {% if has_apple %}
+            <a class="btn ghost" href="{{ url_for('auth.apple', next=nxt) }}">
+              <span class="btn-ic" aria-hidden="true"></span>
+              Continuar con Apple
+              <span class="btn-meta">1 click</span>
+            </a>
+          {% endif %}
+        </div>
+
+        <div class="divider" aria-hidden="true"><span>o</span></div>
+        {% endif %}
+
+        <div class="secondary">
+          <a class="link" href="{{ url_for('shop.shop') }}">Seguir como invitado</a>
+          <div class="fineprint">
+            Al continuar aceptás nuestros
+            <a class="link2" href="{{ url_for('main.about') }}">términos</a>
+            y
+            <a class="link2" href="{{ url_for('main.contact') }}">soporte</a>.
+          </div>
         </div>
       </div>
+
+      <!-- Panel: Register -->
+      <div class="panel is-hidden" id="panel-register" role="tabpanel" aria-labelledby="tab-register">
+        <div class="actions">
+          <a class="btn ghost" href="{{ url_for('auth.register', next=nxt) }}">
+            <span class="btn-ic" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" stroke="currentColor" stroke-width="2"/>
+                <path d="M19 8v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <path d="M16 11h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </span>
+            Crear cuenta
+            <span class="btn-meta">Rápido, 1 minuto</span>
+          </a>
+
+          <div class="mini-note" role="note">
+            🎁 Al registrarte desbloqueás cupones, favoritos y seguimiento de pedidos.
+          </div>
+        </div>
+
+        <div class="divider" aria-hidden="true"><span>o</span></div>
+
+        <div class="secondary">
+          <a class="link" href="{{ url_for('auth.login', next=nxt) }}">Ya tengo cuenta → iniciar sesión</a>
+          <div class="fineprint">
+            Al continuar aceptás nuestros
+            <a class="link2" href="{{ url_for('main.about') }}">términos</a>
+            y
+            <a class="link2" href="{{ url_for('main.contact') }}">soporte</a>.
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 </section>
 
 <style>
-  /* Skyline Store — Account (ULTRA PRO) */
+  /* ==========================================================
+     Skyline Store — Account (ULTRA PRO) · Temu vibes
+     - responsive + tabs + better contrast + a11y
+  ========================================================== */
 
   .ss-account{
     position: relative;
@@ -136,6 +202,7 @@
     justify-content:center;
   }
 
+  /* BG */
   .ss-account__bg{ position:absolute; inset:0; overflow:hidden; pointer-events:none; }
   .ss-account__bg .grid{
     position:absolute; inset:-2px;
@@ -148,7 +215,7 @@
   }
   .ss-account__bg .blob{
     position:absolute; width:520px; height:520px; border-radius:999px;
-    filter: blur(50px); opacity:.35; transform: translate3d(0,0,0);
+    filter: blur(52px); opacity:.35; transform: translate3d(0,0,0);
   }
   .ss-account__bg .b1{
     left:-160px; top:-180px;
@@ -159,22 +226,25 @@
     background: radial-gradient(circle at 40% 40%, rgba(250,204,21,.85), rgba(250,204,21,0));
   }
 
+  /* Layout */
   .ss-account__container{
     position: relative;
     width: min(1100px, 100%);
     display:grid;
     gap: 18px;
-    grid-template-columns: 1.15fr .85fr;
+    grid-template-columns: 1.12fr .88fr;
     align-items: stretch;
   }
 
+  /* HERO */
   .ss-account__hero{
     padding: clamp(18px, 2.5vw, 26px);
     border-radius: 22px;
-    background: rgba(255,255,255,.03);
-    border: 1px solid rgba(255,255,255,.08);
-    box-shadow: 0 10px 30px rgba(0,0,0,.12);
-    backdrop-filter: blur(10px);
+    background: rgba(12, 16, 26, .62);
+    border: 1px solid rgba(255,255,255,.10);
+    box-shadow: 0 12px 40px rgba(0,0,0,.22);
+    backdrop-filter: blur(14px);
+    color: rgba(255,255,255,.92);
   }
 
   .brand{ display:flex; align-items:center; gap:12px; margin-bottom: 12px; }
@@ -182,21 +252,23 @@
     width:42px; height:42px; border-radius: 14px;
     display:grid; place-items:center;
     background: linear-gradient(135deg, rgba(56,189,248,.25), rgba(250,204,21,.18));
-    border: 1px solid rgba(255,255,255,.10);
+    border: 1px solid rgba(255,255,255,.14);
     color: rgba(255,255,255,.92);
   }
-  .brand-name{ font-weight: 800; letter-spacing: .2px; }
-  .brand-tag{ opacity:.75; font-size: .95rem; margin-top:2px; }
+  .brand-name{ font-weight: 900; letter-spacing: .2px; }
+  .brand-tag{ opacity:.82; font-size: .95rem; margin-top:2px; }
 
   .ss-account__hero h1{
-    font-size: clamp(1.6rem, 2.4vw, 2.2rem);
+    font-size: clamp(1.7rem, 2.6vw, 2.35rem);
     margin: 10px 0 6px;
-    line-height: 1.15;
+    line-height: 1.12;
+    letter-spacing: -.5px;
   }
   .ss-account__hero .lead{
-    opacity: .86;
+    opacity: .90;
     margin: 0 0 16px;
-    max-width: 56ch;
+    max-width: 60ch;
+    line-height: 1.55;
   }
 
   .perks{ list-style:none; padding:0; margin: 14px 0 0; display:grid; gap: 10px; }
@@ -204,41 +276,65 @@
     display:flex; align-items:flex-start; gap:10px;
     padding: 10px 12px;
     border-radius: 14px;
-    background: rgba(255,255,255,.03);
-    border: 1px solid rgba(255,255,255,.07);
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.10);
   }
   .perk-ic{
     width:34px; height:34px; border-radius: 12px;
     display:grid; place-items:center;
-    background: rgba(255,255,255,.04);
-    border: 1px solid rgba(255,255,255,.08);
+    background: rgba(255,255,255,.08);
+    border: 1px solid rgba(255,255,255,.12);
     flex: 0 0 auto;
-    opacity: .95;
+    opacity: .98;
   }
 
+  .trust{
+    display:flex; flex-wrap:wrap; gap:10px;
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(255,255,255,.12);
+  }
+  .trust-item{
+    display:inline-flex; align-items:center; gap:8px;
+    padding: 8px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,.12);
+    background: rgba(255,255,255,.06);
+    font-weight: 850;
+    font-size: .92rem;
+    opacity:.92;
+  }
+  .t-dot{
+    width:9px; height:9px; border-radius:999px;
+    background: linear-gradient(135deg, rgba(56,189,248,.95), rgba(250,204,21,.85));
+    box-shadow: 0 0 0 4px rgba(56,189,248,.16);
+  }
+
+  /* CARD */
   .ss-account__card{
     border-radius: 22px;
-    background: rgba(255,255,255,.06);
-    border: 1px solid rgba(255,255,255,.10);
-    box-shadow: 0 16px 40px rgba(0,0,0,.16);
-    backdrop-filter: blur(12px);
+    background: rgba(255,255,255,.90);
+    border: 1px solid rgba(15,23,42,.10);
+    box-shadow: 0 18px 60px rgba(2,6,23,.18);
+    backdrop-filter: blur(10px);
     padding: 18px;
     display:flex;
     flex-direction: column;
-    justify-content: space-between;
+    gap: 12px;
   }
 
-  .card-head{ display:flex; align-items:flex-start; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
-  .card-title{ font-weight: 900; font-size: 1.25rem; }
-  .card-sub{ opacity:.78; font-size:.95rem; margin-top:2px; }
+  .card-head{ display:flex; align-items:flex-start; justify-content: space-between; gap: 10px; }
+  .card-title{ font-weight: 950; font-size: 1.25rem; color: rgba(11,18,32,.94); }
+  .card-sub{ color: rgba(11,18,32,.64); font-weight: 850; font-size:.95rem; margin-top:2px; }
 
   .secure-pill{
     display:inline-flex; align-items:center; gap:8px;
     padding: 7px 10px; border-radius: 999px; font-size:.85rem;
-    background: rgba(16,185,129,.14);
-    border: 1px solid rgba(16,185,129,.22);
-    color: rgba(220,252,231,.95);
+    background: rgba(16,185,129,.12);
+    border: 1px solid rgba(16,185,129,.20);
+    color: rgba(11,18,32,.86);
     white-space: nowrap;
+    font-weight: 900;
   }
   .secure-pill .dot{
     width:8px; height:8px; border-radius: 999px;
@@ -246,8 +342,37 @@
     box-shadow: 0 0 0 4px rgba(16,185,129,.18);
   }
 
-  .actions{ display:grid; gap: 12px; margin-top: 10px; }
+  /* Tabs */
+  .tabs{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap:10px;
+    margin-top: 4px;
+  }
+  .tab{
+    border: 1px solid rgba(15,23,42,.12);
+    background: rgba(255,255,255,.86);
+    border-radius: 14px;
+    padding: 10px 12px;
+    font-weight: 950;
+    color: rgba(11,18,32,.78);
+    cursor:pointer;
+    transition: transform .12s ease, background .12s ease, border-color .12s ease, box-shadow .12s ease;
+  }
+  .tab:hover{ transform: translateY(-1px); }
+  .tab:focus-visible{ outline:none; box-shadow: 0 0 0 4px rgba(56,189,248,.22); }
+  .tab.is-active{
+    color:#fff;
+    border-color: transparent;
+    background: linear-gradient(135deg, rgba(37,99,235,.95), rgba(6,182,212,.88));
+    box-shadow: 0 14px 30px rgba(2,6,23,.14);
+  }
 
+  .panel{ display:block; }
+  .panel.is-hidden{ display:none; }
+
+  /* Buttons */
+  .actions{ display:grid; gap: 12px; }
   .btn{
     position: relative;
     display:flex;
@@ -271,65 +396,69 @@
   .btn .btn-ic{
     width:38px; height:38px; border-radius: 14px;
     display:grid; place-items:center;
-    border: 1px solid rgba(255,255,255,.10);
-    background: rgba(255,255,255,.05);
+    border: 1px solid rgba(15,23,42,.10);
+    background: rgba(255,255,255,.70);
     flex: 0 0 auto;
+    font-weight: 1000;
+    color: rgba(11,18,32,.78);
   }
-  .btn .btn-meta{ margin-left:auto; opacity:.72; font-size:.9rem; }
+  .btn .btn-meta{ margin-left:auto; color: rgba(11,18,32,.55); font-weight: 850; font-size:.9rem; }
 
   .btn.primary{
-    background: linear-gradient(135deg, rgba(56,189,248,.28), rgba(250,204,21,.18));
-    border-color: rgba(255,255,255,.14);
-    color: rgba(255,255,255,.96);
-    box-shadow: 0 12px 28px rgba(0,0,0,.18);
+    background: linear-gradient(135deg, rgba(37,99,235,.95), rgba(6,182,212,.88));
+    border-color: rgba(37,99,235,.18);
+    color: #fff;
+    box-shadow: 0 16px 40px rgba(2,6,23,.16);
   }
-  .btn.primary:hover{
-    box-shadow: 0 18px 40px rgba(0,0,0,.22);
-    border-color: rgba(255,255,255,.20);
+  .btn.primary .btn-ic{
+    background: rgba(255,255,255,.14);
+    border-color: rgba(255,255,255,.22);
+    color: #fff;
   }
 
   .btn.ghost{
-    background: rgba(255,255,255,.04);
-    border-color: rgba(255,255,255,.12);
-    color: rgba(255,255,255,.92);
+    background: rgba(255,255,255,.88);
+    border-color: rgba(15,23,42,.12);
+    color: rgba(11,18,32,.90);
   }
   .btn.ghost:hover{
-    border-color: rgba(255,255,255,.18);
-    background: rgba(255,255,255,.06);
+    border-color: rgba(37,99,235,.20);
+    box-shadow: 0 12px 24px rgba(2,6,23,.08);
   }
 
-  .divider{ position: relative; margin: 14px 0 10px; text-align:center; }
+  .divider{ position: relative; margin: 10px 0 6px; text-align:center; }
   .divider::before{
     content:""; position:absolute; left:0; right:0; top: 50%;
-    height:1px; background: rgba(255,255,255,.12);
+    height:1px; background: rgba(15,23,42,.12);
   }
   .divider span{
     position: relative; display:inline-block;
     padding: 0 10px; border-radius: 999px;
-    background: rgba(10, 10, 15, .35);
-    border: 1px solid rgba(255,255,255,.10);
-    opacity: .8; font-size:.9rem;
+    background: rgba(255,255,255,.92);
+    border: 1px solid rgba(15,23,42,.10);
+    color: rgba(11,18,32,.64);
+    font-weight: 900;
+    font-size:.9rem;
   }
 
   .secondary{
     display:flex; flex-direction: column; gap: 10px;
-    align-items:center; padding-top: 6px;
+    align-items:center; padding-top: 4px;
   }
 
   .link{
     text-decoration:none;
-    font-weight: 700;
+    font-weight: 900;
     padding: 10px 12px;
     border-radius: 12px;
-    border: 1px dashed rgba(255,255,255,.18);
-    background: rgba(255,255,255,.03);
-    color: rgba(255,255,255,.92);
+    border: 1px dashed rgba(15,23,42,.18);
+    background: rgba(255,255,255,.86);
+    color: rgba(11,18,32,.86);
     transition: background .12s ease, border-color .12s ease, transform .12s ease;
   }
   .link:hover{
     transform: translateY(-1px);
-    background: rgba(255,255,255,.05);
-    border-color: rgba(255,255,255,.24);
+    border-color: rgba(37,99,235,.22);
   }
   .link:focus-visible{
     box-shadow: 0 0 0 4px rgba(56,189,248,.22);
@@ -340,23 +469,74 @@
   .fineprint{
     text-align:center;
     font-size: .9rem;
-    opacity: .78;
-    max-width: 44ch;
+    color: rgba(11,18,32,.62);
+    font-weight: 850;
+    max-width: 48ch;
     line-height: 1.35;
   }
 
   .link2{
-    color: rgba(255,255,255,.92);
-    font-weight: 700;
+    color: rgba(11,18,32,.84);
+    font-weight: 900;
     text-decoration: none;
-    border-bottom: 1px solid rgba(255,255,255,.22);
+    border-bottom: 1px solid rgba(15,23,42,.22);
   }
-  .link2:hover{ border-bottom-color: rgba(255,255,255,.38); }
+  .link2:hover{ border-bottom-color: rgba(37,99,235,.35); }
+
+  .mini-note{
+    border-radius: 14px;
+    padding: 12px 12px;
+    border: 1px solid rgba(245,158,11,.24);
+    background: rgba(245,158,11,.10);
+    color: rgba(11,18,32,.82);
+    font-weight: 900;
+    line-height: 1.35;
+  }
 
   @media (max-width: 980px){
     .ss-account__container{ grid-template-columns: 1fr; }
     .ss-account__hero{ order: 2; }
     .ss-account__card{ order: 1; }
   }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ transition:none!important; }
+    .btn:hover, .tab:hover{ transform:none!important; }
+  }
 </style>
+
+<script>
+/* Tabs: accesible + recuerda elección (no rompe) */
+(function(){
+  const loginTab = document.getElementById("tab-login");
+  const regTab = document.getElementById("tab-register");
+  const loginPanel = document.getElementById("panel-login");
+  const regPanel = document.getElementById("panel-register");
+  if(!loginTab || !regTab || !loginPanel || !regPanel) return;
+
+  const KEY = "ss_account_tab";
+  function setTab(which){
+    const isLogin = which === "login";
+    loginTab.classList.toggle("is-active", isLogin);
+    regTab.classList.toggle("is-active", !isLogin);
+
+    loginTab.setAttribute("aria-selected", isLogin ? "true" : "false");
+    regTab.setAttribute("aria-selected", !isLogin ? "true" : "false");
+
+    loginPanel.classList.toggle("is-hidden", !isLogin);
+    regPanel.classList.toggle("is-hidden", isLogin);
+
+    try{ localStorage.setItem(KEY, which); }catch(e){}
+  }
+
+  loginTab.addEventListener("click", ()=> setTab("login"));
+  regTab.addEventListener("click", ()=> setTab("register"));
+
+  // init
+  let saved = "login";
+  try{ saved = localStorage.getItem(KEY) || "login"; }catch(e){}
+  if(saved !== "login" && saved !== "register") saved = "login";
+  setTab(saved);
+})();
+</script>
 {% endblock %}

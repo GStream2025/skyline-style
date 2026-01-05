@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="es" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="x-apple-disable-message-reformatting">
+  <meta name="format-detection" content="telephone=no,address=no,email=no,date=no,url=no">
+  <meta name="color-scheme" content="light">
+  <meta name="supported-color-schemes" content="light">
+  <title>Confirmá tu cuenta · Skyline Store</title>
+
+  <!--[if mso]>
+  <xml>
+    <o:OfficeDocumentSettings>
+      <o:AllowPNG/>
+      <o:PixelsPerInch>96</o:PixelsPerInch>
+    </o:OfficeDocumentSettings>
+  </xml>
+  <style>
+    body, table, td, a { font-family: Arial, sans-serif !important; }
+    table { border-collapse: collapse !important; }
+    .mso-hide { display:none !important; }
+    .mso-button { padding:0 !important; }
+    .mso-break { word-break: break-all !important; }
+  </style>
+  <![endif]-->
+
+  <!-- Mobile safety (some clients respect) -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+</head>
+
+<body style="margin:0;padding:0;background:#f2f5fb;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#0b1220;">
+
+  <!-- ======================================================
+       PREHEADER (Gmail / iOS preview) + anti-clipping padding
+  ======================================================= -->
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;line-height:1px;">
+    Estás a un paso de activar tu cuenta y tu panel en Skyline Store. Enlace seguro.
+  </div>
+  <div style="display:none;max-height:0;overflow:hidden;">
+    &#847;&nbsp;&#847;&nbsp;&#847;&nbsp;&#847;&nbsp;&#847;&nbsp;&#847;&nbsp;&#847;&nbsp;&#847;&nbsp;&#847;&nbsp;&#847;&nbsp;&#847;&nbsp;&#847;&nbsp;&#847;&nbsp;&#847;
+  </div>
+
+  <!-- ======================================================
+       FULL WIDTH BACKGROUND
+  ======================================================= -->
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f2f5fb;">
+    <tr>
+      <td align="center" style="padding:28px 12px;">
+
+        <!-- Outer wrapper to control width -->
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:720px;">
+          <tr>
+            <td style="padding:0 8px;">
+
+              <!-- ======================================================
+                   CARD
+              ======================================================= -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+                     style="background:#ffffff;border:1px solid #e7eaf3;border-radius:24px;overflow:hidden;box-shadow:0 24px 70px rgba(2,6,23,.12);">
+
+                <!-- ======================================================
+                     HEADER (Brand) + Secure Badge
+                ======================================================= -->
+                <tr>
+                  <td style="padding:22px;background:linear-gradient(90deg,#2f7bff,#ffb547);">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td valign="middle">
+                          <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                            <tr>
+                              <td valign="middle" style="padding-right:12px;">
+                                <!-- Logo placeholder (no external image = 0 load fails) -->
+                                <div style="width:46px;height:36px;border-radius:18px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.28);box-shadow:0 10px 20px rgba(2,6,23,.18);"></div>
+                              </td>
+                              <td valign="middle">
+                                <div style="font-weight:950;color:#ffffff;font-size:18px;letter-spacing:-.2px;line-height:1.1;">
+                                  Skyline Store
+                                </div>
+                                <div style="color:rgba(255,255,255,.92);font-weight:760;font-size:13px;margin-top:3px;">
+                                  Marketplace premium · Ropa &amp; Tech
+                                </div>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+
+                        <td align="right" valign="middle" style="white-space:nowrap;">
+                          <span style="display:inline-block;padding:8px 12px;border-radius:999px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.28);color:#fff;font-weight:900;font-size:12px;">
+                            🔒 Enlace seguro
+                          </span>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+
+                <!-- Subtle divider -->
+                <tr>
+                  <td style="height:6px;background:linear-gradient(180deg, rgba(2,6,23,.12), rgba(2,6,23,0));"></td>
+                </tr>
+
+                <!-- ======================================================
+                     CONTENT
+                ======================================================= -->
+                <tr>
+                  <td style="padding:28px 24px 12px;">
+
+                    <!-- Progress + timestamp -->
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td valign="top">
+                          <div style="font-size:12px;font-weight:900;color:#6b7280;text-transform:uppercase;letter-spacing:.3px;">
+                            Paso 1 de 2 · Verificación de cuenta
+                          </div>
+                        </td>
+                        <td align="right" valign="top" style="white-space:nowrap;">
+                          <div style="font-size:12px;font-weight:850;color:#6b7280;">
+                            {{ date_text|default("Ahora", true) }}
+                          </div>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <h1 style="margin:10px 0 0;font-size:24px;letter-spacing:-.4px;font-weight:980;line-height:1.25;color:#0b1220;">
+                      Confirmá tu cuenta{% if name %}, {{ name|e }}{% endif %}
+                    </h1>
+
+                    <p style="margin:12px 0 0;color:#4b5563;font-size:15px;line-height:1.75;font-weight:650;">
+                      Estás a un paso de activar tu cuenta en <b>Skyline Store</b>.
+                      Confirmá tu email para habilitar tu panel, proteger tu acceso y comprar sin restricciones.
+                    </p>
+
+                    <!-- ======================================================
+                         ACCOUNT CARD (email + status + masked id)
+                    ======================================================= -->
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+                           style="margin-top:18px;border:1px solid #e7eaf3;border-radius:16px;background:#fafbff;">
+                      <tr>
+                        <td style="padding:14px 14px;">
+                          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                            <tr>
+                              <td valign="top">
+                                <div style="font-size:12px;color:#6b7280;font-weight:900;text-transform:uppercase;letter-spacing:.2px;">
+                                  Email registrado
+                                </div>
+                                <div style="margin-top:4px;font-size:14px;font-weight:950;color:#0b1220;word-break:break-word;">
+                                  {{ email|e }}
+                                </div>
+
+                                <div style="margin-top:10px;">
+                                  <span style="display:inline-block;padding:6px 10px;border-radius:999px;background:rgba(47,123,255,.10);border:1px solid rgba(47,123,255,.20);font-size:12px;font-weight:900;color:#1f4ed8;">
+                                    Verificación pendiente
+                                  </span>
+                                </div>
+                              </td>
+
+                              <td align="right" valign="top" style="padding-left:10px;white-space:nowrap;">
+                                <div style="display:inline-block;padding:9px 10px;border-radius:14px;background:#ffffff;border:1px solid #eef0f6;">
+                                  <div style="font-size:11px;color:#6b7280;font-weight:900;text-transform:uppercase;letter-spacing:.2px;">
+                                    Identificador
+                                  </div>
+                                  <div class="mso-break" style="margin-top:4px;font-size:12.5px;color:#111827;font-weight:950;">
+                                    {{ (email|e)[:2] }}•••{{ (email|e)[-2:] }}
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          </table>
+
+                          <div style="margin-top:10px;color:#6b7280;font-size:12.6px;line-height:1.55;">
+                            Recomendado: verificá dentro de <b>{{ expires_in|default("15 minutos", true) }}</b> para completar el alta sin interrupciones.
+                          </div>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <!-- ======================================================
+                         CTA BUTTON (with Outlook VML fallback)
+                    ======================================================= -->
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:22px;">
+                      <tr>
+                        <td align="left" class="mso-button">
+                          <!--[if mso]>
+                          <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word"
+                            href="{{ verify_url }}"
+                            style="height:52px;v-text-anchor:middle;width:360px;" arcsize="22%" stroke="f" fillcolor="#2f7bff">
+                            <w:anchorlock/>
+                            <center style="color:#ffffff;font-family:Arial,sans-serif;font-size:14px;font-weight:bold;">
+                              Verificar mi cuenta
+                            </center>
+                          </v:roundrect>
+                          <![endif]-->
+                          <!--[if !mso]><!-- -->
+                          <a href="{{ verify_url }}"
+                             style="display:inline-block;background:linear-gradient(90deg,#2f7bff,#ffb547);color:#fff;
+                                    padding:14px 22px;border-radius:16px;font-weight:950;font-size:15px;line-height:1;
+                                    text-decoration:none;box-shadow:0 18px 40px rgba(2,6,23,.18);border:1px solid rgba(15,23,42,.06);">
+                            Verificar mi cuenta
+                          </a>
+                          <!--<![endif]-->
+                        </td>
+                      </tr>
+                    </table>
+
+                    <!-- Secondary microcopy -->
+                    <div style="margin-top:10px;font-size:12.8px;color:#6b7280;line-height:1.6;font-weight:650;">
+                      Si no podés verificar ahora, podrás hacerlo más tarde desde tu panel (cuando inicies sesión).
+                    </div>
+
+                    <!-- ======================================================
+                         WHY (benefits / professionalism block)
+                    ======================================================= -->
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:18px;">
+                      <tr>
+                        <td style="padding:14px;border-radius:16px;border:1px solid #eef0f6;background:#ffffff;">
+                          <div style="font-weight:950;font-size:13px;color:#0b1220;">
+                            ¿Por qué pedimos esta verificación?
+                          </div>
+                          <div style="margin-top:8px;font-size:12.8px;line-height:1.75;color:#6b7280;font-weight:650;">
+                            • Protege tu cuenta contra accesos no autorizados<br>
+                            • Evita registros fraudulentos y mejora la seguridad de compras<br>
+                            • Habilita tu panel, pedidos, direcciones guardadas y seguimiento
+                          </div>
+
+                          <!-- Trust badges row -->
+                          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:12px;">
+                            <tr>
+                              <td style="font-size:12.6px;color:#374151;font-weight:850;white-space:nowrap;">✔ Seguridad</td>
+                              <td style="font-size:12.6px;color:#374151;font-weight:850;white-space:nowrap;">✔ Privacidad</td>
+                              <td style="font-size:12.6px;color:#374151;font-weight:850;white-space:nowrap;">✔ Soporte real</td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <!-- ======================================================
+                         ANTI-PHISHING (serious brand)
+                    ======================================================= -->
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:16px;">
+                      <tr>
+                        <td style="padding:12px;border-radius:16px;border:1px solid #eef0f6;background:#ffffff;">
+                          <div style="font-weight:950;color:#111827;font-size:13px;">
+                            Importante: evitá fraudes
+                          </div>
+                          <div style="margin-top:6px;color:#6b7280;font-size:12.7px;line-height:1.75;font-weight:650;">
+                            Skyline Store <b>nunca te pedirá tu contraseña</b> por email ni por WhatsApp.
+                            Este mensaje solo sirve para confirmar tu dirección.
+                          </div>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <!-- ======================================================
+                         FALLBACK (link copy) + support
+                    ======================================================= -->
+                    <div style="margin-top:18px;border-top:1px solid #eef0f6;padding-top:14px;">
+                      <div style="font-size:12px;color:#6b7280;line-height:1.55;">
+                        ¿Problemas con el botón? Copiá y pegá este enlace:
+                      </div>
+                      <div class="mso-break" style="margin-top:6px;font-size:12px;font-weight:900;word-break:break-all;color:#111827;">
+                        {{ verify_url }}
+                      </div>
+
+                      <div style="margin-top:12px;font-size:12px;color:#6b7280;line-height:1.6;">
+                        ¿No fuiste vos? Podés ignorar este email. Recomendación: si sospechás de un uso indebido,
+                        cambiá la contraseña de tu email.
+                      </div>
+                    </div>
+
+                  </td>
+                </tr>
+
+                <!-- ======================================================
+                     FOOTER (legal + brand consistency)
+                ======================================================= -->
+                <tr>
+                  <td style="padding:18px 22px;background:#f9fafb;border-top:1px solid #eef0f6;">
+                    <div style="font-size:12px;line-height:1.75;color:#6b7280;">
+                      <b>Skyline Store</b> · Seguridad y privacidad<br>
+                      Este email se envió automáticamente. Por favor, no respondas a este mensaje.
+                    </div>
+
+                    <div style="margin-top:10px;font-size:12px;line-height:1.7;color:#6b7280;">
+                      Si necesitás ayuda, entrá a la web y usá soporte, o escribinos desde tu panel cuando verifiques tu cuenta.
+                    </div>
+
+                    <div style="margin-top:10px;font-size:11px;color:#9aa1af;line-height:1.5;">
+                      © {{ year }} Skyline Store. Todos los derechos reservados.
+                      {% if support_url %} · <a href="{{ support_url }}" style="color:#6b7280;font-weight:900;text-decoration:none;">Soporte</a>{% endif %}
+                      {% if terms_url %} · <a href="{{ terms_url }}" style="color:#6b7280;font-weight:900;text-decoration:none;">Términos</a>{% endif %}
+                      {% if privacy_url %} · <a href="{{ privacy_url }}" style="color:#6b7280;font-weight:900;text-decoration:none;">Privacidad</a>{% endif %}
+                    </div>
+                  </td>
+                </tr>
+
+              </table>
+              <!-- /CARD -->
+
+              <div style="margin-top:10px;text-align:center;font-size:11px;color:#a1a7b5;line-height:1.45;">
+                Consejo: guardá este email para futuras verificaciones de seguridad.
+              </div>
+
+            </td>
+          </tr>
+        </table>
+
+      </td>
+    </tr>
+  </table>
+
+</body>
+</html>

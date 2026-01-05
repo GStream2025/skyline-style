@@ -1,13 +1,13 @@
-﻿# app/models/__init__.py
+﻿# app/models/__init__.py — Skyline Store (PRO / FINAL / BLINDADO)
 from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Set
 
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import OperationalError, ProgrammingError
 
 db = SQLAlchemy()
 log = logging.getLogger("models")
@@ -23,12 +23,16 @@ def _env_flag(name: str, default: bool) -> bool:
     v = os.getenv(name)
     if v is None:
         return default
-    s = v.strip().lower()
+    s = str(v).strip().lower()
     if s in _TRUE:
         return True
     if s in _FALSE:
         return False
     return default
+
+
+def _env_str(name: str, default: str = "") -> str:
+    return (os.getenv(name) or default).strip()
 
 
 def _app_env(app: Flask) -> str:
@@ -46,6 +50,16 @@ def _is_production(app: Flask) -> bool:
 
 def _db_uri(app: Flask) -> str:
     return (app.config.get("SQLALCHEMY_DATABASE_URI") or "").strip()
+
+
+def _db_tables_not_ready_error(e: Exception) -> bool:
+    msg = str(e).lower()
+    return (
+        "no such table" in msg
+        or "does not exist" in msg
+        or "undefined table" in msg
+        or "relation" in msg and "does not exist" in msg
+    )
 
 
 # ==========================================================
@@ -150,7 +164,7 @@ CampaignSend = _ModelProxy("CampaignSend")
 
 
 # ==========================================================
-# Init principal (NO crea tablas)
+# Init principal (NO crea tablas por defecto)
 # ==========================================================
 def init_models(
     app: Flask,
@@ -159,13 +173,21 @@ def init_models(
     force_reload_models: bool = False,
     log_loaded_models: bool = False,
 ) -> Dict[str, Any]:
+    """
+    ✅ init_models(app) debe llamarse en create_app() SIEMPRE.
+
+    - Inicializa SQLAlchemy si hace falta
+    - Carga modelos (core y opcionales)
+    - Valida DB URI
+    - (Opcional) bootstrap admin SI SEED=1 y no SKIP_ADMIN_BOOTSTRAP=1
+    """
 
     if "sqlalchemy" not in app.extensions:
         db.init_app(app)
 
     loaded = _load_models(app, force=force_reload_models)
 
-    required = {"User", "Category", "Product", "Order", "OrderItem"}
+    required: Set[str] = {"User", "Category", "Product", "Order", "OrderItem"}
     missing = required - set(loaded.keys())
     if missing:
         raise RuntimeError(f"❌ Faltan modelos core: {', '.join(sorted(missing))}")
@@ -176,78 +198,115 @@ def init_models(
     if log_loaded_models:
         log.info("📦 Modelos cargados: %s", ", ".join(sorted(loaded.keys())))
 
-    result = {
+    result: Dict[str, Any] = {
         "ok": True,
         "env": _app_env(app),
         "models": sorted(loaded.keys()),
     }
 
-    # ✅ ADMIN: respetar SKIP_ADMIN_BOOTSTRAP SIEMPRE
+    # ✅ ADMIN bootstrap: SOLO si SEED=1 (por defecto local) y no SKIP_ADMIN_BOOTSTRAP
+    # Esto NO “recrea” el admin si ya existe: solo lo asegura como dueño.
+    seed = _env_flag("SEED", False)
     skip_admin = _env_flag("SKIP_ADMIN_BOOTSTRAP", False)
-    if create_admin and not skip_admin:
-        result["admin"] = create_admin_if_missing(app)
+
+    if create_admin and seed and not skip_admin:
+        result["admin"] = create_admin_owner_guard(app)
     else:
-        result["admin"] = {"skipped": True, "reason": "admin bootstrap disabled"}
+        result["admin"] = {"skipped": True, "reason": "SEED=0 o SKIP_ADMIN_BOOTSTRAP=1"}
 
     return result
 
 
 # ==========================================================
-# Admin bootstrap (100% blindado)
+# Admin owner guard (NO rompe nunca)
+# - Si existe el email -> lo refuerza como admin activo y verificado
+# - Si NO existe -> lo crea SOLO si el DB está listo
 # ==========================================================
-def create_admin_if_missing(app: Flask) -> Dict[str, Any]:
+def create_admin_owner_guard(app: Flask) -> Dict[str, Any]:
     loaded = _LOADED_MODELS or {}
     UserModel = loaded.get("User")
     if not UserModel:
         return {"ok": False, "msg": "User model no cargado"}
 
-    email = (os.getenv("ADMIN_EMAIL") or "").lower().strip()
-    password = (os.getenv("ADMIN_PASSWORD") or "").strip()
-    name = (os.getenv("ADMIN_NAME") or "Admin").strip()
+    # Datos del dueño (TU acceso permanente)
+    email = _env_str("ADMIN_EMAIL", "").lower()
+    password = _env_str("ADMIN_PASSWORD", "")
+    name = _env_str("ADMIN_NAME", "Admin") or "Admin"
 
     if not email or "@" not in email:
         return {"ok": False, "msg": "ADMIN_EMAIL inválido"}
 
-    if _is_production(app) and len(password) < 10:
-        return {"ok": False, "msg": "ADMIN_PASSWORD inseguro en producción"}
+    # Seguridad básica en PROD (no bloquea en local)
+    if _is_production(app) and len(password) < 12:
+        return {"ok": False, "msg": "ADMIN_PASSWORD inseguro en producción (mín 12)"}
 
-    # ✅ SKIP explícito
     if _env_flag("SKIP_ADMIN_BOOTSTRAP", False):
         return {"skipped": True, "reason": "SKIP_ADMIN_BOOTSTRAP=1"}
 
     with app.app_context():
         try:
             existing = db.session.query(UserModel).filter_by(email=email).first()
-        except OperationalError as e:
-            msg = str(e).lower()
-            # ✅ tablas aún no creadas → NO romper nunca
-            if "no such table" in msg or "does not exist" in msg:
-                log.warning("⚠️ Admin bootstrap omitido: tablas aún no creadas")
+        except (OperationalError, ProgrammingError) as e:
+            if _db_tables_not_ready_error(e):
+                log.warning("⚠️ Admin bootstrap omitido: tablas aún no creadas/migradas")
                 return {"skipped": True, "reason": "tables not ready"}
-            raise
+            log.exception("❌ Error DB consultando admin")
+            return {"ok": False, "msg": "db error querying admin"}
 
+        # ✅ Si ya existe: NO lo recrea. Solo lo asegura como dueño.
         if existing:
-            existing.is_admin = True
-            existing.is_active = True
-            existing.email_verified = True
-            db.session.commit()
+            changed = False
+
+            for attr, value in [
+                ("is_admin", True),
+                ("is_active", True),
+                ("email_verified", True),
+            ]:
+                if hasattr(existing, attr):
+                    try:
+                        if bool(getattr(existing, attr)) != bool(value):
+                            setattr(existing, attr, value)
+                            changed = True
+                    except Exception:
+                        pass
+
+            if changed:
+                try:
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
+                    return {"ok": False, "msg": "db commit failed (existing admin)"}
+
             return {"ok": True, "created": False, "email": email}
 
-        u = UserModel(name=name, email=email)
-        u.set_password(password)
-        u.is_admin = True
-        u.is_active = True
-        u.email_verified = True
+        # ✅ Si NO existe: lo crea (solo si password válido)
+        if not password or len(password) < 8:
+            return {"ok": False, "msg": "ADMIN_PASSWORD inválido (mín 8) para crear admin"}
 
-        db.session.add(u)
-        db.session.commit()
-        return {"ok": True, "created": True, "email": email}
+        try:
+            u = UserModel(name=name, email=email)
+            u.set_password(password)
+
+            if hasattr(u, "is_admin"):
+                u.is_admin = True
+            if hasattr(u, "is_active"):
+                u.is_active = True
+            if hasattr(u, "email_verified"):
+                u.email_verified = True
+
+            db.session.add(u)
+            db.session.commit()
+            return {"ok": True, "created": True, "email": email}
+        except Exception:
+            db.session.rollback()
+            log.exception("❌ Error creando admin owner")
+            return {"ok": False, "msg": "failed to create admin"}
 
 
 __all__ = [
     "db",
     "init_models",
-    "create_admin_if_missing",
+    "create_admin_owner_guard",
     "User",
     "UserAddress",
     "Category",

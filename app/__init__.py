@@ -1,15 +1,12 @@
 ﻿# app/__init__.py
 from __future__ import annotations
 
-import json
 import logging
 import os
 import secrets
-import tempfile
 import time
 from datetime import timedelta
-from pathlib import Path
-from typing import Optional, Callable, Any, Dict, List, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from flask import Flask, jsonify, render_template, request, session
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -18,10 +15,9 @@ from app.models import db, init_models, create_admin_if_missing
 
 
 # ============================================================
-# ENV helpers
+# ENV helpers (robustos)
 # ============================================================
-
-_TRUE = {"1", "true", "yes", "y", "on"}
+_TRUE = {"1", "true", "yes", "y", "on", "checked"}
 _FALSE = {"0", "false", "no", "n", "off"}
 
 
@@ -43,7 +39,7 @@ def _int_env(key: str, default: int) -> int:
         return default
     try:
         return int(str(v).strip())
-    except (TypeError, ValueError):
+    except Exception:
         return default
 
 
@@ -56,41 +52,37 @@ def _normalize_database_url(url: Optional[str]) -> Optional[str]:
     if not url:
         return None
     u = str(url).strip()
+    # Render antiguamente daba postgres://
     if u.startswith("postgres://"):
         return u.replace("postgres://", "postgresql://", 1)
     return u
 
 
-def _is_production(env: str) -> bool:
-    env = (env or "").strip().lower()
-    return env in {"prod", "production"}
-
-
 def _detect_env() -> str:
-    """
-    Render/Flask: pueden venir como ENV o FLASK_ENV.
-    Dejamos un env canónico: 'production' o 'development'
-    """
     raw = (os.getenv("ENV") or os.getenv("FLASK_ENV") or "production").strip().lower()
-    if raw in {"dev", "development"}:
-        return "development"
-    return "production"
+    return "development" if raw in {"dev", "development"} else "production"
 
 
-def _secure_secret_key(env: str) -> str:
+def _is_production(env: str) -> bool:
+    return (env or "").strip().lower() in {"prod", "production"}
+
+
+def _require_secret_key(env: str) -> str:
     """
-    ✅ En production: EXIGE SECRET_KEY
-    ✅ En development: permite fallback local
+    ✅ Mejora 1: en prod EXIGE SECRET_KEY real
     """
-    env_secret = (os.getenv("SECRET_KEY") or "").strip()
-    if env_secret:
-        return env_secret
+    sk = (os.getenv("SECRET_KEY") or "").strip()
+    if sk:
+        return sk
     if _is_production(env):
-        raise RuntimeError("Falta SECRET_KEY en producción. Configurala en Render (Environment).")
+        raise RuntimeError("Falta SECRET_KEY en producción. Configurala en Render → Environment.")
     return "dev-secret-change-me"
 
 
 def _wants_json() -> bool:
+    """
+    ✅ Mejora 2: negociación JSON correcta (API / AJAX)
+    """
     p = (request.path or "").lower()
     if p.startswith("/api/"):
         return True
@@ -103,9 +95,8 @@ def _wants_json() -> bool:
 
 
 # ============================================================
-# Logging
+# Logging (pro)
 # ============================================================
-
 def _setup_logging(app: Flask) -> None:
     lvl = (os.getenv("LOG_LEVEL") or "").strip().upper()
     if lvl in {"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"}:
@@ -125,21 +116,21 @@ def _setup_logging(app: Flask) -> None:
 
 def _safe_init(app: Flask, label: str, fn: Callable[[], Any]) -> Any:
     """
-    ✅ Mejora #1: inicialización tolerante a faltantes + mensaje claro
+    ✅ Mejora 3: init opcional sin romper deploy
     """
     try:
         out = fn()
-        if out is not None:
-            app.logger.info("✅ %s inicializado", label)
-        else:
-            app.logger.info("ℹ️ %s omitido", label)
+        app.logger.info("✅ %s inicializado", label)
         return out
     except Exception as e:
-        app.logger.warning("⚠️ %s no pudo inicializarse: %s", label, e, exc_info=bool(app.debug))
+        app.logger.warning("⚠️ %s omitido: %s", label, e, exc_info=bool(app.debug))
         return None
 
 
 def _critical_init(app: Flask, label: str, fn: Callable[[], Any]) -> Any:
+    """
+    ✅ Mejora 4: init crítico con log full
+    """
     try:
         out = fn()
         app.logger.info("✅ %s inicializado", label)
@@ -150,104 +141,22 @@ def _critical_init(app: Flask, label: str, fn: Callable[[], Any]) -> Any:
 
 
 # ============================================================
-# Auth helpers
+# CSRF (sin Flask-WTF) - central
 # ============================================================
-
-def _get_current_user():
-    uid = session.get("user_id")
-    if not uid:
-        return None
-    try:
-        from app.models import User
-        return db.session.get(User, int(uid))
-    except Exception:
-        return None
-
-
-# ============================================================
-# Payments Settings (JSON en instance/)
-# ============================================================
-
-def _payments_defaults() -> Dict[str, Any]:
-    return {
-        "mp_uy": {"active": False, "link": "", "note": ""},
-        "mp_ar": {"active": False, "link": "", "note": ""},
-        "paypal": {"active": False, "user": "", "email": "", "mode": "live"},
-        "transfer": {"active": False, "info": ""},
-        "wise": {"active": False, "link": "", "note": ""},
-        "payoneer": {"active": False, "link": "", "note": ""},
-        "paxum": {"active": False, "link": "", "note": ""},
-    }
-
-
-def _settings_dir(app: Flask) -> Path:
-    p = Path(app.instance_path)
-    p.mkdir(parents=True, exist_ok=True)
-    return p
-
-
-def payments_path(app: Flask) -> Path:
-    return _settings_dir(app) / "payments_settings.json"
-
-
-def _merge_dict(base: Dict[str, Any], raw: Any) -> Dict[str, Any]:
-    out = dict(base)
-    if isinstance(raw, dict):
-        for k, v in raw.items():
-            if k in out and isinstance(out.get(k), dict) and isinstance(v, dict):
-                out[k].update(v)
-    return out
-
-
-def load_payments(app: Flask) -> Dict[str, Any]:
-    data = _payments_defaults()
-    path = payments_path(app)
-    if not path.exists():
-        return data
-    try:
-        raw = json.loads(path.read_text("utf-8"))
-        return _merge_dict(data, raw)
-    except Exception:
-        return data
-
-
-def _atomic_write_text(path: Path, text: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_fd, tmp_name = tempfile.mkstemp(prefix=path.name + ".", dir=str(path.parent))
-    try:
-        with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
-            f.write(text)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp_name, str(path))
-    finally:
-        try:
-            if os.path.exists(tmp_name):
-                os.remove(tmp_name)
-        except Exception:
-            pass
-
-
-def save_payments(app: Flask, data: Dict[str, Any]) -> None:
-    base = _payments_defaults()
-    safe = _merge_dict(base, data)
-    _atomic_write_text(payments_path(app), json.dumps(safe, ensure_ascii=False, indent=2))
-
-
-# ============================================================
-# CSRF (robusto)
-# ============================================================
-
 def _ensure_csrf_token() -> str:
+    """
+    ✅ Mejora 5: CSRF token fuerte + autocuración
+    """
     tok = session.get("csrf_token")
-    if not tok or not isinstance(tok, str) or len(tok) < 16:
+    if not tok or not isinstance(tok, str) or len(tok) < 24:
         tok = secrets.token_urlsafe(32)
         session["csrf_token"] = tok
     return tok
 
 
 def _extract_csrf_from_request() -> str:
-    ht = (request.headers.get("X-CSRF-Token") or "").strip()
+    header_name = (os.getenv("CSRF_HEADER") or "X-CSRF-Token").strip()
+    ht = (request.headers.get(header_name) or "").strip()
     if ht:
         return ht
 
@@ -270,18 +179,27 @@ def _extract_csrf_from_request() -> str:
 def _csrf_ok() -> bool:
     if request.method in {"GET", "HEAD", "OPTIONS"}:
         return True
-    st = session.get("csrf_token") or ""
+
+    # ✅ Mejora 6: whitelist para webhooks (no exigir CSRF)
+    p = (request.path or "")
+    if p.startswith("/webhook") or p.startswith("/api/webhook"):
+        return True
+
+    st = str(session.get("csrf_token") or "")
     token = _extract_csrf_from_request()
-    return bool(st) and bool(token) and secrets.compare_digest(str(st), str(token))
+    return bool(st) and bool(token) and secrets.compare_digest(st, str(token))
 
 
 # ============================================================
-# Mejora #2: error handler consistente (JSON/HTML)
+# Error responses (HTML/JSON)
 # ============================================================
-
 def _resp_error(app: Flask, status: int, code: str, message: str):
+    """
+    ✅ Mejora 7: errores consistentes y “bonitos”
+    """
     if _wants_json():
-        return jsonify({"error": code, "message": message}), status
+        return jsonify({"ok": False, "error": code, "message": message}), status
+
     # intenta templates modernos si existen
     try:
         return render_template(f"errors/{status}.html", message=message), status
@@ -293,9 +211,22 @@ def _resp_error(app: Flask, status: int, code: str, message: str):
 
 
 # ============================================================
-# Mejora #3: inicialización de extensiones con imports reales (sin __import__ raro)
+# User helper (session)
 # ============================================================
+def _get_current_user():
+    uid = session.get("user_id")
+    if not uid:
+        return None
+    try:
+        from app.models import User
+        return db.session.get(User, int(uid))
+    except Exception:
+        return None
 
+
+# ============================================================
+# Optional extensions (sin obligarte a instalar)
+# ============================================================
 def _init_compress(app: Flask):
     from flask_compress import Compress
     Compress(app)
@@ -305,28 +236,9 @@ def _init_compress(app: Flask):
 def _init_talisman(app: Flask, env: str):
     from flask_talisman import Talisman
     force_https = _bool_env("FORCE_HTTPS", _is_production(env))
-    # CSP la controlás vos después si querés; por ahora no rompemos assets
+    # CSP: no la forzamos para no romper assets; la activás luego si querés
     Talisman(app, force_https=force_https, content_security_policy=None)
     return True
-
-
-def _init_cache(app: Flask):
-    from flask_caching import Cache
-    cache = Cache(config={
-        "CACHE_TYPE": os.getenv("CACHE_TYPE", "SimpleCache"),
-        "CACHE_DEFAULT_TIMEOUT": _int_env("CACHE_DEFAULT_TIMEOUT", 300),
-    })
-    cache.init_app(app)
-    return cache
-
-
-def _init_minify(app: Flask):
-    from flask_minify import Minify
-    # minify solo cuando NO debug (y flag)
-    if (not app.debug) and _bool_env("MINIFY", True):
-        Minify(app=app, html=True, js=True, cssless=True)
-        return True
-    return None
 
 
 def _init_migrate(app: Flask):
@@ -341,28 +253,40 @@ def _init_limiter(app: Flask):
     return Limiter(
         get_remote_address,
         app=app,
-        default_limits=[os.getenv("RATE_LIMIT_DEFAULT", "200 per hour")],
+        default_limits=[os.getenv("RATE_LIMIT_DEFAULT", "300 per hour")],
         storage_uri=os.getenv("RATE_LIMIT_STORAGE_URI", "memory://"),
     )
 
 
-# ============================================================
-# Mejora #4: auto-create tables OFF cuando estás usando Flask-Migrate
-# (evita duplicados de índices / create_all + migrate)
-# ============================================================
-
 def _should_auto_create_tables(env: str) -> bool:
-    # Por defecto: NO crear tablas automáticamente (migraciones mandan)
-    # Si querés dev rápido sin migrate: AUTO_CREATE_TABLES=1
-    if _is_production(env):
-        return _bool_env("AUTO_CREATE_TABLES", False)
-    return _bool_env("AUTO_CREATE_TABLES", False)
+    """
+    ✅ Mejora 8: create_all OFF por defecto (evita líos con migrations).
+    Si querés local rápido: AUTO_CREATE_TABLES=1
+    """
+    return _bool_env("AUTO_CREATE_TABLES", False) if not _is_production(env) else False
+
+
+def _require_settings_master_key_if_needed(app: Flask) -> None:
+    """
+    ✅ Mejora 9: si vas a usar Settings cifrados (pagos config desde admin),
+    exigimos SETTINGS_MASTER_KEY para que NO quede inseguro.
+    """
+    # Si vas a gestionar pagos/settings desde admin, esto debe existir.
+    # Si preferís no exigirlo en local, poné REQUIRE_SETTINGS_MASTER_KEY=0.
+    require = _bool_env("REQUIRE_SETTINGS_MASTER_KEY", True)
+    if not require:
+        return
+
+    mk = (os.getenv("SETTINGS_MASTER_KEY") or "").strip()
+    if not mk:
+        raise RuntimeError(
+            "Falta SETTINGS_MASTER_KEY. Configurala en .env y en Render → Environment."
+        )
 
 
 # ============================================================
-# App Factory (FINAL)
+# App Factory (FINAL PRO)
 # ============================================================
-
 def create_app() -> Flask:
     env = _detect_env()
     debug = _bool_env("DEBUG", env == "development") or _bool_env("FLASK_DEBUG", False)
@@ -378,25 +302,25 @@ def create_app() -> Flask:
     if _bool_env("TRUST_PROXY_HEADERS", True):
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
 
-    # Database
+    # Config core
+    secret = _require_secret_key(env)
+
     db_url = _normalize_database_url(os.getenv("DATABASE_URL"))
     db_uri = (db_url or os.getenv("SQLALCHEMY_DATABASE_URI") or "sqlite:///skyline.db").strip()
 
-    # Seguridad cookies
     cookie_secure = _bool_env("COOKIE_SECURE", _is_production(env))
     session_samesite = (_str_env("SESSION_SAMESITE", "Lax") or "Lax").strip()
     if session_samesite not in {"Lax", "Strict", "None"}:
         session_samesite = "Lax"
-
-    # Mejora #5: si SameSite=None => Secure debe ser True (regla de navegadores)
+    # si SameSite=None => Secure obligatorio en navegadores
     if session_samesite == "None":
         cookie_secure = True
 
+    session_days = max(1, _int_env("SESSION_PERMANENT_DAYS", 30))
     max_mb = max(1, _int_env("MAX_UPLOAD_MB", 20))
-    secret = _secure_secret_key(env)
 
     engine_opts: Dict[str, Any] = {
-        "pool_pre_ping": True,
+        "pool_pre_ping": _bool_env("SQLALCHEMY_POOL_PRE_PING", True),
         "pool_recycle": _int_env("DB_POOL_RECYCLE", 280),
     }
 
@@ -413,14 +337,14 @@ def create_app() -> Flask:
         SESSION_COOKIE_SAMESITE=session_samesite,
         SESSION_COOKIE_SECURE=cookie_secure,
 
-        PERMANENT_SESSION_LIFETIME=timedelta(days=_int_env("SESSION_DAYS", 14)),
+        PERMANENT_SESSION_LIFETIME=timedelta(days=session_days),
         PREFERRED_URL_SCHEME="https" if _is_production(env) else "http",
 
         JSON_SORT_KEYS=False,
 
-        UPLOADS_DIR=(os.getenv("UPLOADS_DIR") or "").strip(),
+        UPLOADS_DIR=(os.getenv("UPLOADS_DIR") or "static/uploads").strip(),
         APP_NAME=os.getenv("APP_NAME", "Skyline Store"),
-        CURRENCY=os.getenv("CURRENCY", "UYU"),
+        APP_URL=(os.getenv("APP_URL") or "http://127.0.0.1:5000").strip().rstrip("/"),
 
         MAX_CONTENT_LENGTH=max_mb * 1024 * 1024,
     )
@@ -428,7 +352,7 @@ def create_app() -> Flask:
     _setup_logging(app)
 
     app.logger.info(
-        "🚀 create_app() ENV=%s DEBUG=%s DB=%s COOKIE_SECURE=%s SAMESITE=%s",
+        "🚀 create_app ENV=%s DEBUG=%s DB=%s SECURE=%s SAMESITE=%s",
         app.config["ENV"],
         bool(app.debug),
         app.config["SQLALCHEMY_DATABASE_URI"],
@@ -442,33 +366,42 @@ def create_app() -> Flask:
     # Extensiones (opcionales)
     _safe_init(app, "Flask-Compress", lambda: _init_compress(app))
     _safe_init(app, "Flask-Talisman", lambda: _init_talisman(app, env))
-    _safe_init(app, "Flask-Caching", lambda: _init_cache(app))
-    _safe_init(app, "Flask-Minify", lambda: _init_minify(app))
     _safe_init(app, "Flask-Migrate", lambda: _init_migrate(app))
     _safe_init(app, "Flask-Limiter", lambda: _init_limiter(app))
 
-    # ============================================================
-    # Models hub (CRÍTICO)  ✅ FIX real a tu error:
-    # - NO pasamos auto_create_tables si tu init_models no lo acepta
-    # - Controlamos create_all con AUTO_CREATE_TABLES (OFF por defecto)
-    # ============================================================
+    # ========= Settings master key (pagos/admin settings) =========
+    # ✅ Mejora 9 aplicada acá (antes de usar panel settings)
+    _critical_init(app, "SETTINGS_MASTER_KEY guard", lambda: _require_settings_master_key_if_needed(app))
 
+    # ============================================================
+    # Models hub + seed + payments bootstrap
+    # ============================================================
     auto_tables = _should_auto_create_tables(env)
 
     def _models_hub():
-        # Si tu init_models acepta auto_create_tables, esto funcionaría,
-        # pero como te dio error, lo llamamos solo con args compatibles.
         out = init_models(app, create_admin=True, log_loaded_models=True)
-        # si querés create_all rápido sin migraciones:
+
+        # create_all SOLO si lo pedís explícitamente en local
         if auto_tables:
-            with app.app_context():
-                db.create_all()
-                app.logger.info("✅ db.create_all() OK (AUTO_CREATE_TABLES=1)")
+            db.create_all()
+            app.logger.info("✅ db.create_all() OK (AUTO_CREATE_TABLES=1)")
+
+        # ✅ Mejora 10: bootstrap de PaymentProviders cuando SEED=1 (sin habilitar)
+        if _bool_env("SEED", False):
+            try:
+                from app.models.payment_provider import PaymentProviderService  # type: ignore
+                created, total = PaymentProviderService.bootstrap_defaults()
+                app.logger.info("💳 Payment providers bootstrap: %s creados / %s total", created, total)
+            except Exception:
+                app.logger.exception("❌ Error bootstrapping payment providers")
+
         return out
 
     _critical_init(app, "Models hub", _models_hub)
 
-    # Requests
+    # ============================================================
+    # Request hooks (CSRF + headers)
+    # ============================================================
     @app.before_request
     def _before_request():
         try:
@@ -476,12 +409,12 @@ def create_app() -> Flask:
         except Exception:
             pass
 
+        # CSRF gate mutadores
         if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
-            p = request.path or ""
-            if p != "/health" and not p.startswith("/webhook"):
-                if not _csrf_ok():
-                    return _resp_error(app, 400, "csrf_failed", "Solicitud inválida. Recargá la página e intentá nuevamente.")
+            if not _csrf_ok():
+                return _resp_error(app, 400, "csrf_failed", "Solicitud inválida. Recargá la página e intentá nuevamente.")
 
+        # No-cache en admin (evita pantallas viejas)
         if _bool_env("ADMIN_NO_CACHE", True) and (request.path or "").startswith("/admin"):
             try:
                 request._admin_no_cache = True  # type: ignore[attr-defined]
@@ -490,6 +423,7 @@ def create_app() -> Flask:
 
     @app.after_request
     def _after_request(resp):
+        # no-cache admin
         try:
             if getattr(request, "_admin_no_cache", False):
                 resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
@@ -497,12 +431,10 @@ def create_app() -> Flask:
         except Exception:
             pass
 
-        try:
-            resp.headers.setdefault("X-Content-Type-Options", "nosniff")
-            resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
-        except Exception:
-            pass
-
+        # hardening headers (sin romper)
+        resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+        resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
         return resp
 
     # Template globals
@@ -514,8 +446,8 @@ def create_app() -> Flask:
             "is_logged_in": bool(u),
             "is_admin": bool(getattr(u, "is_admin", False)) if u else bool(session.get("is_admin")),
             "APP_NAME": app.config.get("APP_NAME", "Skyline Store"),
+            "APP_URL": app.config.get("APP_URL", ""),
             "ENV": app.config.get("ENV"),
-            "CURRENCY": app.config.get("CURRENCY", "UYU"),
             "csrf_token": session.get("csrf_token", ""),
         }
 
@@ -528,12 +460,13 @@ def create_app() -> Flask:
         registered[:] = sorted(app.blueprints.keys())
         return True
 
+    # estricto opcional (si querés que falle rápido cuando falta una ruta)
     if _bool_env("ROUTES_STRICT", False):
         _critical_init(app, "Register Blueprints", _register_all_routes)
     else:
         _safe_init(app, "Register Blueprints", _register_all_routes)
 
-    # Health + errors
+    # Health
     def _db_check() -> Tuple[bool, str]:
         if not _bool_env("HEALTH_DB_CHECK", False):
             return True, "skipped"
@@ -556,6 +489,7 @@ def create_app() -> Flask:
             "ts": int(time.time()),
         }
 
+    # Error handlers
     @app.errorhandler(404)
     def not_found(_e):
         return _resp_error(app, 404, "not_found", f"No encontrado: {request.path}")
@@ -565,17 +499,11 @@ def create_app() -> Flask:
         app.logger.exception("🔥 Error 500: %s", e)
         return _resp_error(app, 500, "server_error", "Error interno del servidor.")
 
-    # CLI
+    # CLI útiles
     @app.cli.command("create-admin")
     def cli_create_admin():
         out = create_admin_if_missing(app)
         print(out)
-
-    @app.cli.command("create-tables")
-    def cli_create_tables():
-        with app.app_context():
-            db.create_all()
-            print("✅ Tablas creadas")
 
     @app.cli.command("seed")
     def cli_seed():
@@ -585,4 +513,4 @@ def create_app() -> Flask:
     return app
 
 
-__all__ = ["create_app", "db", "load_payments", "save_payments"]
+__all__ = ["create_app", "db"]

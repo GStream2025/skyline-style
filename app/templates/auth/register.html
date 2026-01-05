@@ -3,270 +3,414 @@
 
 {% block extra_head %}
 <style>
-/* =========================
- AUTH — Marketplace Premium
-========================= */
+/* =========================================================
+   SKYLINE STORE — REGISTER
+   ENTERPRISE / MARKETPLACE GRADE
+   Inspiración UX: MercadoLibre · Temu · Amazon
+========================================================= */
+
+/* ---------- Variables ---------- */
+:root{
+  --ink:#0b1220;
+  --muted:rgba(11,18,32,.62);
+  --soft:rgba(2,6,23,.04);
+  --stroke:rgba(15,23,42,.12);
+  --shadow:0 28px 70px rgba(2,6,23,.18);
+  --ease:cubic-bezier(.2,.8,.2,1);
+}
+
+/* ---------- Layout ---------- */
 .auth-wrap{
-  min-height: calc(100vh - 180px);
+  min-height:calc(100vh - 140px);
+  padding:32px 18px;
   display:grid;
   place-items:center;
-  padding: 24px 18px;
-}
-.auth-card{
-  width:100%;
-  max-width: 980px;
-  display:grid;
-  grid-template-columns: 1.1fr .9fr;
-  gap:18px;
-}
-@media (max-width: 900px){
-  .auth-card{grid-template-columns: 1fr}
-}
-.auth-left{
   background:
-    radial-gradient(420px 260px at 20% 10%, rgba(47,123,255,.18), transparent 60%),
-    radial-gradient(420px 260px at 90% 20%, rgba(255,181,71,.20), transparent 60%),
-    linear-gradient(180deg, rgba(255,255,255,.96), rgba(255,255,255,.86));
-  border:1px solid var(--stroke);
-  border-radius: 22px;
-  padding: 26px;
-  box-shadow: var(--shadow2);
+    radial-gradient(820px 460px at 12% 0%, rgba(47,123,255,.10), transparent 60%),
+    radial-gradient(820px 460px at 88% 12%, rgba(255,181,71,.12), transparent 60%);
 }
-.auth-brand{display:flex; align-items:center; gap:12px;}
-.auth-mark{
-  width:38px;height:28px;border-radius:12px;
-  background: var(--grad);
-  box-shadow: 0 12px 22px rgba(2,6,23,.16);
-}
-.auth-title{font-weight: 950; letter-spacing:-.4px;}
-.auth-sub{font-weight:700; color: rgba(11,18,32,.62); font-size:.92rem;}
-.auth-left h1{
-  margin: 16px 0 0;
-  font-weight: 950;
-  letter-spacing:-.6px;
-  font-size: clamp(1.8rem, 4vw, 2.4rem);
-  color: rgba(11,18,32,.95);
-}
-.auth-left p{
-  margin-top:10px;
-  max-width: 46ch;
-  color: rgba(11,18,32,.62);
-  font-weight: 650;
-}
-.auth-benefits{margin-top:16px; display:grid; gap:10px;}
-.benefit{
-  display:flex; gap:12px; align-items:flex-start;
-  padding:12px;
-  border-radius:16px;
-  background: rgba(255,255,255,.80);
-  border:1px solid var(--stroke);
-}
-.benefit .dot{
-  width:12px;height:12px;border-radius:99px;
-  background: var(--grad);
-  margin-top:6px;
-}
-.benefit b{display:block; font-weight:900;}
-.benefit span{display:block; font-weight:650; color: rgba(11,18,32,.60); font-size:.92rem;}
 
-/* ===== Right / Form ===== */
-.auth-right{
+.shell{
+  width:100%;
+  max-width:1200px;
+  display:grid;
+  grid-template-columns:1.05fr .95fr;
+  gap:20px;
+}
+@media(max-width:980px){
+  .shell{grid-template-columns:1fr}
+}
+
+.card{
   background:#fff;
   border:1px solid var(--stroke);
-  border-radius: 22px;
-  padding: 26px;
-  box-shadow: var(--shadow2);
-}
-.auth-head{
-  display:flex; align-items:center; justify-content:space-between; gap:12px;
-}
-.auth-head h2{margin:0; font-weight: 950; letter-spacing:-.4px;}
-.secure{
-  display:inline-flex; align-items:center; gap:8px;
-  padding: 8px 10px;
-  border-radius:999px;
-  background: rgba(47,123,255,.10);
-  border:1px solid rgba(47,123,255,.20);
-  font-weight:800;
-  font-size:.82rem;
+  border-radius:28px;
+  box-shadow:var(--shadow);
+  overflow:hidden;
 }
 
+/* ---------- LEFT (Brand / Trust) ---------- */
+.left{
+  padding:34px;
+  background:
+    radial-gradient(600px 360px at 18% 8%, rgba(47,123,255,.16), transparent 60%),
+    radial-gradient(600px 360px at 90% 12%, rgba(255,181,71,.18), transparent 60%),
+    linear-gradient(180deg, rgba(255,255,255,.97), rgba(255,255,255,.92));
+}
+
+.brand{
+  display:flex;gap:14px;align-items:center;
+}
+.logo{
+  width:48px;height:36px;border-radius:18px;
+  background:var(--grad);
+  box-shadow:0 16px 34px rgba(2,6,23,.22);
+}
+.brand b{
+  font-weight:1000;
+  letter-spacing:-.4px;
+}
+.brand span{
+  display:block;
+  font-weight:800;
+  font-size:.9rem;
+  color:rgba(11,18,32,.55);
+}
+
+.left h1{
+  margin-top:20px;
+  font-size:clamp(2.2rem,4.4vw,3.1rem);
+  font-weight:1000;
+  letter-spacing:-.9px;
+  line-height:1.04;
+  color:var(--ink);
+}
+.left p{
+  margin-top:14px;
+  max-width:56ch;
+  color:var(--muted);
+  font-weight:750;
+  font-size:1.04rem;
+}
+
+/* Trust signals */
+.trust{
+  margin-top:18px;
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+}
+.trust span{
+  padding:10px 14px;
+  border-radius:999px;
+  background:var(--soft);
+  border:1px solid var(--stroke);
+  font-weight:900;
+  font-size:.86rem;
+  color:rgba(11,18,32,.75);
+}
+
+/* ---------- RIGHT (Form) ---------- */
+.right{
+  padding:34px;
+}
+
+/* Steps */
+.steps{
+  display:flex;
+  gap:10px;
+  margin-bottom:16px;
+}
+.step{
+  flex:1;
+  padding:10px;
+  border-radius:14px;
+  background:var(--soft);
+  border:1px solid var(--stroke);
+  text-align:center;
+  font-weight:900;
+  font-size:.85rem;
+  color:rgba(11,18,32,.65);
+}
+.step.active{
+  background:rgba(47,123,255,.12);
+  border-color:rgba(47,123,255,.35);
+  color:var(--ink);
+}
+
+/* Flash */
 .flash{
   margin-top:12px;
-  padding:10px 12px;
-  border-radius:14px;
+  padding:12px 14px;
+  border-radius:16px;
   border:1px solid var(--stroke);
-  font-weight:800;
-  font-size:.92rem;
-  background: rgba(2,6,23,.03);
+  font-weight:850;
+  background:var(--soft);
 }
-.flash.error{background: rgba(255,0,0,.06); border-color: rgba(255,0,0,.14);}
-.flash.warning{background: rgba(255,181,71,.10); border-color: rgba(255,181,71,.18);}
-.flash.success{background: rgba(34,197,94,.10); border-color: rgba(34,197,94,.18);}
-.flash.info{background: rgba(47,123,255,.08); border-color: rgba(47,123,255,.16);}
+.flash.error{background:rgba(255,0,0,.06);border-color:rgba(255,0,0,.16)}
+.flash.warning{background:rgba(255,181,71,.12);border-color:rgba(255,181,71,.22)}
+.flash.success{background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.22)}
+.flash.info{background:rgba(47,123,255,.10);border-color:rgba(47,123,255,.20)}
 
-.form{margin-top:16px; display:grid; gap:14px;}
+/* Form */
+.form{
+  margin-top:14px;
+  display:grid;
+  gap:14px;
+}
+
+.grid2{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
+}
+@media(max-width:560px){
+  .grid2{grid-template-columns:1fr}
+}
+
 .field label{
-  display:block; font-size:.8rem; font-weight:800;
-  color: rgba(11,18,32,.62); margin-bottom:6px;
+  display:flex;
+  justify-content:space-between;
+  font-weight:900;
+  font-size:.82rem;
+  color:rgba(11,18,32,.60);
+  margin-bottom:6px;
 }
-.field input{
+
+.input{
   width:100%;
-  padding: 14px 14px;
-  border-radius: 14px;
+  padding:15px 15px;
+  border-radius:16px;
   border:1px solid var(--stroke);
-  font-weight:700;
-  font-size:.95rem;
+  font-weight:760;
+  font-size:1rem;
 }
-.field input:focus{
+.input:focus{
   outline:none;
-  border-color: rgba(47,123,255,.35);
-  box-shadow: 0 0 0 4px rgba(47,123,255,.14);
+  border-color:rgba(47,123,255,.35);
+  box-shadow:0 0 0 4px rgba(47,123,255,.14);
 }
+.input.error{
+  border-color:rgba(255,0,0,.35);
+  box-shadow:0 0 0 4px rgba(255,0,0,.10);
+}
+
+/* Password */
 .pass-wrap{position:relative}
 .pass-toggle{
-  position:absolute; right:10px; top:50%;
+  position:absolute;
+  right:10px;
+  top:50%;
   transform:translateY(-50%);
-  border:0;
-  background: rgba(255,255,255,.85);
-  border-radius:10px;
+  border:1px solid var(--stroke);
+  background:#fff;
+  border-radius:12px;
   padding:6px 10px;
   cursor:pointer;
   font-weight:900;
 }
+
 .meter{
-  height:6px; border-radius:999px;
-  background: #eef2ff; overflow:hidden;
+  height:7px;
+  border-radius:999px;
+  background:rgba(47,123,255,.10);
+  overflow:hidden;
   border:1px solid var(--stroke);
+  margin-top:8px;
 }
-.meter > span{
-  display:block; height:100%;
+.meter span{
+  display:block;
+  height:100%;
   width:0%;
-  background: var(--grad);
-  transition: width .2s var(--ease);
+  background:var(--grad);
+  transition:width .2s var(--ease);
 }
+
 .rules{
-  display:grid; gap:4px;
-  font-size:.78rem;
-  color: rgba(11,18,32,.58);
+  font-size:.8rem;
+  color:rgba(11,18,32,.55);
+  font-weight:740;
+  display:grid;
+  gap:4px;
 }
-.submit{
-  margin-top:6px;
-  width:100%;
-  padding: 14px;
-  border-radius: 16px;
-  background: var(--grad);
-  color:#fff;
-  border:0;
-  font-weight:950;
-  cursor:pointer;
-  box-shadow: 0 16px 30px rgba(2,6,23,.16);
+
+/* Affiliate */
+.aff-box{
+  margin-top:12px;
+  border-radius:20px;
+  border:1px solid var(--stroke);
+  background:var(--soft);
+  overflow:hidden;
 }
-.submit:active{transform:translateY(1px)}
-.auth-links{
-  margin-top:10px;
+.aff-head{
+  padding:14px;
   display:flex;
   justify-content:space-between;
-  font-size:.9rem;
-  font-weight:800;
+  align-items:center;
+  gap:12px;
 }
-.auth-links a{text-decoration:none}
+.aff-head b{
+  font-weight:1000;
+}
+.switch{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+.switch input{display:none}
+.toggle{
+  width:56px;height:30px;
+  border-radius:999px;
+  border:1px solid var(--stroke);
+  background:#fff;
+  position:relative;
+  cursor:pointer;
+}
+.toggle::after{
+  content:"";
+  width:24px;height:24px;
+  border-radius:99px;
+  background:var(--grad);
+  position:absolute;
+  top:50%;
+  left:3px;
+  transform:translateY(-50%);
+  transition:left .2s var(--ease);
+}
+.switch input:checked + .toggle::after{
+  left:29px;
+}
+
+.aff-body{
+  display:none;
+  padding:14px;
+  border-top:1px solid var(--stroke);
+}
+.aff-body.show{display:block}
+
+/* Submit */
+.submit{
+  margin-top:8px;
+  padding:16px;
+  border-radius:18px;
+  background:var(--grad);
+  color:#fff;
+  border:0;
+  font-weight:1000;
+  font-size:1.05rem;
+  box-shadow:0 20px 40px rgba(2,6,23,.22);
+  cursor:pointer;
+}
+.submit[disabled]{opacity:.85}
+
+/* Footer */
+.footer{
+  margin-top:12px;
+  font-size:.82rem;
+  color:rgba(11,18,32,.55);
+  line-height:1.35;
+}
+.footer a{font-weight:900;text-decoration:none}
 </style>
 {% endblock %}
 
 {% block content %}
 <section class="auth-wrap">
-  <div class="auth-card">
+  <div class="shell">
 
     <!-- LEFT -->
-    <div class="auth-left">
-      <div class="auth-brand">
-        <span class="auth-mark"></span>
+    <div class="card left">
+      <div class="brand">
+        <div class="logo"></div>
         <div>
-          <div class="auth-title">Skyline Store</div>
-          <div class="auth-sub">Marketplace premium</div>
+          <b>Skyline Store</b>
+          <span>Marketplace profesional</span>
         </div>
       </div>
 
       <h1>Creá tu cuenta</h1>
       <p>
-        Comprá más rápido, guardá pedidos y accedé a ofertas exclusivas
-        en un solo lugar.
+        Accedé a una plataforma profesional para comprar, gestionar pedidos
+        y participar de nuestro programa oficial de afiliados.
       </p>
 
-      <div class="auth-benefits">
-        <div class="benefit">
-          <span class="dot"></span>
-          <div><b>Checkout rápido</b><span>Menos pasos, más velocidad.</span></div>
-        </div>
-        <div class="benefit">
-          <span class="dot"></span>
-          <div><b>Seguimiento</b><span>Control total de tus compras.</span></div>
-        </div>
-        <div class="benefit">
-          <span class="dot"></span>
-          <div><b>Ofertas exclusivas</b><span>Promos solo para usuarios.</span></div>
-        </div>
+      <div class="trust">
+        <span>✔ Cuenta protegida</span>
+        <span>✔ Verificación por email</span>
+        <span>✔ Datos cifrados</span>
+        <span>✔ Soporte real</span>
       </div>
     </div>
 
     <!-- RIGHT -->
-    <div class="auth-right">
-      <div class="auth-head">
-        <h2>Crear cuenta</h2>
-        <span class="secure">🔒 Seguro</span>
+    <div class="card right">
+      <div class="steps">
+        <div class="step active">Cuenta</div>
+        <div class="step">Verificación</div>
+        <div class="step">Listo</div>
       </div>
 
-      {# FLASH MESSAGES #}
       {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-          {% for category, message in messages %}
-            <div class="flash {{ category|e }}">{{ message }}</div>
-          {% endfor %}
-        {% endif %}
+        {% for c,m in messages %}
+          <div class="flash {{ c }}">{{ m }}</div>
+        {% endfor %}
       {% endwith %}
 
       <form method="post" action="{{ url_for('auth.register') }}" class="form" id="registerForm">
-        {# CSRF token (CRÍTICO) #}
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-
+        <input type="hidden" name="nonce" value="{{ nonce }}">
         {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
 
-        <div class="field">
-          <label>Nombre (opcional)</label>
-          <input type="text" name="name" maxlength="120"
-                 value="{{ request.form.get('name','') if request.method=='POST' else '' }}"
-                 placeholder="Tu nombre">
+        <div class="grid2">
+          <input class="input" type="text" name="name" placeholder="Nombre (opcional)">
+          <input class="input" type="email" name="email" required placeholder="Correo electrónico">
         </div>
 
-        <div class="field">
-          <label>Correo electrónico</label>
-          <input type="email" name="email" required autocomplete="email"
-                 value="{{ request.form.get('email','') if request.method=='POST' else '' }}"
-                 placeholder="tu@email.com">
-        </div>
-
-        <div class="field">
-          <label>Contraseña</label>
-          <div class="pass-wrap">
-            <input type="password" name="password" id="password" required minlength="8"
-                   autocomplete="new-password"
-                   placeholder="Mínimo 8 caracteres">
-            <button type="button" class="pass-toggle" id="togglePass" aria-label="Mostrar contraseña">👁</button>
+        <div class="grid2">
+          <div>
+            <div class="pass-wrap">
+              <input class="input" type="password" name="password" id="password" required minlength="8" placeholder="Contraseña">
+              <button type="button" class="pass-toggle" id="togglePass">👁</button>
+            </div>
+            <div class="meter"><span id="meter"></span></div>
+            <div class="rules">
+              <span>• 8+ caracteres</span>
+              <span>• Letras y números</span>
+              <span>• Mayúscula recomendada</span>
+            </div>
           </div>
-          <div class="meter"><span id="meter"></span></div>
-          <div class="rules">
-            <span>• 8+ caracteres</span>
-            <span>• Letras y números</span>
-            <span>• 1 mayúscula (recomendado)</span>
+
+          <div>
+            <div class="pass-wrap">
+              <input class="input" type="password" id="password2" required minlength="8" placeholder="Confirmar contraseña">
+              <button type="button" class="pass-toggle" id="togglePass2">👁</button>
+            </div>
+            <div class="rules" id="matchHint">• Debe coincidir</div>
           </div>
         </div>
 
-        <button type="submit" class="submit">Crear cuenta</button>
+        <!-- Affiliate -->
+        <div class="aff-box">
+          <div class="aff-head">
+            <b>Programa de Afiliados</b>
+            <label class="switch">
+              <input type="checkbox" name="want_affiliate" id="wantAffiliate">
+              <span class="toggle"></span>
+            </label>
+          </div>
 
-        <div class="auth-links">
-          <a href="{{ url_for('auth.login') }}">Ya tengo cuenta</a>
-          <a href="{{ url_for('shop.shop') }}">Seguir como invitado</a>
+          <div class="aff-body" id="affBody">
+            <input class="input" type="text" name="affiliate_display_name" placeholder="Nombre público">
+            <input class="input" type="text" name="affiliate_instagram" placeholder="Instagram / TikTok / Web">
+          </div>
+        </div>
+
+        <button class="submit" id="submitBtn">Crear cuenta</button>
+
+        <div class="footer">
+          Al crear tu cuenta aceptás los <a href="#">Términos</a> y la
+          <a href="#">Política de privacidad</a>.  
+          Nunca compartimos tus datos.
         </div>
       </form>
     </div>
@@ -276,42 +420,47 @@
 
 <script>
 (function(){
-  const pass = document.getElementById("password");
-  const meter = document.getElementById("meter");
-  const toggle = document.getElementById("togglePass");
-  const form = document.getElementById("registerForm");
+  const pass=document.getElementById("password");
+  const pass2=document.getElementById("password2");
+  const meter=document.getElementById("meter");
+  const hint=document.getElementById("matchHint");
+  const toggle=document.getElementById("togglePass");
+  const toggle2=document.getElementById("togglePass2");
+  const aff=document.getElementById("wantAffiliate");
+  const body=document.getElementById("affBody");
+  const btn=document.getElementById("submitBtn");
 
   function score(v){
-    let s = 0;
-    if(v.length >= 8) s += 40;
-    if(/[0-9]/.test(v) && /[a-zA-Z]/.test(v)) s += 35;
-    if(/[A-Z]/.test(v)) s += 25;
-    return Math.min(100, s);
+    let s=0;
+    if(v.length>=8)s+=40;
+    if(/[a-zA-Z]/.test(v)&&/[0-9]/.test(v))s+=35;
+    if(/[A-Z]/.test(v))s+=25;
+    return Math.min(100,s);
   }
 
   if(pass){
-    pass.addEventListener("input", () => {
-      meter.style.width = score(pass.value) + "%";
+    pass.addEventListener("input",()=>{
+      meter.style.width=score(pass.value)+"%";
     });
+  }
+  if(pass2){
+    pass2.addEventListener("input",()=>{
+      const ok=pass.value===pass2.value;
+      hint.textContent=ok?"• Coincide ✅":"• Debe coincidir";
+      pass2.classList.toggle("error",!ok&&pass2.value.length>0);
+    });
+  }
+  if(toggle)toggle.onclick=()=>pass.type=pass.type==="password"?"text":"password";
+  if(toggle2)toggle2.onclick=()=>pass2.type=pass2.type==="password"?"text":"password";
+
+  if(aff){
+    aff.onchange=()=>body.classList.toggle("show",aff.checked);
   }
 
-  if(toggle && pass){
-    toggle.addEventListener("click", () => {
-      pass.type = pass.type === "password" ? "text" : "password";
-    });
-  }
-
-  // evita doble submit accidental
-  if(form){
-    form.addEventListener("submit", () => {
-      const btn = form.querySelector("button[type='submit']");
-      if(btn){
-        btn.disabled = true;
-        btn.style.opacity = "0.85";
-        btn.textContent = "Creando...";
-      }
-    });
-  }
+  document.getElementById("registerForm").addEventListener("submit",()=>{
+    btn.disabled=true;
+    btn.textContent="Creando cuenta…";
+  });
 })();
 </script>
 {% endblock %}

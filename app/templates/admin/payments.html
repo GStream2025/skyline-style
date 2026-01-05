@@ -1,87 +1,191 @@
-{# app/templates/admin/payments.html — Pagos ULTRA FINAL PRO (sin fallos) #}
+{# app/templates/admin/payments.html — Skyline Admin Payments (ULTRA PRO / FINAL / NO BREAK) #}
 {% extends "admin/base_admin.html" %}
 {% block title %}Pagos · Skyline Admin{% endblock %}
 
 {% block extra_head %}
 <style>
-  /* ===== Payments ULTRA (Admin) ===== */
-  .pay-head{
-    display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;
-    margin-bottom:12px;
+  /* =========================================================
+    Skyline Admin · Payments (ULTRA PRO)
+    - Responsive + accesible
+    - Estados: ready / needs-config / disabled
+    - Validación inline + toast
+    - UI moderna tipo marketplace
+  ========================================================= */
+
+  :root{
+    --p-bg: rgba(255,255,255,.05);
+    --p-bd: rgba(148,163,184,.16);
+    --p-bd2: rgba(148,163,184,.22);
+    --p-tx: rgba(226,232,240,.92);
+    --p-muted: rgba(226,232,240,.72);
+    --p-shadow: 0 16px 40px rgba(0,0,0,.18);
+    --p-r: 18px;
+    --p-r2: 14px;
+
+    --ok: rgba(34,197,94,.90);
+    --ok-bg: rgba(34,197,94,.10);
+    --warn: rgba(245,158,11,.92);
+    --warn-bg: rgba(245,158,11,.10);
+    --bad: rgba(239,68,68,.92);
+    --bad-bg: rgba(239,68,68,.10);
+    --info: rgba(56,189,248,.92);
+    --info-bg: rgba(56,189,248,.10);
+
+    --focus: 0 0 0 4px rgba(56,189,248,.16);
   }
-  .pay-title{
-    margin:.2rem 0 0;font-weight:1000;letter-spacing:-.5px;
-  }
-  .pay-sub{
-    margin:.45rem 0 0;max-width:70ch
+  :root[data-theme="light"]{
+    --p-bg: rgba(0,0,0,.02);
+    --p-bd: rgba(2,6,23,.10);
+    --p-bd2: rgba(2,6,23,.14);
+    --p-tx: rgba(2,6,23,.92);
+    --p-muted: rgba(2,6,23,.68);
+    --p-shadow: 0 14px 30px rgba(0,0,0,.08);
+
+    --ok-bg: rgba(34,197,94,.08);
+    --warn-bg: rgba(245,158,11,.08);
+    --bad-bg: rgba(239,68,68,.08);
+    --info-bg: rgba(37,99,235,.06);
+    --focus: 0 0 0 4px rgba(37,99,235,.14);
   }
 
+  /* ---- Layout header ---- */
+  .pay-wrap{ display:block; }
+  .pay-head{
+    display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;
+    margin-bottom:14px;
+  }
+  .pay-title{
+    margin:.2rem 0 0;
+    font-weight:1000;
+    letter-spacing:-.6px;
+    line-height:1.1;
+  }
+  .pay-sub{ margin:.45rem 0 0; max-width:80ch; color: var(--p-muted); line-height:1.55; }
+
+  .pay-tools{
+    display:flex;align-items:center;gap:10px;flex-wrap:wrap; justify-content:flex-end;
+  }
+  .mini{
+    padding:8px 10px;border-radius:12px;
+    border:1px dashed var(--p-bd2);
+    background: rgba(255,255,255,.04);
+    color: var(--p-muted);
+    opacity:.95;
+    font-size:.92rem;
+  }
+  :root[data-theme="light"] .mini{ background: rgba(0,0,0,.02); }
+
+  .search{
+    display:flex;align-items:center;gap:8px;
+    border:1px solid var(--p-bd);
+    background: rgba(255,255,255,.04);
+    border-radius: 999px;
+    padding: 8px 12px;
+    min-width: 260px;
+  }
+  :root[data-theme="light"] .search{ background: rgba(0,0,0,.02); }
+  .search input{
+    width:100%;
+    border:0; outline:0; background: transparent;
+    color: var(--p-tx);
+    font-weight:800;
+  }
+  .search input::placeholder{ color: var(--p-muted); font-weight:800; opacity:.8; }
+
+  /* ---- Grid + cards ---- */
   .pay-grid{
     display:grid;
     grid-template-columns: 1fr;
     gap:14px;
   }
-  @media(min-width:980px){
-    .pay-grid{ grid-template-columns: 1fr 1fr; }
-  }
+  @media(min-width:980px){ .pay-grid{ grid-template-columns: 1fr 1fr; } }
 
   .card{
-    border:1px solid rgba(148,163,184,.16);
-    border-radius:18px;
+    border:1px solid var(--p-bd);
+    border-radius: var(--p-r);
     padding:14px;
-    background:rgba(255,255,255,.05);
-    box-shadow: 0 16px 40px rgba(0,0,0,.18);
+    background: var(--p-bg);
+    box-shadow: var(--p-shadow);
+    position: relative;
+    overflow:hidden;
   }
-  :root[data-theme="light"] .card{
-    background: rgba(0,0,0,.02);
-    box-shadow: 0 14px 30px rgba(0,0,0,.08);
+  .card::before{
+    content:"";
+    position:absolute; inset:-2px;
+    background: radial-gradient(900px 260px at 15% -10%, rgba(56,189,248,.18), transparent 55%),
+                radial-gradient(900px 260px at 90% 0%, rgba(34,197,94,.14), transparent 55%);
+    opacity:.55;
+    pointer-events:none;
   }
+  :root[data-theme="light"] .card::before{
+    opacity:.35;
+    background: radial-gradient(900px 260px at 15% -10%, rgba(37,99,235,.12), transparent 55%),
+                radial-gradient(900px 260px at 90% 0%, rgba(34,197,94,.10), transparent 55%);
+  }
+
+  .card-inner{ position:relative; z-index:1; }
 
   .card-top{
     display:flex;justify-content:space-between;align-items:flex-start;gap:10px;
-    margin-bottom:8px;
+    margin-bottom:10px;
   }
   .card-title{
     display:flex;align-items:center;gap:10px;
     font-weight:1000;letter-spacing:-.3px;
+    color: var(--p-tx);
   }
   .card-ic{
-    width:34px;height:34px;border-radius:12px;
+    width:36px;height:36px;border-radius:12px;
     display:grid;place-items:center;
     background: rgba(255,255,255,.08);
-    border:1px solid rgba(148,163,184,.18);
+    border:1px solid var(--p-bd2);
   }
-  :root[data-theme="light"] .card-ic{
-    background: rgba(0,0,0,.04);
-    border-color: rgba(2,6,23,.10);
+  :root[data-theme="light"] .card-ic{ background: rgba(0,0,0,.03); }
+
+  .card-desc{ margin:0; color: var(--p-muted); line-height:1.55; }
+
+  /* ---- Status pill ---- */
+  .pill-row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:8px; }
+  .pill{
+    display:inline-flex;align-items:center;gap:8px;
+    border-radius:999px;
+    padding:6px 10px;
+    border:1px solid var(--p-bd2);
+    background: rgba(255,255,255,.04);
+    color: var(--p-muted);
+    font-weight:900;
+    font-size:.86rem;
+    user-select:none;
   }
+  .pill .dot{ width:10px;height:10px;border-radius:999px; background: rgba(148,163,184,.55); }
+  .pill.ok{ border-color: rgba(34,197,94,.35); background: var(--ok-bg); color: var(--p-tx); }
+  .pill.ok .dot{ background: var(--ok); }
+  .pill.warn{ border-color: rgba(245,158,11,.35); background: var(--warn-bg); color: var(--p-tx); }
+  .pill.warn .dot{ background: var(--warn); }
+  .pill.bad{ border-color: rgba(239,68,68,.35); background: var(--bad-bg); color: var(--p-tx); }
+  .pill.bad .dot{ background: var(--bad); }
 
-  .card-desc{ margin:0; opacity:.82; line-height:1.55; }
-
+  /* ---- Toggle ---- */
   .toggle{
     display:inline-flex;align-items:center;gap:10px;
     padding:8px 10px;
     border-radius:999px;
-    border:1px solid rgba(148,163,184,.18);
+    border:1px solid var(--p-bd2);
     background: rgba(255,255,255,.06);
-    font-weight:900;
+    font-weight:1000;
     white-space:nowrap;
+    color: var(--p-tx);
+    user-select:none;
   }
-  :root[data-theme="light"] .toggle{
-    background: rgba(0,0,0,.02);
-    border-color: rgba(2,6,23,.10);
-  }
+  :root[data-theme="light"] .toggle{ background: rgba(0,0,0,.02); }
 
-  .switch{
-    position:relative;width:46px;height:26px;flex:0 0 auto;
-    display:inline-block;
-  }
+  .switch{ position:relative;width:46px;height:26px;flex:0 0 auto; display:inline-block; }
   .switch input{ display:none; }
   .track{
     position:absolute;inset:0;border-radius:999px;
     background: rgba(148,163,184,.25);
     transition: all .18s ease;
-    border:1px solid rgba(148,163,184,.22);
+    border:1px solid var(--p-bd2);
   }
   .thumb{
     position:absolute;top:3px;left:3px;
@@ -96,258 +200,380 @@
   }
   .switch input:checked + .track .thumb{ left:23px; }
 
-  .fields{
-    display:grid;gap:10px;margin-top:10px;
+  /* ---- Form fields ---- */
+  .fields{ display:grid; gap:10px; margin-top:12px; }
+  .fields label{ font-weight:1000; color: var(--p-tx); }
+  .fields input, .fields textarea, .fields select{
+    width:100%;
+    border-radius: 14px;
+    border:1px solid var(--p-bd);
+    background: rgba(255,255,255,.03);
+    color: var(--p-tx);
+    padding: 10px 12px;
+    outline: none;
+    transition: box-shadow .15s ease, border-color .15s ease, transform .05s ease;
   }
+  :root[data-theme="light"] .fields input,
+  :root[data-theme="light"] .fields textarea,
+  :root[data-theme="light"] .fields select{ background: rgba(0,0,0,.02); }
+
+  .fields textarea{ min-height: 98px; resize: vertical; }
+  .fields input:focus, .fields textarea:focus, .fields select:focus{
+    border-color: rgba(56,189,248,.40);
+    box-shadow: var(--focus);
+  }
+
   .hint{
     font-size:.9rem;
-    opacity:.75;
-    margin-top:-6px;
+    color: var(--p-muted);
+    margin-top:6px;
+    line-height:1.45;
   }
+
   .invalid{
     border-color: rgba(239,68,68,.55) !important;
     box-shadow: 0 0 0 4px rgba(239,68,68,.14) !important;
   }
+
+  /* ---- Provider actions ---- */
+  .card-actions{
+    display:flex;gap:10px;flex-wrap:wrap;align-items:center;
+    margin-top:12px;
+  }
+  .btn-save-mini{
+    display:inline-flex;gap:8px;align-items:center;
+    border-radius: 12px;
+    border:1px solid var(--p-bd2);
+    background: rgba(255,255,255,.06);
+    padding: 9px 12px;
+    font-weight:1000;
+    color: var(--p-tx);
+    cursor:pointer;
+  }
+  .btn-save-mini:active{ transform: translateY(1px); }
+
+  .muted-line{ color: var(--p-muted); font-weight:900; font-size:.92rem; }
+
+  /* ---- Footer actions ---- */
+  .safe-note{
+    margin-top:12px;
+    border:1px solid rgba(56,189,248,.28);
+    background: var(--info-bg);
+    border-radius: 16px;
+    padding: 12px;
+    color: var(--p-tx);
+    opacity: .98;
+  }
+
   .actions{
     display:flex;gap:10px;flex-wrap:wrap;
     margin-top:14px;
     align-items:center;
   }
-  .mini{
-    padding:8px 10px;border-radius:12px;
-    border:1px dashed rgba(148,163,184,.28);
-    background: rgba(255,255,255,.04);
-    opacity:.9;
-    font-size:.92rem;
-  }
-  :root[data-theme="light"] .mini{
-    background: rgba(0,0,0,.02);
-    border-color: rgba(2,6,23,.12);
-  }
 
-  .safe-note{
-    margin-top:10px;
-    border:1px solid rgba(56,189,248,.28);
-    background: rgba(56,189,248,.08);
+  /* ---- Toast ---- */
+  .toast{
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    width: min(420px, calc(100vw - 32px));
     border-radius: 16px;
-    padding: 12px;
-    opacity: .92;
+    border:1px solid var(--p-bd2);
+    background: rgba(2,6,23,.82);
+    color: rgba(226,232,240,.96);
+    padding: 12px 12px;
+    box-shadow: 0 18px 55px rgba(0,0,0,.35);
+    display:none;
+    z-index: 9999;
+    backdrop-filter: blur(10px);
   }
-  :root[data-theme="light"] .safe-note{
-    background: rgba(37,99,235,.06);
-    border-color: rgba(37,99,235,.18);
+  :root[data-theme="light"] .toast{
+    background: rgba(255,255,255,.86);
+    color: rgba(2,6,23,.92);
+    box-shadow: 0 16px 44px rgba(0,0,0,.16);
   }
+  .toast.show{ display:block; }
+  .toast .trow{ display:flex; gap:10px; align-items:flex-start; }
+  .toast .ticon{ width:28px;height:28px;border-radius:10px; display:grid;place-items:center; flex:0 0 auto; border:1px solid var(--p-bd2); background: rgba(255,255,255,.04); }
+  .toast .ttitle{ font-weight:1000; margin:0; }
+  .toast .tmsg{ margin:2px 0 0; color: var(--p-muted); line-height:1.45; }
+  .toast .tx{ margin-left:auto; border:0; background:transparent; color: inherit; font-weight:1000; cursor:pointer; }
 
   .svg{ width:18px;height:18px; display:block; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="pay-head">
-  <div>
-    <h1 class="pay-title">Pagos</h1>
-    <p class="muted pay-sub">
-      Activá métodos de cobro y completá los datos. Esto se muestra en el checkout para que el cliente elija.
-    </p>
+<div class="pay-wrap">
+  <div class="pay-head">
+    <div>
+      <h1 class="pay-title">Pagos</h1>
+      <p class="pay-sub">
+        Activá métodos de cobro y completá los datos. El checkout mostrará solo lo que esté <b>Activo</b> y listo.
+      </p>
+      <div class="pill-row" aria-label="Resumen">
+        <span class="pill" id="pillCount"><span class="dot"></span> <span>0 activos</span></span>
+        <span class="pill ok" id="pillReady"><span class="dot"></span> <span>0 listos</span></span>
+        <span class="pill warn" id="pillNeeds"><span class="dot"></span> <span>0 incompletos</span></span>
+      </div>
+    </div>
+
+    <div class="pay-tools">
+      <div class="search" role="search" aria-label="Buscar método">
+        <span aria-hidden="true">🔎</span>
+        <input id="q" type="search" placeholder="Buscar: mp, paypal, wise, transferencia…" autocomplete="off">
+      </div>
+
+      <div class="mini" title="Regla de oro">
+        🔒 Pegá links públicos / instrucciones · No pegues tokens/secretos
+      </div>
+    </div>
   </div>
 
-  <div class="mini" title="Tip">
-    ✅ Activá solo lo que uses · 🔒 No pegues claves privadas/API keys acá
-  </div>
-</div>
+  {# Guardado rápido por proveedor via fetch (misma ruta) #}
+  <div class="pay-grid" id="grid">
 
-<form method="post" action="{{ url_for('admin.payments_save') }}" id="paymentsForm" novalidate>
-  <div class="pay-grid">
+    {% for p in providers %}
+    {% set code = p.code %}
+    {% set enabled = p.enabled %}
+    {% set ready = p.ready if p.ready is defined else false %}
+    {% set errors = p.errors if p.errors is defined else [] %}
+    {% set schema = p.schema if p.schema is defined else [] %}
 
-    <!-- MercadoPago UY -->
-    <section class="card">
-      <div class="card-top">
-        <div>
-          <div class="card-title">
-            <span class="card-ic" aria-hidden="true">
-              <svg class="svg" viewBox="0 0 24 24" fill="none">
-                <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Z" stroke="currentColor" stroke-width="2" opacity=".8"/>
-                <path d="M7.5 12c1.2-2.4 2.8-3.6 4.5-3.6S15.3 9.6 16.5 12c-1.2 2.4-2.8 3.6-4.5 3.6S8.7 14.4 7.5 12Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-              </svg>
-            </span>
-            MercadoPago Uruguay
+    <section class="card pay-card" data-code="{{ code }}" data-name="{{ (p.name or code) | lower }}">
+      <div class="card-inner">
+        <div class="card-top">
+          <div style="min-width:0">
+            <div class="card-title">
+              <span class="card-ic" aria-hidden="true">
+                <svg class="svg" viewBox="0 0 24 24" fill="none">
+                  <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Z" stroke="currentColor" stroke-width="2" opacity=".8"/>
+                  <path d="M7.5 12c1.2-2.4 2.8-3.6 4.5-3.6S15.3 9.6 16.5 12c-1.2 2.4-2.8 3.6-4.5 3.6S8.7 14.4 7.5 12Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" opacity=".9"/>
+                </svg>
+              </span>
+              <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                {{ p.name or code }}
+              </span>
+            </div>
+            <p class="card-desc">
+              Código: <b>{{ code }}</b>{% if p.country %} · País: <b>{{ p.country }}</b>{% endif %}{% if p.kind %} · Tipo: <b>{{ p.kind }}</b>{% endif %}
+            </p>
+
+            <div class="pill-row" aria-label="Estado del método">
+              {% if enabled and ready %}
+                <span class="pill ok"><span class="dot"></span> Listo para checkout</span>
+              {% elif enabled and not ready %}
+                <span class="pill warn"><span class="dot"></span> Activo pero incompleto</span>
+              {% else %}
+                <span class="pill"><span class="dot"></span> Desactivado</span>
+              {% endif %}
+              {% if errors and errors|length %}
+                <span class="pill bad" title="{{ errors|join(' | ') }}"><span class="dot"></span> {{ errors|length }} faltantes</span>
+              {% endif %}
+            </div>
           </div>
-          <p class="card-desc muted">
-            Pegá tu link de pago MP UY (mpago.la) o link de checkout.
-          </p>
+
+          <label class="toggle" title="Activar método">
+            <span>Activo</span>
+            <span class="switch">
+              <input type="checkbox" class="js-enabled" {% if enabled %}checked{% endif %}>
+              <span class="track"><span class="thumb"></span></span>
+            </span>
+          </label>
         </div>
 
-        <label class="toggle" title="Activar método">
-          <span>Activo</span>
-          <span class="switch">
-            <input type="checkbox" name="mp_uy_active" id="mp_uy_active" {% if data.mp_uy.active %}checked{% endif %}>
-            <span class="track"><span class="thumb"></span></span>
-          </span>
-        </label>
-      </div>
+        <form class="js-form" method="post" action="{{ url_for('admin_payments.admin_payments_save', code=code) }}" novalidate>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="enabled" value="0">
+          <input type="hidden" name="recommended" value="0">
 
-      <div class="fields">
-        <div>
-          <label for="mp_uy_link">Link MercadoPago UY</label>
-          <input id="mp_uy_link" name="mp_uy_link" value="{{ data.mp_uy.link or '' }}" placeholder="https://mpago.la/xxxxxx" autocomplete="off" inputmode="url">
-          <div class="hint muted">Recomendado: link público de pago (no claves).</div>
-        </div>
-        <div>
-          <label for="mp_uy_note">Nota (opcional)</label>
-          <input id="mp_uy_note" name="mp_uy_note" value="{{ data.mp_uy.note or '' }}" placeholder="Ej: Tarjeta UY / cuotas / QR..." autocomplete="off">
-        </div>
+          <div class="fields">
+
+            <div style="display:grid;gap:10px;grid-template-columns: 1fr; align-items:end;">
+              <div style="display:grid;gap:10px;grid-template-columns: 1fr 1fr;">
+                <div>
+                  <label>Orden</label>
+                  <input name="sort_order" value="{{ p.sort_order if p.sort_order is not none else 100 }}" inputmode="numeric" placeholder="10">
+                  <div class="hint">Menor = más arriba en checkout.</div>
+                </div>
+                <div>
+                  <label>Recomendado</label>
+                  <select name="recommended" class="js-recommended">
+                    <option value="0" {% if not p.recommended %}selected{% endif %}>No</option>
+                    <option value="1" {% if p.recommended %}selected{% endif %}>Sí</option>
+                  </select>
+                  <div class="hint">Solo si está <b>Activo</b>.</div>
+                </div>
+              </div>
+            </div>
+
+            <div style="display:grid;gap:10px;grid-template-columns:1fr 1fr;">
+              <div>
+                <label>Fee % (info)</label>
+                <input name="fee_percent" value="{{ p.fee_percent if p.fee_percent is not none else 0 }}" inputmode="numeric" placeholder="0">
+                <div class="hint">Solo informativo (no cobra).</div>
+              </div>
+              <div>
+                <label>ETA (min)</label>
+                <input name="eta_minutes" value="{{ p.eta_minutes if p.eta_minutes is not none else 0 }}" inputmode="numeric" placeholder="0">
+                <div class="hint">Tiempo de confirmación estimado.</div>
+              </div>
+            </div>
+
+            <div style="display:grid;gap:10px;grid-template-columns:1fr 1fr;">
+              <div>
+                <label>Mínimo</label>
+                <input name="min_amount" value="{{ p.min_amount if p.min_amount is not none else 0 }}" inputmode="numeric" placeholder="0">
+              </div>
+              <div>
+                <label>Máximo (0 = sin)</label>
+                <input name="max_amount" value="{{ p.max_amount if p.max_amount is not none else 0 }}" inputmode="numeric" placeholder="0">
+              </div>
+            </div>
+
+            <div>
+              <label>Notas (opcional)</label>
+              <input name="notes" value="{{ p.notes or '' }}" placeholder="Ej: cuotas, QR, horarios, condiciones..." autocomplete="off">
+              <div class="hint">Se muestra como ayuda en checkout (si lo querés).</div>
+            </div>
+
+            {% if schema and schema|length %}
+            <div style="border-top:1px solid var(--p-bd); padding-top:10px; margin-top:2px;">
+              <div class="muted-line">Configuración del método</div>
+              <div class="hint">Completá lo obligatorio. Lo sensible se guarda enmascarado en el admin.</div>
+            </div>
+
+            {% for f in schema %}
+              {% set k = f.key %}
+              {% set typ = (f.type or 'text') %}
+              {% set req = f.required %}
+              {% set val = '' %}
+              {% if p.config is defined and p.config %}
+                {% set val = p.config.get(k, '') %}
+              {% endif %}
+
+              <div>
+                <label for="{{ code }}__{{ k }}">
+                  {{ k }}{% if req %} <span class="pill bad" style="padding:2px 8px;font-size:.78rem;">obligatorio</span>{% endif %}
+                </label>
+
+                {% if typ == "bool" %}
+                  <select id="{{ code }}__{{ k }}" name="cfg__{{ k }}">
+                    <option value="0" {% if not val %}selected{% endif %}>No</option>
+                    <option value="1" {% if val %}selected{% endif %}>Sí</option>
+                  </select>
+                {% elif typ == "url" %}
+                  <input id="{{ code }}__{{ k }}" name="cfg__{{ k }}" value="{{ val or '' }}" placeholder="https://..." inputmode="url" autocomplete="off">
+                {% elif typ == "email" %}
+                  <input id="{{ code }}__{{ k }}" name="cfg__{{ k }}" value="{{ val or '' }}" placeholder="email@dominio.com" autocomplete="email">
+                {% elif typ == "int" %}
+                  <input id="{{ code }}__{{ k }}" name="cfg__{{ k }}" value="{{ val or '' }}" inputmode="numeric" placeholder="0">
+                {% else %}
+                  <input id="{{ code }}__{{ k }}" name="cfg__{{ k }}" value="{{ val or '' }}" placeholder="..." autocomplete="off">
+                {% endif %}
+
+                <div class="hint">
+                  Tipo: <b>{{ typ }}</b>{% if req %} · Requerido{% endif %}
+                </div>
+              </div>
+            {% endfor %}
+            {% else %}
+              <div class="hint" style="margin-top:8px">
+                Este método no tiene schema configurable (o falta exponerlo). Se guardará config vacía.
+              </div>
+            {% endif %}
+
+          </div>
+
+          <div class="card-actions">
+            <button type="submit" class="btn-save-mini js-save">
+              💾 Guardar
+            </button>
+            <span class="muted-line js-state">
+              {% if enabled and ready %}Listo ✅{% elif enabled %}Incompleto ⚠️{% else %}Desactivado{% endif %}
+            </span>
+            <span class="muted-line" style="margin-left:auto;opacity:.9">
+              Última actualización: {{ p.updated_at or '—' }}
+            </span>
+          </div>
+        </form>
       </div>
     </section>
-
-    <!-- MercadoPago AR -->
-    <section class="card">
-      <div class="card-top">
-        <div>
-          <div class="card-title">
-            <span class="card-ic" aria-hidden="true">
-              <svg class="svg" viewBox="0 0 24 24" fill="none">
-                <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Z" stroke="currentColor" stroke-width="2" opacity=".8"/>
-                <path d="M8 13c1.2-2 2.6-3 4-3s2.8 1 4 3c-1.2 2-2.6 3-4 3s-2.8-1-4-3Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-                <path d="M9.3 8.2 8 6.5M14.7 8.2 16 6.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity=".7"/>
-              </svg>
-            </span>
-            MercadoPago Argentina
-          </div>
-          <p class="card-desc muted">
-            Pegá tu link de pago MP AR (mpago.la) o link de checkout.
-          </p>
-        </div>
-
-        <label class="toggle" title="Activar método">
-          <span>Activo</span>
-          <span class="switch">
-            <input type="checkbox" name="mp_ar_active" id="mp_ar_active" {% if data.mp_ar.active %}checked{% endif %}>
-            <span class="track"><span class="thumb"></span></span>
-          </span>
-        </label>
-      </div>
-
-      <div class="fields">
-        <div>
-          <label for="mp_ar_link">Link MercadoPago AR</label>
-          <input id="mp_ar_link" name="mp_ar_link" value="{{ data.mp_ar.link or '' }}" placeholder="https://mpago.la/yyyyyy" autocomplete="off" inputmode="url">
-          <div class="hint muted">Si el método está activo, el link debería estar completo.</div>
-        </div>
-        <div>
-          <label for="mp_ar_note">Nota (opcional)</label>
-          <input id="mp_ar_note" name="mp_ar_note" value="{{ data.mp_ar.note or '' }}" placeholder="Ej: QR / promos / etc." autocomplete="off">
-        </div>
-      </div>
-    </section>
-
-    <!-- PayPal -->
-    <section class="card">
-      <div class="card-top">
-        <div>
-          <div class="card-title">
-            <span class="card-ic" aria-hidden="true">
-              <svg class="svg" viewBox="0 0 24 24" fill="none">
-                <path d="M7 20h7.2a5.2 5.2 0 0 0 0-10.4H9.6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                <path d="M9.6 9.6H8.4a5.2 5.2 0 1 0 0 10.4H7" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity=".75"/>
-              </svg>
-            </span>
-            PayPal
-          </div>
-          <p class="card-desc muted">
-            Usá PayPal.me o el email (se muestra al cliente).
-          </p>
-        </div>
-
-        <label class="toggle" title="Activar método">
-          <span>Activo</span>
-          <span class="switch">
-            <input type="checkbox" name="paypal_active" id="paypal_active" {% if data.paypal.active %}checked{% endif %}>
-            <span class="track"><span class="thumb"></span></span>
-          </span>
-        </label>
-      </div>
-
-      <div class="fields">
-        <div>
-          <label for="paypal_user">PayPal.me (usuario)</label>
-          <input id="paypal_user" name="paypal_user" value="{{ data.paypal.user or '' }}" placeholder="tuusuario (sin https://paypal.me/)" autocomplete="off">
-          <div class="hint muted">Ej: si tu link es paypal.me/juan, acá va <b>juan</b>.</div>
-        </div>
-        <div>
-          <label for="paypal_email">Email PayPal (opcional)</label>
-          <input id="paypal_email" name="paypal_email" value="{{ data.paypal.email or '' }}" placeholder="ventas@tuemail.com" autocomplete="email">
-        </div>
-      </div>
-    </section>
-
-    <!-- Transferencias -->
-    <section class="card">
-      <div class="card-top">
-        <div>
-          <div class="card-title">
-            <span class="card-ic" aria-hidden="true">
-              <svg class="svg" viewBox="0 0 24 24" fill="none">
-                <path d="M3 7h18M6 11h12M8 15h8M10 19h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              </svg>
-            </span>
-            Transferencias
-          </div>
-          <p class="card-desc muted">
-            Datos de cuenta (local/internacional). Se muestra tal cual al cliente.
-          </p>
-        </div>
-
-        <label class="toggle" title="Activar método">
-          <span>Activo</span>
-          <span class="switch">
-            <input type="checkbox" name="transfer_active" id="transfer_active" {% if data.transfer.active %}checked{% endif %}>
-            <span class="track"><span class="thumb"></span></span>
-          </span>
-        </label>
-      </div>
-
-      <div class="fields">
-        <div>
-          <label for="transfer_info">Información (Banco / Alias / IBAN / SWIFT / Wise)</label>
-          <textarea id="transfer_info" name="transfer_info" placeholder="Banco: ...&#10;Cuenta: ...&#10;Alias: ...&#10;IBAN/SWIFT/Wise: ...">{{ data.transfer.info or '' }}</textarea>
-          <div class="hint muted">Tip: separá por líneas para que quede perfecto en checkout.</div>
-        </div>
-      </div>
-    </section>
+    {% endfor %}
 
   </div>
 
   <div class="safe-note">
-    <b>Seguridad:</b> acá solo pegás <u>links públicos</u> y <u>datos de cobro</u>. No pegues tokens ni claves privadas.
+    <b>Seguridad:</b> pegá solo <u>links públicos</u> / <u>instrucciones</u>. Tokens, secrets y claves privadas van en Render (ENV) o en tu vault/Settings Master.
   </div>
 
   <div class="actions">
-    <button class="btn" type="submit">
-      <span class="ic" aria-hidden="true">💾</span> Guardar métodos
-    </button>
-    <a class="btn2" href="{{ url_for('shop.checkout') }}">
-      <span class="ic" aria-hidden="true">🔎</span> Ver checkout
+    <a class="btn2" href="{{ checkout_url if checkout_url is defined else url_for('main.home') }}">
+      🔎 Ver checkout
     </a>
-    <span class="muted" style="margin-left:auto">
-      Consejo: si activás un método, completá su link/datos.
+    <span class="muted-line" style="margin-left:auto">
+      Tip: si un método está Activo y “Incompleto”, no debería mostrarse en checkout.
     </span>
   </div>
-</form>
+</div>
 
+<div class="toast" id="toast" role="status" aria-live="polite">
+  <div class="trow">
+    <div class="ticon" id="toastIcon">✅</div>
+    <div style="min-width:0">
+      <p class="ttitle" id="toastTitle">Listo</p>
+      <p class="tmsg" id="toastMsg">Guardado</p>
+    </div>
+    <button class="tx" type="button" id="toastClose" aria-label="Cerrar">✕</button>
+  </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
 (() => {
-  const byId = (id) => document.getElementById(id);
+  const $ = (sel, root=document) => root.querySelector(sel);
+  const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
 
-  const rules = [
-    { active: "mp_uy_active", required: ["mp_uy_link"], url: ["mp_uy_link"] },
-    { active: "mp_ar_active", required: ["mp_ar_link"], url: ["mp_ar_link"] },
-    { active: "paypal_active", required: ["paypal_user","paypal_email"], anyOne: true },
-    { active: "transfer_active", required: ["transfer_info"] },
-  ];
+  const toast = $("#toast");
+  const toastIcon = $("#toastIcon");
+  const toastTitle = $("#toastTitle");
+  const toastMsg = $("#toastMsg");
+  const toastClose = $("#toastClose");
+  let toastTimer = null;
 
+  function showToast(kind, title, msg){
+    // kind: ok|warn|bad|info
+    const map = {
+      ok: { ic:"✅" },
+      warn: { ic:"⚠️" },
+      bad: { ic:"⛔" },
+      info: { ic:"ℹ️" },
+    };
+    const m = map[kind] || map.info;
+    toastIcon.textContent = m.ic;
+    toastTitle.textContent = title || "Info";
+    toastMsg.textContent = msg || "";
+    toast.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove("show"), 4200);
+  }
+
+  toastClose?.addEventListener("click", () => toast.classList.remove("show"));
+
+  // ===== Mejora #1: Search/filter =====
+  const q = $("#q");
+  q?.addEventListener("input", () => {
+    const needle = (q.value || "").trim().toLowerCase();
+    $$(".pay-card").forEach(card => {
+      const name = (card.getAttribute("data-name") || "");
+      const code = (card.getAttribute("data-code") || "");
+      const hit = !needle || name.includes(needle) || code.includes(needle);
+      card.style.display = hit ? "" : "none";
+    });
+  });
+
+  // ===== helpers validation =====
   function looksLikeUrl(v){
     if(!v) return false;
     try { new URL(v); return true; } catch(e) { return false; }
@@ -357,73 +583,215 @@
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
   }
 
-  function clearInvalid(ids){
-    ids.forEach(id => {
-      const el = byId(id);
-      if(el) el.classList.remove("invalid");
-    });
+  function clearInvalid(root){
+    $$(".invalid", root).forEach(el => el.classList.remove("invalid"));
+  }
+  function markInvalid(el){
+    el?.classList?.add("invalid");
   }
 
-  function markInvalid(ids){
-    ids.forEach(id => {
-      const el = byId(id);
-      if(el) el.classList.add("invalid");
+  // ===== Mejora #2: Summary pills (activos/listos/incompletos) =====
+  const pillCount = $("#pillCount span:last-child");
+  const pillReady = $("#pillReady span:last-child");
+  const pillNeeds = $("#pillNeeds span:last-child");
+
+  function recomputeSummary(){
+    let active = 0, ready = 0, needs = 0;
+    $$(".pay-card").forEach(card => {
+      const enabled = $(".js-enabled", card)?.checked;
+      const state = ($(".js-state", card)?.textContent || "").toLowerCase();
+      if(enabled) active++;
+      if(enabled && state.includes("listo")) ready++;
+      if(enabled && state.includes("incompleto")) needs++;
     });
+    if(pillCount) pillCount.textContent = `${active} activos`;
+    if(pillReady) pillReady.textContent = `${ready} listos`;
+    if(pillNeeds) pillNeeds.textContent = `${needs} incompletos`;
   }
 
-  const form = document.getElementById("paymentsForm");
+  // ===== Mejora #3: Toggle “Activo” sincroniza hidden input enabled =====
+  $$(".pay-card").forEach(card => {
+    const enabled = $(".js-enabled", card);
+    const form = $(".js-form", card);
+    const stateEl = $(".js-state", card);
+    const recSel = $(".js-recommended", card);
 
-  form.addEventListener("submit", (e) => {
-    let ok = true;
+    function syncEnabled(){
+      const on = !!enabled?.checked;
+      const hiddenEnabled = $("input[name='enabled']", form);
+      if(hiddenEnabled) hiddenEnabled.value = on ? "1" : "0";
 
-    // limpiar estados previos
-    rules.forEach(r => clearInvalid(r.required.concat(r.url || [])));
-
-    rules.forEach(r => {
-      const isOn = byId(r.active)?.checked;
-
-      if(!isOn) return;
-
-      if(r.anyOne){
-        const a = (byId(r.required[0])?.value || "").trim();
-        const b = (byId(r.required[1])?.value || "").trim();
-        const hasAny = !!(a || b);
-        if(!hasAny){
-          ok = false;
-          markInvalid(r.required);
+      // Mejora #4: recommended sólo si activo (UX)
+      if(recSel){
+        if(!on){
+          recSel.value = "0";
+          recSel.setAttribute("disabled","disabled");
         }else{
-          // si puso email, validarlo
-          if(b && !looksLikeEmail(b)){
-            ok = false;
-            markInvalid([r.required[1]]);
+          recSel.removeAttribute("disabled");
+        }
+      }
+
+      if(stateEl){
+        stateEl.textContent = on ? "Incompleto ⚠️" : "Desactivado";
+      }
+      recomputeSummary();
+    }
+
+    enabled?.addEventListener("change", syncEnabled);
+    syncEnabled();
+
+    // ===== Mejora #5: Validación inline por tipo (url/email/int) + requeridos =====
+    function validateCard(){
+      let ok = true;
+      clearInvalid(card);
+
+      const isOn = !!enabled?.checked;
+      if(!isOn){
+        return { ok: true, msg: "Desactivado" };
+      }
+
+      // Required: todo input con label que tenga pill obligatorio cerca => simple heuristic
+      // (además, validamos url/email según placeholder/type)
+      const inputs = $$("input[name^='cfg__'], select[name^='cfg__'], textarea[name^='cfg__']", card);
+
+      inputs.forEach(inp => {
+        const name = inp.getAttribute("name") || "";
+        const val = (inp.value || "").trim();
+        const parent = inp.closest("div");
+        const isRequired = !!(parent && $(".pill.bad", parent)); // "obligatorio"
+
+        if(isRequired && !val){
+          ok = false; markInvalid(inp);
+        }
+
+        const ph = (inp.getAttribute("placeholder") || "").toLowerCase();
+        if(val){
+          if(ph.includes("https://") && !looksLikeUrl(val)){
+            ok = false; markInvalid(inp);
+          }
+          if((inp.getAttribute("autocomplete") || "") === "email" && !looksLikeEmail(val)){
+            ok = false; markInvalid(inp);
+          }
+          if(inp.getAttribute("inputmode") === "numeric" && !/^\d+$/.test(val)){
+            ok = false; markInvalid(inp);
           }
         }
+      });
+
+      // Campos base: numeric
+      ["sort_order","fee_percent","eta_minutes","min_amount","max_amount"].forEach(n => {
+        const el = $(`[name="${n}"]`, card);
+        if(el){
+          const v = (el.value || "").trim();
+          if(v && !/^\d+$/.test(v)){ ok = false; markInvalid(el); }
+        }
+      });
+
+      return { ok, msg: ok ? "Listo ✅" : "Incompleto ⚠️" };
+    }
+
+    // Actualiza state en blur
+    $$("input,textarea,select", card).forEach(el => {
+      el.addEventListener("blur", () => {
+        const res = validateCard();
+        if(stateEl && enabled?.checked){
+          stateEl.textContent = res.msg;
+        }
+        recomputeSummary();
+      });
+    });
+
+    // ===== Mejora #6: Guardado por AJAX (sin recargar), con fallback normal =====
+    form?.addEventListener("submit", async (e) => {
+      const res = validateCard();
+      if(!res.ok){
+        e.preventDefault();
+        showToast("warn", "Faltan datos", "Activaste el método pero faltan campos obligatorios o hay valores inválidos.");
         return;
       }
 
-      // required
-      const missing = r.required.filter(id => !((byId(id)?.value || "").trim()));
-      if(missing.length){
-        ok = false;
-        markInvalid(missing);
+      // Si el navegador no soporta fetch, que postee normal
+      if(!window.fetch) return;
+
+      e.preventDefault();
+
+      // Preparar payload
+      const fd = new FormData(form);
+      // sync recommended (si select está disabled, no viaja, lo forzamos)
+      if(recSel && recSel.disabled){
+        fd.set("recommended","0");
       }
 
-      // url validation
-      if(r.url){
-        r.url.forEach(id => {
-          const v = (byId(id)?.value || "").trim();
-          if(v && !looksLikeUrl(v)){
-            ok = false;
-            markInvalid([id]);
-          }
+      const saveBtn = $(".js-save", card);
+      const oldTxt = saveBtn?.textContent;
+      if(saveBtn){ saveBtn.textContent = "Guardando…"; saveBtn.setAttribute("disabled","disabled"); }
+
+      try{
+        const r = await fetch(form.action, {
+          method: "POST",
+          headers: { "Accept": "application/json" },
+          body: fd,
+          credentials: "same-origin",
         });
+        const data = await r.json().catch(() => ({}));
+
+        if(!r.ok || !data || data.ok !== true){
+          const msg = data?.message || data?.error || "No se pudo guardar.";
+          showToast("bad", "Error", msg);
+          if(saveBtn){ saveBtn.textContent = oldTxt || "Guardar"; saveBtn.removeAttribute("disabled"); }
+          return;
+        }
+
+        // ===== Mejora #7: UI update post-save (ready/errors) =====
+        const readyNow = !!data.ready;
+        if(stateEl){
+          stateEl.textContent = enabled.checked ? (readyNow ? "Listo ✅" : "Incompleto ⚠️") : "Desactivado";
+        }
+
+        const errs = (data.errors || []);
+        if(errs.length){
+          showToast("warn", "Guardado", "Se guardó, pero faltan campos obligatorios. Revisá lo marcado.");
+          // resaltar algo si hay invalids
+        }else{
+          showToast("ok", "Guardado", "Método actualizado y listo para checkout.");
+        }
+
+        recomputeSummary();
+      }catch(err){
+        showToast("bad", "Error", "Falló la conexión. Reintentá.");
+      }finally{
+        if(saveBtn){ saveBtn.textContent = oldTxt || "💾 Guardar"; saveBtn.removeAttribute("disabled"); }
       }
     });
+  });
 
-    if(!ok){
+  // ===== Mejora #8: Ctrl/Cmd+K enfoca search (UX pro) =====
+  window.addEventListener("keydown", (e) => {
+    const isMac = navigator.platform.toLowerCase().includes("mac");
+    const mod = isMac ? e.metaKey : e.ctrlKey;
+    if(mod && (e.key || "").toLowerCase() === "k"){
       e.preventDefault();
-      alert("Revisá los campos marcados en rojo: activaste un método pero faltan datos o el link/email no es válido.");
+      q?.focus();
     }
+  });
+
+  // ===== Mejora #9: Enter en search no envía forms =====
+  q?.addEventListener("keydown", (e) => {
+    if(e.key === "Enter") e.preventDefault();
+  });
+
+  // init pills
+  recomputeSummary();
+
+  // ===== Mejora #10: Advertencia si intentás salir con cambios no guardados =====
+  let dirty = false;
+  $$(".pay-card input, .pay-card textarea, .pay-card select").forEach(el => {
+    el.addEventListener("change", () => { dirty = true; });
+  });
+  window.addEventListener("beforeunload", (e) => {
+    if(!dirty) return;
+    e.preventDefault();
+    e.returnValue = "";
   });
 })();
 </script>

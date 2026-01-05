@@ -1,10 +1,13 @@
+{# app/templates/base.html — Skyline Store (ULTRA PRO / FINAL / NO BREAK) #}
 <!doctype html>
 <html lang="es">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <meta name="theme-color" content="#ffffff" />
-  <meta name="color-scheme" content="light" />
+
+  {# ✅ Mejora 1: color-scheme dinámico (si más adelante activás dark) #}
+  <meta name="color-scheme" content="light dark" />
+  <meta name="theme-color" content="#ffffff" id="themeColor" />
 
   {# =========================
      SEO dinámico (desde ctx)
@@ -18,13 +21,24 @@
   <meta property="og:image" content="{{ og_image if og_image else url_for('static', filename='img/og.png', _external=True) }}">
   <meta property="og:type" content="website">
 
+  {# ✅ Mejora 2: Twitter Cards #}
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{ meta_title if meta_title else 'Skyline Store' }}">
+  <meta name="twitter:description" content="{{ meta_description if meta_description else 'Tienda online moderna tipo marketplace.' }}">
+  <meta name="twitter:image" content="{{ og_image if og_image else url_for('static', filename='img/og.png', _external=True) }}">
+
+  {# ✅ Mejora 3: headers meta útiles #}
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
 
-  {# ✅ Mejora real #1: CSRF consistente desde inject_globals (no directo session.get) #}
+  {# ✅ CSRF consistente (viene desde inject_globals) #}
   <meta name="csrf-token" content="{{ csrf_token|e }}"/>
 
-  {# ✅ Mejora real #2: Schema.org para SEO marketplace (Organization + WebSite + SearchAction) #}
+  {# ✅ Mejora 4: preloads básicos (logo/og) + favicon (si existe) #}
+  <link rel="icon" href="{{ url_for('static', filename='img/favicon.png') }}" onerror="this.remove()">
+  <link rel="preload" as="image" href="{{ url_for('static', filename='img/og.png') }}">
+
+  {# ✅ Mejora 5: Schema.org (Organization + WebSite + SearchAction) #}
   <script type="application/ld+json">
   {
     "@context":"https://schema.org",
@@ -48,7 +62,7 @@
   }
   </script>
 
-  <!-- ✅ Tipografía PRO (sin librerías raras) -->
+  {# ✅ Tipografía PRO (Inter) #}
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -67,9 +81,9 @@
       --stroke: rgba(15,23,42,.10);
       --stroke2: rgba(15,23,42,.08);
 
-      --primary:#2f7bff;      /* azul premium */
-      --cyan:#10b8d6;         /* acento tech */
-      --amber:#ffb547;        /* acento warm */
+      --primary:#2f7bff;
+      --cyan:#10b8d6;
+      --amber:#ffb547;
       --grad: linear-gradient(90deg, var(--primary), var(--cyan), var(--amber));
 
       --shadow1: 0 10px 26px rgba(2,6,23,.08);
@@ -80,6 +94,23 @@
       --max: 1240px;
 
       --ease: cubic-bezier(.2,.9,.2,1);
+    }
+
+    /* ✅ Mejora 6: Dark mode real (no rompe, pero queda listo) */
+    :root[data-theme="dark"]{
+      --bg0:#070b12;
+      --bg1:#0b1220;
+      --card: rgba(255,255,255,.06);
+
+      --ink: rgba(255,255,255,.92);
+      --muted: rgba(255,255,255,.62);
+      --muted2: rgba(255,255,255,.48);
+
+      --stroke: rgba(148,163,184,.16);
+      --stroke2: rgba(148,163,184,.12);
+
+      --shadow1: 0 10px 26px rgba(0,0,0,.35);
+      --shadow2: 0 18px 55px rgba(0,0,0,.42);
     }
 
     *{box-sizing:border-box}
@@ -98,10 +129,39 @@
     img{max-width:100%;display:block}
     .container{max-width:var(--max);margin:0 auto;padding:0 18px}
 
+    /* ✅ Mejora 7: utilidades base (botones pro) */
+    .btn{
+      border:0; cursor:pointer;
+      background: var(--grad);
+      color:#fff;
+      border-radius:999px;
+      padding: 10px 14px;
+      font-weight:900;
+      box-shadow: 0 12px 22px rgba(2,6,23,.12);
+      transition: transform .2s var(--ease), box-shadow .2s var(--ease), opacity .2s var(--ease);
+      text-decoration:none;
+      display:inline-flex; align-items:center; gap:10px;
+    }
+    .btn:hover{transform: translateY(-1px); box-shadow: 0 16px 28px rgba(2,6,23,.16)}
+    .btn:active{transform: translateY(0)}
+    .btn2{
+      border:1px solid var(--stroke);
+      background: rgba(255,255,255,.86);
+      border-radius:999px;
+      padding: 10px 14px;
+      font-weight:900;
+      text-decoration:none;
+      display:inline-flex; align-items:center; gap:10px;
+      box-shadow: 0 12px 22px rgba(2,6,23,.06);
+      transition: transform .2s var(--ease), box-shadow .2s var(--ease);
+    }
+    :root[data-theme="dark"] .btn2{ background: rgba(255,255,255,.08) }
+    .btn2:hover{transform: translateY(-1px); box-shadow: 0 16px 28px rgba(2,6,23,.10)}
+
     /* ✅ A11y Skip link */
     .skip{
       position:absolute; left:-9999px; top:12px;
-      background:#fff; border:1px solid var(--stroke);
+      background:var(--card); border:1px solid var(--stroke);
       padding:10px 12px; border-radius:12px;
       box-shadow: var(--shadow1);
       font-weight:900;
@@ -114,6 +174,10 @@
       background: rgba(255,255,255,.75);
       border-bottom: 1px solid var(--stroke2);
     }
+    :root[data-theme="dark"] .strip{
+      background: rgba(0,0,0,.28);
+      border-bottom-color: var(--stroke2);
+    }
     .strip-inner{
       display:flex; align-items:center; justify-content:space-between;
       gap:12px;
@@ -122,6 +186,8 @@
       font-weight:700;
       font-size:.92rem;
     }
+    :root[data-theme="dark"] .strip-inner{ color: rgba(255,255,255,.72); }
+
     .strip-badges{
       display:flex; gap:10px; flex-wrap:wrap; align-items:center;
     }
@@ -133,6 +199,10 @@
       border: 1px solid var(--stroke2);
       box-shadow: 0 10px 22px rgba(2,6,23,.06);
       white-space:nowrap;
+    }
+    :root[data-theme="dark"] .pill{
+      background: rgba(255,255,255,.08);
+      box-shadow: 0 10px 22px rgba(0,0,0,.28);
     }
     .pill b{font-weight:900}
     .dot-grad{
@@ -148,6 +218,7 @@
       backdrop-filter: blur(14px);
       border-bottom: 1px solid var(--stroke);
     }
+    :root[data-theme="dark"] .topbar{ background: rgba(7,11,18,.78); }
     .topbar-inner{
       display:flex; align-items:center; gap:14px;
       padding: 12px 0;
@@ -196,21 +267,18 @@
       border-radius:999px;
       transition: background .2s var(--ease), transform .2s var(--ease), color .2s var(--ease), box-shadow .2s var(--ease);
     }
+    :root[data-theme="dark"] .nav a{ color: rgba(255,255,255,.82); }
     .nav a:hover{
       background: rgba(47,123,255,.10);
-      color: rgba(11,18,32,.95);
       transform: translateY(-1px);
     }
-
-    {# ✅ Mejora real #3: estado activo en navegación (UX pro) #}
     .nav a.is-active{
       background: rgba(47,123,255,.12);
       border: 1px solid rgba(47,123,255,.18);
       box-shadow: 0 12px 22px rgba(2,6,23,.06);
-      color: rgba(11,18,32,.95);
     }
 
-    /* Search (protagonista) */
+    /* Search */
     .search{
       margin-left:auto;
       display:flex; align-items:center; gap:10px;
@@ -222,14 +290,12 @@
       box-shadow: 0 14px 30px rgba(2,6,23,.06);
       transition: box-shadow .2s var(--ease), border-color .2s var(--ease), background .2s var(--ease);
     }
+    :root[data-theme="dark"] .search{ background: rgba(255,255,255,.08); }
     .search:focus-within{
       border-color: rgba(47,123,255,.28);
       box-shadow: 0 0 0 5px rgba(47,123,255,.14), 0 18px 40px rgba(2,6,23,.08);
-      background:#fff;
     }
-    .search .s-ico{
-      width:18px;height:18px; opacity:.7; flex: 0 0 auto;
-    }
+    .search .s-ico{ width:18px;height:18px; opacity:.7; flex: 0 0 auto; }
     .search input{
       border:0; outline:0; background:transparent;
       width:100%;
@@ -237,7 +303,8 @@
       font-weight:600;
       color: rgba(11,18,32,.90);
     }
-    .search input::placeholder{color: rgba(11,18,32,.45); font-weight:600}
+    :root[data-theme="dark"] .search input{ color: rgba(255,255,255,.90); }
+    .search input::placeholder{color: var(--muted2); font-weight:600}
     .search button{
       border:0;
       cursor:pointer;
@@ -265,10 +332,9 @@
       box-shadow: 0 14px 28px rgba(2,6,23,.06);
       transition: transform .2s var(--ease), box-shadow .2s var(--ease);
     }
+    :root[data-theme="dark"] .icon-btn{ background: rgba(255,255,255,.08); }
     .icon-btn:hover{transform: translateY(-1px); box-shadow: 0 18px 36px rgba(2,6,23,.10)}
-    .icon{
-      width:20px;height:20px; opacity:.84;
-    }
+    .icon{ width:20px;height:20px; opacity:.84; }
 
     .badge{
       position:absolute;
@@ -301,6 +367,7 @@
       box-shadow: 0 14px 28px rgba(2,6,23,.06);
       transition: transform .2s var(--ease), box-shadow .2s var(--ease);
     }
+    :root[data-theme="dark"] .account{ background: rgba(47,123,255,.12); }
     .account:hover{transform: translateY(-1px); box-shadow: 0 18px 36px rgba(2,6,23,.10)}
     .acc-ico{
       width:30px;height:30px;border-radius:999px;
@@ -309,7 +376,22 @@
       border:1px solid var(--stroke);
       box-shadow: 0 10px 20px rgba(2,6,23,.08);
     }
+    :root[data-theme="dark"] .acc-ico{ background: rgba(255,255,255,.10); }
     .acc-ico svg{width:18px;height:18px; opacity:.85}
+
+    /* Theme toggle */
+    .theme-btn{
+      width:46px;height:46px;
+      border-radius:999px;
+      border:1px solid var(--stroke);
+      background: rgba(255,255,255,.92);
+      cursor:pointer;
+      display:grid; place-items:center;
+      box-shadow: 0 14px 28px rgba(2,6,23,.06);
+      transition: transform .2s var(--ease), box-shadow .2s var(--ease);
+    }
+    :root[data-theme="dark"] .theme-btn{ background: rgba(255,255,255,.08); }
+    .theme-btn:hover{transform: translateY(-1px); box-shadow: 0 18px 36px rgba(2,6,23,.10)}
 
     /* Mobile menu */
     .burger{
@@ -322,6 +404,7 @@
       box-shadow: 0 14px 28px rgba(2,6,23,.06);
       transition: transform .2s var(--ease);
     }
+    :root[data-theme="dark"] .burger{ background: rgba(255,255,255,.08); }
     .burger:hover{transform: translateY(-1px)}
     .mobile{
       display:none;
@@ -329,6 +412,7 @@
       background: rgba(255,255,255,.96);
       padding: 10px 0 14px;
     }
+    :root[data-theme="dark"] .mobile{ background: rgba(7,11,18,.92); }
     .mobile a{
       display:block;
       padding: 12px 18px;
@@ -336,6 +420,7 @@
       font-weight:900;
       color: rgba(11,18,32,.86);
     }
+    :root[data-theme="dark"] .mobile a{ color: rgba(255,255,255,.86); }
     .mobile a:hover{background: rgba(47,123,255,.07)}
     .mobile.is-open{display:block}
 
@@ -348,15 +433,19 @@
     /* Flash */
     .flash-wrap{padding: 10px 0}
     .flash{
-      background:#fff;
+      background:var(--card);
       border:1px solid var(--stroke);
-      box-shadow: 0 10px 26px rgba(2,6,23,.08);
+      box-shadow: var(--shadow1);
       border-radius: 14px;
       padding: 12px 14px;
       margin: 10px 0;
       font-weight:800;
-      color: rgba(11,18,32,.90);
+      color: var(--ink);
     }
+    .flash[data-cat="success"]{ border-color: rgba(34,197,94,.28); }
+    .flash[data-cat="warning"]{ border-color: rgba(245,158,11,.28); }
+    .flash[data-cat="error"]{ border-color: rgba(239,68,68,.28); }
+    .flash[data-cat="info"]{ border-color: rgba(56,189,248,.28); }
 
     /* Offline banner */
     .offline{
@@ -368,19 +457,20 @@
       border-radius: 16px;
       padding: 12px 14px;
       font-weight:800;
-      box-shadow: 0 10px 26px rgba(2,6,23,.08);
+      box-shadow: var(--shadow1);
     }
+    :root[data-theme="dark"] .offline{ color: rgba(255,255,255,.86); }
     .offline.is-on{display:flex;align-items:center;justify-content:space-between;gap:12px}
     .offline button{
-      border:1px solid rgba(15,23,42,.12);
-      background:#fff;
+      border:1px solid var(--stroke);
+      background:var(--card);
       border-radius:999px;
       padding:8px 12px;
       font-weight:900;
       cursor:pointer;
+      color: var(--ink);
     }
 
-    /* Main spacing base */
     main{padding: 10px 0 0}
 
     /* Footer PRO */
@@ -389,7 +479,7 @@
       background:
         radial-gradient(900px 380px at 20% 0%, rgba(47,123,255,.10), transparent 62%),
         radial-gradient(900px 380px at 85% 0%, rgba(255,181,71,.10), transparent 62%),
-        linear-gradient(180deg, #ffffff, #f4f7ff);
+        linear-gradient(180deg, var(--bg0), var(--bg1));
       border-top:1px solid var(--stroke);
     }
     .footer-grid{
@@ -399,15 +489,11 @@
       gap:16px;
       align-items:start;
     }
-    .f-brand{
-      display:flex; gap:12px; align-items:flex-start;
-    }
-    .f-title{
-      font-weight:900; letter-spacing:-.3px;
-    }
+    .f-brand{display:flex; gap:12px; align-items:flex-start;}
+    .f-title{font-weight:900; letter-spacing:-.3px;}
     .f-desc{
       margin-top:6px;
-      color: rgba(11,18,32,.62);
+      color: var(--muted);
       font-weight:600;
       line-height:1.3;
       max-width: 42ch;
@@ -416,17 +502,16 @@
       margin:0 0 10px;
       font-size:.98rem;
       font-weight:900;
-      color: rgba(11,18,32,.90);
+      color: var(--ink);
     }
-    .f-links{
-      display:flex; flex-direction:column; gap:8px;
-    }
+    .f-links{display:flex; flex-direction:column; gap:8px;}
     .f-links a{
       text-decoration:none;
       color: rgba(11,18,32,.72);
       font-weight:650;
     }
-    .f-links a:hover{text-decoration:underline; color: rgba(11,18,32,.92)}
+    :root[data-theme="dark"] .f-links a{ color: rgba(255,255,255,.72); }
+    .f-links a:hover{text-decoration:underline; color: var(--ink)}
     .payrow{
       padding: 10px 0 16px;
       display:flex; gap:12px; align-items:center; justify-content:center;
@@ -436,17 +521,17 @@
     .pay{
       width:78px; height:38px;
       border-radius:12px;
-      border:1px solid rgba(15,23,42,.10);
-      background:#fff;
+      border:1px solid var(--stroke);
+      background:var(--card);
       display:grid; place-items:center;
       font-weight:900;
-      color: rgba(11,18,32,.70);
+      color: var(--muted);
       box-shadow: 0 12px 22px rgba(2,6,23,.06);
     }
     .copyright{
       text-align:center;
       padding: 0 0 18px;
-      color: rgba(11,18,32,.55);
+      color: var(--muted);
       font-weight:700;
       font-size:.92rem;
     }
@@ -484,9 +569,9 @@
     .toast{
       pointer-events:auto;
       width: min(380px, calc(100vw - 28px));
-      background:#fff;
-      border:1px solid rgba(15,23,42,.10);
-      box-shadow: 0 18px 55px rgba(2,6,23,.10);
+      background:var(--card);
+      border:1px solid var(--stroke);
+      box-shadow: var(--shadow2);
       border-radius: 16px;
       padding: 12px 12px;
       display:flex;
@@ -502,8 +587,8 @@
       background: var(--grad);
       flex: 0 0 auto;
     }
-    .toast .t-title{font-weight:900; font-size:.95rem; color: rgba(11,18,32,.92)}
-    .toast .t-msg{font-weight:650; font-size:.88rem; color: rgba(11,18,32,.62); margin-top:2px; line-height:1.25}
+    .toast .t-title{font-weight:900; font-size:.95rem; color: var(--ink)}
+    .toast .t-msg{font-weight:650; font-size:.88rem; color: var(--muted); margin-top:2px; line-height:1.25}
     .toast .t-close{
       margin-left:auto;
       border:0;
@@ -511,6 +596,7 @@
       cursor:pointer;
       font-weight:900;
       opacity:.62;
+      color: var(--ink);
     }
     .toast .t-close:hover{opacity:1}
   </style>
@@ -584,6 +670,14 @@
           <span>Mi Cuenta</span>
         </a>
 
+        {# ✅ Mejora 8: toggle de tema (queda pro y no rompe nada) #}
+        <button class="theme-btn" type="button" aria-label="Cambiar tema" id="themeBtn" title="Tema">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M12 18a6 6 0 1 0 0-12 6 6 0 0 0 0 12Z" stroke="currentColor" stroke-width="2"/>
+            <path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M19.8 4.2l-1.4 1.4M5.6 18.4l-1.4 1.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+
         <button class="burger" type="button" aria-label="Abrir menú" aria-expanded="false" id="burger">
           <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
@@ -615,7 +709,7 @@
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
         {% for category, message in messages %}
-          <div class="flash" role="status">{{ message }}</div>
+          <div class="flash" data-cat="{{ category|e }}" role="status">{{ message }}</div>
         {% endfor %}
       {% endif %}
     {% endwith %}
@@ -683,7 +777,7 @@
   <!-- TOASTER -->
   <div class="toasts" aria-live="polite" aria-label="Notificaciones" id="toasts"></div>
 
-  {# ✅ Mejora real #4: CSRF definitivo en TODOS los forms POST (sin tocar cada template) #}
+  {# ✅ Mejora 9: CSRF definitivo en TODOS los forms POST (sin tocar cada template) #}
   <script>
   (function(){
     const meta = document.querySelector('meta[name="csrf-token"]');
@@ -718,14 +812,45 @@
       if(y) y.textContent = String(new Date().getFullYear());
     })();
 
-    // Menú móvil
+    // Menú móvil + cerrar al navegar
     (function(){
       const btn = document.getElementById("burger");
       const menu = document.getElementById("mobileMenu");
       if(!btn || !menu) return;
-      btn.addEventListener("click", () => {
-        const open = menu.classList.toggle("is-open");
+
+      const setOpen = (open) => {
+        menu.classList.toggle("is-open", !!open);
         btn.setAttribute("aria-expanded", open ? "true" : "false");
+      };
+
+      btn.addEventListener("click", () => setOpen(!menu.classList.contains("is-open")));
+      menu.querySelectorAll("a").forEach(a => a.addEventListener("click", () => setOpen(false)));
+    })();
+
+    // ✅ Mejora 10: Tema (persistente + respeta sistema si no hay preferencia)
+    (function(){
+      const root = document.documentElement;
+      const btn = document.getElementById("themeBtn");
+      const metaTheme = document.getElementById("themeColor");
+      if(!btn) return;
+
+      const getSys = () => window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      const getSaved = () => { try { return localStorage.getItem("skyline:theme"); } catch(e){ return null; } };
+
+      const apply = (theme) => {
+        root.setAttribute("data-theme", theme);
+        // theme-color para móviles (aprox)
+        if(metaTheme) metaTheme.setAttribute("content", theme === "dark" ? "#070b12" : "#ffffff");
+      };
+
+      const init = getSaved() || getSys();
+      apply(init);
+
+      btn.addEventListener("click", () => {
+        const cur = root.getAttribute("data-theme") || "light";
+        const next = cur === "dark" ? "light" : "dark";
+        apply(next);
+        try { localStorage.setItem("skyline:theme", next); } catch(e){}
       });
     })();
 
@@ -777,7 +902,7 @@
       }
     })();
 
-    // Fetch helpers (timeout + retry) + CSRF
+    // ✅ Mejora 11: helpers fetch (timeout + retry) + CSRF + manejo auth
     (function(){
       const csrf = (document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '').trim();
 
@@ -807,15 +932,14 @@
             let data = null;
             try { data = await res.json(); } catch(e) {}
 
-            {# ✅ Mejora real #5: manejo 401/403 (sesión expirada) #}
             if(!res.ok){
               if(res.status === 401 || res.status === 403){
-                if(window.toast) window.toast("Sesión requerida", "Ingresá para continuar.");
+                window.toast && window.toast("Sesión requerida", "Ingresá para continuar.");
                 setTimeout(() => { window.location.href = "/account"; }, 350);
                 throw new Error("No autorizado");
               }
-              const msg = (data && data.error && (data.error.message || data.error)) ? (data.error.message || data.error) : 'Ocurrió un error.';
-              throw new Error(msg);
+              const msg = (data && (data.message || data.error)) ? (data.message || data.error) : 'Ocurrió un error.';
+              throw new Error(String(msg));
             }
             return data;
           }catch(e){
@@ -836,15 +960,13 @@
       window.apiPost = (url, body) => _req('POST', url, body, 2);
     })();
 
-    // CartStore (cache + sync pestañas)
+    // CartStore (cache + sync pestañas) — NO BREAK aunque /cart/json no exista
     (function(){
       const KEY = 'skyline:cart:snap:v1';
       const badge = document.querySelector('[data-cart-badge]');
       const bc = ('BroadcastChannel' in window) ? new BroadcastChannel('skyline_cart') : null;
 
-      const read = () => {
-        try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch(e){ return null; }
-      };
+      const read = () => { try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch(e){ return null; } };
       const write = (snap) => {
         try { localStorage.setItem(KEY, JSON.stringify(snap)); } catch(e){}
         if(bc) bc.postMessage({type:'cart', snap});
@@ -873,7 +995,7 @@
         async refresh(){
           try{
             const d = await window.apiGet('/cart/json');
-            const snap = d && d.cart ? d.cart : null;
+            const snap = d && (d.cart || d) ? (d.cart || d) : null;
             if(snap) write(snap);
             setBadge(snap);
             return snap;
@@ -881,17 +1003,14 @@
             return read();
           }
         },
-        update(snap){
-          write(snap);
-          setBadge(snap);
-        },
+        update(snap){ write(snap); setBadge(snap); },
         get(){ return read(); }
       };
 
       setTimeout(() => { window.CartStore.refresh(); }, 120);
     })();
 
-    // Nav active state
+    // ✅ Mejora 12: Nav active state (no rompe con querystrings)
     (function(){
       const path = (location.pathname || "/").toLowerCase();
       const links = document.querySelectorAll(".nav a, #mobileMenu a");

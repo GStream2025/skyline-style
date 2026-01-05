@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="es" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="x-apple-disable-message-reformatting">
+  <meta name="format-detection" content="telephone=no,address=no,email=no,date=no,url=no">
+  <title>Recordatorio: verificá tu cuenta · Skyline Store</title>
+  <!--[if mso]>
+  <style type="text/css">
+    body, table, td, a { font-family: Arial, sans-serif !important; }
+    table { border-collapse: collapse !important; }
+  </style>
+  <![endif]-->
+</head>
+<body style="margin:0;padding:0;background:#f2f5fb;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#0b1220;">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;line-height:1px;">
+    Te queda un paso para activar tu cuenta y tu panel en Skyline Store.
+  </div>
+
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f2f5fb;">
+    <tr>
+      <td align="center" style="padding:28px 12px;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:720px;">
+          <tr><td style="padding:0 8px;">
+
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
+                   style="background:#ffffff;border:1px solid #e7eaf3;border-radius:24px;overflow:hidden;box-shadow:0 24px 70px rgba(2,6,23,.12);">
+              <tr>
+                <td style="padding:22px;background:linear-gradient(90deg,#2f7bff,#ffb547);">
+                  <div style="font-weight:950;color:#fff;font-size:18px;">Skyline Store</div>
+                  <div style="color:rgba(255,255,255,.92);font-weight:760;font-size:13px;margin-top:4px;">Marketplace premium</div>
+                </td>
+              </tr>
+
+              <tr><td style="height:6px;background:linear-gradient(180deg, rgba(2,6,23,.12), rgba(2,6,23,0));"></td></tr>
+
+              <tr>
+                <td style="padding:28px 24px 14px;">
+                  <h1 style="margin:0;font-size:22px;letter-spacing:-.35px;font-weight:980;">
+                    Te falta un paso{% if name %}, {{ name|e }}{% endif %}
+                  </h1>
+                  <p style="margin:12px 0 0;color:#4b5563;font-weight:660;line-height:1.75;font-size:15px;">
+                    Para activar tu panel y habilitar tus pedidos, verificá tu email.
+                  </p>
+
+                  <div style="margin-top:18px;padding:14px;border:1px solid #e7eaf3;border-radius:16px;background:#fafbff;">
+                    <div style="font-size:12px;color:#6b7280;font-weight:900;text-transform:uppercase;">Email</div>
+                    <div style="margin-top:6px;font-size:14px;font-weight:950;word-break:break-word;">{{ email|e }}</div>
+                  </div>
+
+                  <div style="margin-top:20px;">
+                    <a href="{{ verify_url }}"
+                       style="display:inline-block;text-decoration:none;background:linear-gradient(90deg,#2f7bff,#ffb547);
+                              color:#fff;font-weight:950;font-size:15px;padding:14px 20px;border-radius:16px;
+                              box-shadow:0 16px 34px rgba(2,6,23,.18);">
+                      Verificar ahora
+                    </a>
+                  </div>
+
+                  <div style="margin-top:16px;border-top:1px solid #eef0f6;padding-top:14px;">
+                    <div style="font-size:12px;color:#6b7280;line-height:1.55;">
+                      ¿Problemas con el botón? Copiá y pegá este enlace:
+                    </div>
+                    <div style="margin-top:7px;font-size:12px;font-weight:900;word-break:break-all;">
+                      {{ verify_url }}
+                    </div>
+                  </div>
+
+                </td>
+              </tr>
+
+              <tr>
+                <td style="padding:16px 22px;background:#f9fafb;border-top:1px solid #eef0f6;">
+                  <div style="color:#6b7280;font-size:12px;line-height:1.75;">
+                    Skyline Store · Seguridad y privacidad<br>
+                    Nunca te pediremos tu contraseña por email.
+                  </div>
+                  <div style="margin-top:10px;color:#9aa1af;font-size:11px;">© {{ year }} Skyline Store.</div>
+                </td>
+              </tr>
+            </table>
+
+          </td></tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
