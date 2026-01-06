@@ -1,12 +1,12 @@
 # ============================================================
 # Skyline Store — Development / Testing Requirements
-# ULTRA PRO · FINAL · NO TOCAR MÁS
+# ULTRA PRO · FINAL · NO BREAK · +10 mejoras
 # ============================================================
 # ✔ Hereda TODO de producción
-# ✔ Herramientas modernas y estables
-# ✔ No rompe Render / CI / Local
+# ✔ Testing rápido, estable y reproducible
+# ✔ Lint/format/typecheck PRO
+# ✔ Debug UX y calidad sin afectar prod
 # ✔ Compatible Flask 3 + SQLAlchemy 2
-# ✔ Evita dependencias pesadas innecesarias en prod
 # ============================================================
 
 
@@ -24,67 +24,90 @@ pytest-cov==6.0.0
 pytest-mock==3.14.0
 pytest-env==1.1.5
 
-# ✅ Mejora #1: tests en paralelo (mucho más rápido)
+# ✅ Mejora 1: tests en paralelo
 pytest-xdist==3.6.1
 
-# ✅ Mejora #2: orden aleatorio para detectar tests frágiles
+# ✅ Mejora 2: orden aleatorio (detecta tests frágiles)
 pytest-randomly==3.16.0
 
-# ✅ Mejora #3: testear tiempo/fechas (locks, expiraciones, promos, etc.)
+# ✅ Mejora 3: tiempo/fechas (locks, expiraciones, promos)
 freezegun==1.5.1
 
+# ✅ Mejora 4: timeouts para que no se “cuelgue” CI/local
+pytest-timeout==2.3.1
+
+# ✅ Mejora 5: mejores mensajes de assert (más legible)
+pytest-clarity==1.0.1
+
 
 # =========================
-# Lint / Format (calidad PRO)
+# Coverage / reportes
 # =========================
-ruff==0.8.4          # lint ultra rápido (reemplaza flake8/isort)
-black==24.10.0       # formato estable y predecible
-mypy==1.13.0         # type checking (opcional pero PRO)
+coverage[toml]==7.6.9
+
+# ✅ Mejora 6: reporte HTML local (útil para ver qué falta testear)
+pytest-html==4.1.1
+
+
+# =========================
+# Lint / Format / Types (calidad PRO)
+# =========================
+ruff==0.8.4
+black==24.10.0
+mypy==1.13.0
 
 types-requests==2.32.0.20241016
 types-python-dateutil==2.9.0.20241206
 types-six==1.17.0.20241205
+
+# ✅ Mejora 7: type stubs para libs comunes que usás (Flask-Login / WTForms)
+types-Flask==1.1.6
+types-Werkzeug==1.0.9
+types-WTForms==3.1.0.20240425
 
 
 # =========================
 # Debug / Dev UX
 # =========================
 ipython==8.31.0
-rich==13.9.4         # logs y prints lindos en dev
-watchdog==6.0.0      # reload inteligente (Windows/Linux/Mac)
-
-# Debugger remoto (VSCode) — no afecta prod si no lo usás
+rich==13.9.4
+watchdog==6.0.0
 debugpy==1.8.11
 
-
-# =========================
-# Seguridad / Testing extra
-# =========================
-bandit==1.7.10       # security lint (opcional)
-coverage[toml]==7.6.9
+# ✅ Mejora 8: dotenv CLI (correr comandos con .env sin magia)
+python-dotenv==1.0.1
 
 
 # =========================
-# DB / Debug helpers
+# Seguridad / Quality gates (dev)
+# =========================
+bandit==1.7.10
+
+# ✅ Mejora 9: revisar vulnerabilidades conocidas en deps (solo dev)
+pip-audit==2.7.3
+
+
+# =========================
+# DB / Factories / Seeds
 # =========================
 sqlalchemy-utils==0.41.2
-faker==33.1.0        # seeds / datos fake
-
-# ✅ Mejora #4: factories reales para modelos (User/Product/Order)
+faker==33.1.0
 factory-boy==3.3.1
+
+# ✅ Mejora 10: pretty-print de objetos y debugging de tests
+prettyprinter==0.18.0
 
 
 # =========================
 # Tooling opcional (NO obligatorio)
 # =========================
-# ✅ Mejora #5: congelar deps de forma PRO (compile/sync)
 pip-tools==7.4.1
 
-# Pre-commit hooks
+# Pre-commit (si querés automatizar ruff/black)
 # pre-commit==4.0.1
-
-# Profiling
-# py-spy==0.3.14
 
 # HTTP mocking
 # responses==0.25.3
+
+# Profiling
+# py-spy==0.3.14

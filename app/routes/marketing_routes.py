@@ -37,6 +37,7 @@ MAX_SOURCE_LEN = 64
 # Helpers base
 # ============================================================
 
+
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -76,6 +77,7 @@ def _client_ip() -> str:
 # Rate limit simple (sin dependencias)
 # ============================================================
 
+
 def _rl_store() -> Dict[str, Tuple[float, int]]:
     # key -> (reset_ts, count)
     ext = current_app.extensions.setdefault("marketing_rl", {})
@@ -113,9 +115,11 @@ def _rate_limit_or_429(bucket: str, limit: int, window_seconds: int):
 # Email service (opcional, NO rompe)
 # ============================================================
 
+
 def _try_send_email(to_email: str, subject: str, html: str, text: str = "") -> bool:
     try:
         from app.services.email_service import send_email  # type: ignore
+
         send_email(to=to_email, subject=subject, html=html, text=text or "")
         return True
     except Exception as exc:
@@ -126,6 +130,7 @@ def _try_send_email(to_email: str, subject: str, html: str, text: str = "") -> b
 # ============================================================
 # Subscriber model (opcional, fallback total)
 # ============================================================
+
 
 def _get_subscriber_model():
     """
@@ -170,6 +175,7 @@ def _get_or_create_fallback(email: str, source: str) -> _SubscriberFallback:
 # Security / Admin
 # ============================================================
 
+
 def _is_admin() -> bool:
     if session.get("is_admin") is True:
         return True
@@ -192,6 +198,7 @@ def _require_admin():
 # ============================================================
 # Tokens unsubscribe
 # ============================================================
+
 
 def _serializer() -> Optional[URLSafeTimedSerializer]:
     secret = current_app.config.get("SECRET_KEY")
@@ -235,6 +242,7 @@ def _decode_unsubscribe_token(token: str, max_age: int) -> str:
 # Payload parsing + anti-bot
 # ============================================================
 
+
 def _read_payload() -> Dict[str, Any]:
     if request.is_json:
         return request.get_json(silent=True) or {}
@@ -254,6 +262,7 @@ def _honeypot_triggered(payload: Dict[str, Any]) -> bool:
 # ============================================================
 # Subscribe
 # ============================================================
+
 
 @marketing_bp.post("/marketing/subscribe")
 def subscribe():
@@ -308,10 +317,16 @@ def subscribe():
         db.session.commit()
 
         token = _unsubscribe_token(email_norm)
-        unsub_url = url_for("marketing.unsubscribe", token=token, _external=True) if token else None
+        unsub_url = (
+            url_for("marketing.unsubscribe", token=token, _external=True)
+            if token
+            else None
+        )
 
         html = (
-            render_template("emails/subscribed.html", email=email_norm, unsubscribe_url=unsub_url)
+            render_template(
+                "emails/subscribed.html", email=email_norm, unsubscribe_url=unsub_url
+            )
             if _template_exists("emails/subscribed.html")
             else f"<p>Gracias por suscribirte.</p><p><a href='{unsub_url}'>Darme de baja</a></p>"
         )
@@ -335,6 +350,7 @@ def subscribe():
 # Unsubscribe
 # ============================================================
 
+
 @marketing_bp.get("/unsubscribe/<token>")
 def unsubscribe(token: str):
     ttl = int(current_app.config.get("MARKETING_UNSUB_TTL_SECONDS", 60 * 60 * 24 * 365))
@@ -342,7 +358,9 @@ def unsubscribe(token: str):
     try:
         email = _decode_unsubscribe_token(token, ttl)
     except (SignatureExpired, BadSignature):
-        return render_template("unsubscribe.html", ok=False, message="Link inválido o expirado.")
+        return render_template(
+            "unsubscribe.html", ok=False, message="Link inválido o expirado."
+        )
 
     SubscriberModel = _get_subscriber_model()
 
@@ -351,7 +369,9 @@ def unsubscribe(token: str):
         if sub:
             sub.status = "unsubscribed"
             sub.unsubscribed_at = utcnow()
-        return render_template("unsubscribe.html", ok=True, message="Baja realizada.", email=email)
+        return render_template(
+            "unsubscribe.html", ok=True, message="Baja realizada.", email=email
+        )
 
     try:
         sub = SubscriberModel.query.filter_by(email=email).first()
@@ -362,17 +382,25 @@ def unsubscribe(token: str):
                 sub.unsubscribed_at = utcnow()
             db.session.commit()
 
-        return render_template("unsubscribe.html", ok=True, message="Baja confirmada.", email=email)
+        return render_template(
+            "unsubscribe.html", ok=True, message="Baja confirmada.", email=email
+        )
 
     except Exception as exc:
         db.session.rollback()
         current_app.logger.exception("Unsubscribe error: %s", exc)
-        return render_template("unsubscribe.html", ok=False, message="Error al procesar la baja."), 500
+        return (
+            render_template(
+                "unsubscribe.html", ok=False, message="Error al procesar la baja."
+            ),
+            500,
+        )
 
 
 # ============================================================
 # Admin / API (paginado)
 # ============================================================
+
 
 def _sub_to_dict(s: Any) -> Dict[str, Any]:
     return {
@@ -396,26 +424,46 @@ def marketing_admin():
 
     if SubscriberModel is None:
         # fallback view
-        subs = list(_FALLBACK_STORE.values())[offset: offset + limit]
+        subs = list(_FALLBACK_STORE.values())[offset : offset + limit]
         if not _template_exists("marketing_admin.html"):
-            return jsonify(ok=True, total=len(_FALLBACK_STORE), subscribers=[_sub_to_dict(x) for x in subs], fallback=True)
+            return jsonify(
+                ok=True,
+                total=len(_FALLBACK_STORE),
+                subscribers=[_sub_to_dict(x) for x in subs],
+                fallback=True,
+            )
         return render_template("marketing_admin.html", subscribers=subs, fallback=True)
 
     q = SubscriberModel.query
-    order_col = getattr(SubscriberModel, "created_at", None) or getattr(SubscriberModel, "email")
+    order_col = getattr(SubscriberModel, "created_at", None) or getattr(
+        SubscriberModel, "email"
+    )
 
     subs = q.order_by(order_col.desc()).offset(offset).limit(limit).all()
     total = q.count()
 
     if not _template_exists("marketing_admin.html"):
-        return jsonify(ok=True, total=total, limit=limit, offset=offset, subscribers=[_sub_to_dict(x) for x in subs])
+        return jsonify(
+            ok=True,
+            total=total,
+            limit=limit,
+            offset=offset,
+            subscribers=[_sub_to_dict(x) for x in subs],
+        )
 
-    return render_template("marketing_admin.html", subscribers=subs, total=total, limit=limit, offset=offset)
+    return render_template(
+        "marketing_admin.html",
+        subscribers=subs,
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
 
 
 # ============================================================
 # Export CSV (streaming)
 # ============================================================
+
 
 def _csv_rows(items: Iterable[Any]) -> Iterable[str]:
     output = io.StringIO()
@@ -426,13 +474,15 @@ def _csv_rows(items: Iterable[Any]) -> Iterable[str]:
     output.truncate(0)
 
     for s in items:
-        w.writerow([
-            getattr(s, "email", ""),
-            getattr(s, "status", ""),
-            getattr(s, "source", ""),
-            getattr(s, "created_at", ""),
-            getattr(s, "unsubscribed_at", ""),
-        ])
+        w.writerow(
+            [
+                getattr(s, "email", ""),
+                getattr(s, "status", ""),
+                getattr(s, "source", ""),
+                getattr(s, "created_at", ""),
+                getattr(s, "unsubscribed_at", ""),
+            ]
+        )
         yield output.getvalue()
         output.seek(0)
         output.truncate(0)

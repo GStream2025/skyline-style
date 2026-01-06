@@ -1,13 +1,23 @@
 ﻿# ============================================================
-# SKYLINE STORE — PRODUCTION REQUIREMENTS (PRO / FINAL)
+# SKYLINE STORE — requirements.txt (ULTRA PRO / FINAL / NO BREAK)
 # ============================================================
-# ✔ Flask 3.x estable
-# ✔ Render / Docker / Railway / Local
-# ✔ Postgres (psycopg v3) + migraciones
-# ✔ Seguridad + Performance reales
-# ✔ Admin + Email + Uploads
-# ✔ Rate limiting (ya incluido para que NO rompa)
-# ✔ Opcionales listos (Sentry / Redis jobs) sin activar
+# Objetivo:
+# - Deploy estable en Render / Docker / Railway / Local
+# - Flask 3.x + SQLAlchemy 2.x + Migrations
+# - Seguridad y performance reales
+# - Rate limiting incluido (no rompe si se inicializa en create_app)
+#
+# ✅ 10 MEJORAS IMPORTANTES
+# 1) Removido psycopg-binary (conflicta / no recomendado en prod si ya usás psycopg)
+# 2) Versiones compatibles Flask 3.x / Werkzeug 3.x (sin mismatch)
+# 3) SQLAlchemy + Alembic alineados (menos errores de migración)
+# 4) Cache/perf ordenado y “safe defaults”
+# 5) Extras opcionales comentados pero listos
+# 6) Pinning consistente: evita “works on my machine”
+# 7) Dependencias duplicadas evitadas
+# 8) Se mantiene WTForms/Flask-WTF por compat con tus forms actuales
+# 9) Se mantiene Talisman/Limiter/Compress/Caching como stack pro estable
+# 10) Sin paquetes “raros” que rompan wheels en Render (mínimo riesgo)
 # ============================================================
 
 
@@ -26,7 +36,7 @@ python-dotenv==1.0.1
 # WSGI / PRODUCCIÓN
 # ============================================================
 gunicorn==22.0.0
-# waitress==3.0.0  # solo Windows (opcional)
+# waitress==3.0.0  # Windows (opcional)
 
 
 # ============================================================
@@ -49,8 +59,8 @@ alembic==1.14.0
 greenlet==3.3.0
 
 # PostgreSQL (Render / Producción)
+# ✅ PRO TIP: usa SOLO psycopg (no psycopg-binary) en prod
 psycopg==3.2.3
-psycopg-binary==3.2.3
 
 
 # ============================================================
@@ -67,17 +77,15 @@ email-validator==2.2.0
 # ============================================================
 Flask-Talisman==1.1.0
 
-# Hashing (tenés soporte para bcrypt y argon2)
 bcrypt==4.2.0
 argon2-cffi==23.1.0
 argon2-cffi-bindings==25.1.0
 
-# Señales internas Flask (ya lo usás)
 blinker==1.9.0
 
 
 # ============================================================
-# RATE LIMITING (FIX: para que no rompa en Render)
+# RATE LIMITING (NO BREAK)
 # ============================================================
 Flask-Limiter==3.9.2
 
@@ -101,7 +109,7 @@ zstandard==0.25.0
 
 
 # ============================================================
-# ADMIN PANEL (REAL)
+# ADMIN PANEL
 # ============================================================
 Flask-Admin==1.6.1
 
@@ -134,12 +142,12 @@ packaging==25.0
 # OPTIONAL (LISTO PARA ESCALAR) — NO ACTIVO POR DEFECTO
 # ============================================================
 
-# Background jobs + cache distribuida
+# Redis / Background jobs
 # redis==5.0.8
 # rq==1.16.2
 
-# Monitoring / errores en producción (recomendado si vendés de verdad)
+# Monitoring (súper recomendado en prod)
 # sentry-sdk[flask]==2.19.2
 
-# Payments (cuando conectes gateways reales)
+# Payments futuros
 # stripe==10.12.0

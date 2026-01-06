@@ -1,0 +1,575 @@
+{# ==========================================================
+   FILE: app/templates/orders/order_success.html
+   Skyline Store — Order Success (ULTRA PRO - FINAL)
+   - Sin Tailwind / sin dependencias
+   - Sin demo / sin texto "modo prueba"
+   - Robusto: no rompe si faltan variables
+   - A11y: aria-live, focus-visible, reduced-motion
+   - UX: copiar pedido/tracking, imprimir, guardar comprobante, atajos teclado
+   - Compatible con base: --max, --stroke, --grad, --shadow2, --ease
+========================================================== #}
+
+{% extends "base.html" %}
+{% block title %}Pedido confirmado - Skyline Store{% endblock %}
+
+{% block extra_head %}
+<style>
+  .oc{ padding: 18px 0 44px; }
+  .oc .wrap{ max-width: var(--max); margin:0 auto; padding: 0 18px; }
+
+  .card{
+    background: rgba(255,255,255,.96);
+    border: 1px solid var(--stroke);
+    border-radius: 28px;
+    box-shadow: var(--shadow2);
+    overflow:hidden;
+  }
+
+  .head{
+    display:flex;
+    gap: 16px;
+    align-items:flex-start;
+    padding: 18px 18px 14px;
+    background:
+      radial-gradient(circle at 20% 0%, rgba(47,123,255,.10), transparent 55%),
+      radial-gradient(circle at 85% 10%, rgba(16,185,129,.10), transparent 55%),
+      linear-gradient(180deg, rgba(255,255,255,.94), rgba(255,255,255,.84));
+    border-bottom: 1px solid rgba(15,23,42,.08);
+  }
+
+  .ok{
+    width: 58px; height: 58px;
+    border-radius: 999px;
+    display:grid;
+    place-items:center;
+    background: rgba(16,185,129,.10);
+    border: 1px solid rgba(16,185,129,.35);
+    flex: 0 0 auto;
+    box-shadow: 0 18px 34px rgba(2,6,23,.10);
+    color: rgba(11,18,32,.92);
+  }
+
+  .hgroup{ min-width: 0; }
+  .hgroup h1{
+    margin:0;
+    font-weight: 1000;
+    letter-spacing: -.6px;
+    color: rgba(11,18,32,.95);
+    font-size: clamp(1.35rem, 2.2vw, 2.05rem);
+    line-height: 1.15;
+  }
+  .sub{
+    margin-top: 6px;
+    color: rgba(11,18,32,.62);
+    font-weight: 780;
+    line-height: 1.45;
+    max-width: 78ch;
+  }
+
+  .grid{
+    padding: 0 18px 18px;
+    display:grid;
+    gap: 12px;
+  }
+
+  /* top quick actions */
+  .top-actions{
+    margin-top: 12px;
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    align-items:center;
+    justify-content:space-between;
+  }
+  .crumb{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    align-items:center;
+    color: rgba(11,18,32,.60);
+    font-weight: 900;
+    font-size: .92rem;
+  }
+  .crumb a{
+    color: rgba(11,18,32,.86);
+    text-decoration:none;
+    border-bottom: 1px solid rgba(15,23,42,.18);
+  }
+  .crumb a:hover{ border-bottom-color: rgba(47,123,255,.35); }
+
+  .actions-mini{ display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+
+  .mini-btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    padding: 10px 12px;
+    border-radius: 14px;
+    border: 1px solid rgba(15,23,42,.10);
+    background: rgba(255,255,255,.94);
+    text-decoration:none;
+    font-weight: 1000;
+    color: rgba(11,18,32,.90);
+    transition: transform .18s var(--ease), box-shadow .18s var(--ease);
+    cursor:pointer;
+    user-select:none;
+  }
+  .mini-btn:hover{ transform: translateY(-2px); box-shadow: 0 14px 26px rgba(2,6,23,.10); }
+  .mini-btn:active{ transform: translateY(0); }
+  .mini-btn:focus-visible{ outline: 3px solid rgba(59,130,246,.35); outline-offset: 2px; }
+
+  /* Stats */
+  .stats{
+    margin-top: 6px;
+    display:grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  @media(min-width: 860px){
+    .stats{ grid-template-columns: repeat(3, 1fr); }
+  }
+
+  .stat{
+    background: rgba(255,255,255,.96);
+    border: 1px solid rgba(15,23,42,.10);
+    border-radius: 18px;
+    padding: 12px 12px;
+    box-shadow: 0 14px 26px rgba(2,6,23,.06);
+  }
+  .k{
+    font-size: .78rem;
+    color: rgba(11,18,32,.56);
+    font-weight: 950;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+  .v{
+    margin-top: 6px;
+    font-size: 1.06rem;
+    font-weight: 1000;
+    color: rgba(11,18,32,.92);
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .pill{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding: 7px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(15,23,42,.10);
+    background: rgba(255,255,255,.94);
+    font-weight: 1000;
+    font-size: .86rem;
+    color: rgba(11,18,32,.86);
+    white-space: nowrap;
+  }
+  .pill .dot{
+    width:9px; height:9px; border-radius: 999px;
+    background: var(--grad);
+    box-shadow: 0 0 0 4px rgba(47,123,255,.12);
+  }
+
+  .copy{
+    border: 1px solid rgba(15,23,42,.12);
+    background: rgba(255,255,255,.94);
+    border-radius: 12px;
+    padding: 8px 10px;
+    font-weight: 1000;
+    cursor:pointer;
+    transition: transform .14s var(--ease), box-shadow .14s var(--ease);
+    white-space: nowrap;
+    user-select:none;
+  }
+  .copy:hover{ transform: translateY(-1px); box-shadow: 0 12px 22px rgba(2,6,23,.08); }
+  .copy:active{ transform: translateY(0); }
+  .copy:focus-visible{ outline: 3px solid rgba(59,130,246,.35); outline-offset: 2px; }
+
+  /* Timeline */
+  .timeline{
+    display:grid;
+    gap: 10px;
+    margin-top: 10px;
+  }
+  @media(min-width: 860px){ .timeline{ grid-template-columns: repeat(4, 1fr); } }
+  .tstep{
+    border-radius: 18px;
+    border: 1px solid rgba(15,23,42,.10);
+    background: rgba(255,255,255,.96);
+    padding: 12px;
+    box-shadow: 0 14px 26px rgba(2,6,23,.06);
+  }
+  .tstep b{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-weight: 1000;
+    color: rgba(11,18,32,.92);
+  }
+  .tstep p{
+    margin: 8px 0 0;
+    color: rgba(11,18,32,.62);
+    font-weight: 780;
+    line-height: 1.45;
+  }
+
+  /* Panel items */
+  .panel{
+    background: rgba(255,255,255,.96);
+    border: 1px solid rgba(15,23,42,.10);
+    border-radius: 22px;
+    overflow:hidden;
+  }
+  .panel-head{
+    padding: 12px 14px;
+    background: rgba(248,250,252,.90);
+    border-bottom: 1px solid rgba(15,23,42,.08);
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap: 10px;
+  }
+  .panel-head h2{
+    margin:0;
+    font-weight: 1000;
+    color: rgba(11,18,32,.92);
+    letter-spacing: -.3px;
+    font-size: 1.05rem;
+  }
+  .mini{
+    font-size: .9rem;
+    font-weight: 900;
+    color: rgba(11,18,32,.58);
+  }
+
+  .items{
+    padding: 12px 14px 14px;
+    display:grid;
+    gap: 10px;
+  }
+  .line{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap: 12px;
+    padding: 10px 10px;
+    border-radius: 16px;
+    background: rgba(15,23,42,.03);
+    border: 1px solid rgba(15,23,42,.06);
+  }
+  .left{ min-width: 0; }
+  .ptitle{
+    font-weight: 950;
+    color: rgba(11,18,32,.92);
+    line-height: 1.2;
+    word-break: break-word;
+  }
+  .meta{
+    margin-top: 6px;
+    color: rgba(11,18,32,.60);
+    font-weight: 850;
+    font-size: .9rem;
+  }
+  .amt{
+    font-weight: 1000;
+    color: rgba(11,18,32,.92);
+    white-space: nowrap;
+  }
+
+  .total{
+    margin-top: 6px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(15,23,42,.10);
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap: 12px;
+  }
+  .total b{
+    font-size: 1.18rem;
+    font-weight: 1000;
+    color: rgba(11,18,32,.95);
+  }
+
+  /* Support */
+  .support{
+    border-radius: 22px;
+    border: 1px solid rgba(15,23,42,.10);
+    background: rgba(255,255,255,.96);
+    padding: 12px 14px;
+    box-shadow: 0 14px 26px rgba(2,6,23,.06);
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    justify-content:space-between;
+    gap: 10px;
+  }
+  .support b{ font-weight: 1000; color: rgba(11,18,32,.92); }
+  .support span{ color: rgba(11,18,32,.60); font-weight: 850; }
+
+  /* CTA */
+  .cta{
+    margin-top: 4px;
+    display:flex;
+    flex-wrap:wrap;
+    gap: 10px;
+    align-items:center;
+  }
+  .btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap: 8px;
+    text-decoration:none;
+    font-weight: 1000;
+    padding: 12px 14px;
+    border-radius: 14px;
+    border: 1px solid rgba(15,23,42,.10);
+    transition: transform .18s var(--ease), box-shadow .18s var(--ease), opacity .18s var(--ease);
+    user-select:none;
+  }
+  .btn:hover{ transform: translateY(-2px); box-shadow: 0 14px 26px rgba(2,6,23,.10); }
+  .btn:active{ transform: translateY(0); }
+  .btn:focus-visible{ outline: 3px solid rgba(59,130,246,.35); outline-offset: 2px; }
+
+  .btn.primary{
+    background: var(--grad);
+    color: #fff;
+    border-color: rgba(47,123,255,.22);
+  }
+  .btn.ghost{
+    background: rgba(255,255,255,.94);
+    color: rgba(11,18,32,.90);
+  }
+
+  .note{
+    margin-top: 8px;
+    font-size: .88rem;
+    color: rgba(11,18,32,.55);
+    font-weight: 850;
+    line-height: 1.45;
+  }
+
+  /* Print */
+  @media print{
+    .ss-header, .ss-footer, nav, .cta, .top-actions, .support{ display:none !important; }
+    .oc{ padding:0; }
+    .card{ box-shadow:none; border-color:#ddd; }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ transition:none!important; }
+    .btn:hover, .mini-btn:hover, .copy:hover{ transform:none!important; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# ---- Datos seguros (no rompe si falta algo) ---- #}
+{% set order_number = (order.number if order is defined and order and order.number else (order.id if order is defined and order else '—')) %}
+{% set order_status = (order.status if order is defined and order and order.status else 'Confirmado') %}
+{% set order_total  = (order.total if order is defined and order and order.total is not none else 0) %}
+{% set currency     = (currency if currency is defined else '$') %}
+{% set items_list   = (items if items is defined and items else []) %}
+
+{# Opcionales (si tu backend los pasa, se muestran; si no, no aparecen) #}
+{% set order_detail_url = (order_detail_url if order_detail_url is defined else '') %}
+{% set tracking_code    = (tracking_code if tracking_code is defined else (order.tracking_code if order is defined and order and order.tracking_code is defined else '')) %}
+{% set support_url      = (support_url if support_url is defined else '') %}
+{% set support_email    = (support_email if support_email is defined else '') %}
+{% set customer_email   = (customer_email if customer_email is defined else (order.email if order is defined and order and order.email is defined else '')) %}
+
+<section class="oc" aria-label="Pedido confirmado">
+  <div class="wrap">
+    <article class="card" role="status" aria-live="polite">
+      <header class="head">
+        <div class="ok" aria-hidden="true">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+            <path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+
+        <div class="hgroup">
+          <h1>¡Pedido confirmado!</h1>
+          <p class="sub">
+            Gracias por tu compra. Tu pedido quedó registrado{% if customer_email %} y vamos a enviarte actualizaciones a <b>{{ customer_email }}</b>{% endif %}.
+          </p>
+
+          <div class="top-actions" aria-label="Acciones rápidas">
+            <div class="crumb" aria-label="Navegación">
+              <a href="{{ url_for('main.home') }}">Inicio</a>
+              <span aria-hidden="true">›</span>
+              <a href="{{ url_for('shop.shop') }}">Tienda</a>
+              <span aria-hidden="true">›</span>
+              <span>Pedido</span>
+            </div>
+
+            <div class="actions-mini">
+              <button class="mini-btn" type="button" id="btnPrint" aria-label="Imprimir comprobante">🖨️ Imprimir</button>
+              <button class="mini-btn" type="button" id="btnSave" aria-label="Guardar comprobante">💾 Guardar</button>
+              {% if order_detail_url %}
+                <a class="mini-btn" href="{{ order_detail_url }}" aria-label="Ver detalle del pedido">📄 Ver pedido</a>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div class="grid">
+
+        <!-- Stats -->
+        <section class="stats" aria-label="Datos del pedido">
+          <div class="stat">
+            <div class="k">N° de pedido</div>
+            <div class="v">
+              <span id="orderNumber">{{ order_number }}</span>
+              <button class="copy" type="button" id="copyOrder" aria-label="Copiar número de pedido">Copiar</button>
+            </div>
+          </div>
+
+          <div class="stat">
+            <div class="k">Estado</div>
+            <div class="v">
+              <span class="pill"><span class="dot" aria-hidden="true"></span> {{ order_status }}</span>
+            </div>
+          </div>
+
+          <div class="stat">
+            <div class="k">Total</div>
+            <div class="v">
+              <span>{{ currency }} {{ "%.2f"|format(order_total or 0) }}</span>
+            </div>
+          </div>
+        </section>
+
+        {% if tracking_code %}
+        <!-- Tracking -->
+        <section class="stats" aria-label="Seguimiento">
+          <div class="stat" style="grid-column: 1 / -1;">
+            <div class="k">Código de seguimiento</div>
+            <div class="v">
+              <span id="trackingCode">{{ tracking_code }}</span>
+              <button class="copy" type="button" id="copyTracking" aria-label="Copiar código de seguimiento">Copiar</button>
+            </div>
+            <div class="meta">Usá este código para consultar el estado del envío (si aplica).</div>
+          </div>
+        </section>
+        {% endif %}
+
+        <!-- Timeline -->
+        <section class="timeline" aria-label="Proceso del pedido">
+          <div class="tstep"><b>✅ Confirmado</b><p>Tu compra fue registrada correctamente.</p></div>
+          <div class="tstep"><b>📦 Preparación</b><p>Estamos armando tu pedido para despacharlo.</p></div>
+          <div class="tstep"><b>🚚 En camino</b><p>Cuando salga, te avisamos y te damos seguimiento si aplica.</p></div>
+          <div class="tstep"><b>🏁 Entregado</b><p>Recibís tu pedido y podés pedir soporte si lo necesitás.</p></div>
+        </section>
+
+        <!-- Resumen -->
+        <section class="panel" aria-label="Resumen del pedido">
+          <header class="panel-head">
+            <h2>Resumen</h2>
+            <div class="mini">Items: {{ items_list|length }}</div>
+          </header>
+
+          <div class="items">
+            {% if items_list|length > 0 %}
+              {% for it in items_list %}
+                {% set qty = (it.qty if it.qty is not none else 1) %}
+                {% set price = (it.price if it.price is not none else 0) %}
+                <div class="line">
+                  <div class="left">
+                    <div class="ptitle">{{ it.title or 'Producto' }}</div>
+                    <div class="meta">Cantidad: {{ qty }} · Unit: {{ currency }} {{ "%.2f"|format(price) }}</div>
+                  </div>
+                  <div class="amt">{{ currency }} {{ "%.2f"|format(qty * price) }}</div>
+                </div>
+              {% endfor %}
+            {% endif %}
+
+            <div class="total" aria-label="Total del pedido">
+              <span class="meta">Total</span>
+              <b>{{ currency }} {{ "%.2f"|format(order_total or 0) }}</b>
+            </div>
+          </div>
+        </section>
+
+        <!-- Soporte -->
+        <section class="support" aria-label="Soporte">
+          <div>
+            <b>¿Necesitás ayuda?</b><br>
+            <span>Tené a mano tu N° de pedido para resolver más rápido.</span>
+          </div>
+          <div class="actions-mini">
+            {% if support_url %}
+              <a class="mini-btn" href="{{ support_url }}">💬 Contacto</a>
+            {% else %}
+              <a class="mini-btn" href="{{ url_for('main.contact') }}">💬 Contacto</a>
+            {% endif %}
+            {% if support_email %}
+              <a class="mini-btn" href="mailto:{{ support_email }}?subject=Soporte%20Pedido%20{{ order_number }}">✉️ Email</a>
+            {% endif %}
+          </div>
+        </section>
+
+        <!-- CTA -->
+        <div class="cta" aria-label="Acciones">
+          <a class="btn primary" href="{{ url_for('shop.shop') }}">Seguir comprando</a>
+          <a class="btn ghost" href="{{ url_for('main.home') }}">Volver al inicio</a>
+          {% if order_detail_url %}
+            <a class="btn ghost" href="{{ order_detail_url }}">Ver detalle del pedido</a>
+          {% endif %}
+        </div>
+
+        <p class="note">
+          Guardá tu número de pedido por cualquier consulta.
+        </p>
+      </div>
+    </article>
+  </div>
+</section>
+
+<script>
+/* ==========================================================
+   UX PRO FINAL:
+   - copiar pedido / tracking
+   - imprimir
+   - guardar comprobante (descarga html)
+   - atajos: P imprimir, C copiar pedido
+========================================================== */
+(function(){
+  function toast(text){
+    const t = document.createElement("div");
+    t.textContent = text;
+    t.style.position = "fixed";
+    t.style.left = "50%";
+    t.style.bottom = "18px";
+    t.style.transform = "translateX(-50%)";
+    t.style.padding = "10px 12px";
+    t.style.borderRadius = "999px";
+    t.style.fontWeight = "900";
+    t.style.background = "rgba(11,18,32,.92)";
+    t.style.color = "#fff";
+    t.style.boxShadow = "0 18px 38px rgba(2,6,23,.18)";
+    t.style.zIndex = "9999";
+    document.body.appendChild(t);
+    setTimeout(()=>{ t.style.opacity = "0"; t.style.transition = "opacity .25s ease"; }, 900);
+    setTimeout(()=>{ t.remove(); }, 1200);
+  }
+
+  async function copyText(value){
+    try{
+      await navigator.clipboard.writeText(value);
+      toast("Copiado ✅");
+      return true;
+    }catch(e){
+      const ta = document.createElement("textarea");
+      ta.value = value;
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+     

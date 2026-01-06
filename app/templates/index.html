@@ -2,891 +2,104 @@
 {% block title %}Skyline Store · Moda urbana premium{% endblock %}
 
 {% block extra_head %}
-<meta name="description" content="{{ meta_description if meta_description is defined else 'Skyline Store · Moda urbana premium, accesorios y tecnología. Comprá fácil, rápido y seguro.' }}">
+<meta name="description" content="{{ meta_description | default('Skyline Store · Moda urbana premium, accesorios y tecnología.') }}">
 <link rel="canonical" href="{{ request.url }}">
 
-<meta property="og:title" content="{{ meta_title if meta_title is defined else 'Skyline Store · Moda urbana premium' }}">
-<meta property="og:description" content="{{ meta_description if meta_description is defined else 'Moda urbana, accesorios y tecnología en un solo lugar.' }}">
-<meta property="og:image" content="{{ (og_image if og_image is defined else url_for('static', filename='img/banners/hero_home.png', _external=True)) }}">
-<meta property="og:type" content="website">
-
 <link rel="preload" as="image" href="{{ url_for('static', filename='img/banners/hero_home.png') }}">
-
-<style>
-/* =========================================================
- SKYLINE STORE — HOME (Marketplace PRO)
- - Estilo tipo Temu / MercadoLibre (hero + quick actions + deals + grid)
- - 100% compatible con tu base (usa --max, --stroke, --grad, --shadow2, --ease)
- - Accesible (aria), responsive, sin dependencias externas
-========================================================= */
-
-.home{padding: 10px 0 0}
-.section{max-width: var(--max); margin:0 auto; padding: 0 18px 28px}
-a{color:inherit}
-.sr-only{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
-:root{scroll-behavior:smooth}
-
-/* =========================
- TOP: beneficios + buscador + quick actions
-========================= */
-.home-top{
-  margin: 14px 0 12px;
-  display:grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
-}
-@media (min-width: 980px){
-  .home-top{grid-template-columns: 1.3fr 1fr; align-items:center}
-}
-
-.badges{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
-.badge{
-  display:inline-flex; align-items:center; gap:8px;
-  background: rgba(255,255,255,.88);
-  border: 1px solid var(--stroke);
-  border-radius:999px;
-  padding: 9px 11px;
-  box-shadow: 0 12px 24px rgba(2,6,23,.06);
-  font-weight: 850;
-  font-size: .88rem;
-  color: rgba(11,18,32,.86);
-}
-.badge .d{
-  width:10px;height:10px;border-radius:99px;
-  background: var(--grad);
-  opacity:.95;
-}
-
-.home-search{
-  display:flex;
-  align-items:center;
-  gap:10px;
-  width: 100%;
-}
-.home-search .search{
-  flex:1;
-  display:flex; gap:10px; align-items:center;
-  background: rgba(255,255,255,.94);
-  border: 1px solid var(--stroke);
-  border-radius: 18px;
-  padding: 10px 12px;
-  box-shadow: 0 14px 30px rgba(2,6,23,.06);
-  min-height: 48px;
-}
-.home-search input{
-  border:0; outline:none; width:100%;
-  font-weight: 800;
-  background: transparent;
-  color: rgba(11,18,32,.92);
-}
-.home-search input::placeholder{color: rgba(11,18,32,.45)}
-.home-search button{
-  border:0;
-  background: var(--grad);
-  color:#fff;
-  font-weight: 950;
-  padding: 10px 14px;
-  border-radius: 14px;
-  cursor:pointer;
-  box-shadow: 0 12px 22px rgba(2,6,23,.12);
-  transition: transform .18s var(--ease), opacity .18s var(--ease);
-  white-space:nowrap;
-}
-.home-search button:hover{transform: translateY(-1px)}
-.home-search button:active{transform: translateY(0)}
-.home-search button:focus-visible,
-.home-search input:focus-visible{
-  outline: 3px solid rgba(59,130,246,.35);
-  outline-offset: 2px;
-  border-radius: 16px;
-}
-
-/* Quick actions (tipo ML) */
-.quick-actions{
-  margin-top: 8px;
-  display:flex; gap:10px; flex-wrap:wrap;
-  align-items:center;
-}
-.qa{
-  display:inline-flex; align-items:center; justify-content:center;
-  gap:8px;
-  padding: 10px 12px;
-  border-radius: 999px;
-  text-decoration:none;
-  background: rgba(255,255,255,.92);
-  border: 1px solid var(--stroke);
-  box-shadow: 0 10px 20px rgba(2,6,23,.06);
-  font-weight: 900;
-  color: rgba(11,18,32,.86);
-  transition: transform .18s var(--ease), box-shadow .18s var(--ease);
-}
-.qa:hover{transform: translateY(-2px); box-shadow: 0 14px 26px rgba(2,6,23,.10)}
-.qa .dot{width:8px;height:8px;border-radius:99px;background: var(--grad)}
-
-/* =========================
- HERO + SIDEBAR (mega categories) + panel derecha
-========================= */
-.hero-wrap{
-  margin-top: 12px;
-  display:grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
-}
-@media (min-width: 1080px){
-  .hero-wrap{
-    grid-template-columns: 280px 1fr 320px;
-    align-items: stretch;
-  }
-}
-
-.side{
-  background: rgba(255,255,255,.94);
-  border: 1px solid var(--stroke);
-  border-radius: 22px;
-  box-shadow: var(--shadow2);
-  padding: 12px;
-  overflow:hidden;
-}
-.side h2{
-  margin: 2px 0 10px;
-  font-size: 1rem;
-  font-weight: 950;
-  letter-spacing: -.3px;
-  color: rgba(11,18,32,.92);
-}
-.side ul{list-style:none; margin:0; padding:0; display:grid; gap:8px}
-.side a{
-  display:flex; align-items:center; justify-content:space-between;
-  gap: 10px;
-  text-decoration:none;
-  padding: 10px 10px;
-  border-radius: 14px;
-  background: rgba(255,255,255,.78);
-  border: 1px solid rgba(15,23,42,.08);
-  color: rgba(11,18,32,.86);
-  font-weight: 900;
-  transition: transform .18s var(--ease);
-}
-.side a:hover{transform: translateY(-1px)}
-.side .tagmini{
-  display:inline-flex;
-  align-items:center;
-  padding: 6px 9px;
-  border-radius: 999px;
-  background: rgba(47,123,255,.08);
-  border: 1px solid rgba(47,123,255,.14);
-  font-weight: 900;
-  font-size: .78rem;
-  color: rgba(11,18,32,.78);
-}
-
-.hero{
-  position:relative;
-  border-radius: 22px;
-  overflow:hidden;
-  background: #fff;
-  border: 1px solid var(--stroke);
-  box-shadow: var(--shadow2);
-}
-.hero-img{
-  width:100%;
-  height: min(520px, 70vw);
-  object-fit: cover;
-  display:block;
-  filter: saturate(1.06) contrast(1.02);
-}
-.hero-overlay{
-  position:absolute; inset:0;
-  display:flex; align-items:center;
-  padding: 22px clamp(18px,4vw,46px);
-}
-.hero-card{
-  max-width: 620px;
-  background: linear-gradient(180deg, rgba(255,255,255,.94), rgba(255,255,255,.70));
-  border: 1px solid rgba(15,23,42,.12);
-  box-shadow: 0 18px 55px rgba(2,6,23,.12);
-  border-radius: 22px;
-  padding: 18px 18px 16px;
-  backdrop-filter: blur(10px);
-}
-.hero-kicker{
-  display:inline-flex; align-items:center; gap:8px;
-  font-weight:950; font-size:.86rem;
-  padding: 8px 10px;
-  border-radius:999px;
-  background: rgba(47,123,255,.10);
-  border: 1px solid rgba(47,123,255,.18);
-  color: rgba(11,18,32,.88);
-}
-.hero-kicker .d{width:10px;height:10px;border-radius:99px;background:var(--grad)}
-.hero-card h1{
-  margin: 12px 0 0;
-  font-weight: 1000;
-  letter-spacing: -1px;
-  line-height: 1.02;
-  font-size: clamp(2rem, 4.9vw, 3.3rem);
-  color: rgba(11,18,32,.95);
-}
-.hero-card h1 .accent{
-  background: var(--grad);
-  -webkit-background-clip:text;
-  background-clip:text;
-  color: transparent;
-}
-.hero-sub{
-  margin-top: 10px;
-  font-weight: 700;
-  color: rgba(11,18,32,.62);
-  line-height: 1.35;
-  max-width: 52ch;
-}
-.hero-ctas{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
-.btn{
-  display:inline-flex;align-items:center;justify-content:center;
-  text-decoration:none;font-weight:950;
-  padding: 12px 14px;
-  border-radius: 14px;
-  border:1px solid var(--stroke);
-  cursor:pointer;
-  transition: transform .18s var(--ease), box-shadow .18s var(--ease), opacity .18s var(--ease);
-}
-.btn:hover{transform: translateY(-2px); box-shadow: 0 14px 26px rgba(2,6,23,.10)}
-.btn.primary{
-  background: var(--grad);
-  color:#fff;
-  border-color: rgba(47,123,255,.20);
-}
-.btn.ghost{
-  background: rgba(255,255,255,.88);
-  color: rgba(11,18,32,.92);
-}
-.btn:focus-visible{outline: 3px solid rgba(59,130,246,.35); outline-offset: 2px}
-
-.hero-mini{
-  display:flex; gap:10px; flex-wrap:wrap;
-  margin-top: 12px;
-}
-.pill{
-  display:inline-flex;align-items:center;gap:8px;
-  padding: 8px 10px;
-  border-radius: 999px;
-  background: rgba(255,255,255,.90);
-  border: 1px solid rgba(15,23,42,.10);
-  font-weight: 900;
-  color: rgba(11,18,32,.72);
-  font-size: .88rem;
-}
-.pill b{color: rgba(11,18,32,.92)}
-
-/* Right panel: cuenta / cupones / tracking (tipo marketplace) */
-.panel{
-  background: rgba(255,255,255,.94);
-  border: 1px solid var(--stroke);
-  border-radius: 22px;
-  box-shadow: var(--shadow2);
-  padding: 12px;
-  display:grid;
-  gap:10px;
-}
-.pcard{
-  background: rgba(255,255,255,.86);
-  border: 1px solid rgba(15,23,42,.10);
-  border-radius: 18px;
-  padding: 12px;
-  box-shadow: 0 14px 30px rgba(2,6,23,.06);
-}
-.pcard b{display:block; font-weight: 950; color: rgba(11,18,32,.92)}
-.pcard span{display:block; margin-top:6px; font-weight:700; color: rgba(11,18,32,.62); line-height:1.35}
-.pcard .row{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px}
-.pbtn{
-  display:inline-flex; align-items:center; justify-content:center;
-  gap:8px;
-  padding: 10px 12px;
-  border-radius: 14px;
-  text-decoration:none;
-  font-weight: 950;
-  border:1px solid rgba(15,23,42,.10);
-  background: rgba(255,255,255,.92);
-  color: rgba(11,18,32,.90);
-  transition: transform .18s var(--ease);
-}
-.pbtn:hover{transform: translateY(-2px)}
-.pbtn.primary{background: var(--grad); color:#fff; border-color: rgba(47,123,255,.18)}
-
-/* =========================
- CATEGORÍAS BANNERS (scroll móvil)
-========================= */
-.cats{
-  display:grid;
-  grid-template-columns: 1fr;
-  gap:12px;
-  margin: 14px 0 10px;
-}
-@media (min-width: 860px){ .cats{grid-template-columns: repeat(4,1fr)} }
-@media (max-width: 859px){
-  .cats{
-    display:flex;
-    overflow:auto;
-    scroll-snap-type:x mandatory;
-    padding-bottom: 4px;
-  }
-  .cat{min-width: 78%; scroll-snap-align: start}
-}
-.cat{
-  position:relative;
-  border-radius: 18px;
-  overflow:hidden;
-  border: 1px solid var(--stroke);
-  box-shadow: 0 16px 34px rgba(2,6,23,.08);
-  min-height: 140px;
-  background:#fff;
-}
-.cat img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:saturate(1.05)}
-.cat .layer{
-  position:absolute; inset:0;
-  background: linear-gradient(90deg, rgba(0,0,0,.42), rgba(0,0,0,.10), transparent);
-}
-.cat .content{position:absolute;left:14px;bottom:14px;right:14px;color:#fff}
-.cat .content b{display:block;font-weight:1000;font-size:1.06rem;letter-spacing:-.2px}
-.cat .content a{
-  margin-top:8px;display:inline-flex;
-  color:#fff;text-decoration:none;
-  font-weight:950;
-  background: rgba(255,255,255,.14);
-  border:1px solid rgba(255,255,255,.22);
-  padding: 9px 11px;
-  border-radius: 12px;
-  backdrop-filter: blur(6px);
-  transition: transform .18s var(--ease);
-}
-.cat .content a:hover{transform: translateY(-1px)}
-
-/* =========================
- CHIPS filtros
-========================= */
-.filters{
-  display:flex; gap:8px; flex-wrap:wrap;
-  margin: 10px 0 14px;
-}
-.chip{
-  display:inline-flex; align-items:center; gap:8px;
-  padding: 10px 12px;
-  border-radius: 999px;
-  background: rgba(255,255,255,.92);
-  border: 1px solid var(--stroke);
-  box-shadow: 0 10px 20px rgba(2,6,23,.06);
-  text-decoration:none;
-  font-weight: 950;
-  color: rgba(11,18,32,.86);
-  transition: transform .18s var(--ease);
-}
-.chip .d{width:8px;height:8px;border-radius:99px;background: var(--grad)}
-.chip:hover{transform: translateY(-2px)}
-
-/* =========================
- FLASH DEALS (urgencia tipo Temu)
-========================= */
-.deals{
-  margin-top: 10px;
-  background: rgba(255,255,255,.94);
-  border:1px solid var(--stroke);
-  border-radius: 22px;
-  box-shadow: var(--shadow2);
-  padding: 12px;
-}
-.deals-top{
-  display:flex; align-items:flex-end; justify-content:space-between;
-  gap:12px; flex-wrap:wrap;
-}
-.deals-title{
-  font-weight: 1000;
-  letter-spacing:-.5px;
-  color: rgba(11,18,32,.95);
-  font-size: 1.18rem;
-}
-.timer{
-  display:inline-flex; align-items:center; gap:8px;
-  padding: 8px 10px;
-  border-radius: 999px;
-  background: rgba(47,123,255,.08);
-  border:1px solid rgba(47,123,255,.14);
-  font-weight: 950;
-  color: rgba(11,18,32,.82);
-}
-.timer .box{
-  display:inline-grid; place-items:center;
-  width: 28px; height: 26px;
-  border-radius: 10px;
-  background: rgba(255,255,255,.9);
-  border:1px solid rgba(15,23,42,.10);
-}
-.deals-row{
-  margin-top: 10px;
-  display:grid;
-  grid-template-columns: 1fr;
-  gap:12px;
-}
-@media (min-width: 860px){ .deals-row{grid-template-columns: repeat(3, 1fr)} }
-
-.deal{
-  border-radius: 18px;
-  overflow:hidden;
-  border:1px solid rgba(15,23,42,.10);
-  background: rgba(255,255,255,.90);
-  box-shadow: 0 16px 34px rgba(2,6,23,.08);
-  display:flex;
-  gap: 12px;
-  padding: 12px;
-  align-items:center;
-}
-.deal .img{
-  width: 86px; height: 86px;
-  border-radius: 16px;
-  background: #eef2ff;
-  border:1px solid rgba(15,23,42,.08);
-  overflow:hidden;
-  flex: 0 0 auto;
-}
-.deal .img img{width:100%;height:100%;object-fit:cover;display:block}
-.deal .info{min-width: 0}
-.deal .info b{display:block;font-weight:950;color:rgba(11,18,32,.92);line-height:1.15}
-.deal .info span{display:block;margin-top:6px;font-weight:800;color:rgba(11,18,32,.62);font-size:.92rem}
-.deal .bar{
-  margin-top: 8px;
-  height: 10px;
-  border-radius: 999px;
-  background: rgba(15,23,42,.08);
-  overflow:hidden;
-  border:1px solid rgba(15,23,42,.10);
-}
-.deal .bar i{
-  display:block; height:100%;
-  background: var(--grad);
-  width: 62%;
-}
-.deal .cta{
-  margin-left:auto;
-  display:inline-flex;
-  text-decoration:none;
-  font-weight: 1000;
-  padding: 10px 12px;
-  border-radius: 14px;
-  background: var(--grad);
-  color:#fff;
-  border:1px solid rgba(47,123,255,.22);
-  box-shadow: 0 14px 26px rgba(2,6,23,.10);
-  white-space:nowrap;
-}
-.deal .cta:active{transform: translateY(1px)}
-
-/* =========================
- DESTACADOS (grid cards)
-========================= */
-.block-head{
-  margin: 14px 0 10px;
-  display:flex; align-items:flex-end; justify-content:space-between;
-  gap:12px; flex-wrap:wrap;
-}
-.block-title{
-  font-weight: 1000;
-  letter-spacing:-.5px;
-  color: rgba(11,18,32,.95);
-  font-size: 1.25rem;
-}
-.block-sub{
-  font-weight: 750;
-  color: rgba(11,18,32,.58);
-  font-size: .92rem;
-}
-
-.gridP{display:grid;grid-template-columns:1fr;gap:12px}
-@media (min-width: 860px){ .gridP{grid-template-columns: repeat(4,1fr)} }
-
-.cardP{
-  background: rgba(255,255,255,.94);
-  border: 1px solid var(--stroke);
-  box-shadow: 0 16px 34px rgba(2,6,23,.08);
-  border-radius: 20px;
-  overflow:hidden;
-  transition: transform .2s var(--ease), box-shadow .2s var(--ease);
-  display:flex;
-  flex-direction:column;
-}
-.cardP:hover{
-  transform: translateY(-6px);
-  box-shadow: 0 22px 50px rgba(2,6,23,.12);
-}
-.ph{
-  background: #eef2ff;
-  height: 190px;
-  position:relative;
-  display:grid;
-  place-items:center;
-  overflow:hidden;
-}
-.ph img{width:100%;height:100%;object-fit:cover;display:block}
-.sk{
-  position:absolute; inset:0;
-  background: linear-gradient(90deg, rgba(226,232,240,.55) 0%, rgba(226,232,240,.25) 45%, rgba(226,232,240,.55) 100%);
-  background-size:200% 100%;
-  animation: sk 1.05s ease-in-out infinite;
-}
-@keyframes sk{0%{background-position:0% 0}100%{background-position:200% 0}}
-.fallback{
-  position:absolute; inset:0;
-  display:none;
-  place-items:center;
-  text-align:center;
-  padding:12px;
-  font-weight: 900;
-  color: rgba(11,18,32,.72);
-}
-.badgeP{
-  position:absolute;
-  left: 10px;
-  top: 10px;
-  display:inline-flex;
-  align-items:center;
-  gap:8px;
-  padding: 8px 10px;
-  border-radius: 999px;
-  background: rgba(0,0,0,.42);
-  border: 1px solid rgba(255,255,255,.18);
-  color:#fff;
-  font-weight: 950;
-  backdrop-filter: blur(6px);
-}
-.badgeP .d{width:8px;height:8px;border-radius:99px;background:var(--grad)}
-
-.body{padding: 12px 12px 14px;display:flex;flex-direction:column;gap:8px;flex:1}
-.name{font-weight: 900;color: rgba(11,18,32,.92);line-height:1.2}
-.price{font-weight: 1000;color: rgba(11,18,32,.95); font-size: 1.04rem}
-.meta{
-  display:flex; flex-wrap:wrap; gap:8px;
-  color: rgba(11,18,32,.62);
-  font-weight:750;
-  font-size: .86rem;
-}
-.tag{
-  display:inline-flex; align-items:center; gap:6px;
-  padding: 7px 9px;
-  border-radius: 999px;
-  background: rgba(47,123,255,.08);
-  border:1px solid rgba(47,123,255,.14);
-}
-.tag .t{width:7px;height:7px;border-radius:99px;background: var(--grad)}
-.buy{
-  margin-top:auto;
-  display:inline-flex;align-items:center;justify-content:center;
-  text-decoration:none;
-  font-weight: 1000;
-  background: var(--grad);
-  color:#fff;
-  padding: 12px 12px;
-  border-radius: 14px;
-  border:1px solid rgba(47,123,255,.22);
-  box-shadow: 0 14px 26px rgba(2,6,23,.10);
-}
-.buy:active{transform: translateY(1px)}
-
-/* =========================
- Servicios (3 cards)
-========================= */
-.services{
-  margin-top: 14px;
-  display:grid;
-  grid-template-columns: 1fr;
-  gap:10px;
-  background: rgba(255,255,255,.92);
-  border:1px solid var(--stroke);
-  border-radius: 22px;
-  padding: 12px;
-  box-shadow: 0 16px 34px rgba(2,6,23,.08);
-}
-@media (min-width: 860px){ .services{grid-template-columns: repeat(3,1fr)} }
-.svc{
-  display:flex; gap:12px; align-items:center;
-  padding: 10px;
-  border-radius: 16px;
-  background: rgba(255,255,255,.74);
-  border: 1px solid rgba(15,23,42,.08);
-}
-.svc img{width:54px;height:54px;object-fit:contain}
-.svc b{display:block;font-weight: 950;color: rgba(11,18,32,.92)}
-.svc span{display:block;color: rgba(11,18,32,.62);font-size:.92rem;font-weight:700}
-
-/* =========================
- Floating Top
-========================= */
-.to-top{
-  position: fixed;
-  right: 16px;
-  bottom: 18px;
-  z-index: 50;
-  display:none;
-  width: 46px; height: 46px;
-  border-radius: 999px;
-  background: rgba(255,255,255,.92);
-  border: 1px solid var(--stroke);
-  box-shadow: 0 18px 38px rgba(2,6,23,.14);
-  font-weight: 1000;
-  cursor:pointer;
-}
-.to-top.show{display:grid;place-items:center}
-</style>
 {% endblock %}
 
 {% block content %}
-<div class="home">
-  <div class="section">
+<section class="home">
 
-    <!-- TOP -->
-    <div class="home-top" aria-label="Beneficios y buscador">
-
-      <div>
-        <div class="badges" aria-label="Beneficios de la tienda">
-          <span class="badge"><span class="d" aria-hidden="true"></span> Envío rápido</span>
-          <span class="badge"><span class="d" aria-hidden="true"></span> Pago seguro</span>
-          <span class="badge"><span class="d" aria-hidden="true"></span> Soporte 24/7</span>
-          <span class="badge"><span class="d" aria-hidden="true"></span> Compra protegida</span>
-        </div>
-
-        <div class="quick-actions" aria-label="Accesos rápidos">
-          <a class="qa" href="{{ url_for('shop.shop') }}?sort=new"><span class="dot" aria-hidden="true"></span> Novedades</a>
-          <a class="qa" href="{{ url_for('shop.shop') }}?q=oferta"><span class="dot" aria-hidden="true"></span> Ofertas</a>
-          <a class="qa" href="{{ url_for('shop.shop') }}?available=1"><span class="dot" aria-hidden="true"></span> En stock</a>
-          <a class="qa" href="{{ url_for('shop.shop') }}"><span class="dot" aria-hidden="true"></span> Ver todo</a>
-        </div>
+  <!-- TOP BENEFITS + SEARCH -->
+  <section class="home-top section">
+    <div>
+      <div class="badges">
+        <span class="badge"><span class="d"></span> Envío rápido</span>
+        <span class="badge"><span class="d"></span> Pago seguro</span>
+        <span class="badge"><span class="d"></span> Soporte 24/7</span>
+        <span class="badge"><span class="d"></span> Compra protegida</span>
       </div>
 
-      <form class="home-search" action="{{ url_for('shop.shop') }}" method="get" role="search" aria-label="Buscar productos">
-        <div class="search">
-          <label class="sr-only" for="q">Buscar</label>
-          <input id="q" name="q" placeholder="Buscar en Skyline Store…" autocomplete="off">
-          <button type="submit">Buscar</button>
-        </div>
-      </form>
-
+      <div class="quick-actions">
+        <a class="qa" href="{{ url_for('shop.shop') }}?sort=new"><span class="dot"></span> Novedades</a>
+        <a class="qa" href="{{ url_for('shop.shop') }}?q=oferta"><span class="dot"></span> Ofertas</a>
+        <a class="qa" href="{{ url_for('shop.shop') }}"><span class="dot"></span> Ver todo</a>
+      </div>
     </div>
 
-    <!-- HERO WRAP -->
-    <div class="hero-wrap" aria-label="Hero con panel marketplace">
-
-      <!-- Left: mega categories -->
-      <aside class="side" aria-label="Categorías rápidas">
-        <h2>☰ Categorías</h2>
-        <ul>
-          <li><a href="{{ url_for('shop.shop') }}?categoria=ropa"><span>Ropa urbana</span><span class="tagmini">Top</span></a></li>
-          <li><a href="{{ url_for('shop.shop') }}?q=buzo"><span>Buzos & Hoodies</span><span class="tagmini">🔥</span></a></li>
-          <li><a href="{{ url_for('shop.shop') }}?q=remera"><span>Remeras</span><span class="tagmini">New</span></a></li>
-          <li><a href="{{ url_for('shop.shop') }}?categoria=accesorios"><span>Accesorios</span><span class="tagmini">Pro</span></a></li>
-          <li><a href="{{ url_for('shop.shop') }}?categoria=tecnologia"><span>Gadgets & Tech</span><span class="tagmini">⚡</span></a></li>
-          <li><a href="{{ url_for('shop.shop') }}?q=auriculares"><span>Auriculares</span><span class="tagmini">Hot</span></a></li>
-          <li><a href="{{ url_for('shop.shop') }}?q=smartwatch"><span>Smartwatch</span><span class="tagmini">Trend</span></a></li>
-          <li><a href="{{ url_for('shop.shop') }}?sort=new"><span>Lo último</span><span class="tagmini">2026</span></a></li>
-        </ul>
-      </aside>
-
-      <!-- Center: hero -->
-      <div class="hero" aria-label="Hero principal">
-        <img class="hero-img"
-             src="{{ url_for('static', filename='img/banners/hero_home.png') }}"
-             alt="Nueva colección urbana Skyline Store"
-             loading="eager" decoding="async">
-
-        <div class="hero-overlay">
-          <div class="hero-card">
-            <div class="hero-kicker"><span class="d" aria-hidden="true"></span> NUEVA TEMPORADA · 2026</div>
-
-            <h1>Nueva colección <span class="accent">urbana</span></h1>
-
-            <div class="hero-sub">
-              Streetwear + tecnología con look premium. Comprá fácil, rápido y con confianza.
-            </div>
-
-            <div class="hero-ctas">
-              <a class="btn primary" href="{{ url_for('shop.shop') }}">Explorar productos</a>
-              <a class="btn ghost" href="{{ url_for('shop.shop') }}?sort=new">Ver novedades</a>
-            </div>
-
-            <div class="hero-mini" aria-label="Highlights">
-              <span class="pill"><b>+100</b> productos</span>
-              <span class="pill"><b>Ofertas</b> semanales</span>
-              <span class="pill"><b>Seguimiento</b> de pedidos</span>
-            </div>
-          </div>
-        </div>
+    <form class="home-search" action="{{ url_for('shop.shop') }}" method="get" role="search">
+      <div class="search">
+        <label for="q" class="sr-only">Buscar</label>
+        <input id="q" name="q" placeholder="Buscar en Skyline Store…" autocomplete="off">
+        <button type="submit">Buscar</button>
       </div>
+    </form>
+  </section>
 
-      <!-- Right: panel marketplace -->
-      <aside class="panel" aria-label="Panel de cuenta y beneficios">
-        <div class="pcard">
-          <b>Tu cuenta</b>
-          <span>Ingresá para ver pedidos, favoritos y cupones.</span>
-          <div class="row">
-            <a class="pbtn primary" href="{{ url_for('auth.login') if 'auth.login' in request.url_rule.endpoint if request.url_rule else url_for('auth.login') }}">Ingresar</a>
-            <a class="pbtn" href="{{ url_for('auth.register') if 'auth.register' in request.url_rule.endpoint if request.url_rule else url_for('auth.register') }}">Crear cuenta</a>
+  <!-- HERO -->
+  <section class="hero-wrap section">
+
+    <aside class="side">
+      <h2>Categorías</h2>
+      <ul>
+        <li><a href="{{ url_for('shop.shop') }}?categoria=ropa">Ropa urbana</a></li>
+        <li><a href="{{ url_for('shop.shop') }}?categoria=accesorios">Accesorios</a></li>
+        <li><a href="{{ url_for('shop.shop') }}?categoria=tecnologia">Tecnología</a></li>
+        <li><a href="{{ url_for('shop.shop') }}?sort=new">Lo nuevo</a></li>
+      </ul>
+    </aside>
+
+    <div class="hero">
+      <img
+        src="{{ url_for('static', filename='img/banners/hero_home.png') }}"
+        alt="Nueva colección Skyline Store"
+        loading="eager"
+        decoding="async"
+      >
+      <div class="hero-overlay">
+        <div class="hero-card">
+          <span class="hero-kicker"><span class="d"></span> TEMPORADA 2026</span>
+          <h1>Streetwear <span class="accent">premium</span></h1>
+          <p class="hero-sub">Moda urbana + tecnología con diseño profesional.</p>
+          <div class="hero-ctas">
+            <a href="{{ url_for('shop.shop') }}" class="btn primary">Explorar tienda</a>
+            <a href="{{ url_for('shop.shop') }}?sort=new" class="btn ghost">Novedades</a>
           </div>
-        </div>
-
-        <div class="pcard">
-          <b>Cupones & ofertas</b>
-          <span>Encontrá descuentos y promos destacadas.</span>
-          <div class="row">
-            <a class="pbtn" href="{{ url_for('shop.shop') }}?q=oferta">Ver ofertas</a>
-            <a class="pbtn" href="{{ url_for('shop.shop') }}?sort=new">Novedades</a>
-          </div>
-        </div>
-
-        <div class="pcard">
-          <b>Compra protegida</b>
-          <span>Pago seguro + soporte rápido para ayudarte.</span>
-          <div class="row">
-            <a class="pbtn" href="{{ url_for('shop.shop') }}">Explorar</a>
-          </div>
-        </div>
-      </aside>
-
-    </div>
-
-    <!-- CATEGORÍAS VISUALES -->
-    <div class="cats" aria-label="Categorías principales">
-      <div class="cat">
-        <img src="{{ url_for('static', filename='img/banners/cat_men.png') }}" alt="Moda masculina" loading="lazy" decoding="async">
-        <div class="layer"></div>
-        <div class="content">
-          <b>Moda Masculina</b>
-          <a href="{{ url_for('shop.shop') }}?categoria=ropa&sub=masculina">Ver más</a>
-        </div>
-      </div>
-
-      <div class="cat">
-        <img src="{{ url_for('static', filename='img/banners/cat_women.png') }}" alt="Moda femenina" loading="lazy" decoding="async">
-        <div class="layer"></div>
-        <div class="content">
-          <b>Moda Femenina</b>
-          <a href="{{ url_for('shop.shop') }}?categoria=ropa&sub=femenina">Ver más</a>
-        </div>
-      </div>
-
-      <div class="cat">
-        <img src="{{ url_for('static', filename='img/banners/cat_accessories.png') }}" alt="Accesorios" loading="lazy" decoding="async">
-        <div class="layer"></div>
-        <div class="content">
-          <b>Accesorios</b>
-          <a href="{{ url_for('shop.shop') }}?categoria=accesorios">Ver más</a>
-        </div>
-      </div>
-
-      <div class="cat">
-        <img src="{{ url_for('static', filename='img/banners/cat_tech.png') }}" alt="Gadgets y tecnología" loading="lazy" decoding="async">
-        <div class="layer"></div>
-        <div class="content">
-          <b>Gadgets & Tech</b>
-          <a href="{{ url_for('shop.shop') }}?categoria=tecnologia">Ver más</a>
         </div>
       </div>
     </div>
 
-    <!-- QUICK FILTERS -->
-    <div class="filters" aria-label="Filtros rápidos">
-      <a class="chip" href="{{ url_for('shop.shop') }}?sort=new"><span class="d" aria-hidden="true"></span> Novedades</a>
-      <a class="chip" href="{{ url_for('shop.shop') }}?q=oferta"><span class="d" aria-hidden="true"></span> Ofertas</a>
-      <a class="chip" href="{{ url_for('shop.shop') }}?available=1"><span class="d" aria-hidden="true"></span> Disponibles</a>
-      <a class="chip" href="{{ url_for('shop.shop') }}?categoria=tecnologia"><span class="d" aria-hidden="true"></span> Tech</a>
-    </div>
-
-    <!-- FLASH DEALS -->
-    <section class="deals" aria-label="Flash deals">
-      <div class="deals-top">
-        <div>
-          <div class="deals-title">⚡ Flash Deals</div>
-          <div class="block-sub">Ofertas rápidas — se agotan</div>
-        </div>
-        <div class="timer" aria-label="Temporizador de ofertas">
-          <span>Termina en</span>
-          <span class="box" id="tH">00</span>:
-          <span class="box" id="tM">10</span>:
-          <span class="box" id="tS">00</span>
+    <aside class="panel">
+      <div class="pcard">
+        <b>Tu cuenta</b>
+        <span>Accedé a pedidos y beneficios.</span>
+        <div class="row">
+          <a class="pbtn primary" href="/account">Ingresar</a>
+          <a class="pbtn" href="/account">Crear cuenta</a>
         </div>
       </div>
+    </aside>
 
-      <div class="deals-row">
-        <div class="deal" aria-label="Oferta 1">
-          <div class="img">
-            <img src="{{ url_for('static', filename='img/products/hero-placeholder.png') }}" alt="Oferta destacada" loading="lazy" decoding="async">
-          </div>
-          <div class="info">
-            <b>Oferta destacada</b>
-            <span>Precio especial por tiempo limitado</span>
-            <div class="bar" aria-hidden="true"><i></i></div>
-          </div>
-          <a class="cta" href="{{ url_for('shop.shop') }}?q=oferta">Ver</a>
-        </div>
+  </section>
 
-        <div class="deal" aria-label="Oferta 2">
-          <div class="img">
-            <img src="{{ url_for('static', filename='img/products/hero-placeholder.png') }}" alt="Oferta destacada" loading="lazy" decoding="async">
-          </div>
-          <div class="info">
-            <b>Envío rápido</b>
-            <span>Productos listos para salir</span>
-            <div class="bar" aria-hidden="true"><i style="width:74%"></i></div>
-          </div>
-          <a class="cta" href="{{ url_for('shop.shop') }}?available=1">Ver</a>
-        </div>
+  <!-- FEATURED -->
+  <section class="section">
+    <header class="block-head">
+      <h2 class="block-title">Destacados</h2>
+      <span class="block-sub">Selección premium</span>
+    </header>
 
-        <div class="deal" aria-label="Oferta 3">
-          <div class="img">
-            <img src="{{ url_for('static', filename='img/products/hero-placeholder.png') }}" alt="Oferta destacada" loading="lazy" decoding="async">
-          </div>
-          <div class="info">
-            <b>Novedades 2026</b>
-            <span>Lo último en streetwear + tech</span>
-            <div class="bar" aria-hidden="true"><i style="width:58%"></i></div>
-          </div>
-          <a class="cta" href="{{ url_for('shop.shop') }}?sort=new">Ver</a>
-        </div>
-      </div>
-    </section>
+    {% set featured_list = featured if featured is defined else [] %}
 
-    <!-- DESTACADOS -->
-    <div class="block-head">
-      <div>
-        <div class="block-title">Productos destacados</div>
-        <div class="block-sub">Selección premium — lo más buscado hoy</div>
-      </div>
-      <div class="block-sub">Actualiza automáticamente</div>
-    </div>
-
-    {% set featured_list = featured if featured is defined and featured is iterable else [] %}
-
-    <div class="gridP" aria-label="Productos destacados">
+    <div class="gridP">
       {% for p in featured_list %}
-      <article class="cardP" aria-label="Producto destacado">
+      <article class="cardP">
         <div class="ph">
-          <div class="sk" aria-hidden="true"></div>
-          <div class="badgeP"><span class="d" aria-hidden="true"></span> DESTACADO</div>
-
-          {% if p.img and (p.img.startswith('http://') or p.img.startswith('https://')) %}
-            <img src="{{ p.img }}" alt="{{ p.title }}" loading="lazy" decoding="async" data-fallback="1">
-          {% else %}
-            <img src="{{ url_for('static', filename='img/products/' ~ (p.img or 'hero-placeholder.png')) }}"
-                 alt="{{ p.title }}" loading="lazy" decoding="async" data-fallback="1">
-          {% endif %}
-
-          <div class="fallback" aria-hidden="true">
-            {{ p.title }}<br>
-            <span style="opacity:.7;font-size:.9rem;">Imagen no disponible</span>
-          </div>
+          <img src="{{ p.img }}" alt="{{ p.title }}" loading="lazy">
         </div>
-
         <div class="body">
           <div class="price">{{ p.price }}</div>
-          <div class="meta">
-            <span class="tag"><span class="t" aria-hidden="true"></span> Envío</span>
-            <span class="tag"><span class="t" aria-hidden="true"></span> Pago seguro</span>
-          </div>
           <div class="name">{{ p.title }}</div>
           <a class="buy" href="{{ p.href }}">Comprar</a>
         </div>
@@ -895,104 +108,11 @@ a{color:inherit}
     </div>
 
     {% if featured_list|length == 0 %}
-    <div style="margin-top:12px;padding:14px;background:#fff;border:1px solid rgba(15,23,42,.10);border-radius:16px;box-shadow:0 16px 34px rgba(2,6,23,.08);font-weight:900;color:rgba(11,18,32,.70)">
-      No hay destacados aún. Agregá productos activos y se mostrarán automáticamente.
-    </div>
+      <div class="empty">Todavía no hay productos destacados.</div>
     {% endif %}
+  </section>
 
-    <!-- SERVICIOS -->
-    <div class="services" aria-label="Servicios">
-      <div class="svc">
-        <img src="{{ url_for('static', filename='img/banners/service_shipping.png') }}" alt="Envío rápido" loading="lazy" decoding="async">
-        <div><b>Envío rápido</b><span>Entrega ágil y seguimiento</span></div>
-      </div>
-      <div class="svc">
-        <img src="{{ url_for('static', filename='img/banners/service_payment.png') }}" alt="Pago seguro" loading="lazy" decoding="async">
-        <div><b>Pago seguro</b><span>Plataformas certificadas</span></div>
-      </div>
-      <div class="svc">
-        <img src="{{ url_for('static', filename='img/banners/service_support.png') }}" alt="Soporte 24/7" loading="lazy" decoding="async">
-        <div><b>Soporte 24/7</b><span>Atención al cliente</span></div>
-      </div>
-    </div>
+</section>
 
-  </div>
-</div>
-
-<button class="to-top" id="toTop" aria-label="Subir">↑</button>
-
-<script>
-/* =========================
- Skeleton + fallback imágenes
-========================= */
-(function(){
-  document.querySelectorAll('img[data-fallback="1"]').forEach(function(img){
-    var ph = img.closest('.ph');
-    var sk = ph ? ph.querySelector('.sk') : null;
-    var fb = ph ? ph.querySelector('.fallback') : null;
-
-    var ok = function(){ if(sk) sk.style.display='none'; };
-    var bad = function(){
-      img.style.display='none';
-      if(fb) fb.style.display='grid';
-      ok();
-    };
-
-    img.addEventListener('load', ok, {once:true});
-    img.addEventListener('error', bad, {once:true});
-
-    if(img.complete){
-      (img.naturalWidth > 0) ? ok() : bad();
-    }
-  });
-})();
-
-/* =========================
- Floating "to top"
-========================= */
-(function(){
-  var btn = document.getElementById('toTop');
-  if(!btn) return;
-
-  var onScroll = function(){
-    if(window.scrollY > 500) btn.classList.add('show');
-    else btn.classList.remove('show');
-  };
-  window.addEventListener('scroll', onScroll, {passive:true});
-  onScroll();
-
-  btn.addEventListener('click', function(){
-    window.scrollTo({top:0, behavior:'smooth'});
-  });
-})();
-
-/* =========================
- Flash deals timer (10:00)
-========================= */
-(function(){
-  var h = document.getElementById('tH');
-  var m = document.getElementById('tM');
-  var s = document.getElementById('tS');
-  if(!h || !m || !s) return;
-
-  var total = 10 * 60; // 10 minutos
-  var pad = function(n){ return (n < 10 ? '0' : '') + n; };
-
-  var tick = function(){
-    var hh = Math.floor(total / 3600);
-    var mm = Math.floor((total % 3600) / 60);
-    var ss = total % 60;
-
-    h.textContent = pad(hh);
-    m.textContent = pad(mm);
-    s.textContent = pad(ss);
-
-    total = Math.max(0, total - 1);
-    if(total === 0) clearInterval(intv);
-  };
-
-  tick();
-  var intv = setInterval(tick, 1000);
-})();
-</script>
+<button class="to-top" id="toTop">↑</button>
 {% endblock %}

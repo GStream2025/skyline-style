@@ -35,6 +35,7 @@ _MAX_PASSWORD_LEN = 512  # defensa anti input malicioso
 # Policy / Config (ENV driven, sin Flask)
 # ============================================================
 
+
 @dataclass(frozen=True)
 class PasswordPolicy:
     # Werkzeug methods: "pbkdf2:sha256", "scrypt", etc.
@@ -45,7 +46,9 @@ class PasswordPolicy:
     # Pepper
     use_pepper: bool = False
     pepper_env_key: str = "PASSWORD_PEPPER"
-    pepper_required: bool = False  # si use_pepper=True y required=True => exige que exista
+    pepper_required: bool = (
+        False  # si use_pepper=True y required=True => exige que exista
+    )
 
     # Reglas opcionales (off por default)
     require_digit: bool = False
@@ -134,6 +137,7 @@ def get_policy() -> PasswordPolicy:
 # ============================================================
 # Helpers internos (defensivos)
 # ============================================================
+
 
 def _clean(v: Optional[str]) -> str:
     return (v or "").strip()
@@ -267,6 +271,7 @@ def validate_password(raw_password: str, policy: PasswordPolicy) -> Tuple[bool, 
 # API pública — ESTABLE
 # ============================================================
 
+
 def hash_password(raw_password: str) -> str:
     policy = get_policy()
     ok, msg = validate_password(raw_password, policy)
@@ -329,7 +334,9 @@ def verify_password(
     return True, None
 
 
-def verify_and_maybe_rehash(raw_password: str, password_hash: str) -> Tuple[bool, Optional[str]]:
+def verify_and_maybe_rehash(
+    raw_password: str, password_hash: str
+) -> Tuple[bool, Optional[str]]:
     return verify_password(raw_password, password_hash, allow_rehash=True)
 
 

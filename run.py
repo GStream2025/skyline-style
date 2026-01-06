@@ -5,7 +5,7 @@ import os
 import sys
 import traceback
 from pathlib import Path
-from typing import Callable, Optional, Tuple
+from typing import Callable, Tuple
 
 
 # ==========================================================
@@ -172,11 +172,20 @@ def _validate_secret(env: str, log: logging.Logger) -> None:
         return
 
     if _bool_env("ALLOW_RUNTIME_SECRET", False):
-        log.warning("⚠️ ALLOW_RUNTIME_SECRET=1: permitido SECRET_KEY runtime (no recomendado).")
+        log.warning(
+            "⚠️ ALLOW_RUNTIME_SECRET=1: permitido SECRET_KEY runtime (no recomendado)."
+        )
         return
 
     secret = (_str_env("SECRET_KEY", "")).strip()
-    weak = {"dev", "dev-secret", "dev-secret-change-me", "change-me", "secret", "password"}
+    weak = {
+        "dev",
+        "dev-secret",
+        "dev-secret-change-me",
+        "change-me",
+        "secret",
+        "password",
+    }
     if (not secret) or (secret.lower() in weak) or (len(secret) < 24):
         raise RuntimeError(
             "Falta SECRET_KEY segura para producción. "
@@ -196,11 +205,17 @@ def _validate_prod_db_policy(env: str, log: logging.Logger) -> None:
     if not _bool_env("REQUIRE_POSTGRES", False):
         return
 
-    db_url = (_str_env("DATABASE_URL", "") or _str_env("SQLALCHEMY_DATABASE_URI", "")).strip()
+    db_url = (
+        _str_env("DATABASE_URL", "") or _str_env("SQLALCHEMY_DATABASE_URI", "")
+    ).strip()
     if not db_url:
-        raise RuntimeError("REQUIRE_POSTGRES=1 pero falta DATABASE_URL en producción (Render).")
+        raise RuntimeError(
+            "REQUIRE_POSTGRES=1 pero falta DATABASE_URL en producción (Render)."
+        )
     if db_url.startswith("sqlite"):
-        raise RuntimeError("REQUIRE_POSTGRES=1 pero estás usando sqlite en producción. Configurá Postgres en Render.")
+        raise RuntimeError(
+            "REQUIRE_POSTGRES=1 pero estás usando sqlite en producción. Configurá Postgres en Render."
+        )
 
 
 def _preflight_db_local(log: logging.Logger) -> None:
@@ -208,7 +223,9 @@ def _preflight_db_local(log: logging.Logger) -> None:
     ✅ Mejora nueva #2
     Si estás en sqlite local, intenta preparar el path (sin romper).
     """
-    db_url = (_str_env("DATABASE_URL", "") or _str_env("SQLALCHEMY_DATABASE_URI", "")).strip()
+    db_url = (
+        _str_env("DATABASE_URL", "") or _str_env("SQLALCHEMY_DATABASE_URI", "")
+    ).strip()
     if not db_url:
         return
 
@@ -231,12 +248,16 @@ def _preflight_db_local(log: logging.Logger) -> None:
         log.warning("⚠️ No pude preparar path de SQLite (%s): %s", rel, e)
 
 
-def _diagnostics(log: logging.Logger, env: str, debug: bool, host: str, port: int) -> None:
+def _diagnostics(
+    log: logging.Logger, env: str, debug: bool, host: str, port: int
+) -> None:
     """
     ✅ Mejora nueva #3
     Diagnóstico sin filtrar secretos.
     """
-    db_url = (_str_env("DATABASE_URL", "") or _str_env("SQLALCHEMY_DATABASE_URI", "")).strip()
+    db_url = (
+        _str_env("DATABASE_URL", "") or _str_env("SQLALCHEMY_DATABASE_URI", "")
+    ).strip()
     secret = (_str_env("SECRET_KEY", "")).strip()
 
     log.info("🚀 Skyline Store boot")
@@ -259,10 +280,13 @@ def _import_app_factory() -> Callable[[], object]:
     spec = (_str_env("APP_FACTORY", "") or _str_env("WSGI_APP", "")).strip()
     if not spec:
         from app import create_app  # noqa: WPS433
+
         return create_app
 
     if ":" not in spec:
-        raise RuntimeError(f"APP_FACTORY/WSGI_APP inválido: {spec}. Usá 'modulo:funcion'")
+        raise RuntimeError(
+            f"APP_FACTORY/WSGI_APP inválido: {spec}. Usá 'modulo:funcion'"
+        )
 
     mod, sym = spec.split(":", 1)
     mod = mod.strip()
@@ -286,7 +310,9 @@ def main() -> int:
     env = _auto_fix_local_env(env)  # ✅ nueva mejora #1
     debug = _resolve_debug(env)
 
-    log_level = (_str_env("LOG_LEVEL", "") or ("DEBUG" if debug else "INFO")).strip().upper()
+    log_level = (
+        (_str_env("LOG_LEVEL", "") or ("DEBUG" if debug else "INFO")).strip().upper()
+    )
     _setup_logging(log_level)
     log = logging.getLogger("skyline.run")
 
@@ -347,7 +373,11 @@ try:
         env = _auto_fix_local_env(env)
         debug = _resolve_debug(env)
 
-        _setup_logging((_str_env("LOG_LEVEL", "") or ("DEBUG" if debug else "INFO")).strip().upper())
+        _setup_logging(
+            (_str_env("LOG_LEVEL", "") or ("DEBUG" if debug else "INFO"))
+            .strip()
+            .upper()
+        )
         log = logging.getLogger("skyline.wsgi")
 
         _validate_secret(env, log)

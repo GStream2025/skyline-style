@@ -1,64 +1,464 @@
+{# ==========================================================
+   FILE: app/templates/orders/detail.html
+   Skyline Store — Order Detail (ULTRA PRO)
+   - Sin Tailwind / sin dependencias
+   - Robusto: no rompe si faltan campos
+   - Timeline real: NO usa index() con tuplas (evita bug)
+   - Extras PRO: copiar pedido, imprimir, tracking, a11y
+   - Compatible con base: --max, --stroke, --grad, --shadow2, --ease
+========================================================== #}
+
 {% extends "base.html" %}
 {% block title %}Pedido {{ order.number or order.id }} · Skyline Store{% endblock %}
 
-{% set STATUS_FLOW = [
-  ("created","Pedido creado"),
-  ("paid","Pago confirmado"),
-  ("processing","Preparando"),
-  ("shipped","Enviado"),
-  ("delivered","Entregado")
-] %}
+{% block extra_head %}
+<style>
+  .od{ padding: 18px 0 44px; }
+  .od .wrap{ max-width: var(--max); margin:0 auto; padding: 0 18px; display:grid; gap: 14px; }
+
+  .card{
+    background: rgba(255,255,255,.96);
+    border: 1px solid var(--stroke);
+    border-radius: 26px;
+    box-shadow: var(--shadow2);
+    overflow:hidden;
+  }
+
+  .head{
+    padding: 18px 18px 14px;
+    background:
+      radial-gradient(circle at 20% 0%, rgba(47,123,255,.10), transparent 55%),
+      radial-gradient(circle at 85% 10%, rgba(16,185,129,.10), transparent 55%),
+      linear-gradient(180deg, rgba(255,255,255,.94), rgba(255,255,255,.84));
+    border-bottom: 1px solid rgba(15,23,42,.08);
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap: 12px;
+    flex-wrap:wrap;
+  }
+
+  .titlebox{ min-width: 260px; }
+  h1{
+    margin:0;
+    font-weight: 1000;
+    letter-spacing: -.6px;
+    color: rgba(11,18,32,.95);
+    font-size: clamp(1.35rem, 2.2vw, 2.05rem);
+    line-height: 1.15;
+  }
+  .sub{
+    margin-top: 6px;
+    color: rgba(11,18,32,.62);
+    font-weight: 850;
+    line-height: 1.45;
+  }
+
+  .actions{
+    display:flex; flex-wrap:wrap; gap:10px; align-items:center;
+  }
+  .btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap: 8px;
+    text-decoration:none;
+    font-weight: 1000;
+    padding: 10px 12px;
+    border-radius: 14px;
+    border: 1px solid rgba(15,23,42,.10);
+    background: rgba(255,255,255,.94);
+    color: rgba(11,18,32,.92);
+    transition: transform .18s var(--ease), box-shadow .18s var(--ease);
+    cursor:pointer;
+    user-select:none;
+  }
+  .btn:hover{ transform: translateY(-2px); box-shadow: 0 14px 26px rgba(2,6,23,.10); }
+  .btn:active{ transform: translateY(0); }
+  .btn:focus-visible{ outline: 3px solid rgba(59,130,246,.35); outline-offset: 2px; }
+
+  .pill{
+    display:inline-flex; align-items:center; gap:8px;
+    padding: 8px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(15,23,42,.10);
+    background: rgba(255,255,255,.94);
+    font-weight: 1000;
+    color: rgba(11,18,32,.86);
+    white-space: nowrap;
+  }
+  .pill .dot{
+    width:9px;height:9px;border-radius:999px;
+    background: var(--grad);
+    box-shadow: 0 0 0 4px rgba(47,123,255,.12);
+  }
+
+  .grid{
+    padding: 14px 18px 18px;
+    display:grid;
+    gap: 12px;
+  }
+
+  .two{
+    display:grid;
+    gap: 12px;
+  }
+  @media(min-width: 980px){
+    .two{ grid-template-columns: 1.05fr .95fr; align-items:start; }
+  }
+
+  /* Timeline */
+  .timeline{
+    border-radius: 22px;
+    border: 1px solid rgba(15,23,42,.10);
+    background: rgba(255,255,255,.96);
+    overflow:hidden;
+  }
+  .th{
+    padding: 12px 14px;
+    background: rgba(248,250,252,.90);
+    border-bottom: 1px solid rgba(15,23,42,.08);
+    display:flex; align-items:center; justify-content:space-between; gap: 10px;
+  }
+  .th h2{
+    margin:0;
+    font-weight: 1000;
+    color: rgba(11,18,32,.92);
+    letter-spacing: -.3px;
+    font-size: 1.05rem;
+  }
+  .mini{
+    font-size: .9rem;
+    font-weight: 900;
+    color: rgba(11,18,32,.58);
+  }
+
+  .steps{
+    padding: 12px 14px 14px;
+    display:grid;
+    gap: 10px;
+  }
+  @media(min-width: 980px){
+    .steps{ grid-template-columns: 1fr 1fr; }
+  }
+
+  .step{
+    display:flex; gap: 10px; align-items:flex-start;
+    padding: 12px 12px;
+    border-radius: 18px;
+    border: 1px solid rgba(15,23,42,.08);
+    background: rgba(15,23,42,.03);
+  }
+  .ic{
+    width:36px;height:36px;border-radius: 14px;
+    display:grid; place-items:center;
+    border: 1px solid rgba(15,23,42,.10);
+    background: rgba(255,255,255,.90);
+    flex: 0 0 auto;
+    font-weight: 1000;
+  }
+  .ic.on{
+    background: rgba(16,185,129,.10);
+    border-color: rgba(16,185,129,.25);
+    color: rgba(11,18,32,.92);
+  }
+  .lbl{
+    font-weight: 950;
+    color: rgba(11,18,32,.92);
+    line-height: 1.15;
+  }
+  .desc{
+    margin-top: 6px;
+    color: rgba(11,18,32,.62);
+    font-weight: 850;
+    line-height: 1.4;
+    font-size: .92rem;
+  }
+
+  /* Items */
+  .items{
+    border-radius: 22px;
+    border: 1px solid rgba(15,23,42,.10);
+    background: rgba(255,255,255,.96);
+    overflow:hidden;
+  }
+  .rows{ padding: 12px 14px 14px; display:grid; gap: 10px; }
+  .row{
+    display:flex;
+    justify-content:space-between;
+    gap: 12px;
+    padding: 10px 10px;
+    border-radius: 16px;
+    background: rgba(15,23,42,.03);
+    border: 1px solid rgba(15,23,42,.06);
+  }
+  .left{ min-width:0; }
+  .ptitle{
+    font-weight: 950;
+    color: rgba(11,18,32,.92);
+    line-height: 1.2;
+    word-break: break-word;
+  }
+  .pmeta{
+    margin-top: 6px;
+    color: rgba(11,18,32,.60);
+    font-weight: 850;
+    font-size: .9rem;
+  }
+  .amt{
+    font-weight: 1000;
+    color: rgba(11,18,32,.92);
+    white-space: nowrap;
+  }
+  .total{
+    margin-top: 6px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(15,23,42,.10);
+    display:flex; align-items:center; justify-content:space-between; gap: 12px;
+  }
+  .total b{
+    font-size: 1.18rem;
+    font-weight: 1000;
+    color: rgba(11,18,32,.95);
+  }
+
+  /* Support / tracking box */
+  .box{
+    border-radius: 22px;
+    border: 1px solid rgba(15,23,42,.10);
+    background: rgba(255,255,255,.96);
+    padding: 12px 14px;
+    box-shadow: 0 14px 26px rgba(2,6,23,.06);
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    justify-content:space-between;
+    gap: 10px;
+  }
+  .box b{ font-weight: 1000; color: rgba(11,18,32,.92); }
+  .box span{ color: rgba(11,18,32,.60); font-weight: 850; }
+
+  .note{
+    margin-top: 2px;
+    font-size: .88rem;
+    color: rgba(11,18,32,.55);
+    font-weight: 850;
+    line-height: 1.45;
+  }
+
+  @media print{
+    .ss-header, .ss-footer, nav, .actions{ display:none !important; }
+    .od{ padding:0; }
+    .card, .timeline, .items, .box{ box-shadow:none; }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ transition:none!important; }
+    .btn:hover{ transform:none!important; }
+  }
+</style>
+{% endblock %}
 
 {% block content %}
-<section class="max-w-5xl mx-auto px-4 py-14">
 
-  <h1 class="text-2xl font-bold text-slate-900">
-    Pedido {{ order.number or order.id }}
-  </h1>
-  <p class="text-slate-600 mt-1">
-    Estado actual:
-    <b class="text-emerald-600">{{ order.status|capitalize }}</b>
-  </p>
+{# ---------- Normalización segura ---------- #}
+{% set order_id = (order.number if order and order.number else (order.id if order else '—')) %}
+{% set status_raw = (order.status if order and order.status else 'created') %}
+{% set status = status_raw|string|lower %}
+{% set currency = (currency if currency is defined else '$') %}
+{% set total = (order.total if order and order.total is not none else 0) %}
+{% set items = (order.items if order and order.items is defined and order.items else []) %}
+{% set tracking_code = (tracking_code if tracking_code is defined else (order.tracking_code if order and order.tracking_code is defined else '')) %}
 
-  <!-- TIMELINE -->
-  <div class="mt-8 bg-white border rounded-2xl p-6 shadow">
-    <h2 class="font-semibold mb-4">Seguimiento del pedido</h2>
+{# ---------- Flujo de estados (editable) ---------- #}
+{% set STATUS_FLOW = [
+  ('created','Pedido creado','Recibimos tu pedido y lo estamos registrando.'),
+  ('paid','Pago confirmado','El pago fue aprobado o quedó registrado como confirmado.'),
+  ('processing','Preparando','Estamos preparando el paquete para el despacho.'),
+  ('shipped','Enviado','El pedido salió. Si hay tracking, te lo mostramos abajo.'),
+  ('delivered','Entregado','El pedido fue entregado. ¡Gracias por comprar!')
+] %}
 
-    <ol class="relative border-l border-slate-200">
-      {% for code,label in STATUS_FLOW %}
-        {% set active = STATUS_FLOW.index((code,label)) <= STATUS_FLOW.index((order.status, label)) if order.status in STATUS_FLOW|map(attribute=0) else false %}
-        <li class="ml-6 mb-6">
-          <span class="absolute -left-3 flex h-6 w-6 items-center justify-center rounded-full
-            {{ 'bg-emerald-500 text-white' if active else 'bg-slate-200 text-slate-500' }}">
-            ✓
-          </span>
-          <h3 class="font-medium text-slate-900">{{ label }}</h3>
-        </li>
-      {% endfor %}
-    </ol>
-  </div>
+{# índice actual (evita el bug de index con tuplas) #}
+{% set current_idx = 0 %}
+{% for code,label,desc in STATUS_FLOW %}
+  {% if code == status %}{% set current_idx = loop.index0 %}{% endif %}
+{% endfor %}
 
-  <!-- ITEMS -->
-  <div class="mt-8 bg-white border rounded-2xl p-6 shadow">
-    <h2 class="font-semibold mb-4">Productos</h2>
+<section class="od" aria-label="Detalle del pedido">
+  <div class="wrap">
 
-    {% for it in order.items %}
-    <div class="flex justify-between border-b py-3">
-      <div>
-        <div class="font-medium">{{ it.title }}</div>
-        <div class="text-sm text-slate-500">Cantidad: {{ it.qty }}</div>
+    <article class="card" aria-live="polite">
+      <header class="head">
+        <div class="titlebox">
+          <h1>Pedido {{ order_id }}</h1>
+          <div class="sub">
+            Estado actual:
+            <span class="pill"><span class="dot" aria-hidden="true"></span> {{ status|capitalize }}</span>
+          </div>
+        </div>
+
+        <div class="actions" aria-label="Acciones">
+          <button class="btn" type="button" id="btnCopy">📋 Copiar N°</button>
+          <button class="btn" type="button" id="btnPrint">🖨️ Imprimir</button>
+          <a class="btn" href="{{ url_for('shop.shop') }}">🛒 Ir a la tienda</a>
+        </div>
+      </header>
+
+      <div class="grid two">
+
+        <!-- TIMELINE -->
+        <section class="timeline" aria-label="Seguimiento del pedido">
+          <div class="th">
+            <h2>Seguimiento del pedido</h2>
+            <div class="mini">Paso {{ current_idx + 1 }} / {{ STATUS_FLOW|length }}</div>
+          </div>
+
+          <div class="steps">
+            {% for code,label,desc in STATUS_FLOW %}
+              {% set active = loop.index0 <= current_idx %}
+              <div class="step">
+                <div class="ic {{ 'on' if active else '' }}" aria-hidden="true">{{ '✓' if active else '•' }}</div>
+                <div>
+                  <div class="lbl">{{ label }}</div>
+                  <div class="desc">{{ desc }}</div>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+
+          {% if tracking_code %}
+          <div class="box" style="margin:0 14px 14px;">
+            <div>
+              <b>Tracking</b><br>
+              <span id="trackingCode">{{ tracking_code }}</span>
+            </div>
+            <button class="btn" type="button" id="btnCopyTracking">Copiar</button>
+          </div>
+          {% endif %}
+        </section>
+
+        <!-- ITEMS -->
+        <section class="items" aria-label="Productos del pedido">
+          <div class="th">
+            <h2>Productos</h2>
+            <div class="mini">Items: {{ items|length }}</div>
+          </div>
+
+          <div class="rows">
+            {% if items and items|length > 0 %}
+              {% for it in items %}
+                {% set qty = (it.qty if it.qty is not none else 1) %}
+                {% set price = (it.price if it.price is not none else 0) %}
+                <div class="row">
+                  <div class="left">
+                    <div class="ptitle">{{ it.title or 'Producto' }}</div>
+                    <div class="pmeta">Cantidad: {{ qty }} · Unit: {{ currency }} {{ "%.2f"|format(price) }}</div>
+                  </div>
+                  <div class="amt">{{ currency }} {{ "%.2f"|format(qty * price) }}</div>
+                </div>
+              {% endfor %}
+            {% else %}
+              <div class="row">
+                <div class="left">
+                  <div class="ptitle">No pudimos listar los productos.</div>
+                  <div class="pmeta">Si esto es inesperado, contactá soporte con tu N° de pedido.</div>
+                </div>
+                <div class="amt">—</div>
+              </div>
+            {% endif %}
+
+            <div class="total" aria-label="Total">
+              <span class="pmeta">Total</span>
+              <b>{{ currency }} {{ "%.2f"|format(total or 0) }}</b>
+            </div>
+          </div>
+
+          <div class="note" style="padding: 0 14px 14px;">
+            Guardá tu número de pedido por cualquier consulta.
+          </div>
+
+          <div class="box" style="margin:0 14px 14px;">
+            <div>
+              <b>Soporte</b><br>
+              <span>Respondemos rápido si nos escribís desde Contacto.</span>
+            </div>
+            <a class="btn" href="{{ url_for('main.contact') }}">💬 Contacto</a>
+          </div>
+
+        </section>
+
       </div>
-      <div class="font-semibold">
-        $ {{ "%.2f"|format(it.qty * it.price) }}
-      </div>
-    </div>
-    {% endfor %}
+    </article>
 
-    <div class="flex justify-between pt-4 text-lg font-bold">
-      <span>Total</span>
-      <span>$ {{ "%.2f"|format(order.total) }}</span>
-    </div>
   </div>
-
 </section>
+
+<script>
+(function(){
+  const orderId = "{{ (order.number if order and order.number else (order.id if order else '')) }}";
+  const tracking = "{{ tracking_code if tracking_code else '' }}";
+
+  function toast(text){
+    const t = document.createElement("div");
+    t.textContent = text;
+    t.style.position = "fixed";
+    t.style.left = "50%";
+    t.style.bottom = "18px";
+    t.style.transform = "translateX(-50%)";
+    t.style.padding = "10px 12px";
+    t.style.borderRadius = "999px";
+    t.style.fontWeight = "900";
+    t.style.background = "rgba(11,18,32,.92)";
+    t.style.color = "#fff";
+    t.style.boxShadow = "0 18px 38px rgba(2,6,23,.18)";
+    t.style.zIndex = "9999";
+    document.body.appendChild(t);
+    setTimeout(()=>{ t.style.opacity = "0"; t.style.transition = "opacity .25s ease"; }, 900);
+    setTimeout(()=>{ t.remove(); }, 1200);
+  }
+
+  async function copyText(value){
+    if(!value) return;
+    try{
+      await navigator.clipboard.writeText(value);
+      toast("Copiado ✅");
+    }catch(e){
+      const ta = document.createElement("textarea");
+      ta.value = value;
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      try{ document.execCommand("copy"); toast("Copiado ✅"); }
+      catch(_){ toast("No se pudo copiar"); }
+      ta.remove();
+    }
+  }
+
+  const btnCopy = document.getElementById("btnCopy");
+  if(btnCopy) btnCopy.addEventListener("click", ()=> copyText(orderId));
+
+  const btnPrint = document.getElementById("btnPrint");
+  if(btnPrint) btnPrint.addEventListener("click", ()=> window.print());
+
+  const btnCopyTracking = document.getElementById("btnCopyTracking");
+  if(btnCopyTracking) btnCopyTracking.addEventListener("click", ()=> copyText(tracking));
+
+  // Atajos: P imprime, C copia N° pedido (si no estás escribiendo en un input)
+  document.addEventListener("keydown", (e)=>{
+    const t = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : "";
+    if(t === "input" || t === "textarea" || e.isComposing) return;
+
+    if(e.key.toLowerCase() === "p"){
+      e.preventDefault();
+      window.print();
+    }
+    if(e.key.toLowerCase() === "c"){
+      e.preventDefault();
+      copyText(orderId);
+    }
+  });
+})();
+</script>
 {% endblock %}

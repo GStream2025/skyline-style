@@ -54,11 +54,26 @@ def _normalize_category(category: Optional[str]) -> str:
 
     if c in (CATEGORY_BUZOS, "hoodie", "hoodies", "sweatshirt", "buzo", "buzos"):
         return CATEGORY_BUZOS
-    if c in (CATEGORY_REMERAS, "t-shirt", "tshirt", "tee", "remera", "remeras", "shirt"):
+    if c in (
+        CATEGORY_REMERAS,
+        "t-shirt",
+        "tshirt",
+        "tee",
+        "remera",
+        "remeras",
+        "shirt",
+    ):
         return CATEGORY_REMERAS
     if c in (CATEGORY_GORROS, "cap", "hat", "beanie", "gorra", "gorras"):
         return CATEGORY_GORROS
-    if c in (CATEGORY_CAMPERAS, "jacket", "campera", "camperas", "zip hoodie", "bomber"):
+    if c in (
+        CATEGORY_CAMPERAS,
+        "jacket",
+        "campera",
+        "camperas",
+        "zip hoodie",
+        "bomber",
+    ):
         return CATEGORY_CAMPERAS
 
     return CATEGORY_OTROS
@@ -168,7 +183,11 @@ class Product:
 
         # Imagen principal: aceptamos URL absoluta o ruta relativa
         self.image = _normalize_str(self.image)
-        if self.image and not _is_valid_url(self.image) and not self.image.startswith("/"):
+        if (
+            self.image
+            and not _is_valid_url(self.image)
+            and not self.image.startswith("/")
+        ):
             # No tocamos rutas relativas válidas ("/static/..."),
             # sólo limpiamos basura obvia.
             self.image = self.image.strip()
@@ -217,7 +236,7 @@ class Product:
             "name": self.name,
             "short_name": self.short_name,
             "slug": self.seo_slug,
-            "price": str(self.price),           # string para JSON seguro
+            "price": str(self.price),  # string para JSON seguro
             "price_formatted": self.price_formatted,
             "currency": self.currency,
             "category": self.category,
@@ -302,9 +321,7 @@ class Product:
         # Imagen principal: buscamos preview / thumbnail / url
         image_url = ""
         files: Sequence[Mapping[str, Any]] = (
-            first_variant.get("files")
-            or product_data.get("files")
-            or []
+            first_variant.get("files") or product_data.get("files") or []
         )
         if isinstance(files, Sequence) and files:
             file0 = files[0] or {}

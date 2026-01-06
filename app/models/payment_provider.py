@@ -24,8 +24,16 @@ _URL_RE = re.compile(r"^https?://", re.I)
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 _SECRET_KEYS_HINT = {
-    "access_token", "client_secret", "webhook_secret", "api_key",
-    "private_key", "secret", "password", "signature", "bearer", "token"
+    "access_token",
+    "client_secret",
+    "webhook_secret",
+    "api_key",
+    "private_key",
+    "secret",
+    "password",
+    "signature",
+    "bearer",
+    "token",
 }
 
 _ALLOWED_CODES = {
@@ -65,9 +73,8 @@ def _deep_merge(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
 
 def _is_secret_key(k: str) -> bool:
     k2 = (k or "").lower()
-    return (
-        k2 in _SECRET_KEYS_HINT
-        or any(x in k2 for x in ("token", "secret", "key", "password", "bearer"))
+    return k2 in _SECRET_KEYS_HINT or any(
+        x in k2 for x in ("token", "secret", "key", "password", "bearer")
     )
 
 
@@ -155,14 +162,24 @@ class PaymentProvider(db.Model):
     sort_order = db.Column(db.Integer, default=100, nullable=False, index=True)
 
     # Tipo visual y país (para filtros)
-    kind = db.Column(db.String(20), nullable=False, default="other", index=True)  # wallet/card/bank_transfer/...
-    country = db.Column(db.String(2), nullable=False, default="UY", index=True)  # ISO2, ej "UY", "AR"
+    kind = db.Column(
+        db.String(20), nullable=False, default="other", index=True
+    )  # wallet/card/bank_transfer/...
+    country = db.Column(
+        db.String(2), nullable=False, default="UY", index=True
+    )  # ISO2, ej "UY", "AR"
 
     # UX pro
-    fee_percent = db.Column(db.Integer, nullable=False, default=0)     # % comisión estimada (solo info UI)
-    eta_minutes = db.Column(db.Integer, nullable=False, default=0)     # tiempo estimado confirmación
-    min_amount = db.Column(db.Integer, nullable=False, default=0)      # mínimo (en moneda base UI)
-    max_amount = db.Column(db.Integer, nullable=False, default=0)      # 0 = sin máximo
+    fee_percent = db.Column(
+        db.Integer, nullable=False, default=0
+    )  # % comisión estimada (solo info UI)
+    eta_minutes = db.Column(
+        db.Integer, nullable=False, default=0
+    )  # tiempo estimado confirmación
+    min_amount = db.Column(
+        db.Integer, nullable=False, default=0
+    )  # mínimo (en moneda base UI)
+    max_amount = db.Column(db.Integer, nullable=False, default=0)  # 0 = sin máximo
 
     # Extras
     notes = db.Column(db.String(500), nullable=False, default="")
@@ -173,7 +190,9 @@ class PaymentProvider(db.Model):
     updated_ip = db.Column(db.String(64), nullable=False, default="")
 
     created_at = db.Column(db.DateTime, default=_utcnow, nullable=False)
-    updated_at = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
+    updated_at = db.Column(
+        db.DateTime, default=_utcnow, onupdate=_utcnow, nullable=False
+    )
 
     __table_args__ = (
         CheckConstraint("length(code) >= 2", name="ck_pp_code_len"),
@@ -361,7 +380,11 @@ class PaymentProvider(db.Model):
         if code == "mercadopago_uy":
             return [
                 {"key": "mode", "type": "text", "required": False},  # live/test
-                {"key": "checkout_url", "type": "url", "required": False},  # si usás link directo
+                {
+                    "key": "checkout_url",
+                    "type": "url",
+                    "required": False,
+                },  # si usás link directo
                 {"key": "public_key", "type": "text", "required": False},
                 {"key": "access_token", "type": "text", "required": False},
                 {"key": "currency", "type": "text", "required": True},  # UYU
@@ -464,21 +487,30 @@ class UserPreferredPayment(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
 
-    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
 
     # code debe ser uno de PaymentProvider.code (ej: mercadopago_uy)
     provider_code = db.Column(db.String(40), nullable=False, index=True)
 
     # UI info (no sensible)
     label = db.Column(db.String(80), nullable=False, default="")
-    brand = db.Column(db.String(40), nullable=False, default="")   # Visa/Mastercard/etc (si aplica)
-    last4 = db.Column(db.String(8), nullable=False, default="")    # últimos 4 (si aplica)
+    brand = db.Column(
+        db.String(40), nullable=False, default=""
+    )  # Visa/Mastercard/etc (si aplica)
+    last4 = db.Column(db.String(8), nullable=False, default="")  # últimos 4 (si aplica)
 
     # Extra data NO sensible (ej: "debit"/"credit", cuotas preferidas, etc.)
     meta = db.Column(db.JSON, nullable=False, default=dict)
 
     created_at = db.Column(db.DateTime, default=_utcnow, nullable=False)
-    updated_at = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
+    updated_at = db.Column(
+        db.DateTime, default=_utcnow, onupdate=_utcnow, nullable=False
+    )
 
     __table_args__ = (
         UniqueConstraint("user_id", name="uq_user_preferred_payment_user"),
@@ -541,7 +573,9 @@ class PaymentProviderService:
     """
 
     @staticmethod
-    def get_enabled_for_checkout(country: Optional[str] = None) -> List[PaymentProvider]:
+    def get_enabled_for_checkout(
+        country: Optional[str] = None,
+    ) -> List[PaymentProvider]:
         try:
             q = PaymentProvider.query.filter(PaymentProvider.enabled.is_(True))
 
@@ -552,14 +586,11 @@ class PaymentProviderService:
                     # deja WW: hoy simplificado (si querés WW real, lo expandimos)
                     q = q.filter(PaymentProvider.country.in_([cc, "UY", "AR"]))
 
-            providers = (
-                q.order_by(
-                    PaymentProvider.recommended.desc(),
-                    PaymentProvider.sort_order.asc(),
-                    PaymentProvider.name.asc(),
-                )
-                .all()
-            )
+            providers = q.order_by(
+                PaymentProvider.recommended.desc(),
+                PaymentProvider.sort_order.asc(),
+                PaymentProvider.name.asc(),
+            ).all()
             return [p for p in providers if p.is_ready_for_checkout()]
         except Exception:
             return []
@@ -604,7 +635,9 @@ class PaymentProviderService:
 
         pref = PaymentProviderService.get_user_preferred(user_id)
         if not pref:
-            pref = UserPreferredPayment(user_id=int(user_id), provider_code=provider.code)
+            pref = UserPreferredPayment(
+                user_id=int(user_id), provider_code=provider.code
+            )
 
         pref.provider_code = provider.code
         pref.label = _clean_str(label, 80) or provider.get_label_for_checkout()

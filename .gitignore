@@ -198,3 +198,20 @@ docker-compose.override.yml
 # -----------------------------------------------------
 # FIN
 # -----------------------------------------------------
+
+# ---- Skyline Store (auto) ----
+.env
+*.env
+!.env.example
+.venv/
+venv/
+__pycache__/
+*.pyc
+instance/
+static/uploads/
+coverage_html/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+build/

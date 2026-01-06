@@ -4,7 +4,7 @@ import hmac
 import os
 import time
 from functools import wraps
-from typing import Any, Callable, Dict, Mapping, Optional, Tuple, TypeVar
+from typing import Any, Callable, Dict, Tuple, TypeVar
 
 from flask import current_app, flash, jsonify, redirect, request, session, url_for
 
@@ -29,6 +29,7 @@ _FAIL_PREFIX = "admin:fail:"
 # ============================================================
 # ENV helpers (safe)
 # ============================================================
+
 
 def _env(key: str, default: str = "") -> str:
     try:
@@ -69,7 +70,11 @@ def _now() -> int:
 def _wants_json() -> bool:
     try:
         accept = (request.headers.get("Accept") or "").lower()
-        return ("application/json" in accept) or bool(request.is_json) or (request.args.get("json") == "1")
+        return (
+            ("application/json" in accept)
+            or bool(request.is_json)
+            or (request.args.get("json") == "1")
+        )
     except Exception:
         return False
 
@@ -89,6 +94,7 @@ def _client_ip() -> str:
 # ============================================================
 # Redirect seguro (anti open-redirect)
 # ============================================================
+
 
 def _is_safe_next(nxt: str) -> bool:
     if not nxt:
@@ -128,7 +134,9 @@ def admin_next(default_endpoint: str = "admin.dashboard") -> str:
 # ============================================================
 
 ADMIN_SESSION_TTL = _env_int("ADMIN_SESSION_TTL", 60 * 60 * 4)  # 4h
-ADMIN_SESSION_TTL_REMEMBER = _env_int("ADMIN_SESSION_TTL_REMEMBER", 60 * 60 * 24 * 7)  # 7d
+ADMIN_SESSION_TTL_REMEMBER = _env_int(
+    "ADMIN_SESSION_TTL_REMEMBER", 60 * 60 * 24 * 7
+)  # 7d
 ADMIN_SESSION_REFRESH_EVERY = _env_int("ADMIN_SESSION_REFRESH_EVERY", 60 * 5)  # 5m
 
 ADMIN_LOGIN_MAX_FAILS = _env_int("ADMIN_LOGIN_MAX_FAILS", 8)
@@ -139,6 +147,7 @@ ADMIN_LOCKOUT_SEC = _env_int("ADMIN_LOCKOUT_SEC", 60 * 10)
 # ============================================================
 # Admin credentials (ENV) — multi + legacy + hash opcional
 # ============================================================
+
 
 def _parse_admin_users(raw: str) -> Dict[str, str]:
     """
@@ -177,7 +186,7 @@ def _const_time_dummy(password: str) -> None:
     """
     Siempre hacemos compare_digest contra algo, para timing uniform.
     """
-    p = (password or "")
+    p = password or ""
     dummy = "x" * max(1, len(p))
     _ = hmac.compare_digest(p, dummy)
 
@@ -201,6 +210,7 @@ def admin_creds_ok(email: str, password: str) -> bool:
     if admin_email and admin_hash and e == admin_email:
         try:
             import hashlib
+
             got = hashlib.sha256(p.encode("utf-8")).hexdigest()
             return hmac.compare_digest(got, admin_hash)
         except Exception:
@@ -210,7 +220,9 @@ def admin_creds_ok(email: str, password: str) -> bool:
     admins = _get_admin_users()
     if not admins:
         try:
-            current_app.logger.warning("⚠️ Admin login bloqueado: faltan ADMIN_USERS o ADMIN_EMAIL/ADMIN_PASSWORD.")
+            current_app.logger.warning(
+                "⚠️ Admin login bloqueado: faltan ADMIN_USERS o ADMIN_EMAIL/ADMIN_PASSWORD."
+            )
         except Exception:
             pass
         _const_time_dummy(p)
@@ -227,6 +239,7 @@ def admin_creds_ok(email: str, password: str) -> bool:
 # ============================================================
 # Rate limit (por IP, guardado en session)
 # ============================================================
+
 
 def _fail_key(ip: str) -> str:
     return f"{_FAIL_PREFIX}{ip}"
@@ -289,6 +302,7 @@ def _rate_limit_clear(ip: str) -> None:
 # Admin session
 # ============================================================
 
+
 def admin_login(*, email: str = "", remember: bool = False) -> None:
     """
     Anti session fixation: limpia session y crea flags admin.
@@ -308,7 +322,11 @@ def admin_logout() -> None:
 
 
 def _ttl_current() -> int:
-    return ADMIN_SESSION_TTL_REMEMBER if bool(session.get(_SESS_REM)) else ADMIN_SESSION_TTL
+    return (
+        ADMIN_SESSION_TTL_REMEMBER
+        if bool(session.get(_SESS_REM))
+        else ADMIN_SESSION_TTL
+    )
 
 
 def _session_admin_valid() -> bool:
@@ -348,6 +366,7 @@ def _current_user_is_admin_db() -> bool:
 
     try:
         from app.models import db, User
+
         u = db.session.get(User, int(uid))
         return bool(getattr(u, "is_admin", False)) if u else False
     except Exception:
@@ -372,6 +391,7 @@ def admin_identity() -> Dict[str, Any]:
 # Decorator
 # ============================================================
 
+
 def admin_required(view: F) -> F:
     @wraps(view)
     def wrapped(*args: Any, **kwargs: Any):
@@ -391,7 +411,10 @@ def admin_required(view: F) -> F:
 # Helper recomendado para /admin/login POST
 # ============================================================
 
-def admin_login_attempt(email: str, password: str, *, remember: bool = False) -> Tuple[bool, str, int]:
+
+def admin_login_attempt(
+    email: str, password: str, *, remember: bool = False
+) -> Tuple[bool, str, int]:
     """
     Maneja:
       - rate limit por IP

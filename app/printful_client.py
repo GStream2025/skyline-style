@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 # Errors
 # =============================================================================
 
+
 class PrintfulError(RuntimeError):
     """Base error."""
 
@@ -48,8 +49,10 @@ class PrintfulServerError(PrintfulError):
 
 _TRUE = {"1", "true", "yes", "y", "on"}
 
+
 def _env(key: str, default: str = "") -> str:
     return (os.getenv(key) or default).strip()
+
 
 def _env_int(key: str, default: int) -> int:
     v = os.getenv(key)
@@ -59,6 +62,7 @@ def _env_int(key: str, default: int) -> int:
         return int(str(v).strip())
     except Exception:
         return default
+
 
 def _env_bool(key: str, default: bool = False) -> bool:
     v = os.getenv(key)
@@ -71,15 +75,19 @@ def _env_bool(key: str, default: bool = False) -> bool:
 # Retry / Backoff helpers
 # =============================================================================
 
-def _backoff(attempt: int, base: float = 0.8, cap: float = 20.0, jitter: float = 0.25) -> float:
+
+def _backoff(
+    attempt: int, base: float = 0.8, cap: float = 20.0, jitter: float = 0.25
+) -> float:
     """
     Exponential backoff con jitter.
     attempt=0 -> ~base
     """
-    t = min(cap, base * (2 ** attempt))
+    t = min(cap, base * (2**attempt))
     # jitter +- jitter%
     j = 1.0 + random.uniform(-jitter, jitter)
     return max(0.0, t * j)
+
 
 def _parse_retry_after(value: Optional[str]) -> Optional[float]:
     """
@@ -106,10 +114,12 @@ def _parse_retry_after(value: Optional[str]) -> Optional[float]:
 # Small in-memory TTL cache (bounded)
 # =============================================================================
 
+
 @dataclass
 class _CacheItem:
     ts: float
     val: Any
+
 
 class _TTLCache:
     def __init__(self, ttl: int = 300, max_items: int = 128):
@@ -146,6 +156,7 @@ class _TTLCache:
 # Session factory (requests + urllib3 retry)
 # =============================================================================
 
+
 def _make_session() -> requests.Session:
     s = requests.Session()
 
@@ -173,6 +184,7 @@ _SESSION = _make_session()
 # Client
 # =============================================================================
 
+
 class PrintfulClient:
     """
     Cliente Printful PRO (GET) con:
@@ -195,21 +207,34 @@ class PrintfulClient:
     ):
         self.api_key = (api_key or _env("PRINTFUL_API_KEY")).strip()
         if not self.api_key:
-            raise PrintfulError("PRINTFUL_API_KEY no está definido (Render Environment o .env local).")
+            raise PrintfulError(
+                "PRINTFUL_API_KEY no está definido (Render Environment o .env local)."
+            )
 
         self.base_url = (base_url or PRINTFUL_BASE_URL).rstrip("/")
         self.timeout: Tuple[float, float] = (
-            float(_env("PRINTFUL_TIMEOUT_CONNECT", str(timeout_connect)) or timeout_connect),
+            float(
+                _env("PRINTFUL_TIMEOUT_CONNECT", str(timeout_connect))
+                or timeout_connect
+            ),
             float(_env("PRINTFUL_TIMEOUT_READ", str(timeout_read)) or timeout_read),
         )
 
         self.retries = max(1, _env_int("PRINTFUL_RETRIES", retries))
 
-        ttl = cache_ttl if cache_ttl is not None else _env_int("PRINTFUL_CACHE_TTL", 300)
-        max_items = cache_max_items if cache_max_items is not None else _env_int("PRINTFUL_CACHE_MAX", 128)
+        ttl = (
+            cache_ttl if cache_ttl is not None else _env_int("PRINTFUL_CACHE_TTL", 300)
+        )
+        max_items = (
+            cache_max_items
+            if cache_max_items is not None
+            else _env_int("PRINTFUL_CACHE_MAX", 128)
+        )
         self.cache = _TTLCache(ttl=ttl, max_items=max_items)
 
-        self.user_agent = _env("PRINTFUL_USER_AGENT", "SkylineStore/1.0 (+https://skylinestore)")
+        self.user_agent = _env(
+            "PRINTFUL_USER_AGENT", "SkylineStore/1.0 (+https://skylinestore)"
+        )
         self.debug = _env_bool("PRINTFUL_DEBUG", False)
 
     # -------------------------
@@ -253,7 +278,9 @@ class PrintfulClient:
         except Exception:
             return f"HTTP {resp.status_code}"
 
-    def _request_get(self, endpoint: str, params: Optional[Mapping[str, Any]] = None) -> Any:
+    def _request_get(
+        self, endpoint: str, params: Optional[Mapping[str, Any]] = None
+    ) -> Any:
         url = f"{self.base_url}/{endpoint.lstrip('/')}"
         params_dict = dict(params or {})
 
@@ -270,7 +297,13 @@ class PrintfulClient:
             except requests.RequestException as e:
                 last_err = e
                 wait = _backoff(attempt)
-                logger.warning("Printful GET error (%s) endpoint=%s attempt=%d wait=%.1fs", e, endpoint, attempt + 1, wait)
+                logger.warning(
+                    "Printful GET error (%s) endpoint=%s attempt=%d wait=%.1fs",
+                    e,
+                    endpoint,
+                    attempt + 1,
+                    wait,
+                )
                 time.sleep(wait)
                 continue
 
@@ -284,7 +317,9 @@ class PrintfulClient:
 
             # Auth errors
             if code in (401, 403):
-                raise PrintfulAuthError(f"Printful auth error ({code}): {self._extract_error_message(resp)}")
+                raise PrintfulAuthError(
+                    f"Printful auth error ({code}): {self._extract_error_message(resp)}"
+                )
 
             # Not found
             if code == 404:
@@ -295,7 +330,13 @@ class PrintfulClient:
                 ra = _parse_retry_after(resp.headers.get("Retry-After"))
                 wait = ra if ra is not None else _backoff(attempt, base=1.2)
                 msg = self._extract_error_message(resp)
-                logger.warning("Printful 429 rate limit endpoint=%s attempt=%d wait=%.1fs msg=%s", endpoint, attempt + 1, wait, msg)
+                logger.warning(
+                    "Printful 429 rate limit endpoint=%s attempt=%d wait=%.1fs msg=%s",
+                    endpoint,
+                    attempt + 1,
+                    wait,
+                    msg,
+                )
                 time.sleep(wait)
                 last_err = PrintfulRateLimitError(msg)
                 continue
@@ -304,7 +345,14 @@ class PrintfulClient:
             if 500 <= code < 600:
                 wait = _backoff(attempt)
                 msg = self._extract_error_message(resp)
-                logger.warning("Printful %d endpoint=%s attempt=%d wait=%.1fs msg=%s", code, endpoint, attempt + 1, wait, msg)
+                logger.warning(
+                    "Printful %d endpoint=%s attempt=%d wait=%.1fs msg=%s",
+                    code,
+                    endpoint,
+                    attempt + 1,
+                    wait,
+                    msg,
+                )
                 time.sleep(wait)
                 last_err = PrintfulServerError(msg)
                 continue
@@ -315,10 +363,18 @@ class PrintfulClient:
 
         # exhausted
         if last_err:
-            raise PrintfulError(f"Demasiados errores consecutivos llamando Printful: {last_err}")
+            raise PrintfulError(
+                f"Demasiados errores consecutivos llamando Printful: {last_err}"
+            )
         raise PrintfulError("Demasiados errores consecutivos llamando Printful.")
 
-    def _get(self, endpoint: str, params: Optional[Mapping[str, Any]] = None, *, use_cache: bool = True) -> Any:
+    def _get(
+        self,
+        endpoint: str,
+        params: Optional[Mapping[str, Any]] = None,
+        *,
+        use_cache: bool = True,
+    ) -> Any:
         key = self._cache_key(endpoint, params)
         if use_cache:
             cached = self.cache.get(key)
@@ -335,10 +391,16 @@ class PrintfulClient:
     # Public API
     # -------------------------
 
-    def get_synced_products(self, limit: int = 50, offset: int = 0, use_cache: bool = True) -> Any:
+    def get_synced_products(
+        self, limit: int = 50, offset: int = 0, use_cache: bool = True
+    ) -> Any:
         limit = max(1, min(int(limit), 200))
         offset = max(0, int(offset))
-        return self._get("store/products", params={"limit": limit, "offset": offset}, use_cache=use_cache)
+        return self._get(
+            "store/products",
+            params={"limit": limit, "offset": offset},
+            use_cache=use_cache,
+        )
 
     def get_synced_product(self, product_id: int | str, use_cache: bool = True) -> Any:
         pid = str(product_id).strip()

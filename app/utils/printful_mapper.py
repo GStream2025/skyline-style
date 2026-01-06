@@ -104,6 +104,7 @@ _ZIP_HOODIE_PHRASES = {"zip hoodie", "zip-up hoodie", "zippered hoodie"}
 
 _WORD_RE = re.compile(r"[a-z0-9]+", re.IGNORECASE)
 
+
 def _normalize(text: Optional[str]) -> str:
     if not text:
         return ""
@@ -112,12 +113,15 @@ def _normalize(text: Optional[str]) -> str:
     s = "".join(c for c in s if not unicodedata.combining(c))
     return s
 
+
 def _tokens(text: str) -> List[str]:
     # tokens alfanuméricos
     return _WORD_RE.findall(text or "")
 
+
 def _blob(*parts: str) -> str:
     return " ".join([p for p in parts if p]).strip()
+
 
 def _join_tags(tags: Iterable[Any]) -> str:
     out: List[str] = []
@@ -133,6 +137,7 @@ def _join_tags(tags: Iterable[Any]) -> str:
             out.append(_normalize(str(t)))
     return " ".join([x for x in out if x])
 
+
 def _split_sku(sku: str) -> str:
     # separa SKU por separadores típicos para mejorar match
     s = _normalize(sku)
@@ -140,10 +145,12 @@ def _split_sku(sku: str) -> str:
         return ""
     return " ".join(re.split(r"[\s\-\_\/\|\.\:]+", s))
 
+
 # ============================================================
 # Overrides opcionales por ENV (sin tocar código)
 # CATEGORY_OVERRIDES_JSON='{"hoodie zip":"buzos","windbreaker":"camperas"}'
 # ============================================================
+
 
 def _load_overrides() -> List[Tuple[str, str]]:
     raw = (os.getenv("CATEGORY_OVERRIDES_JSON") or "").strip()
@@ -163,26 +170,32 @@ def _load_overrides() -> List[Tuple[str, str]]:
     except Exception:
         return []
 
+
 _OVERRIDES = _load_overrides()
 
 # ============================================================
 # Precompilación de patterns (frases/palabras)
 # ============================================================
 
+
 def _kw_to_token_list(kw: str) -> List[str]:
     return _tokens(_normalize(kw))
+
 
 _KEYWORD_TOKENS: Dict[str, List[List[str]]] = {
     cat: [_kw_to_token_list(kw) for kw in kws if _kw_to_token_list(kw)]
     for cat, kws in _KEYWORDS.items()
 }
 
-_ZIP_HOODIE_TOKENS = [tuple(_kw_to_token_list(x)) for x in _ZIP_HOODIE_PHRASES if _kw_to_token_list(x)]
+_ZIP_HOODIE_TOKENS = [
+    tuple(_kw_to_token_list(x)) for x in _ZIP_HOODIE_PHRASES if _kw_to_token_list(x)
+]
 
 
 # ============================================================
 # Matching por secuencias de tokens (evita falsos positivos)
 # ============================================================
+
 
 def _contains_phrase(tokens: List[str], phrase_tokens: List[str]) -> bool:
     if not tokens or not phrase_tokens:
@@ -196,6 +209,7 @@ def _contains_phrase(tokens: List[str], phrase_tokens: List[str]) -> bool:
             return True
     return False
 
+
 def _score_category(tokens: List[str], cat: str) -> int:
     score = 0
     for pt in _KEYWORD_TOKENS.get(cat, []):
@@ -204,8 +218,10 @@ def _score_category(tokens: List[str], cat: str) -> int:
             score += 3 if len(pt) >= 2 else 2
     return score
 
+
 def is_valid_category(cat: str) -> bool:
     return (cat or "").strip().lower() in ALL_CATEGORIES
+
 
 def list_categories() -> List[str]:
     return list(ALL_CATEGORIES)
@@ -214,6 +230,7 @@ def list_categories() -> List[str]:
 # ============================================================
 # Clasificación por texto (con scoring + pesos)
 # ============================================================
+
 
 def guess_category_from_text(
     name: Optional[str] = None,
@@ -258,7 +275,9 @@ def guess_category_from_text(
     # Regla especial: zip hoodie => BUZO salvo que también haya señales de CAMPERA
     if tokens_name or tokens_type:
         all_tokens = tokens_name + tokens_type + tokens_tags
-        has_zip_hoodie = any(_contains_phrase(all_tokens, list(z)) for z in _ZIP_HOODIE_TOKENS)
+        has_zip_hoodie = any(
+            _contains_phrase(all_tokens, list(z)) for z in _ZIP_HOODIE_TOKENS
+        )
         if has_zip_hoodie:
             # si también menciona jacket/windbreaker/etc, dejamos que gane campera
             campera_hint = scores[CATEGORY_CAMPERAS] > 0
@@ -283,6 +302,7 @@ def guess_category_from_text(
 # ============================================================
 # Clasificación directa desde Printful (tolerante)
 # ============================================================
+
 
 def guess_category_from_printful(product: Mapping[str, Any]) -> str:
     """
@@ -329,7 +349,7 @@ def guess_category_from_printful(product: Mapping[str, Any]) -> str:
     return guess_category_from_text(
         name=str(name),
         product_type=str(product_type),
-        tags=tags,   # dejamos mixed (el join lo tolera)
+        tags=tags,  # dejamos mixed (el join lo tolera)
         sku=sku,
     )
 

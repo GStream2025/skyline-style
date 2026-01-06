@@ -19,8 +19,10 @@ from app.utils.password_engine import hash_password, verify_and_maybe_rehash
 # Helpers
 # ============================================================
 
+
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
 
 EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 
@@ -34,13 +36,23 @@ MAX_PASSWORD_LEN = 256
 
 # “Blacklist” mínima (anti password tontas). Podés ampliar sin romper nada.
 COMMON_PASSWORDS = {
-    "12345678", "password", "qwerty123", "admin12345", "123456789",
-    "iloveyou", "11111111", "00000000", "skyline123", "gabriel123",
+    "12345678",
+    "password",
+    "qwerty123",
+    "admin12345",
+    "123456789",
+    "iloveyou",
+    "11111111",
+    "00000000",
+    "skyline123",
+    "gabriel123",
 }
+
 
 def _token64() -> str:
     """Token EXACTO 64 chars hex (32 bytes)."""
     return secrets.token_hex(32)
+
 
 def _safe_strip(v: Optional[str]) -> Optional[str]:
     if v is None:
@@ -48,12 +60,16 @@ def _safe_strip(v: Optional[str]) -> Optional[str]:
     vv = str(v).strip()
     return vv if vv else None
 
+
 def _clean_phone(v: Optional[str]) -> Optional[str]:
     vv = _safe_strip(v)
     if not vv:
         return None
-    cleaned = "".join(ch for ch in vv if ch.isdigit() or ch in {"+", " ", "(", ")", "-"}).strip()
+    cleaned = "".join(
+        ch for ch in vv if ch.isdigit() or ch in {"+", " ", "(", ")", "-"}
+    ).strip()
     return cleaned[:40] if cleaned else None
+
 
 def _clamp_int(v: Optional[int], lo: int = 0, hi: int = 10_000) -> int:
     try:
@@ -66,8 +82,10 @@ def _clamp_int(v: Optional[int], lo: int = 0, hi: int = 10_000) -> int:
         return hi
     return n
 
+
 def _normalize_email(email: str) -> str:
     return (email or "").strip().lower()
+
 
 def _is_email_valid(email: str) -> bool:
     e = _normalize_email(email)
@@ -75,12 +93,14 @@ def _is_email_valid(email: str) -> bool:
         return False
     return bool(EMAIL_RE.match(e))
 
+
 def _normalize_role(v: Optional[str]) -> str:
     vv = _safe_strip(v)
     if not vv:
         return "customer"
     rv = vv.lower()[:20]
     return rv if rv in ALLOWED_ROLES else "customer"
+
 
 def _safe_digest_eq(a: Optional[str], b: Optional[str]) -> bool:
     """Comparación en tiempo constante (anti timing attacks)."""
@@ -91,13 +111,16 @@ def _safe_digest_eq(a: Optional[str], b: Optional[str]) -> bool:
     except Exception:
         return False
 
+
 def _env_owner_email() -> str:
     return (os.getenv("ADMIN_EMAIL") or "").strip().lower()
+
 
 def _safe_ip(ip: Optional[str]) -> Optional[str]:
     if not ip:
         return None
     return str(ip).strip()[:64] or None
+
 
 def _safe_provider_max_tries() -> int:
     # si querés tunear por env
@@ -105,6 +128,7 @@ def _safe_provider_max_tries() -> int:
         return max(3, min(20, int(os.getenv("TOKEN_RETRY_MAX") or "8")))
     except Exception:
         return 8
+
 
 def _ensure_unique_token(
     field_name: str,
@@ -126,7 +150,9 @@ def _ensure_unique_token(
         tok = make_token()
         last = tok
         try:
-            q = db.session.query(model_cls).filter(getattr(model_cls, field_name) == tok)
+            q = db.session.query(model_cls).filter(
+                getattr(model_cls, field_name) == tok
+            )
             exists = q.first()
             if not exists:
                 return tok
@@ -136,6 +162,7 @@ def _ensure_unique_token(
 
     # fallback: último token (colisión ultra rara)
     return last
+
 
 def _password_score_basic(pwd: str) -> int:
     """
@@ -154,6 +181,7 @@ def _password_score_basic(pwd: str) -> int:
     if any(not c.isalnum() for c in pwd):
         s += 1
     return s
+
 
 def _password_is_bad(pwd: str, email: Optional[str]) -> bool:
     p = (pwd or "").strip()
@@ -177,6 +205,7 @@ def _password_is_bad(pwd: str, email: Optional[str]) -> bool:
 # ============================================================
 # User
 # ============================================================
+
 
 class User(UserMixin, db.Model):
     """
@@ -209,14 +238,18 @@ class User(UserMixin, db.Model):
     # Estado / roles
     is_active = db.Column(db.Boolean, nullable=False, default=True, index=True)
     is_admin = db.Column(db.Boolean, nullable=False, default=False, index=True)
-    role = db.Column(db.String(20), nullable=True, index=True)  # admin/staff/customer/affiliate
+    role = db.Column(
+        db.String(20), nullable=True, index=True
+    )  # admin/staff/customer/affiliate
 
     # Email verification
     email_verified = db.Column(db.Boolean, nullable=False, default=False, index=True)
     email_verified_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
     # Auditoría / seguridad
-    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, index=True)
+    created_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, default=utcnow, index=True
+    )
     last_login_at = db.Column(db.DateTime(timezone=True), nullable=True, index=True)
     password_changed_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
@@ -226,8 +259,12 @@ class User(UserMixin, db.Model):
     last_login_ip = db.Column(db.String(64), nullable=True)
 
     # Tokens (64 fixed)
-    email_verify_token = db.Column(db.String(64), nullable=True, unique=True, index=True)
-    reset_password_token = db.Column(db.String(64), nullable=True, unique=True, index=True)
+    email_verify_token = db.Column(
+        db.String(64), nullable=True, unique=True, index=True
+    )
+    reset_password_token = db.Column(
+        db.String(64), nullable=True, unique=True, index=True
+    )
     reset_password_expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
     # Marketing
@@ -520,7 +557,9 @@ class User(UserMixin, db.Model):
 
     def ensure_email_verify_token(self) -> str:
         if not self.email_verify_token:
-            self.email_verify_token = _ensure_unique_token("email_verify_token", _token64, User)
+            self.email_verify_token = _ensure_unique_token(
+                "email_verify_token", _token64, User
+            )
         return self.email_verify_token
 
     def token_matches_email_verify(self, token: str) -> bool:
@@ -533,7 +572,9 @@ class User(UserMixin, db.Model):
         self.reinforce_owner_flags()
 
     def create_reset_token(self, minutes: int = 30) -> str:
-        self.reset_password_token = _ensure_unique_token("reset_password_token", _token64, User)
+        self.reset_password_token = _ensure_unique_token(
+            "reset_password_token", _token64, User
+        )
         self.reset_password_expires_at = utcnow() + timedelta(minutes=int(minutes))
         return self.reset_password_token
 
@@ -576,7 +617,7 @@ class User(UserMixin, db.Model):
     # ============================================================
 
     def default_address(self) -> Optional["UserAddress"]:
-        for a in (self.addresses or []):
+        for a in self.addresses or []:
             if a.is_default:
                 return a
         addrs = list(self.addresses or [])
@@ -588,7 +629,9 @@ class User(UserMixin, db.Model):
 
     def ensure_tokens(self) -> None:
         if not self.unsubscribe_token:
-            self.unsubscribe_token = _ensure_unique_token("unsubscribe_token", _token64, User)
+            self.unsubscribe_token = _ensure_unique_token(
+                "unsubscribe_token", _token64, User
+            )
 
     def prepare_for_save(self) -> None:
         try:
@@ -655,7 +698,9 @@ class User(UserMixin, db.Model):
             "is_active": bool(self.is_active),
             "email_verified": bool(self.email_verified),
             "created_at": self.created_at.isoformat() if self.created_at else None,
-            "last_login_at": self.last_login_at.isoformat() if self.last_login_at else None,
+            "last_login_at": (
+                self.last_login_at.isoformat() if self.last_login_at else None
+            ),
         }
 
     def public_admin_dict(self) -> Dict[str, Any]:
@@ -674,7 +719,9 @@ class User(UserMixin, db.Model):
             "failed_login_count": int(self.failed_login_count or 0),
             "locked": bool(self.locked_until and utcnow() < self.locked_until),
             "created_at": self.created_at.isoformat() if self.created_at else None,
-            "last_login_at": self.last_login_at.isoformat() if self.last_login_at else None,
+            "last_login_at": (
+                self.last_login_at.isoformat() if self.last_login_at else None
+            ),
             "last_login_ip": self.last_login_ip,
         }
 
@@ -701,7 +748,7 @@ class User(UserMixin, db.Model):
     @validates("email")
     def _v_email(self, _k, v: str) -> str:
         vv = self.normalize_email(v)
-        return (vv[:255] if vv else "")
+        return vv[:255] if vv else ""
 
     @validates("country")
     def _v_country(self, _k, v: Optional[str]) -> Optional[str]:
@@ -738,6 +785,7 @@ Index("ix_users_role_active", User.role, User.is_active)
 # UserAddress
 # ============================================================
 
+
 class UserAddress(db.Model):
     __tablename__ = "user_addresses"
 
@@ -763,7 +811,9 @@ class UserAddress(db.Model):
     country = db.Column(db.String(2), nullable=True)
 
     is_default = db.Column(db.Boolean, nullable=False, default=False, index=True)
-    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, index=True)
+    created_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, default=utcnow, index=True
+    )
 
     user = db.relationship("User", back_populates="addresses", lazy="select")
 
@@ -805,11 +855,13 @@ class UserAddress(db.Model):
     def __repr__(self) -> str:
         return f"<UserAddress id={self.id} user_id={self.user_id} default={bool(self.is_default)}>"
 
+
 Index("ix_user_addresses_user_default", UserAddress.user_id, UserAddress.is_default)
 
 # ============================================================
 # Hooks (ultra safe)
 # ============================================================
+
 
 @event.listens_for(User, "before_insert", propagate=True)
 def _user_before_insert(_mapper, _conn, target: User):
@@ -818,12 +870,14 @@ def _user_before_insert(_mapper, _conn, target: User):
     except Exception:
         pass
 
+
 @event.listens_for(User, "before_update", propagate=True)
 def _user_before_update(_mapper, _conn, target: User):
     try:
         target.prepare_for_save()
     except Exception:
         pass
+
 
 # ------------------------------------------------------------
 # Garantiza 1 default address por usuario (sin migraciones)

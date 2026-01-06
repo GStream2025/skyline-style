@@ -14,6 +14,7 @@ from app.models import db
 # Helpers
 # ============================================================
 
+
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -44,7 +45,9 @@ def _clean_phone(v: Optional[str]) -> Optional[str]:
     vv = _safe_strip(v)
     if not vv:
         return None
-    cleaned = "".join(ch for ch in vv if ch.isdigit() or ch in {"+", " ", "(", ")", "-"}).strip()
+    cleaned = "".join(
+        ch for ch in vv if ch.isdigit() or ch in {"+", " ", "(", ")", "-"}
+    ).strip()
     return cleaned[:40] if cleaned else None
 
 
@@ -81,6 +84,7 @@ def _normalize_url(v: Optional[str], max_len: int = 200) -> Optional[str]:
 # AffiliateProfile
 # ============================================================
 
+
 class AffiliateProfile(db.Model):
     """
     Skyline Store — AffiliateProfile (PRO / FINAL / NO BREAK)
@@ -116,14 +120,18 @@ class AffiliateProfile(db.Model):
     display_name = db.Column(db.String(120), nullable=True)
     phone = db.Column(db.String(40), nullable=True)
 
-    instagram = db.Column(db.String(120), nullable=True)  # guardamos handle normalizado (sin @)
+    instagram = db.Column(
+        db.String(120), nullable=True
+    )  # guardamos handle normalizado (sin @)
     tiktok = db.Column(db.String(120), nullable=True)
     website = db.Column(db.String(200), nullable=True)
 
     payout_method = db.Column(db.String(40), nullable=True)
     payout_details = db.Column(db.Text, nullable=True)
 
-    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, index=True)
+    created_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, default=utcnow, index=True
+    )
     approved_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
     # Relación al usuario
@@ -312,7 +320,9 @@ class AffiliateProfile(db.Model):
         """
         if not self.is_approved:
             return False
-        return bool(_safe_strip(self.payout_method)) and bool(_safe_strip(self.payout_details))
+        return bool(_safe_strip(self.payout_method)) and bool(
+            _safe_strip(self.payout_details)
+        )
 
     # ============================================================
     # Validaciones suaves (NO BREAK)
@@ -470,13 +480,22 @@ class AffiliateProfile(db.Model):
 # Índices recomendados
 # ============================================================
 
-Index("ix_affiliate_profiles_status_created", AffiliateProfile.status, AffiliateProfile.created_at)
-Index("ix_affiliate_profiles_user_status", AffiliateProfile.user_id, AffiliateProfile.status)
+Index(
+    "ix_affiliate_profiles_status_created",
+    AffiliateProfile.status,
+    AffiliateProfile.created_at,
+)
+Index(
+    "ix_affiliate_profiles_user_status",
+    AffiliateProfile.user_id,
+    AffiliateProfile.status,
+)
 
 
 # ============================================================
 # Hooks ultra safe (NO BREAK)
 # ============================================================
+
 
 @event.listens_for(AffiliateProfile, "before_insert", propagate=True)
 def _aff_before_insert(_mapper, _conn, target: AffiliateProfile):

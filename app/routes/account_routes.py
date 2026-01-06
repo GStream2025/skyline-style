@@ -1,9 +1,10 @@
-# app/routes/account_routes.py
+# app/routes/account_routes.py — Skyline Store (ULTRA PRO++ / FINAL / NO BREAK)
 from __future__ import annotations
 
 import os
 import re
 import secrets
+import time
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urljoin, urlparse
@@ -36,7 +37,6 @@ account_bp = Blueprint(
 # Alias /cuenta (sin url_prefix)
 cuenta_bp = Blueprint("cuenta", __name__)
 
-
 # ============================================================
 # Flags / Config
 # ============================================================
@@ -44,14 +44,19 @@ cuenta_bp = Blueprint("cuenta", __name__)
 _TRUE = {"1", "true", "yes", "y", "on"}
 _FALSE = {"0", "false", "no", "n", "off"}
 
-REQUIRE_CSRF = (os.getenv("REQUIRE_CSRF", "1").strip().lower() in _TRUE)  # ✅ default ON
-ACCOUNT_ALLOW_JSON = (os.getenv("ACCOUNT_ALLOW_JSON", "1").strip().lower() in _TRUE)
+REQUIRE_CSRF = os.getenv("REQUIRE_CSRF", "1").strip().lower() in _TRUE  # ✅ default ON
+ACCOUNT_ALLOW_JSON = os.getenv("ACCOUNT_ALLOW_JSON", "1").strip().lower() in _TRUE
 
 # Edad mínima para comprar (default 18)
 MIN_AGE = int(os.getenv("MIN_AGE", "18") or "18")
 
 # Limita updates de perfil (simple anti spam)
 PROFILE_MAX_LEN = 120
+
+# Simple rate-limit por sesión (writes)
+ACCOUNT_RATE_LIMIT_SECONDS = float(
+    os.getenv("ACCOUNT_RATE_LIMIT_SECONDS", "1.2") or "1.2"
+)
 
 # ============================================================
 # Helpers — JSON / Templates / Seguridad
@@ -62,12 +67,29 @@ _USERNAME_RE = re.compile(r"^[a-zA-Z0-9_\.]{3,24}$")
 _PHONE_CLEAN_RE = re.compile(r"[^0-9\+\-\(\)\s]")
 
 
+def _safe_get_json() -> Dict[str, Any]:
+    """No rompe si el body no es JSON válido."""
+    try:
+        if request.is_json:
+            data = request.get_json(silent=True) or {}
+            return data if isinstance(data, dict) else {}
+    except Exception:
+        pass
+    return {}
+
+
 def _wants_json() -> bool:
     if not ACCOUNT_ALLOW_JSON:
         return False
+    # Mejor detección: accept + content-type + request.is_json + ?format=json
     accept = (request.headers.get("Accept") or "").lower()
     ctype = (request.headers.get("Content-Type") or "").lower()
-    return ("application/json" in accept) or ("application/json" in ctype) or (request.args.get("format") == "json")
+    fmt = (request.args.get("format") or "").strip().lower()
+    if fmt == "json":
+        return True
+    if request.is_json:
+        return True
+    return ("application/json" in accept) or ("application/json" in ctype)
 
 
 def _json_or_html(payload: Dict[str, Any], html_fn):
@@ -82,6 +104,13 @@ def _template_exists(name: str) -> bool:
         return True
     except Exception:
         return False
+
+
+def _safe_url_for(endpoint: str, **kwargs) -> Optional[str]:
+    try:
+        return url_for(endpoint, **kwargs)
+    except Exception:
+        return None
 
 
 def _is_safe_next(target: Optional[str]) -> bool:
@@ -101,12 +130,16 @@ def _next_url(default: str = "/account") -> str:
     return nxt if _is_safe_next(nxt) else default
 
 
-def _clear_session() -> None:
+def _clear_session_keep_csrf() -> None:
+    """No deja al usuario sin csrf_token si lo usás en templates."""
+    csrf = session.get("csrf_token")
     try:
         session.clear()
     except Exception:
         for k in list(session.keys()):
             session.pop(k, None)
+    if csrf:
+        session["csrf_token"] = csrf
 
 
 def _commit_or_rollback() -> bool:
@@ -123,17 +156,51 @@ def _csrf_token() -> str:
     if not tok or not isinstance(tok, str) or len(tok) < 16:
         tok = secrets.token_urlsafe(32)
         session["csrf_token"] = tok
+        session.modified = True
     return tok
 
 
 def _csrf_ok() -> bool:
+    """
+    ✅ CSRF real:
+    - Form: csrf_token
+    - Header: X-CSRF-Token
+    - JSON: {"csrf_token": "..."} (para fetch)
+    """
     if request.method not in {"POST", "PUT", "PATCH", "DELETE"}:
         return True
     if not REQUIRE_CSRF:
         return True
-    sent = (request.form.get("csrf_token") or request.headers.get("X-CSRF-Token") or "").strip()
+
     stored = (session.get("csrf_token") or "").strip()
-    return bool(sent) and bool(stored) and secrets.compare_digest(sent, stored)
+    if not stored:
+        return False
+
+    sent = (
+        request.form.get("csrf_token") or request.headers.get("X-CSRF-Token") or ""
+    ).strip()
+    if sent and secrets.compare_digest(sent, stored):
+        return True
+
+    data = _safe_get_json()
+    sent2 = (str(data.get("csrf_token") or "")).strip()
+    return bool(sent2) and secrets.compare_digest(sent2, stored)
+
+
+def _rate_limit_ok(key: str) -> bool:
+    """Rate-limit simple por sesión (evita spam en writes)."""
+    now = time.time()
+    k = f"rl:{key}"
+    last = session.get(k, 0)
+    try:
+        last = float(last)
+    except Exception:
+        last = 0.0
+    if (now - last) < ACCOUNT_RATE_LIMIT_SECONDS:
+        return False
+    session[k] = now
+    session.modified = True
+    return True
 
 
 @account_bp.before_request
@@ -144,15 +211,30 @@ def _before_account_request():
         return None
 
     # ✅ valida CSRF en writes
-    if request.method in {"POST", "PUT", "PATCH", "DELETE"} and not _csrf_ok():
-        if _wants_json():
-            return jsonify(ok=False, error="csrf_failed"), 400
-        flash("Sesión expirada o formulario inválido. Reintentá.", "error")
-        return redirect(request.referrer or url_for("account.account_home"))
+    if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+        if not _csrf_ok():
+            if _wants_json():
+                return jsonify(ok=False, error="csrf_failed"), 400
+            flash("Sesión expirada o formulario inválido. Reintentá.", "error")
+            return redirect(
+                request.referrer
+                or (_safe_url_for("account.account_home") or "/account")
+            )
+
+        # ✅ rate-limit base
+        if not _rate_limit_ok(request.endpoint or "write"):
+            if _wants_json():
+                return jsonify(ok=False, error="rate_limited"), 429
+            flash("Demasiadas acciones seguidas. Esperá un segundo.", "warning")
+            return redirect(
+                request.referrer
+                or (_safe_url_for("account.account_home") or "/account")
+            )
 
 
 @account_bp.context_processor
 def _inject_csrf():
+    # Siempre disponible como {{ csrf_token }}
     return {"csrf_token": session.get("csrf_token", "")}
 
 
@@ -163,7 +245,7 @@ def _get_current_user() -> Optional[User]:
     try:
         uid_int = int(uid)
     except Exception:
-        _clear_session()
+        _clear_session_keep_csrf()
         return None
 
     try:
@@ -172,20 +254,25 @@ def _get_current_user() -> Optional[User]:
         u = None
 
     if not u:
-        _clear_session()
+        _clear_session_keep_csrf()
         return None
 
-    # lock / inactive
-    if hasattr(u, "is_active") and not bool(getattr(u, "is_active")):
-        _clear_session()
-        return None
+    # inactive -> fuera
+    try:
+        if hasattr(u, "is_active") and not bool(getattr(u, "is_active")):
+            _clear_session_keep_csrf()
+            return None
+    except Exception:
+        pass
 
     return u
 
 
 def _is_admin_session(u: Optional[User]) -> bool:
+    # usa user real primero
     if u and bool(getattr(u, "is_admin", False)):
         return True
+    # fallback session
     v = session.get("is_admin", False)
     if isinstance(v, str):
         return v.strip().lower() in _TRUE
@@ -208,6 +295,7 @@ def _require_user() -> Tuple[Optional[User], Optional[Any]]:
 # ============================================================
 # Validación / Normalización (perfil tipo MercadoLibre/Temu)
 # ============================================================
+
 
 def _clean_str(v: Any, max_len: int = 120) -> str:
     return ("" if v is None else str(v)).strip()[:max_len]
@@ -239,10 +327,8 @@ def _parse_dob(v: Any) -> Optional[date]:
     s = _clean_str(v, 32)
     if not s:
         return None
-    # acepta YYYY-MM-DD
     try:
-        d = datetime.strptime(s, "%Y-%m-%d").date()
-        return d
+        return datetime.strptime(s, "%Y-%m-%d").date()
     except Exception:
         return None
 
@@ -270,6 +356,7 @@ def _safe_setattr(model: Any, attr: str, value: Any) -> bool:
 # Account Home
 # ============================================================
 
+
 @account_bp.get("")
 @account_bp.get("/")
 def account_home():
@@ -277,6 +364,7 @@ def account_home():
     nxt = _next_url("/account")
 
     if not u:
+
         def _html():
             if _template_exists("account/account_home.html"):
                 return render_template("account/account_home.html", next=nxt)
@@ -288,10 +376,7 @@ def account_home():
 
     # Admin: acceso rápido al panel
     if _is_admin_session(u):
-        try:
-            return redirect(url_for("admin.dashboard"))
-        except Exception:
-            return redirect("/admin")
+        return redirect(_safe_url_for("admin.dashboard") or "/admin")
 
     orders_count = 0
     try:
@@ -301,9 +386,13 @@ def account_home():
 
     def _html():
         if _template_exists("account/dashboard.html"):
-            return render_template("account/dashboard.html", user=u, orders_count=orders_count)
+            return render_template(
+                "account/dashboard.html", user=u, orders_count=orders_count
+            )
         if _template_exists("account/home.html"):
-            return render_template("account/home.html", user=u, orders_count=orders_count)
+            return render_template(
+                "account/home.html", user=u, orders_count=orders_count
+            )
         if _template_exists("account.html"):
             return render_template("account.html", user=u, orders_count=orders_count)
         return ("OK", 200)
@@ -311,7 +400,11 @@ def account_home():
     return _json_or_html(
         {
             "ok": True,
-            "user": {"id": u.id, "email": u.email, "name": getattr(u, "name", None)},
+            "user": {
+                "id": u.id,
+                "email": getattr(u, "email", None),
+                "name": getattr(u, "name", None),
+            },
             "orders_count": orders_count,
         },
         _html,
@@ -322,6 +415,7 @@ def account_home():
 # Profile — full (datos + edad + preferencias)
 # ============================================================
 
+
 @account_bp.get("/profile")
 def profile_get():
     u, resp = _require_user()
@@ -331,9 +425,8 @@ def profile_get():
     def _html():
         if _template_exists("account/profile.html"):
             return render_template("account/profile.html", user=u)
-        return redirect(url_for("account.account_home"))
+        return redirect(_safe_url_for("account.account_home") or "/account")
 
-    # Si existen columnas extra en User, las exponemos; si no, no rompe
     payload = {
         "ok": True,
         "user": {
@@ -344,10 +437,11 @@ def profile_get():
             "country": getattr(u, "country", None),
             "city": getattr(u, "city", None),
             "email_verified": bool(getattr(u, "email_verified", False)),
-            "dob": (getattr(u, "dob", None).isoformat() if getattr(u, "dob", None) else None),
+            "dob": (
+                getattr(u, "dob", None).isoformat() if getattr(u, "dob", None) else None
+            ),
             "age_verified": bool(getattr(u, "age_verified", False)),
             "marketing_opt_in": bool(getattr(u, "email_opt_in", True)),
-            # preferido de pago (si existe)
             "preferred_payment": getattr(u, "preferred_payment", None),
             "preferred_payment_type": getattr(u, "preferred_payment_type", None),
         },
@@ -361,25 +455,28 @@ def profile_post():
     if resp:
         return resp
 
-    # Campos base
-    name = _clean_str(request.form.get("name"), 120) or None
-    phone = _clean_phone(request.form.get("phone")) or None
-    country = _clean_str(request.form.get("country"), 2).upper() or None
-    city = _clean_str(request.form.get("city"), 80) or None
+    # ✅ soporta JSON y FORM
+    data = _safe_get_json()
 
-    # Extra (tipo marketplace)
-    username_raw = request.form.get("username")
-    dob_raw = request.form.get("dob")  # YYYY-MM-DD
-    marketing_opt_in = (request.form.get("marketing_opt_in") or "").strip().lower() in _TRUE
+    def _get(name: str) -> Any:
+        return request.form.get(name) if request.form else data.get(name)
 
-    # Validaciones suaves
+    name = _clean_str(_get("name"), 120) or None
+    phone = _clean_phone(_get("phone")) or None
+    country = _clean_str(_get("country"), 2).upper() or None
+    city = _clean_str(_get("city"), 80) or None
+
+    username_raw = _get("username")
+    dob_raw = _get("dob")  # YYYY-MM-DD
+    marketing_opt_in = str(_get("marketing_opt_in") or "").strip().lower() in _TRUE
+
     try:
         username = _clean_username(username_raw) if username_raw is not None else ""
     except Exception as e:
         if _wants_json():
             return jsonify(ok=False, error="invalid_username", detail=str(e)), 400
         flash(str(e), "error")
-        return redirect(url_for("account.profile_get"))
+        return redirect(_safe_url_for("account.profile_get") or "/account/profile")
 
     dob = _parse_dob(dob_raw)
     if dob:
@@ -389,9 +486,8 @@ def profile_post():
             if _wants_json():
                 return jsonify(ok=False, error="age_required", detail=msg), 400
             flash(msg, "error")
-            return redirect(url_for("account.profile_get"))
+            return redirect(_safe_url_for("account.profile_get") or "/account/profile")
 
-    # Persistimos solo lo que exista en el modelo (NO rompe DB vieja)
     _safe_setattr(u, "name", name)
     _safe_setattr(u, "phone", phone)
     _safe_setattr(u, "country", country)
@@ -406,7 +502,6 @@ def profile_post():
 
     _safe_setattr(u, "email_opt_in", bool(marketing_opt_in))
     if bool(marketing_opt_in):
-        # si existe
         _safe_setattr(u, "email_opt_in_at", datetime.utcnow())
 
     ok = _commit_or_rollback()
@@ -414,14 +509,17 @@ def profile_post():
     if _wants_json():
         return jsonify(ok=ok)
 
-    flash("Perfil actualizado ✅" if ok else "No se pudo actualizar el perfil.", "success" if ok else "error")
-    return redirect(url_for("account.profile_get"))
+    flash(
+        "Perfil actualizado ✅" if ok else "No se pudo actualizar el perfil.",
+        "success" if ok else "error",
+    )
+    return redirect(_safe_url_for("account.profile_get") or "/account/profile")
 
 
 # ============================================================
 # Payments — /account/payments (método preferido + lista)
-# - MercadoLibre/Temu style: guardar preferencia para checkout rápido
 # ============================================================
+
 
 def _get_available_payment_methods() -> List[Dict[str, Any]]:
     """
@@ -430,54 +528,73 @@ def _get_available_payment_methods() -> List[Dict[str, Any]]:
     - Si existe PaymentProvider: lo usa.
     - Si no: fallback seguro.
     """
-    # 1) Service
     try:
         from app.models.payment_provider import PaymentProviderService  # type: ignore
+
         providers = PaymentProviderService.get_enabled_for_checkout()
         out = []
         for p in providers:
-            out.append({
-                "code": p.code,
-                "name": p.get_label_for_checkout() if hasattr(p, "get_label_for_checkout") else p.name,
-                "recommended": bool(getattr(p, "recommended", False)),
-            })
-        return out
+            out.append(
+                {
+                    "code": getattr(p, "code", None),
+                    "name": (
+                        p.get_label_for_checkout()
+                        if hasattr(p, "get_label_for_checkout")
+                        else getattr(p, "name", "Pago")
+                    ),
+                    "recommended": bool(getattr(p, "recommended", False)),
+                }
+            )
+        return [m for m in out if m.get("code")]
     except Exception:
         pass
 
-    # 2) Model directo
     try:
         from app.models.payment_provider import PaymentProvider  # type: ignore
+
         providers = (
-            PaymentProvider.query
-            .filter(PaymentProvider.enabled.is_(True))
-            .order_by(PaymentProvider.recommended.desc(), PaymentProvider.sort_order.asc())
+            PaymentProvider.query.filter(PaymentProvider.enabled.is_(True))
+            .order_by(
+                PaymentProvider.recommended.desc(), PaymentProvider.sort_order.asc()
+            )
             .all()
         )
         out = []
         for p in providers:
-            # si tiene validación real, filtramos
             ready = True
             try:
-                ready = p.is_ready_for_checkout() if hasattr(p, "is_ready_for_checkout") else True
+                ready = (
+                    p.is_ready_for_checkout()
+                    if hasattr(p, "is_ready_for_checkout")
+                    else True
+                )
             except Exception:
                 ready = True
             if not ready:
                 continue
-            out.append({
-                "code": p.code,
-                "name": p.get_label_for_checkout() if hasattr(p, "get_label_for_checkout") else p.name,
-                "recommended": bool(getattr(p, "recommended", False)),
-            })
-        return out
+            out.append(
+                {
+                    "code": getattr(p, "code", None),
+                    "name": (
+                        p.get_label_for_checkout()
+                        if hasattr(p, "get_label_for_checkout")
+                        else getattr(p, "name", "Pago")
+                    ),
+                    "recommended": bool(getattr(p, "recommended", False)),
+                }
+            )
+        return [m for m in out if m.get("code")]
     except Exception:
         pass
 
-    # 3) Fallback
     return [
         {"code": "mercadopago_uy", "name": "Mercado Pago (UY)", "recommended": True},
         {"code": "paypal", "name": "PayPal", "recommended": False},
-        {"code": "transferencia", "name": "Transferencia bancaria", "recommended": False},
+        {
+            "code": "transferencia",
+            "name": "Transferencia bancaria",
+            "recommended": False,
+        },
     ]
 
 
@@ -489,11 +606,14 @@ def payments_get():
 
     methods = _get_available_payment_methods()
 
-    preferred = getattr(u, "preferred_payment", None) or session.get("preferred_payment")
-    preferred_type = getattr(u, "preferred_payment_type", None) or session.get("preferred_payment_type")
+    preferred = getattr(u, "preferred_payment", None) or session.get(
+        "preferred_payment"
+    )
+    preferred_type = getattr(u, "preferred_payment_type", None) or session.get(
+        "preferred_payment_type"
+    )
 
     def _html():
-        # template recomendado
         if _template_exists("account/payments.html"):
             return render_template(
                 "account/payments.html",
@@ -502,7 +622,7 @@ def payments_get():
                 preferred=preferred,
                 preferred_type=preferred_type,
             )
-        return redirect(url_for("account.account_home"))
+        return redirect(_safe_url_for("account.account_home") or "/account")
 
     return _json_or_html(
         {
@@ -521,9 +641,22 @@ def payments_post():
     if resp:
         return resp
 
-    code = (_clean_str(request.form.get("preferred_payment"), 40) or "").lower()
-    ptype = (_clean_str(request.form.get("preferred_payment_type"), 20) or "").lower()
-    # ptype: debito/credito/mp/transfer/paypal/...
+    data = _safe_get_json()
+    code = (
+        _clean_str(
+            request.form.get("preferred_payment") or data.get("preferred_payment"), 40
+        )
+        or ""
+    ).lower()
+    ptype = (
+        _clean_str(
+            request.form.get("preferred_payment_type")
+            or data.get("preferred_payment_type"),
+            20,
+        )
+        or ""
+    ).lower()
+
     if ptype and ptype not in {"debito", "credito", "mp", "transfer", "paypal", "otro"}:
         ptype = "otro"
 
@@ -532,9 +665,8 @@ def payments_post():
         if _wants_json():
             return jsonify(ok=False, error="invalid_payment_method"), 400
         flash("Método de pago inválido.", "error")
-        return redirect(url_for("account.payments_get"))
+        return redirect(_safe_url_for("account.payments_get") or "/account/payments")
 
-    # Guardamos (DB si existe, si no -> session)
     saved_db = False
     if code:
         saved_db = _safe_setattr(u, "preferred_payment", code) or saved_db
@@ -549,30 +681,39 @@ def payments_post():
             session["preferred_payment"] = code
         if ptype:
             session["preferred_payment_type"] = ptype
+        session.modified = True
 
     if _wants_json():
         return jsonify(ok=ok, preferred=code, preferred_type=ptype)
 
-    flash("Preferencia de pago guardada ✅" if ok else "No se pudo guardar tu preferencia.", "success" if ok else "error")
-    return redirect(url_for("account.payments_get"))
+    flash(
+        (
+            "Preferencia de pago guardada ✅"
+            if ok
+            else "No se pudo guardar tu preferencia."
+        ),
+        "success" if ok else "error",
+    )
+    return redirect(_safe_url_for("account.payments_get") or "/account/payments")
 
 
 # ============================================================
 # Addresses — CRUD + default PRO
 # ============================================================
 
+
 def _addr_to_dict(a: UserAddress) -> Dict[str, Any]:
     return {
         "id": a.id,
-        "label": a.label,
-        "full_name": a.full_name,
-        "phone": a.phone,
-        "line1": a.line1,
-        "line2": a.line2,
-        "city": a.city,
-        "state": a.state,
-        "postal_code": a.postal_code,
-        "country": a.country,
+        "label": getattr(a, "label", None),
+        "full_name": getattr(a, "full_name", None),
+        "phone": getattr(a, "phone", None),
+        "line1": getattr(a, "line1", None),
+        "line2": getattr(a, "line2", None),
+        "city": getattr(a, "city", None),
+        "state": getattr(a, "state", None),
+        "postal_code": getattr(a, "postal_code", None),
+        "country": getattr(a, "country", None),
         "is_default": bool(getattr(a, "is_default", False)),
     }
 
@@ -597,9 +738,11 @@ def addresses_get():
     def _html():
         if _template_exists("account/addresses.html"):
             return render_template("account/addresses.html", user=u, addresses=addrs)
-        return redirect(url_for("account.account_home"))
+        return redirect(_safe_url_for("account.account_home") or "/account")
 
-    return _json_or_html({"ok": True, "addresses": [_addr_to_dict(a) for a in addrs]}, _html)
+    return _json_or_html(
+        {"ok": True, "addresses": [_addr_to_dict(a) for a in addrs]}, _html
+    )
 
 
 @account_bp.post("/addresses/new")
@@ -608,26 +751,38 @@ def addresses_new():
     if resp:
         return resp
 
-    line1 = _clean_str(request.form.get("line1"), 200)
+    data = _safe_get_json()
+    line1 = _clean_str(request.form.get("line1") or data.get("line1"), 200)
     if not line1:
         if _wants_json():
             return jsonify(ok=False, error="line1_required"), 400
         flash("Dirección (línea 1) es obligatoria.", "warning")
-        return redirect(url_for("account.addresses_get"))
+        return redirect(_safe_url_for("account.addresses_get") or "/account/addresses")
 
-    is_default = (request.form.get("is_default") or "").strip().lower() in _TRUE
+    is_default = (
+        request.form.get("is_default") or str(data.get("is_default") or "")
+    ).strip().lower() in _TRUE
 
     a = UserAddress(
         user_id=u.id,
-        label=_clean_str(request.form.get("label"), 50) or None,
-        full_name=_clean_str(request.form.get("full_name"), 120) or None,
-        phone=_clean_phone(request.form.get("phone")) or None,
+        label=_clean_str(request.form.get("label") or data.get("label"), 50) or None,
+        full_name=_clean_str(
+            request.form.get("full_name") or data.get("full_name"), 120
+        )
+        or None,
+        phone=_clean_phone(request.form.get("phone") or data.get("phone")) or None,
         line1=line1,
-        line2=_clean_str(request.form.get("line2"), 200) or None,
-        city=_clean_str(request.form.get("city"), 120) or None,
-        state=_clean_str(request.form.get("state"), 120) or None,
-        postal_code=_clean_str(request.form.get("postal_code"), 40) or None,
-        country=_clean_str(request.form.get("country"), 2).upper() or None,
+        line2=_clean_str(request.form.get("line2") or data.get("line2"), 200) or None,
+        city=_clean_str(request.form.get("city") or data.get("city"), 120) or None,
+        state=_clean_str(request.form.get("state") or data.get("state"), 120) or None,
+        postal_code=_clean_str(
+            request.form.get("postal_code") or data.get("postal_code"), 40
+        )
+        or None,
+        country=_clean_str(
+            request.form.get("country") or data.get("country"), 2
+        ).upper()
+        or None,
         is_default=is_default,
     )
 
@@ -635,7 +790,6 @@ def addresses_new():
         db.session.add(a)
         db.session.flush()
 
-        # primera dirección -> default
         any_other = (
             db.session.query(UserAddress.id)
             .filter(UserAddress.user_id == u.id, UserAddress.id != a.id)
@@ -656,13 +810,13 @@ def addresses_new():
             return jsonify(ok=True, address=_addr_to_dict(a))
 
         flash("Dirección guardada ✅", "success")
-        return redirect(url_for("account.addresses_get"))
+        return redirect(_safe_url_for("account.addresses_get") or "/account/addresses")
     except Exception:
         db.session.rollback()
         if _wants_json():
             return jsonify(ok=False, error="save_failed"), 500
         flash("No se pudo guardar la dirección.", "error")
-        return redirect(url_for("account.addresses_get"))
+        return redirect(_safe_url_for("account.addresses_get") or "/account/addresses")
 
 
 @account_bp.post("/addresses/<int:addr_id>/default")
@@ -680,10 +834,12 @@ def addresses_set_default(addr_id: int):
         if _wants_json():
             return jsonify(ok=False, error="not_found"), 404
         flash("Dirección no encontrada.", "error")
-        return redirect(url_for("account.addresses_get"))
+        return redirect(_safe_url_for("account.addresses_get") or "/account/addresses")
 
     try:
-        db.session.query(UserAddress).filter(UserAddress.user_id == u.id).update({"is_default": False}, synchronize_session=False)
+        db.session.query(UserAddress).filter(UserAddress.user_id == u.id).update(
+            {"is_default": False}, synchronize_session=False
+        )
         a.is_default = True
         db.session.commit()
         if _wants_json():
@@ -695,7 +851,7 @@ def addresses_set_default(addr_id: int):
             return jsonify(ok=False, error="update_failed"), 500
         flash("No se pudo actualizar la dirección.", "error")
 
-    return redirect(url_for("account.addresses_get"))
+    return redirect(_safe_url_for("account.addresses_get") or "/account/addresses")
 
 
 @account_bp.post("/addresses/<int:addr_id>/delete")
@@ -713,7 +869,7 @@ def addresses_delete(addr_id: int):
         if _wants_json():
             return jsonify(ok=False, error="not_found"), 404
         flash("Dirección no encontrada.", "error")
-        return redirect(url_for("account.addresses_get"))
+        return redirect(_safe_url_for("account.addresses_get") or "/account/addresses")
 
     was_default = bool(getattr(a, "is_default", False))
 
@@ -721,7 +877,6 @@ def addresses_delete(addr_id: int):
         db.session.delete(a)
         db.session.flush()
 
-        # si borró default, setea otra
         if was_default:
             next_addr = (
                 db.session.query(UserAddress)
@@ -744,12 +899,13 @@ def addresses_delete(addr_id: int):
             return jsonify(ok=False, error="delete_failed"), 500
         flash("No se pudo eliminar la dirección.", "error")
 
-    return redirect(url_for("account.addresses_get"))
+    return redirect(_safe_url_for("account.addresses_get") or "/account/addresses")
 
 
 # ============================================================
 # Orders — historial
 # ============================================================
+
 
 @account_bp.get("/orders")
 def orders_get():
@@ -772,7 +928,7 @@ def orders_get():
     def _html():
         if _template_exists("account/orders.html"):
             return render_template("account/orders.html", user=u, orders=items)
-        return redirect(url_for("account.account_home"))
+        return redirect(_safe_url_for("account.account_home") or "/account")
 
     return _json_or_html(
         {
@@ -785,7 +941,11 @@ def orders_get():
                     "payment_status": getattr(o, "payment_status", None),
                     "total": str(getattr(o, "total", "0.00")),
                     "currency": getattr(o, "currency", None),
-                    "created_at": (o.created_at.isoformat() if getattr(o, "created_at", None) else None),
+                    "created_at": (
+                        o.created_at.isoformat()
+                        if getattr(o, "created_at", None)
+                        else None
+                    ),
                 }
                 for o in items
             ],
@@ -798,13 +958,15 @@ def orders_get():
 # Alias /cuenta (ES)
 # ============================================================
 
+
 @cuenta_bp.get("/cuenta")
 def cuenta_alias():
     nxt = _next_url("/account")
-    try:
-        return redirect(url_for("account.account_home", next=nxt))
-    except Exception:
-        return redirect("/account")
+    # ✅ next va como querystring, no como param de ruta
+    u = _safe_url_for("account.account_home")
+    if u:
+        return redirect(f"{u}?next={nxt}")
+    return redirect("/account")
 
 
 __all__ = ["account_bp", "cuenta_bp"]

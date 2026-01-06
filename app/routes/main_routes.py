@@ -17,9 +17,17 @@ import logging
 import os
 import threading
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
-from flask import Blueprint, current_app, jsonify, make_response, render_template, request, url_for
+from flask import (
+    Blueprint,
+    current_app,
+    jsonify,
+    make_response,
+    render_template,
+    request,
+    url_for,
+)
 from sqlalchemy import text
 
 from app.models import db  # ✅ solo db (no Product proxy)
@@ -39,7 +47,9 @@ _HOME_CACHE: Dict[str, Any] = {"ts": 0.0, "featured": [], "sig": ""}
 _HOME_LOCK = threading.Lock()
 
 SEO_DEFAULTS = {
-    "meta_title": os.getenv("SEO_TITLE", "Skyline Store · Moda urbana, accesorios y tecnología"),
+    "meta_title": os.getenv(
+        "SEO_TITLE", "Skyline Store · Moda urbana, accesorios y tecnología"
+    ),
     "meta_description": os.getenv(
         "SEO_DESCRIPTION",
         "Comprá moda urbana, accesorios y tecnología en un solo lugar. Envíos rápidos y pagos seguros.",
@@ -51,6 +61,7 @@ SEO_DEFAULTS = {
 # ============================================================
 # Helpers
 # ============================================================
+
 
 def _is_json_request() -> bool:
     if request.args.get("json") == "1":
@@ -125,7 +136,9 @@ def _render_safe(template: str, *, status: int = 200, **ctx):
         return jsonify(ok=True, template_missing=template, data=safe_ctx), status
 
     title = _safe_text(ctx.get("meta_title") or SEO_DEFAULTS["meta_title"], 120)
-    desc = _safe_text(ctx.get("meta_description") or SEO_DEFAULTS["meta_description"], 240)
+    desc = _safe_text(
+        ctx.get("meta_description") or SEO_DEFAULTS["meta_description"], 240
+    )
     templ = _safe_text(template, 120)
 
     html_doc = f"""<!doctype html>
@@ -161,15 +174,16 @@ def _render_safe(template: str, *, status: int = 200, **ctx):
 # Model resolver (CRÍTICO: evita mapper/init issues)
 # ============================================================
 
+
 def _get_model(name: str):
     """
     Resuelve modelos desde el hub SIN forzar imports al import-time.
     Si el hub no está listo aún, devuelve None (y caemos a fallback).
     """
     try:
-        from app.models import init_models  # lazy import
         # no llamamos init_models acá; create_app ya lo hace.
         from app.models import __dict__ as models_ns  # type: ignore
+
         m = models_ns.get(name)
         # m puede ser _ModelProxy: si no está cargado, puede tirar RuntimeError en _resolve()
         return m
@@ -181,10 +195,11 @@ def _get_model(name: str):
 # Product helpers (no tipamos Product para no atar a la clase)
 # ============================================================
 
+
 def _product_title(p: Any) -> str:
     t = getattr(p, "title", None) or getattr(p, "name", None) or "Producto"
     s = str(t).strip()
-    return (s[:120] or "Producto")
+    return s[:120] or "Producto"
 
 
 def _product_image(p: Any) -> str:
@@ -259,6 +274,7 @@ def _limit_clamp(n: Any, lo: int = 1, hi: int = 24, default: int = 8) -> int:
 # Featured builder + cache signature (SQLite/Postgres safe)
 # ============================================================
 
+
 def _db_signature() -> str:
     """
     Firma best-effort para invalidar cache.
@@ -273,7 +289,9 @@ def _db_signature() -> str:
         # 2) max updated_at si existe columna (puede fallar si no existe)
         mx = None
         try:
-            row2 = db.session.execute(text("SELECT MAX(updated_at) FROM products")).first()
+            row2 = db.session.execute(
+                text("SELECT MAX(updated_at) FROM products")
+            ).first()
             mx = row2[0] if row2 else None
         except Exception:
             mx = None
@@ -349,10 +367,30 @@ def _build_featured(limit: int = 8) -> List[Dict[str, Any]]:
 
 def _static_featured() -> List[Dict[str, Any]]:
     return [
-        {"img": "/static/img/products/hero-hoodie.png", "title": "Hoodies Premium", "price": "UYU 1990", "href": "/shop"},
-        {"img": "/static/img/products/hero-sneakers.png", "title": "Zapatillas Urbanas", "price": "UYU 2590", "href": "/shop"},
-        {"img": "/static/img/products/hero-headphones.png", "title": "Audio Inalámbrico", "price": "UYU 1290", "href": "/shop"},
-        {"img": "/static/img/products/hero-watch.png", "title": "Smartwatch", "price": "UYU 1490", "href": "/shop"},
+        {
+            "img": "/static/img/products/hero-hoodie.png",
+            "title": "Hoodies Premium",
+            "price": "UYU 1990",
+            "href": "/shop",
+        },
+        {
+            "img": "/static/img/products/hero-sneakers.png",
+            "title": "Zapatillas Urbanas",
+            "price": "UYU 2590",
+            "href": "/shop",
+        },
+        {
+            "img": "/static/img/products/hero-headphones.png",
+            "title": "Audio Inalámbrico",
+            "price": "UYU 1290",
+            "href": "/shop",
+        },
+        {
+            "img": "/static/img/products/hero-watch.png",
+            "title": "Smartwatch",
+            "price": "UYU 1490",
+            "href": "/shop",
+        },
     ]
 
 
@@ -386,6 +424,7 @@ def _set_cached_featured(items: List[Dict[str, Any]]) -> None:
 # ============================================================
 # Routes
 # ============================================================
+
 
 @main_bp.get("/")
 def home():
@@ -429,6 +468,7 @@ def contact():
 # Health (separado para no chocar con create_app)
 # ============================================================
 
+
 @main_bp.get("/healthz")
 def healthz():
     try:
@@ -453,9 +493,10 @@ def healthz():
 # Robots + Sitemap
 # ============================================================
 
+
 @main_bp.get("/robots.txt")
 def robots_txt():
-    if (os.getenv("ROBOTS_DISALLOW_ALL", "0").strip().lower() in _TRUE):
+    if os.getenv("ROBOTS_DISALLOW_ALL", "0").strip().lower() in _TRUE:
         body = "User-agent: *\nDisallow: /\n"
     else:
         body = "User-agent: *\nAllow: /\nSitemap: /sitemap.xml\n"
@@ -516,7 +557,9 @@ def sitemap_xml():
             except Exception:
                 pass
 
-    xml_items = "\n".join([f"  <url><loc>{_safe_text(u, 300)}</loc></url>" for u in urls])
+    xml_items = "\n".join(
+        [f"  <url><loc>{_safe_text(u, 300)}</loc></url>" for u in urls]
+    )
     xml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 {xml_items}

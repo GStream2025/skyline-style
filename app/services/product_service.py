@@ -1,7 +1,6 @@
 # app/services/product_service.py
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, List, Optional, Tuple
@@ -32,6 +31,7 @@ def _to_int(x: Any) -> int:
 
 def _slugify(txt: str) -> str:
     import re
+
     s = (txt or "").strip().lower()
     s = re.sub(r"[^a-z0-9áéíóúñü\s-]", "", s, flags=re.I)
     s = s.replace("ñ", "n")
@@ -56,8 +56,12 @@ class ProductService:
     def get_stats(self) -> Dict[str, Any]:
         total = db.session.query(Product).count()
         active = db.session.query(Product).filter(Product.status == "active").count()
-        printful = db.session.query(Product).filter(Product.source == "printful").count()
-        drops = db.session.query(Product).filter(Product.source == "dropshipping").count()
+        printful = (
+            db.session.query(Product).filter(Product.source == "printful").count()
+        )
+        drops = (
+            db.session.query(Product).filter(Product.source == "dropshipping").count()
+        )
         offers = db.session.query(Offer).count()
         cats = db.session.query(Category).count()
 
@@ -72,7 +76,11 @@ class ProductService:
 
     # ---------- Categories ----------
     def list_categories(self) -> List[Category]:
-        return db.session.query(Category).order_by(Category.sort_order.asc(), Category.name.asc()).all()
+        return (
+            db.session.query(Category)
+            .order_by(Category.sort_order.asc(), Category.name.asc())
+            .all()
+        )
 
     def ensure_default_categories(self) -> None:
         defaults = [
@@ -100,7 +108,13 @@ class ProductService:
 
         if q:
             like = f"%{q}%"
-            qry = qry.filter(or_(Product.title.ilike(like), Product.slug.ilike(like), Product.tags.ilike(like)))
+            qry = qry.filter(
+                or_(
+                    Product.title.ilike(like),
+                    Product.slug.ilike(like),
+                    Product.tags.ilike(like),
+                )
+            )
 
         if category_slug:
             qry = qry.filter(Product.category_slug == category_slug)
@@ -129,7 +143,11 @@ class ProductService:
             slug=slug,
             description=payload.get("description", "") or "",
             price=_to_decimal(payload.get("price", 0)),
-            compare_at_price=_to_decimal(payload.get("compare_at_price")) if payload.get("compare_at_price") else None,
+            compare_at_price=(
+                _to_decimal(payload.get("compare_at_price"))
+                if payload.get("compare_at_price")
+                else None
+            ),
             currency=(payload.get("currency") or "UYU").strip(),
             category_slug=(payload.get("category_slug") or "").strip() or None,
             image_url=(payload.get("image_url") or "").strip(),
@@ -143,7 +161,9 @@ class ProductService:
         db.session.commit()
         return True, "Producto creado ✅"
 
-    def update_product(self, product_id: int, payload: Dict[str, Any]) -> Tuple[bool, str]:
+    def update_product(
+        self, product_id: int, payload: Dict[str, Any]
+    ) -> Tuple[bool, str]:
         p = self.get_product(product_id)
         if not p:
             return False, "Producto no encontrado."
@@ -155,7 +175,11 @@ class ProductService:
         if not slug:
             slug = _slugify(title)
 
-        other = db.session.query(Product).filter(Product.slug == slug, Product.id != p.id).first()
+        other = (
+            db.session.query(Product)
+            .filter(Product.slug == slug, Product.id != p.id)
+            .first()
+        )
         if other:
             return False, f"Slug en uso por otro producto: {slug}"
 
@@ -163,7 +187,11 @@ class ProductService:
         p.slug = slug
         p.description = payload.get("description", "") or ""
         p.price = _to_decimal(payload.get("price", 0))
-        p.compare_at_price = _to_decimal(payload.get("compare_at_price")) if payload.get("compare_at_price") else None
+        p.compare_at_price = (
+            _to_decimal(payload.get("compare_at_price"))
+            if payload.get("compare_at_price")
+            else None
+        )
         p.currency = (payload.get("currency") or "UYU").strip()
 
         p.category_slug = (payload.get("category_slug") or "").strip() or None
@@ -232,7 +260,9 @@ class ProductService:
         return True, "Oferta eliminada ✅"
 
     # ---------- External Upsert (Printful / Dropshipping) ----------
-    def upsert_external_product(self, data: Dict[str, Any], source: str) -> Tuple[bool, str]:
+    def upsert_external_product(
+        self, data: Dict[str, Any], source: str
+    ) -> Tuple[bool, str]:
         """
         data esperado:
           external_id, title, description, price, compare_at_price, currency,
@@ -243,7 +273,11 @@ class ProductService:
         if not external_id or not title:
             return False, "Faltan external_id o title en producto externo."
 
-        p = db.session.query(Product).filter(Product.source == source, Product.external_id == external_id).first()
+        p = (
+            db.session.query(Product)
+            .filter(Product.source == source, Product.external_id == external_id)
+            .first()
+        )
 
         slug = (data.get("slug") or "").strip()
         if not slug:
@@ -262,7 +296,11 @@ class ProductService:
                 slug=slug,
                 description=data.get("description", "") or "",
                 price=_to_decimal(data.get("price", 0)),
-                compare_at_price=_to_decimal(data.get("compare_at_price")) if data.get("compare_at_price") else None,
+                compare_at_price=(
+                    _to_decimal(data.get("compare_at_price"))
+                    if data.get("compare_at_price")
+                    else None
+                ),
                 currency=(data.get("currency") or "UYU").strip(),
                 category_slug=(data.get("category_slug") or "").strip() or None,
                 image_url=(data.get("image_url") or "").strip(),
@@ -280,7 +318,11 @@ class ProductService:
         p.title = title
         p.description = data.get("description", "") or p.description
         p.price = _to_decimal(data.get("price", p.price))
-        p.compare_at_price = _to_decimal(data.get("compare_at_price")) if data.get("compare_at_price") else p.compare_at_price
+        p.compare_at_price = (
+            _to_decimal(data.get("compare_at_price"))
+            if data.get("compare_at_price")
+            else p.compare_at_price
+        )
         p.currency = (data.get("currency") or p.currency).strip()
         p.category_slug = (data.get("category_slug") or p.category_slug) or None
         p.image_url = (data.get("image_url") or p.image_url).strip()

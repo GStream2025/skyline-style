@@ -32,19 +32,24 @@ _TRUE = {"1", "true", "yes", "y", "on"}
 # ENV / helpers
 # -----------------------------------------------------------------------------
 
+
 def _env(k: str, d: str = "") -> str:
     import os
+
     return (os.getenv(k) or d).strip()
+
 
 def _bool_env(k: str, d: bool = False) -> bool:
     v = _env(k, "")
     return v.lower() in _TRUE if v else d
+
 
 def _timeout() -> int:
     try:
         return int(_env("PAYPAL_TIMEOUT_SEC", "12"))
     except Exception:
         return 12
+
 
 def _paypal_mode() -> str:
     m = _env("PAYPAL_MODE", "").lower()
@@ -54,8 +59,14 @@ def _paypal_mode() -> str:
         return "sandbox"
     return "live"
 
+
 def paypal_base_url() -> str:
-    return "https://api-m.sandbox.paypal.com" if _paypal_mode() == "sandbox" else "https://api-m.paypal.com"
+    return (
+        "https://api-m.sandbox.paypal.com"
+        if _paypal_mode() == "sandbox"
+        else "https://api-m.paypal.com"
+    )
+
 
 def _d(v: Any, default="0.00") -> Decimal:
     try:
@@ -65,15 +76,19 @@ def _d(v: Any, default="0.00") -> Decimal:
     except (InvalidOperation, ValueError, TypeError):
         return Decimal(default)
 
+
 def money_str(v: Any) -> str:
     return f"{_d(v):.2f}"
+
 
 def cur3(v: Any, default="USD") -> str:
     s = (str(v) if v else default).strip().upper()
     return s[:3] if len(s) >= 3 else default
 
+
 def _trunc(v: Any, n: int = 300) -> str:
     return (str(v) if v is not None else "")[:n]
+
 
 def _basic_auth(client_id: str, secret: str) -> str:
     raw = f"{client_id}:{secret}".encode("utf-8")
@@ -84,11 +99,14 @@ def _basic_auth(client_id: str, secret: str) -> str:
 # Errors
 # -----------------------------------------------------------------------------
 
+
 class PayPalClientError(RuntimeError):
     pass
 
+
 class PayPalAuthError(PayPalClientError):
     pass
+
 
 class PayPalHTTPError(PayPalClientError):
     pass
@@ -99,6 +117,7 @@ class PayPalHTTPError(PayPalClientError):
 # -----------------------------------------------------------------------------
 
 _TOKEN_CACHE: Dict[str, Any] = {"access_token": None, "expires_at": 0}
+
 
 def _get_oauth_token(force_refresh: bool = False) -> str:
     now = int(time.time())
@@ -153,7 +172,9 @@ def _get_oauth_token(force_refresh: bool = False) -> str:
     raise PayPalAuthError("PayPal OAuth: failed")
 
 
-def _headers(idempotency_key: Optional[str] = None, *, refresh_token: bool = False) -> Dict[str, str]:
+def _headers(
+    idempotency_key: Optional[str] = None, *, refresh_token: bool = False
+) -> Dict[str, str]:
     tok = _get_oauth_token(force_refresh=refresh_token)
     h = {
         "Authorization": f"Bearer {tok}",
@@ -168,11 +189,13 @@ def _headers(idempotency_key: Optional[str] = None, *, refresh_token: bool = Fal
 # DTOs
 # -----------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class PayPalCreateResp:
     paypal_order_id: str
     approve_url: Optional[str]
     raw: Dict[str, Any]
+
 
 @dataclass(frozen=True)
 class PayPalCaptureResp:
@@ -187,6 +210,7 @@ class PayPalCaptureResp:
 # -----------------------------------------------------------------------------
 # API calls
 # -----------------------------------------------------------------------------
+
 
 def create_order(
     *,
@@ -207,12 +231,14 @@ def create_order(
     """
     body = {
         "intent": "CAPTURE",
-        "purchase_units": [{
-            "reference_id": reference_id[:256],
-            "description": f"Order {reference_id}"[:127],
-            "custom_id": custom_id[:127],
-            "amount": {"currency_code": cur3(currency, "USD"), "value": amount},
-        }],
+        "purchase_units": [
+            {
+                "reference_id": reference_id[:256],
+                "description": f"Order {reference_id}"[:127],
+                "custom_id": custom_id[:127],
+                "amount": {"currency_code": cur3(currency, "USD"), "value": amount},
+            }
+        ],
         "application_context": {
             "brand_name": brand_name[:127],
             "locale": locale,
@@ -228,7 +254,12 @@ def create_order(
 
     for i in range(3):
         try:
-            r = _SESSION.post(url, headers=_headers(idempotency_key), data=json.dumps(body), timeout=_timeout())
+            r = _SESSION.post(
+                url,
+                headers=_headers(idempotency_key),
+                data=json.dumps(body),
+                timeout=_timeout(),
+            )
         except requests.RequestException as e:
             if i == 2:
                 raise PayPalHTTPError(f"PayPal create error: {_trunc(e)}")
@@ -247,7 +278,11 @@ def create_order(
                         break
             if not pid:
                 raise PayPalHTTPError("PayPal create: missing id")
-            return PayPalCreateResp(paypal_order_id=pid, approve_url=approve, raw=j if isinstance(j, dict) else {"_raw": j})
+            return PayPalCreateResp(
+                paypal_order_id=pid,
+                approve_url=approve,
+                raw=j if isinstance(j, dict) else {"_raw": j},
+            )
 
         if r.status_code in {401, 403}:
             # token vencido -> refresh 1 vez
@@ -274,7 +309,9 @@ def create_order(
     raise PayPalHTTPError("PayPal create failed")
 
 
-def capture_order(*, paypal_order_id: str, idempotency_key: Optional[str] = None) -> PayPalCaptureResp:
+def capture_order(
+    *, paypal_order_id: str, idempotency_key: Optional[str] = None
+) -> PayPalCaptureResp:
     paypal_order_id = (paypal_order_id or "").strip()
     if not paypal_order_id:
         raise PayPalClientError("paypal_order_id requerido")
@@ -283,7 +320,9 @@ def capture_order(*, paypal_order_id: str, idempotency_key: Optional[str] = None
 
     for i in range(3):
         try:
-            r = _SESSION.post(url, headers=_headers(idempotency_key), timeout=_timeout())
+            r = _SESSION.post(
+                url, headers=_headers(idempotency_key), timeout=_timeout()
+            )
         except requests.RequestException as e:
             if i == 2:
                 raise PayPalHTTPError(f"PayPal capture error: {_trunc(e)}")
@@ -294,7 +333,9 @@ def capture_order(*, paypal_order_id: str, idempotency_key: Optional[str] = None
             j = r.json() if r.content else {}
             status = str(j.get("status") or "").upper()
 
-            capture_id, paid_amount, paid_currency = _extract_capture_details(j if isinstance(j, dict) else {})
+            capture_id, paid_amount, paid_currency = _extract_capture_details(
+                j if isinstance(j, dict) else {}
+            )
             return PayPalCaptureResp(
                 paypal_order_id=paypal_order_id,
                 status=status or "OK",
@@ -327,7 +368,9 @@ def capture_order(*, paypal_order_id: str, idempotency_key: Optional[str] = None
     raise PayPalHTTPError("PayPal capture failed")
 
 
-def _extract_capture_details(payload: Dict[str, Any]) -> Tuple[Optional[str], Optional[Decimal], Optional[str]]:
+def _extract_capture_details(
+    payload: Dict[str, Any]
+) -> Tuple[Optional[str], Optional[Decimal], Optional[str]]:
     """
     Extrae capture_id + amount/currency desde capture response.
     """

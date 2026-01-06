@@ -64,8 +64,16 @@ class Campaign(db.Model):
     delivered_count = db.Column(db.Integer, nullable=False, default=0)
     failed_count = db.Column(db.Integer, nullable=False, default=0)
 
-    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, index=True)
-    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow, index=True)
+    created_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, default=utcnow, index=True
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=utcnow,
+        onupdate=utcnow,
+        index=True,
+    )
 
     # Relación
     sends = db.relationship(
@@ -81,12 +89,12 @@ class Campaign(db.Model):
     @validates("name")
     def _v_name(self, _k, v: str) -> str:
         v = (v or "").strip()
-        return (v[:160] if v else "Campaña")
+        return v[:160] if v else "Campaña"
 
     @validates("subject")
     def _v_subject(self, _k, v: str) -> str:
         v = (v or "").strip()
-        return (v[:200] if v else "Skyline Store")
+        return v[:200] if v else "Skyline Store"
 
     @validates("from_email")
     def _v_from_email(self, _k, v: Optional[str]) -> Optional[str]:
@@ -122,7 +130,9 @@ class Campaign(db.Model):
         Guarda dict como JSON string (compacto).
         """
         try:
-            self.audience_rule_json = json.dumps(rules or {}, ensure_ascii=False, separators=(",", ":"))
+            self.audience_rule_json = json.dumps(
+                rules or {}, ensure_ascii=False, separators=(",", ":")
+            )
         except Exception:
             self.audience_rule_json = "{}"
 
@@ -188,7 +198,9 @@ class CampaignSend(db.Model):
 
     error_message = db.Column(db.String(500), nullable=True)
 
-    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, index=True)
+    created_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, default=utcnow, index=True
+    )
 
     campaign = db.relationship("Campaign", back_populates="sends", lazy="select")
 
@@ -236,7 +248,9 @@ class CampaignSend(db.Model):
 db.Index("ix_campaigns_status_scheduled", Campaign.status, Campaign.scheduled_at)
 db.Index("ix_campaigns_created", Campaign.created_at)
 
-db.Index("ix_campaign_sends_campaign_status", CampaignSend.campaign_id, CampaignSend.status)
+db.Index(
+    "ix_campaign_sends_campaign_status", CampaignSend.campaign_id, CampaignSend.status
+)
 db.Index("ix_campaign_sends_email_status", CampaignSend.to_email, CampaignSend.status)
 db.Index("ix_campaign_sends_sent_at", CampaignSend.sent_at)
 
@@ -244,6 +258,7 @@ db.Index("ix_campaign_sends_sent_at", CampaignSend.sent_at)
 # ============================================================
 # Hooks: updated_at fuerte
 # ============================================================
+
 
 @event.listens_for(Campaign, "before_update", propagate=True)
 def _campaign_before_update(_mapper, _conn, target: Campaign):

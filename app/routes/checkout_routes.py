@@ -17,8 +17,7 @@ Checkout completo y real, sin hacks.
 
 import os
 import time
-from decimal import Decimal
-from typing import Optional, Dict, Any
+from typing import Optional
 
 from flask import (
     Blueprint,
@@ -31,11 +30,10 @@ from flask import (
     current_app,
 )
 
-from app.models import db, User, UserAddress, Order
+from app.models import db, User, UserAddress
 from app.routes.cart_routes import cart_snapshot
 from app.services.checkout_flow import CheckoutFlow, CheckoutError
-from app.services.paypal_capture import create_paypal_order, capture_paypal_order
-from app.integrations.mp_create_preference import create_mp_preference
+from app.services.paypal_capture import capture_paypal_order
 
 checkout_bp = Blueprint("checkout", __name__, url_prefix="/checkout")
 
@@ -95,9 +93,11 @@ def checkout_page():
         return redirect(url_for("cart.view_cart"))
 
     user = _current_user()
-    addresses = UserAddress.query.filter_by(user_id=user.id).order_by(
-        UserAddress.is_default.desc()
-    ).all()
+    addresses = (
+        UserAddress.query.filter_by(user_id=user.id)
+        .order_by(UserAddress.is_default.desc())
+        .all()
+    )
 
     return render_template(
         "checkout/checkout.html",
@@ -219,7 +219,7 @@ def paypal_capture():
             order_id=state.order_id,
             paypal_order_id=token,
         )
-    except Exception as e:
+    except Exception:
         current_app.logger.exception("PayPal capture failed")
         return redirect(url_for("checkout.payment_failure", provider="paypal"))
 

@@ -77,19 +77,14 @@ def csp_for_tailwind_cdn() -> Dict[str, list]:
         "form-action": ["'self'"],
         "frame-ancestors": ["'none'"],
         "object-src": ["'none'"],
-
         # Imágenes (incluye data: para svg/base64)
         "img-src": ["'self'", "data:", "https:"],
-
         # Estilos (Tailwind inline + Google Fonts)
         "style-src": ["'self'", "'unsafe-inline'", "https:"],
-
         # Scripts (Tailwind CDN usa inline + https)
         "script-src": ["'self'", "'unsafe-inline'", "https:"],
-
         # Fuentes
         "font-src": ["'self'", "data:", "https:"],
-
         # Conexiones (si usás APIs externas)
         "connect-src": ["'self'", "https:"],
     }
@@ -98,6 +93,7 @@ def csp_for_tailwind_cdn() -> Dict[str, list]:
 # =============================================================================
 # Config Base
 # =============================================================================
+
 
 class BaseConfig:
     """
@@ -118,7 +114,9 @@ class BaseConfig:
     TESTING: bool = env_bool("TESTING", False)
 
     # Normalizamos ENV final
-    ENV: str = "development" if FLASK_ENV in {"dev", "development"} or DEBUG else "production"
+    ENV: str = (
+        "development" if FLASK_ENV in {"dev", "development"} or DEBUG else "production"
+    )
 
     # -----------------------------
     # Server / URL
@@ -130,7 +128,9 @@ class BaseConfig:
     SERVER_NAME: str = env_str("SERVER_NAME", "")
     PREFERRED_URL_SCHEME: str = "https" if ENV == "production" else "http"
 
-    TRUST_PROXY_HEADERS: bool = env_bool("TRUST_PROXY_HEADERS", default=(ENV == "production"))
+    TRUST_PROXY_HEADERS: bool = env_bool(
+        "TRUST_PROXY_HEADERS", default=(ENV == "production")
+    )
 
     # -----------------------------
     # Security / Sessions / Cookies
@@ -139,8 +139,13 @@ class BaseConfig:
     SECRET_KEY: str = env_str("SECRET_KEY", "dev_skyline_fallback_change_me")
 
     SESSION_COOKIE_HTTPONLY: bool = True
-    SESSION_COOKIE_SAMESITE: str = normalize_samesite(env_str("SESSION_COOKIE_SAMESITE", env_str("SESSION_SAMESITE", "Lax")), "Lax")
-    SESSION_COOKIE_SECURE: bool = env_bool("SESSION_COOKIE_SECURE", env_bool("COOKIE_SECURE", default=(ENV == "production")))
+    SESSION_COOKIE_SAMESITE: str = normalize_samesite(
+        env_str("SESSION_COOKIE_SAMESITE", env_str("SESSION_SAMESITE", "Lax")), "Lax"
+    )
+    SESSION_COOKIE_SECURE: bool = env_bool(
+        "SESSION_COOKIE_SECURE",
+        env_bool("COOKIE_SECURE", default=(ENV == "production")),
+    )
 
     # 7 días por defecto
     SESSION_DAYS: int = max(1, env_int("SESSION_DAYS", 7))
@@ -198,7 +203,9 @@ class BaseConfig:
     # -----------------------------
     # Printful / Dropshipping
     # -----------------------------
-    PRINTFUL_API_KEY: str = env_str("PRINTFUL_API_KEY", env_str("PRINTFUL_KEY", env_str("PRINTFUL_API_TOKEN", "")))
+    PRINTFUL_API_KEY: str = env_str(
+        "PRINTFUL_API_KEY", env_str("PRINTFUL_KEY", env_str("PRINTFUL_API_TOKEN", ""))
+    )
     PRINTFUL_STORE_ID: str = env_str("PRINTFUL_STORE_ID", "")
     PRINTFUL_CACHE_TTL: int = max(30, env_int("PRINTFUL_CACHE_TTL", 300))
     ENABLE_PRINTFUL: bool = env_bool("ENABLE_PRINTFUL", default=bool(PRINTFUL_API_KEY))
@@ -296,7 +303,9 @@ class ProductionConfig(BaseConfig):
         pass
 
     SESSION_COOKIE_SECURE = env_bool("SESSION_COOKIE_SECURE", default=True)
-    SESSION_COOKIE_SAMESITE = normalize_samesite(env_str("SESSION_COOKIE_SAMESITE", "Lax"), "Lax")
+    SESSION_COOKIE_SAMESITE = normalize_samesite(
+        env_str("SESSION_COOKIE_SAMESITE", "Lax"), "Lax"
+    )
 
     ENABLE_MINIFY = env_bool("ENABLE_MINIFY", default=True)
 

@@ -246,7 +246,9 @@ class EmailService:
         plain = (text or "").strip()
         if not plain:
             # muy simple: evita enviar vacío
-            plain = "Hola! Te compartimos una actualización de tu pedido en Skyline Store."
+            plain = (
+                "Hola! Te compartimos una actualización de tu pedido en Skyline Store."
+            )
 
         msg.set_content(plain, subtype="plain", charset="utf-8")
         msg.add_alternative(html or "", subtype="html", charset="utf-8")
@@ -268,7 +270,9 @@ class EmailService:
         reuse_connection: bool = False,
     ) -> bool:
         if not self.ready():
-            logger.warning("EmailService no configurado (SMTP_*). No se envía: %s", subject)
+            logger.warning(
+                "EmailService no configurado (SMTP_*). No se envía: %s", subject
+            )
             return False
 
         try:
@@ -285,7 +289,9 @@ class EmailService:
         for i in range(attempts):
             try:
                 smtp = self._get_or_open() if reuse_connection else self._connect()
-                smtp.send_message(msg, from_addr=self.cfg.from_email, to_addrs=recipients)
+                smtp.send_message(
+                    msg, from_addr=self.cfg.from_email, to_addrs=recipients
+                )
                 if not reuse_connection:
                     try:
                         smtp.quit()
@@ -297,7 +303,9 @@ class EmailService:
                 return True
             except Exception as e:
                 last_err = e
-                logger.exception("Error enviando email (try %s/%s) a %s", i + 1, attempts, to_email)
+                logger.exception(
+                    "Error enviando email (try %s/%s) a %s", i + 1, attempts, to_email
+                )
                 # si era conexión persistente, la cerramos para reintentar limpio
                 if reuse_connection:
                     self.close()

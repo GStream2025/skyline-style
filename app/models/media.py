@@ -53,7 +53,12 @@ class Media(db.Model):
     alt = db.Column(db.String(180), nullable=True)
 
     # Relación opcional con producto (si existe)
-    product_id = db.Column(db.Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=True, index=True)
+    product_id = db.Column(
+        db.Integer,
+        ForeignKey("products.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
 
     # Orden para galerías / sliders
     sort_order = db.Column(db.Integer, nullable=False, default=0)
@@ -75,8 +80,12 @@ class Media(db.Model):
     # Metadatos flexibles (ej: crop, focal_point, color, poster_url, etc.)
     meta = db.Column(MetaType, nullable=True)
 
-    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, index=True)
-    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+    created_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, default=utcnow, index=True
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
+    )
 
     # -------------------------
     # Validaciones suaves
@@ -84,7 +93,7 @@ class Media(db.Model):
     @validates("scope", "kind")
     def _v_short(self, _k: str, v: str) -> str:
         v = (v or "").strip().lower()
-        return (v[:32] if v else "generic")
+        return v[:32] if v else "generic"
 
     @validates("url")
     def _v_url(self, _k: str, v: str) -> str:

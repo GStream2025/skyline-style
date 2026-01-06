@@ -8,7 +8,13 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 
-from app.models import db, Product, Category, ProductMedia, Tag  # ajusta si tus imports difieren
+from app.models import (
+    db,
+    Product,
+    Category,
+    ProductMedia,
+    Tag,
+)  # ajusta si tus imports difieren
 
 
 @dataclass(frozen=True)
@@ -34,13 +40,24 @@ class DropshippingService:
     def __init__(self) -> None:
         self.feed_url = (os.getenv("DROPSHIPPING_FEED_URL") or "").strip()
         self.feed_file = (os.getenv("DROPSHIPPING_FEED_FILE") or "").strip()
-        self.timeout = self._to_int(os.getenv("DROPSHIPPING_TIMEOUT"), self.DEFAULT_TIMEOUT)
-        self.user_agent = (os.getenv("DROPSHIPPING_USER_AGENT") or "SkylineStore/1.0 (+dropshipping-feed)").strip()
+        self.timeout = self._to_int(
+            os.getenv("DROPSHIPPING_TIMEOUT"), self.DEFAULT_TIMEOUT
+        )
+        self.user_agent = (
+            os.getenv("DROPSHIPPING_USER_AGENT")
+            or "SkylineStore/1.0 (+dropshipping-feed)"
+        ).strip()
 
         # comportamiento
-        self.auto_create_categories = self._to_bool(os.getenv("DROPSHIPPING_AUTO_CREATE_CATEGORIES"), True)
-        self.update_existing_manual = self._to_bool(os.getenv("DROPSHIPPING_UPDATE_MANUAL"), False)  # por defecto NO
-        self.default_supplier_name = (os.getenv("DROPSHIPPING_SUPPLIER_NAME") or "Dropshipping").strip()
+        self.auto_create_categories = self._to_bool(
+            os.getenv("DROPSHIPPING_AUTO_CREATE_CATEGORIES"), True
+        )
+        self.update_existing_manual = self._to_bool(
+            os.getenv("DROPSHIPPING_UPDATE_MANUAL"), False
+        )  # por defecto NO
+        self.default_supplier_name = (
+            os.getenv("DROPSHIPPING_SUPPLIER_NAME") or "Dropshipping"
+        ).strip()
 
     # =========================
     # API
@@ -58,7 +75,10 @@ class DropshippingService:
                     normalized.append(p)
 
             if not normalized:
-                return False, "Feed leído pero sin productos válidos (external_id + title)."
+                return (
+                    False,
+                    "Feed leído pero sin productos válidos (external_id + title).",
+                )
 
             # devolvemos dicts para compatibilidad
             return True, [self._as_dict(p) for p in normalized]
@@ -91,12 +111,18 @@ class DropshippingService:
                     continue
 
                 # 1) buscamos por external_id
-                p: Optional[Product] = db.session.query(Product).filter(Product.external_id == external_id).first()
+                p: Optional[Product] = (
+                    db.session.query(Product)
+                    .filter(Product.external_id == external_id)
+                    .first()
+                )
 
                 # 2) si existe, validamos si se puede actualizar
                 if p is not None:
                     # Si es manual o printful y no queremos tocarlo:
-                    if (p.source or "").lower() != "dropship" and not self.update_existing_manual:
+                    if (
+                        p.source or ""
+                    ).lower() != "dropship" and not self.update_existing_manual:
                         skipped += 1
                         continue
                     self._apply_fields(p, it)
@@ -109,17 +135,25 @@ class DropshippingService:
                     p = Product(
                         external_id=external_id,
                         title=(it.get("title") or "").strip(),
-                        slug=self._safe_slug(external_id, (it.get("title") or "").strip()),
+                        slug=self._safe_slug(
+                            external_id, (it.get("title") or "").strip()
+                        ),
                         source="dropship",
                         status=(it.get("status") or "active").strip().lower(),
                         currency=(it.get("currency") or "UYU").strip().upper(),
                         price=self._to_float(it.get("price"), 0.0) or 0.0,
-                        compare_at_price=self._to_float(it.get("compare_at_price"), None),
+                        compare_at_price=self._to_float(
+                            it.get("compare_at_price"), None
+                        ),
                         stock_mode="finite",
                         stock_qty=self._to_int(it.get("stock"), 0),
                         supplier_name=self.default_supplier_name,
                         external_url=self._external_url_from_id(external_id),
-                        short_description=(it.get("description") or "").strip()[:260] if hasattr(Product, "short_description") else None,
+                        short_description=(
+                            (it.get("description") or "").strip()[:260]
+                            if hasattr(Product, "short_description")
+                            else None
+                        ),
                         description_html=(it.get("description") or "").strip(),
                     )
                     db.session.add(p)
@@ -136,7 +170,13 @@ class DropshippingService:
 
         if errors:
             db.session.rollback()
-            return {"ok": False, "created": created, "updated": updated, "skipped": skipped, "errors": errors}
+            return {
+                "ok": False,
+                "created": created,
+                "updated": updated,
+                "skipped": skipped,
+                "errors": errors,
+            }
 
         db.session.commit()
         return {"ok": True, "created": created, "updated": updated, "skipped": skipped}
@@ -164,7 +204,9 @@ class DropshippingService:
 
         # stock
         p.stock_mode = "finite"
-        p.stock_qty = self._to_int(it.get("stock"), int(getattr(p, "stock_qty", 0) or 0))
+        p.stock_qty = self._to_int(
+            it.get("stock"), int(getattr(p, "stock_qty", 0) or 0)
+        )
 
         # metadata dropship
         p.source = "dropship"
@@ -238,7 +280,9 @@ class DropshippingService:
             return self._load_from_url(self.feed_url)
         if self.feed_file:
             return self._load_from_file(self.feed_file)
-        raise RuntimeError("Definí DROPSHIPPING_FEED_URL o DROPSHIPPING_FEED_FILE en .env")
+        raise RuntimeError(
+            "Definí DROPSHIPPING_FEED_URL o DROPSHIPPING_FEED_FILE en .env"
+        )
 
     def _load_from_url(self, url: str) -> Any:
         headers = {"User-Agent": self.user_agent, "Accept": "application/json"}
@@ -250,7 +294,9 @@ class DropshippingService:
             return r.json()
         except Exception:
             snippet = (r.text or "")[:240].replace("\n", " ").strip()
-            raise RuntimeError(f"El feed remoto no es JSON válido. Respuesta: {snippet}")
+            raise RuntimeError(
+                f"El feed remoto no es JSON válido. Respuesta: {snippet}"
+            )
 
     def _load_from_file(self, path: str) -> Any:
         if not os.path.exists(path):
@@ -278,8 +324,12 @@ class DropshippingService:
         price = self._to_float(it.get("price"), default=0.0) or 0.0
         compare = self._to_float(it.get("compare_at_price"), default=None)
 
-        image_url = self._to_str(it.get("image_url") or it.get("image") or it.get("thumbnail") or "")
-        category_slug = self._to_str(it.get("category_slug") or it.get("category") or "")
+        image_url = self._to_str(
+            it.get("image_url") or it.get("image") or it.get("thumbnail") or ""
+        )
+        category_slug = self._to_str(
+            it.get("category_slug") or it.get("category") or ""
+        )
         stock = self._to_int(it.get("stock"), default=0)
         status = self._to_status(it.get("status") or self.DEFAULT_STATUS)
         tags = self._to_tags(it.get("tags"))

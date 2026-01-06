@@ -31,17 +31,20 @@ Endpoints de webhooks/control pagos.
 import os
 import time
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from flask import Blueprint, jsonify, request, current_app
 
 from app.models import db
 from app.models.order import Order
-from app.services.order_service import OrderService, OrderServiceError, PaymentMismatchError
+from app.services.order_service import (
+    OrderService,
+    OrderServiceError,
+    PaymentMismatchError,
+)
 
 # ✅ Handlers reales
 from app.integrations.mercadopago_webhook import handle_webhook as mp_handle_webhook
-from app.services.paypal_capture import capture_paypal_order  # captura oficial (lo correcto)
 
 log = logging.getLogger("webhook_routes")
 
@@ -172,23 +175,34 @@ def mercadopago_webhook():
         res = mp_handle_webhook(raw_body=raw, headers=headers)
 
         # MP reintenta si no recibe 2xx. Para "ignored" igual devolvemos 200.
-        http_code = 200 if res.status in {"processed", "ignored"} else (400 if not res.ok else 200)
+        http_code = (
+            200
+            if res.status in {"processed", "ignored"}
+            else (400 if not res.ok else 200)
+        )
 
         if DEBUG_WEBHOOKS:
             current_app.logger.info(
                 "MP webhook: ok=%s status=%s msg=%s order_id=%s payment_id=%s",
-                res.ok, res.status, res.message, res.order_id, res.payment_id
+                res.ok,
+                res.status,
+                res.message,
+                res.order_id,
+                res.payment_id,
             )
 
-        return jsonify(
-            ok=res.ok,
-            status=res.status,
-            message=res.message,
-            order_id=res.order_id,
-            order_number=res.order_number,
-            payment_id=res.payment_id,
-            raw_type=res.raw_type,
-        ), http_code
+        return (
+            jsonify(
+                ok=res.ok,
+                status=res.status,
+                message=res.message,
+                order_id=res.order_id,
+                order_number=res.order_number,
+                payment_id=res.payment_id,
+                raw_type=res.raw_type,
+            ),
+            http_code,
+        )
 
     except Exception:
         current_app.logger.exception("MP webhook route failed")
@@ -212,7 +226,9 @@ def paypal_webhook():
     payload = _json()
 
     if DEBUG_WEBHOOKS:
-        current_app.logger.info("PayPal webhook received: keys=%s", list(payload.keys())[:30])
+        current_app.logger.info(
+            "PayPal webhook received: keys=%s", list(payload.keys())[:30]
+        )
 
     # Intentamos encontrar la orden por paypal_order_id si viene.
     paypal_order_id = None
@@ -227,10 +243,17 @@ def paypal_webhook():
         paypal_order_id = None
 
     if not paypal_order_id:
-        return jsonify(ok=True, status="ignored", message="missing_paypal_order_id"), 200
+        return (
+            jsonify(ok=True, status="ignored", message="missing_paypal_order_id"),
+            200,
+        )
 
     try:
-        order = db.session.query(Order).filter(Order.paypal_order_id == paypal_order_id).first()
+        order = (
+            db.session.query(Order)
+            .filter(Order.paypal_order_id == paypal_order_id)
+            .first()
+        )
         if not order:
             return jsonify(ok=True, status="ignored", message="order_not_found"), 200
 
@@ -240,15 +263,23 @@ def paypal_webhook():
             _commit_safe()
             return jsonify(ok=True, status="ignored", message="duplicate_event"), 200
 
-        _meta_save(order, {
-            "paypal_last_webhook_at": int(time.time()),
-            "paypal_last_webhook_id": event_id or None,
-            "paypal_last_webhook_payload": payload if DEBUG_WEBHOOKS else {"_stored": True, "id": event_id},
-        })
+        _meta_save(
+            order,
+            {
+                "paypal_last_webhook_at": int(time.time()),
+                "paypal_last_webhook_id": event_id or None,
+                "paypal_last_webhook_payload": (
+                    payload if DEBUG_WEBHOOKS else {"_stored": True, "id": event_id}
+                ),
+            },
+        )
         _commit_safe()
 
         # ✅ NO marcar paid acá.
-        return jsonify(ok=True, status="processed", message="paypal_webhook_audited"), 200
+        return (
+            jsonify(ok=True, status="processed", message="paypal_webhook_audited"),
+            200,
+        )
 
     except Exception:
         db.session.rollback()
@@ -305,12 +336,29 @@ def manual_confirm():
             paid_currency=paid_currency,
             raw={"manual_confirm": True, "reference": reference, "provider": provider},
         )
-        return jsonify(ok=True, status="processed", message="confirmed", order_id=order.id, order_number=order.number), 200
+        return (
+            jsonify(
+                ok=True,
+                status="processed",
+                message="confirmed",
+                order_id=order.id,
+                order_number=order.number,
+            ),
+            200,
+        )
 
     except PaymentMismatchError as e:
-        return jsonify(ok=False, status="error", message=f"payment_mismatch:{str(e)[:160]}"), 400
+        return (
+            jsonify(
+                ok=False, status="error", message=f"payment_mismatch:{str(e)[:160]}"
+            ),
+            400,
+        )
     except OrderServiceError as e:
-        return jsonify(ok=False, status="error", message=f"order_error:{str(e)[:160]}"), 400
+        return (
+            jsonify(ok=False, status="error", message=f"order_error:{str(e)[:160]}"),
+            400,
+        )
     except Exception:
         current_app.logger.exception("manual_confirm error")
         return jsonify(ok=False, status="error", message="manual_confirm_failed"), 500

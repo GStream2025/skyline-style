@@ -40,16 +40,21 @@ _SESSION = requests.Session()
 
 _TRUE = {"1", "true", "yes", "y", "on"}
 
+
 def _env(k: str, d: str = "") -> str:
     import os
+
     return (os.getenv(k) or d).strip()
+
 
 def _bool_env(k: str, d: bool = False) -> bool:
     v = _env(k)
     return v.lower() in _TRUE if v else d
 
+
 def _now() -> int:
     return int(time.time())
+
 
 def _d(v: Any, default="0.00") -> Decimal:
     try:
@@ -57,9 +62,11 @@ def _d(v: Any, default="0.00") -> Decimal:
     except (InvalidOperation, ValueError, TypeError):
         return Decimal(default)
 
+
 def _currency(v: Any, default="USD") -> str:
     s = (str(v) if v else default).upper().strip()
     return s[:3] if len(s) >= 3 else default
+
 
 def _json(raw: str) -> Dict[str, Any]:
     try:
@@ -68,35 +75,43 @@ def _json(raw: str) -> Dict[str, Any]:
     except Exception:
         return {"_invalid_json": True, "raw": (raw or "")[:2000]}
 
+
 def _trunc(v: Any, n: int = 300) -> str:
     return str(v)[:n] if v is not None else ""
+
 
 def _mp_token() -> str:
     return _env("MP_ACCESS_TOKEN")
 
+
 def _mp_api() -> str:
     return _env("MP_API_BASE", "https://api.mercadopago.com").rstrip("/")
 
+
 def _dry_run() -> bool:
     return _bool_env("MP_WEBHOOK_DRY_RUN", False)
+
 
 # =============================================================================
 # Result DTO
 # =============================================================================
 
+
 @dataclass(frozen=True)
 class WebhookResult:
     ok: bool
-    status: str     # processed | ignored | error
+    status: str  # processed | ignored | error
     message: str
     order_id: Optional[int] = None
     order_number: Optional[str] = None
     payment_id: Optional[str] = None
     raw_type: Optional[str] = None
 
+
 # =============================================================================
 # Signature (opcional)
 # =============================================================================
+
 
 def _verify_signature(headers: Dict[str, str], raw_body: str) -> Tuple[bool, str]:
     secret = _env("MP_WEBHOOK_SECRET")
@@ -117,9 +132,7 @@ def _verify_signature(headers: Dict[str, str], raw_body: str) -> Tuple[bool, str
             return False, "timestamp_outside_window"
 
     msg = f"{raw_body}|{ts}|{rid}"
-    expected = hmac.new(
-        secret.encode(), msg.encode(), hashlib.sha256
-    ).hexdigest()
+    expected = hmac.new(secret.encode(), msg.encode(), hashlib.sha256).hexdigest()
 
     sig = sig.replace("sha256=", "")
     return (
@@ -127,9 +140,11 @@ def _verify_signature(headers: Dict[str, str], raw_body: str) -> Tuple[bool, str
         "signature_ok" if sig == expected else "signature_invalid",
     )
 
+
 # =============================================================================
 # MercadoPago API
 # =============================================================================
+
 
 def _mp_get_payment(pid: str) -> Dict[str, Any]:
     token = _mp_token()
@@ -160,9 +175,11 @@ def _mp_get_payment(pid: str) -> Dict[str, Any]:
 
         raise RuntimeError(f"MP error {r.status_code}: {r.text[:200]}")
 
+
 # =============================================================================
 # Payload helpers
 # =============================================================================
+
 
 def _payment_id(payload: Dict[str, Any]) -> Optional[str]:
     if isinstance(payload.get("data"), dict):
@@ -174,12 +191,15 @@ def _payment_id(payload: Dict[str, Any]) -> Optional[str]:
         return res.split("/payments/")[-1].split("?")[0]
     return None
 
+
 def _type(payload: Dict[str, Any]) -> str:
     return (payload.get("type") or payload.get("topic") or "unknown").lower()
+
 
 # =============================================================================
 # Order lookup
 # =============================================================================
+
 
 def _find_order(payment: Dict[str, Any]) -> Optional[Order]:
     pid = str(payment.get("id") or "")
@@ -215,24 +235,32 @@ def _find_order(payment: Dict[str, Any]) -> Optional[Order]:
 
     return None
 
+
 # =============================================================================
 # State helpers
 # =============================================================================
 
+
 def _is_paid(p: Dict[str, Any]) -> bool:
     return (p.get("status") or "").lower() in {"approved", "authorized"}
+
 
 def _is_refunded(p: Dict[str, Any]) -> bool:
     return (p.get("status") or "").lower() in {"refunded", "charged_back"}
 
+
 def _is_failed(p: Dict[str, Any]) -> bool:
     return (p.get("status") or "").lower() in {"rejected", "cancelled"}
+
 
 # =============================================================================
 # PUBLIC ENTRYPOINT
 # =============================================================================
 
-def handle_webhook(*, raw_body: str, headers: Optional[Dict[str, str]] = None) -> WebhookResult:
+
+def handle_webhook(
+    *, raw_body: str, headers: Optional[Dict[str, str]] = None
+) -> WebhookResult:
     headers = headers or {}
     payload = _json(raw_body)
     raw_type = _type(payload)
@@ -270,7 +298,9 @@ def handle_webhook(*, raw_body: str, headers: Optional[Dict[str, str]] = None) -
                 order.mp_payment_id = pid
 
             if _dry_run():
-                return WebhookResult(True, "processed", "dry_run", order.id, order.number, pid)
+                return WebhookResult(
+                    True, "processed", "dry_run", order.id, order.number, pid
+                )
 
         if _is_paid(payment):
             try:
@@ -284,19 +314,27 @@ def handle_webhook(*, raw_body: str, headers: Optional[Dict[str, str]] = None) -
                 )
                 return WebhookResult(True, "processed", "paid", o2.id, o2.number, pid)
             except PaymentMismatchError as e:
-                return WebhookResult(False, "error", f"mismatch:{_trunc(e)}", order.id, pid)
+                return WebhookResult(
+                    False, "error", f"mismatch:{_trunc(e)}", order.id, pid
+                )
             except OrderServiceError as e:
-                return WebhookResult(False, "error", f"service:{_trunc(e)}", order.id, pid)
+                return WebhookResult(
+                    False, "error", f"service:{_trunc(e)}", order.id, pid
+                )
 
         if _is_refunded(payment):
             with db.session.begin():
                 order.mark_refunded()
-            return WebhookResult(True, "processed", "refunded", order.id, order.number, pid)
+            return WebhookResult(
+                True, "processed", "refunded", order.id, order.number, pid
+            )
 
         if _is_failed(payment):
             with db.session.begin():
                 order.payment_status = Order.PAY_FAILED
-            return WebhookResult(True, "processed", "failed", order.id, order.number, pid)
+            return WebhookResult(
+                True, "processed", "failed", order.id, order.number, pid
+            )
 
         return WebhookResult(True, "processed", "pending", order.id, order.number, pid)
 

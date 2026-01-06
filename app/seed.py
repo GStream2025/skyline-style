@@ -218,7 +218,11 @@ def seed_demo_store(*, overwrite: bool = False) -> Dict[str, Any]:
             # buscamos oferta existente (por product_id si existe)
             existing_offer: Optional[Any] = None
             try:
-                if hasattr(Offer, "query") and hasattr(Offer, "product_id") and hasattr(hoodie, "id"):
+                if (
+                    hasattr(Offer, "query")
+                    and hasattr(Offer, "product_id")
+                    and hasattr(hoodie, "id")
+                ):
                     existing_offer = Offer.query.filter_by(product_id=hoodie.id).first()
             except Exception:
                 existing_offer = None

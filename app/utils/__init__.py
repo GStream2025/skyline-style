@@ -25,11 +25,13 @@ log = logging.getLogger("utils")
 
 _TRUE = {"1", "true", "yes", "y", "on"}
 
+
 def _env_bool(key: str, default: bool = False) -> bool:
     v = os.getenv(key)
     if v is None:
         return default
     return v.strip().lower() in _TRUE
+
 
 # Strict (dev): si algo falta, queremos enterarnos rápido
 _UTILS_STRICT = _env_bool("UTILS_STRICT", False)
@@ -50,13 +52,11 @@ _EXPORTS: Dict[str, Tuple[str, str]] = {
     "is_admin_logged": ("app.utils.auth", "is_admin_logged"),
     "admin_identity": ("app.utils.auth", "admin_identity"),
     "admin_next": ("app.utils.auth", "admin_next"),
-
     # -----------------------
     # Security (URLs / redirects)
     # -----------------------
     "safe_next_url": ("app.utils.security", "safe_next_url"),
     "is_safe_url": ("app.utils.security", "is_safe_url"),
-
     # -----------------------
     # Printful mapping
     # -----------------------
@@ -77,6 +77,7 @@ _CACHE: Dict[str, Any] = {}
 # Helpers internos (safe import + fallback)
 # ============================================================
 
+
 def _safe_import(module: str, symbol: str) -> Any:
     """
     Importa símbolo de forma segura.
@@ -94,7 +95,9 @@ def _safe_import(module: str, symbol: str) -> Any:
             pass
 
         if _UTILS_STRICT:
-            raise RuntimeError(f"Utils strict: no se pudo importar {module}.{symbol}: {e}") from e
+            raise RuntimeError(
+                f"Utils strict: no se pudo importar {module}.{symbol}: {e}"
+            ) from e
 
         return None
 
@@ -103,11 +106,13 @@ def _missing(name: str):
     """
     Crea un stub que falla con error claro SOLO cuando se usa.
     """
+
     def _fn(*_a: Any, **_k: Any):
         raise RuntimeError(
             f"Utilidad no disponible: {name}. "
             f"Revisá imports/archivo faltante o typo en registry _EXPORTS."
         )
+
     _fn.__name__ = name
     return _fn
 
@@ -148,6 +153,7 @@ def _load(name: str) -> Any:
 # Lazy exports (PEP 562)
 # ============================================================
 
+
 def __getattr__(name: str) -> Any:
     """
     Se ejecuta cuando se accede a app.utils.<name>.
@@ -183,7 +189,10 @@ if TYPE_CHECKING:
     from app.utils.security import safe_next_url, is_safe_url  # noqa: F401
 
     # Printful
-    from app.utils.printful_mapper import map_printful_product, map_printful_variant  # noqa: F401
+    from app.utils.printful_mapper import (
+        map_printful_product,
+        map_printful_variant,
+    )  # noqa: F401
 
 
 # ============================================================

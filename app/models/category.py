@@ -2,7 +2,7 @@
 
 import re
 from datetime import datetime, timezone
-from typing import Optional, List
+from typing import List
 
 from sqlalchemy import event
 from sqlalchemy.orm import validates
@@ -20,7 +20,14 @@ _slug_re = re.compile(r"[^a-z0-9\-]+")
 def slugify(text: str, max_len: int = 160) -> str:
     """Slug simple sin deps. Mantiene compat y evita basura."""
     s = (text or "").strip().lower()
-    s = s.replace("á", "a").replace("é", "e").replace("í", "i").replace("ó", "o").replace("ú", "u").replace("ñ", "n")
+    s = (
+        s.replace("á", "a")
+        .replace("é", "e")
+        .replace("í", "i")
+        .replace("ó", "o")
+        .replace("ú", "u")
+        .replace("ñ", "n")
+    )
     s = re.sub(r"\s+", "-", s)
     s = _slug_re.sub("", s)
     s = re.sub(r"-{2,}", "-", s).strip("-")
@@ -69,8 +76,16 @@ class Category(db.Model):
     # Path cacheado (opcional)
     slug_path = db.Column(db.String(700), nullable=True, index=True)
 
-    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, index=True)
-    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow, index=True)
+    created_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, default=utcnow, index=True
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=utcnow,
+        onupdate=utcnow,
+        index=True,
+    )
 
     # Relación: parent -> children
     parent = db.relationship(
@@ -102,7 +117,7 @@ class Category(db.Model):
     @validates("name")
     def _v_name(self, _k, v: str) -> str:
         v = (v or "").strip()
-        return (v[:120] if v else "Categoría")
+        return v[:120] if v else "Categoría"
 
     @validates("slug")
     def _v_slug(self, _k, v: str) -> str:
@@ -188,6 +203,7 @@ db.Index("ix_categories_parent_sort", Category.parent_id, Category.sort_order)
 # ============================================================
 # Hooks: mantener slug_path + updated_at
 # ============================================================
+
 
 @event.listens_for(Category, "before_insert", propagate=True)
 def _cat_before_insert(_mapper, _conn, target: Category):

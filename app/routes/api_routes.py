@@ -18,6 +18,7 @@ _TRUE = {"1", "true", "yes", "y", "on"}
 # Config (dinámico, no “congelado” en import)
 # ============================================================
 
+
 def _env_flag(name: str, default: bool = False) -> bool:
     v = os.getenv(name)
     if v is None:
@@ -113,6 +114,7 @@ def _rate_limit_check() -> Tuple[bool, int]:
 # CORS
 # ============================================================
 
+
 def _cors_headers(resp):
     origins = _cors_origins()
     if not origins:
@@ -123,7 +125,9 @@ def _cors_headers(resp):
         resp.headers["Access-Control-Allow-Origin"] = origin
         resp.headers["Vary"] = "Origin"
         resp.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
-        resp.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization,X-API-Key"
+        resp.headers["Access-Control-Allow-Headers"] = (
+            "Content-Type,Authorization,X-API-Key"
+        )
         resp.headers["Access-Control-Max-Age"] = "600"
     return resp
 
@@ -138,6 +142,7 @@ def _json_ok(payload: Dict[str, Any], status: int = 200):
 # Gate global API
 # ============================================================
 
+
 @api_bp.before_request
 def _api_gate():
     # Preflight CORS
@@ -149,13 +154,17 @@ def _api_gate():
 
     ok, retry = _rate_limit_check()
     if not ok:
-        resp = _json_ok({"ok": False, "error": "rate_limited", "retry_after": retry}, 429)
+        resp = _json_ok(
+            {"ok": False, "error": "rate_limited", "retry_after": retry}, 429
+        )
         resp.headers["Retry-After"] = str(retry)
         return resp
 
     keys = _api_keys()
     if keys:
-        got = (request.headers.get("X-API-Key") or "").strip() or (request.args.get("api_key") or "").strip()
+        got = (request.headers.get("X-API-Key") or "").strip() or (
+            request.args.get("api_key") or ""
+        ).strip()
         if not got or got not in keys:
             return _json_ok({"ok": False, "error": "invalid_api_key"}, 401)
 
@@ -171,6 +180,7 @@ def _api_after(resp):
 # Helpers
 # ============================================================
 
+
 def _int(v: Any, default: int) -> int:
     try:
         return int(v)
@@ -179,7 +189,7 @@ def _int(v: Any, default: int) -> int:
 
 
 def _str(v: Any, default: str = "") -> str:
-    return (str(v).strip() if v is not None else default)
+    return str(v).strip() if v is not None else default
 
 
 def _money(v: Any) -> str:
@@ -233,13 +243,25 @@ def _product_public(p: Product) -> Dict[str, Any]:
         "source": getattr(p, "source", "manual"),
         "currency": getattr(p, "currency", "USD"),
         "price": _money(getattr(p, "price", "0.00")),
-        "compare_at_price": (_money(getattr(p, "compare_at_price", None)) if getattr(p, "compare_at_price", None) is not None else None),
+        "compare_at_price": (
+            _money(getattr(p, "compare_at_price", None))
+            if getattr(p, "compare_at_price", None) is not None
+            else None
+        ),
         "in_stock": in_stock,
         "stock_mode": getattr(p, "stock_mode", "finite"),
         "stock_qty": int(getattr(p, "stock_qty", 0) or 0),
         "short_description": getattr(p, "short_description", None),
-        "seo_title": (p.seo_title_final() if hasattr(p, "seo_title_final") else getattr(p, "seo_title", None)),
-        "seo_description": (p.seo_description_final() if hasattr(p, "seo_description_final") else getattr(p, "seo_description", None)),
+        "seo_title": (
+            p.seo_title_final()
+            if hasattr(p, "seo_title_final")
+            else getattr(p, "seo_title", None)
+        ),
+        "seo_description": (
+            p.seo_description_final()
+            if hasattr(p, "seo_description_final")
+            else getattr(p, "seo_description", None)
+        ),
         "image": img,
         "category": cat,
         "updated_at": _safe_iso(getattr(p, "updated_at", None)),
@@ -291,20 +313,24 @@ def _make_aff_link(product_id: int, aff: str, sub: Optional[str] = None) -> str:
 # API: Health
 # ============================================================
 
+
 @api_bp.get("/health")
 def api_health():
-    return _json_ok({
-        "ok": True,
-        "api_enabled": True,
-        "version": "v1",
-        "rate_limit": {"enabled": _rate_limit_enabled(), "rpm": _rate_limit_rpm()},
-        "auth_required": bool(_api_keys()),
-    })
+    return _json_ok(
+        {
+            "ok": True,
+            "api_enabled": True,
+            "version": "v1",
+            "rate_limit": {"enabled": _rate_limit_enabled(), "rpm": _rate_limit_rpm()},
+            "auth_required": bool(_api_keys()),
+        }
+    )
 
 
 # ============================================================
 # API: Productos
 # ============================================================
+
 
 @api_bp.get("/products")
 def api_products_list():
@@ -320,7 +346,7 @@ def api_products_list():
     category = request.args.get("category")
     page = max(1, _int(request.args.get("page"), 1))
     per_page = min(50, max(1, _int(request.args.get("per_page"), 20)))
-    active_only = (_str(request.args.get("active_only"), "1").lower() in _TRUE)
+    active_only = _str(request.args.get("active_only"), "1").lower() in _TRUE
 
     query = db.session.query(Product)
 
@@ -347,8 +373,11 @@ def api_products_list():
                 c = (
                     db.session.query(Category)
                     .filter(
-                        (Category.slug == str(category)) |
-                        (getattr(Category, "slug_path", Category.slug) == str(category))
+                        (Category.slug == str(category))
+                        | (
+                            getattr(Category, "slug_path", Category.slug)
+                            == str(category)
+                        )
                     )
                     .first()
                 )
@@ -372,13 +401,15 @@ def api_products_list():
     except Exception:
         items = []
 
-    return _json_ok({
-        "ok": True,
-        "page": page,
-        "per_page": per_page,
-        "total": total,
-        "products": [_product_public(p) for p in items],
-    })
+    return _json_ok(
+        {
+            "ok": True,
+            "page": page,
+            "per_page": per_page,
+            "total": total,
+            "products": [_product_public(p) for p in items],
+        }
+    )
 
 
 @api_bp.get("/products/<int:product_id>")
@@ -413,6 +444,7 @@ def api_product_by_slug(slug: str):
 # API: Afiliados
 # ============================================================
 
+
 @api_bp.post("/affiliate/click")
 def api_affiliate_click():
     """
@@ -428,7 +460,11 @@ def api_affiliate_click():
     sub = _str(data.get("sub")) or None
     product_id = _int(data.get("product_id"), 0)
 
-    ref = _str(data.get("ref"))[:500] or (request.headers.get("Referer") or "")[:500] or None
+    ref = (
+        _str(data.get("ref"))[:500]
+        or (request.headers.get("Referer") or "")[:500]
+        or None
+    )
     ua = _str(data.get("ua") or request.headers.get("User-Agent"))[:300] or None
     ip = _client_ip()
 
@@ -442,6 +478,7 @@ def api_affiliate_click():
     AffiliateClick = None
     try:
         from app.models import AffiliateClick as _AC  # type: ignore
+
         AffiliateClick = _AC
     except Exception:
         AffiliateClick = None
@@ -465,7 +502,15 @@ def api_affiliate_click():
             current_app.logger.info("AffiliateClick save ignored: %s", exc)
 
     link = _make_aff_link(getattr(p, "id", product_id), aff, sub)
-    return _json_ok({"ok": True, "tracked": True, "stored": stored, "product_id": getattr(p, "id", product_id), "link": link})
+    return _json_ok(
+        {
+            "ok": True,
+            "tracked": True,
+            "stored": stored,
+            "product_id": getattr(p, "id", product_id),
+            "link": link,
+        }
+    )
 
 
 @api_bp.get("/affiliate/link")

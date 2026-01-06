@@ -1,1036 +1,159 @@
-{# app/templates/base.html — Skyline Store (ULTRA PRO / FINAL / NO BREAK) #}
+{# app/templates/base.html — Skyline Store (PRO ENTERPRISE FINAL) #}
 <!doctype html>
 <html lang="es">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  {# ✅ Mejora 1: color-scheme dinámico (si más adelante activás dark) #}
-  <meta name="color-scheme" content="light dark" />
-  <meta name="theme-color" content="#ffffff" id="themeColor" />
+  <title>{% block title %}{{ meta_title or "Skyline Store" }}{% endblock %}</title>
+  <meta name="description" content="{{ meta_description or 'Skyline Store — marketplace premium de tecnología y streetwear.' }}">
+  <link rel="canonical" href="{{ request.url }}">
 
-  {# =========================
-     SEO dinámico (desde ctx)
-  ========================= #}
-  <title>{% block title %}{{ meta_title if meta_title else "Skyline Store" }}{% endblock %}</title>
-  <meta name="description" content="{{ meta_description if meta_description else 'Skyline Store — tienda online con estilo, ofertas y productos premium.' }}" />
-  <link rel="canonical" href="{{ request.url }}" />
-
-  <meta property="og:title" content="{{ meta_title if meta_title else 'Skyline Store' }}">
-  <meta property="og:description" content="{{ meta_description if meta_description else 'Tienda online moderna tipo marketplace.' }}">
-  <meta property="og:image" content="{{ og_image if og_image else url_for('static', filename='img/og.png', _external=True) }}">
+  <!-- Open Graph -->
+  <meta property="og:title" content="{{ meta_title or 'Skyline Store' }}">
+  <meta property="og:description" content="{{ meta_description or 'Marketplace premium de tecnología y streetwear.' }}">
+  <meta property="og:image" content="{{ og_image or url_for('static', filename='img/og.png', _external=True) }}">
   <meta property="og:type" content="website">
 
-  {# ✅ Mejora 2: Twitter Cards #}
+  <!-- Twitter -->
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="{{ meta_title if meta_title else 'Skyline Store' }}">
-  <meta name="twitter:description" content="{{ meta_description if meta_description else 'Tienda online moderna tipo marketplace.' }}">
-  <meta name="twitter:image" content="{{ og_image if og_image else url_for('static', filename='img/og.png', _external=True) }}">
 
-  {# ✅ Mejora 3: headers meta útiles #}
+  <!-- Security -->
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
 
-  {# ✅ CSRF consistente (viene desde inject_globals) #}
-  <meta name="csrf-token" content="{{ csrf_token|e }}"/>
+  <!-- CSRF -->
+  <meta name="csrf-token" content="{{ csrf_token }}">
 
-  {# ✅ Mejora 4: preloads básicos (logo/og) + favicon (si existe) #}
-  <link rel="icon" href="{{ url_for('static', filename='img/favicon.png') }}" onerror="this.remove()">
-  <link rel="preload" as="image" href="{{ url_for('static', filename='img/og.png') }}">
+  <!-- Favicon -->
+  <link rel="icon" href="{{ url_for('static', filename='img/favicon.png') }}">
 
-  {# ✅ Mejora 5: Schema.org (Organization + WebSite + SearchAction) #}
-  <script type="application/ld+json">
-  {
-    "@context":"https://schema.org",
-    "@type":"Organization",
-    "name":"Skyline Store",
-    "url":"{{ request.url_root|trim('/') }}",
-    "logo":"{{ url_for('static', filename='img/og.png', _external=True) }}"
-  }
-  </script>
-  <script type="application/ld+json">
-  {
-    "@context":"https://schema.org",
-    "@type":"WebSite",
-    "name":"Skyline Store",
-    "url":"{{ request.url_root|trim('/') }}",
-    "potentialAction":{
-      "@type":"SearchAction",
-      "target":"{{ request.url_root|trim('/') }}/shop?q={search_term_string}",
-      "query-input":"required name=search_term_string"
-    }
-  }
-  </script>
-
-  {# ✅ Tipografía PRO (Inter) #}
+  <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 
-  <style>
-    :root{
-      /* ===== Brand / Marketplace Premium ===== */
-      --bg0:#ffffff;
-      --bg1:#f6f7fb;
-      --card:#ffffff;
-
-      --ink:#0b1220;
-      --muted: rgba(11,18,32,.62);
-      --muted2: rgba(11,18,32,.45);
-
-      --stroke: rgba(15,23,42,.10);
-      --stroke2: rgba(15,23,42,.08);
-
-      --primary:#2f7bff;
-      --cyan:#10b8d6;
-      --amber:#ffb547;
-      --grad: linear-gradient(90deg, var(--primary), var(--cyan), var(--amber));
-
-      --shadow1: 0 10px 26px rgba(2,6,23,.08);
-      --shadow2: 0 18px 55px rgba(2,6,23,.10);
-
-      --r: 14px;
-      --r2: 20px;
-      --max: 1240px;
-
-      --ease: cubic-bezier(.2,.9,.2,1);
-    }
-
-    /* ✅ Mejora 6: Dark mode real (no rompe, pero queda listo) */
-    :root[data-theme="dark"]{
-      --bg0:#070b12;
-      --bg1:#0b1220;
-      --card: rgba(255,255,255,.06);
-
-      --ink: rgba(255,255,255,.92);
-      --muted: rgba(255,255,255,.62);
-      --muted2: rgba(255,255,255,.48);
-
-      --stroke: rgba(148,163,184,.16);
-      --stroke2: rgba(148,163,184,.12);
-
-      --shadow1: 0 10px 26px rgba(0,0,0,.35);
-      --shadow2: 0 18px 55px rgba(0,0,0,.42);
-    }
-
-    *{box-sizing:border-box}
-    html{scroll-behavior:smooth}
-    body{
-      margin:0;
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
-      color:var(--ink);
-      background:
-        radial-gradient(900px 460px at 18% 20%, rgba(47,123,255,.10), transparent 60%),
-        radial-gradient(900px 520px at 86% 22%, rgba(255,181,71,.12), transparent 62%),
-        linear-gradient(180deg, var(--bg0), var(--bg1));
-    }
-
-    a{color:inherit}
-    img{max-width:100%;display:block}
-    .container{max-width:var(--max);margin:0 auto;padding:0 18px}
-
-    /* ✅ Mejora 7: utilidades base (botones pro) */
-    .btn{
-      border:0; cursor:pointer;
-      background: var(--grad);
-      color:#fff;
-      border-radius:999px;
-      padding: 10px 14px;
-      font-weight:900;
-      box-shadow: 0 12px 22px rgba(2,6,23,.12);
-      transition: transform .2s var(--ease), box-shadow .2s var(--ease), opacity .2s var(--ease);
-      text-decoration:none;
-      display:inline-flex; align-items:center; gap:10px;
-    }
-    .btn:hover{transform: translateY(-1px); box-shadow: 0 16px 28px rgba(2,6,23,.16)}
-    .btn:active{transform: translateY(0)}
-    .btn2{
-      border:1px solid var(--stroke);
-      background: rgba(255,255,255,.86);
-      border-radius:999px;
-      padding: 10px 14px;
-      font-weight:900;
-      text-decoration:none;
-      display:inline-flex; align-items:center; gap:10px;
-      box-shadow: 0 12px 22px rgba(2,6,23,.06);
-      transition: transform .2s var(--ease), box-shadow .2s var(--ease);
-    }
-    :root[data-theme="dark"] .btn2{ background: rgba(255,255,255,.08) }
-    .btn2:hover{transform: translateY(-1px); box-shadow: 0 16px 28px rgba(2,6,23,.10)}
-
-    /* ✅ A11y Skip link */
-    .skip{
-      position:absolute; left:-9999px; top:12px;
-      background:var(--card); border:1px solid var(--stroke);
-      padding:10px 12px; border-radius:12px;
-      box-shadow: var(--shadow1);
-      font-weight:900;
-      z-index:9999;
-    }
-    .skip:focus{left:12px}
-
-    /* ===== Top strip (confianza tipo marketplace) ===== */
-    .strip{
-      background: rgba(255,255,255,.75);
-      border-bottom: 1px solid var(--stroke2);
-    }
-    :root[data-theme="dark"] .strip{
-      background: rgba(0,0,0,.28);
-      border-bottom-color: var(--stroke2);
-    }
-    .strip-inner{
-      display:flex; align-items:center; justify-content:space-between;
-      gap:12px;
-      padding: 8px 0;
-      color: rgba(11,18,32,.78);
-      font-weight:700;
-      font-size:.92rem;
-    }
-    :root[data-theme="dark"] .strip-inner{ color: rgba(255,255,255,.72); }
-
-    .strip-badges{
-      display:flex; gap:10px; flex-wrap:wrap; align-items:center;
-    }
-    .pill{
-      display:inline-flex; align-items:center; gap:8px;
-      padding: 7px 10px;
-      border-radius:999px;
-      background: rgba(255,255,255,.82);
-      border: 1px solid var(--stroke2);
-      box-shadow: 0 10px 22px rgba(2,6,23,.06);
-      white-space:nowrap;
-    }
-    :root[data-theme="dark"] .pill{
-      background: rgba(255,255,255,.08);
-      box-shadow: 0 10px 22px rgba(0,0,0,.28);
-    }
-    .pill b{font-weight:900}
-    .dot-grad{
-      width:10px;height:10px;border-radius:999px;
-      background: var(--grad);
-      box-shadow: 0 10px 16px rgba(2,6,23,.12);
-    }
-
-    /* ===== Header (Marketplace Premium) ===== */
-    .topbar{
-      position:sticky; top:0; z-index:50;
-      background: rgba(255,255,255,.86);
-      backdrop-filter: blur(14px);
-      border-bottom: 1px solid var(--stroke);
-    }
-    :root[data-theme="dark"] .topbar{ background: rgba(7,11,18,.78); }
-    .topbar-inner{
-      display:flex; align-items:center; gap:14px;
-      padding: 12px 0;
-    }
-
-    /* Brand */
-    .brand{
-      display:flex; align-items:center; gap:10px;
-      text-decoration:none;
-      font-weight:900;
-      letter-spacing:-.35px;
-    }
-    .brand-mark{
-      width:34px; height:24px;
-      border-radius:10px;
-      background: var(--grad);
-      box-shadow: 0 12px 22px rgba(2,6,23,.14);
-    }
-    .brand-name{
-      font-weight:900;
-      text-transform:uppercase;
-      font-size:1.05rem;
-      line-height:1;
-    }
-    .brand-name small{
-      display:block;
-      font-size:.72rem;
-      letter-spacing:.2px;
-      color: var(--muted);
-      font-weight:700;
-      text-transform:none;
-      margin-top:2px;
-    }
-
-    /* Nav desktop */
-    .nav{
-      display:none;
-      gap:8px;
-      margin-left:8px;
-    }
-    .nav a{
-      text-decoration:none;
-      font-weight:800;
-      color: rgba(11,18,32,.82);
-      padding:10px 12px;
-      border-radius:999px;
-      transition: background .2s var(--ease), transform .2s var(--ease), color .2s var(--ease), box-shadow .2s var(--ease);
-    }
-    :root[data-theme="dark"] .nav a{ color: rgba(255,255,255,.82); }
-    .nav a:hover{
-      background: rgba(47,123,255,.10);
-      transform: translateY(-1px);
-    }
-    .nav a.is-active{
-      background: rgba(47,123,255,.12);
-      border: 1px solid rgba(47,123,255,.18);
-      box-shadow: 0 12px 22px rgba(2,6,23,.06);
-    }
-
-    /* Search */
-    .search{
-      margin-left:auto;
-      display:flex; align-items:center; gap:10px;
-      background: rgba(255,255,255,.92);
-      border:1px solid var(--stroke);
-      border-radius:999px;
-      padding: 10px 12px;
-      min-width: min(560px, 46vw);
-      box-shadow: 0 14px 30px rgba(2,6,23,.06);
-      transition: box-shadow .2s var(--ease), border-color .2s var(--ease), background .2s var(--ease);
-    }
-    :root[data-theme="dark"] .search{ background: rgba(255,255,255,.08); }
-    .search:focus-within{
-      border-color: rgba(47,123,255,.28);
-      box-shadow: 0 0 0 5px rgba(47,123,255,.14), 0 18px 40px rgba(2,6,23,.08);
-    }
-    .search .s-ico{ width:18px;height:18px; opacity:.7; flex: 0 0 auto; }
-    .search input{
-      border:0; outline:0; background:transparent;
-      width:100%;
-      font-size: .98rem;
-      font-weight:600;
-      color: rgba(11,18,32,.90);
-    }
-    :root[data-theme="dark"] .search input{ color: rgba(255,255,255,.90); }
-    .search input::placeholder{color: var(--muted2); font-weight:600}
-    .search button{
-      border:0;
-      cursor:pointer;
-      background: var(--grad);
-      color:#fff;
-      border-radius:999px;
-      padding: 10px 14px;
-      font-weight:900;
-      box-shadow: 0 12px 22px rgba(2,6,23,.12);
-      transition: transform .2s var(--ease), box-shadow .2s var(--ease);
-    }
-    .search button:hover{transform: translateY(-1px); box-shadow: 0 16px 28px rgba(2,6,23,.16)}
-
-    .actions{display:flex; align-items:center; gap:10px}
-
-    .icon-btn{
-      position:relative;
-      width:46px;height:46px;
-      border-radius:999px;
-      border:1px solid var(--stroke);
-      background: rgba(255,255,255,.92);
-      cursor:pointer;
-      display:grid; place-items:center;
-      text-decoration:none;
-      box-shadow: 0 14px 28px rgba(2,6,23,.06);
-      transition: transform .2s var(--ease), box-shadow .2s var(--ease);
-    }
-    :root[data-theme="dark"] .icon-btn{ background: rgba(255,255,255,.08); }
-    .icon-btn:hover{transform: translateY(-1px); box-shadow: 0 18px 36px rgba(2,6,23,.10)}
-    .icon{ width:20px;height:20px; opacity:.84; }
-
-    .badge{
-      position:absolute;
-      top:-6px; right:-6px;
-      min-width:20px; height:20px;
-      padding:0 6px;
-      border-radius:999px;
-      background: var(--grad);
-      color:#fff;
-      display:none;
-      align-items:center;
-      justify-content:center;
-      font-size:12px;
-      font-weight:900;
-      box-shadow: 0 10px 18px rgba(2,6,23,.16);
-      border: 2px solid #fff;
-    }
-    .badge.is-on{display:flex}
-
-    /* Cuenta CTA */
-    .account{
-      display:flex; align-items:center; gap:10px;
-      text-decoration:none;
-      font-weight:900;
-      background: rgba(47,123,255,.10);
-      border: 1px solid rgba(47,123,255,.18);
-      padding: 10px 12px;
-      border-radius:999px;
-      white-space:nowrap;
-      box-shadow: 0 14px 28px rgba(2,6,23,.06);
-      transition: transform .2s var(--ease), box-shadow .2s var(--ease);
-    }
-    :root[data-theme="dark"] .account{ background: rgba(47,123,255,.12); }
-    .account:hover{transform: translateY(-1px); box-shadow: 0 18px 36px rgba(2,6,23,.10)}
-    .acc-ico{
-      width:30px;height:30px;border-radius:999px;
-      display:grid;place-items:center;
-      background:#fff;
-      border:1px solid var(--stroke);
-      box-shadow: 0 10px 20px rgba(2,6,23,.08);
-    }
-    :root[data-theme="dark"] .acc-ico{ background: rgba(255,255,255,.10); }
-    .acc-ico svg{width:18px;height:18px; opacity:.85}
-
-    /* Theme toggle */
-    .theme-btn{
-      width:46px;height:46px;
-      border-radius:999px;
-      border:1px solid var(--stroke);
-      background: rgba(255,255,255,.92);
-      cursor:pointer;
-      display:grid; place-items:center;
-      box-shadow: 0 14px 28px rgba(2,6,23,.06);
-      transition: transform .2s var(--ease), box-shadow .2s var(--ease);
-    }
-    :root[data-theme="dark"] .theme-btn{ background: rgba(255,255,255,.08); }
-    .theme-btn:hover{transform: translateY(-1px); box-shadow: 0 18px 36px rgba(2,6,23,.10)}
-
-    /* Mobile menu */
-    .burger{
-      display:inline-flex; align-items:center; justify-content:center;
-      width:46px;height:46px;
-      border-radius:14px;
-      border:1px solid var(--stroke);
-      background: rgba(255,255,255,.92);
-      cursor:pointer;
-      box-shadow: 0 14px 28px rgba(2,6,23,.06);
-      transition: transform .2s var(--ease);
-    }
-    :root[data-theme="dark"] .burger{ background: rgba(255,255,255,.08); }
-    .burger:hover{transform: translateY(-1px)}
-    .mobile{
-      display:none;
-      border-top:1px solid var(--stroke);
-      background: rgba(255,255,255,.96);
-      padding: 10px 0 14px;
-    }
-    :root[data-theme="dark"] .mobile{ background: rgba(7,11,18,.92); }
-    .mobile a{
-      display:block;
-      padding: 12px 18px;
-      text-decoration:none;
-      font-weight:900;
-      color: rgba(11,18,32,.86);
-    }
-    :root[data-theme="dark"] .mobile a{ color: rgba(255,255,255,.86); }
-    .mobile a:hover{background: rgba(47,123,255,.07)}
-    .mobile.is-open{display:block}
-
-    @media (min-width: 980px){
-      .nav{display:flex}
-      .burger{display:none}
-      .mobile{display:none!important}
-    }
-
-    /* Flash */
-    .flash-wrap{padding: 10px 0}
-    .flash{
-      background:var(--card);
-      border:1px solid var(--stroke);
-      box-shadow: var(--shadow1);
-      border-radius: 14px;
-      padding: 12px 14px;
-      margin: 10px 0;
-      font-weight:800;
-      color: var(--ink);
-    }
-    .flash[data-cat="success"]{ border-color: rgba(34,197,94,.28); }
-    .flash[data-cat="warning"]{ border-color: rgba(245,158,11,.28); }
-    .flash[data-cat="error"]{ border-color: rgba(239,68,68,.28); }
-    .flash[data-cat="info"]{ border-color: rgba(56,189,248,.28); }
-
-    /* Offline banner */
-    .offline{
-      display:none;
-      margin: 10px 0 0;
-      background: rgba(255,181,71,.14);
-      border: 1px solid rgba(255,181,71,.26);
-      color: rgba(11,18,32,.86);
-      border-radius: 16px;
-      padding: 12px 14px;
-      font-weight:800;
-      box-shadow: var(--shadow1);
-    }
-    :root[data-theme="dark"] .offline{ color: rgba(255,255,255,.86); }
-    .offline.is-on{display:flex;align-items:center;justify-content:space-between;gap:12px}
-    .offline button{
-      border:1px solid var(--stroke);
-      background:var(--card);
-      border-radius:999px;
-      padding:8px 12px;
-      font-weight:900;
-      cursor:pointer;
-      color: var(--ink);
-    }
-
-    main{padding: 10px 0 0}
-
-    /* Footer PRO */
-    footer{
-      margin-top: 34px;
-      background:
-        radial-gradient(900px 380px at 20% 0%, rgba(47,123,255,.10), transparent 62%),
-        radial-gradient(900px 380px at 85% 0%, rgba(255,181,71,.10), transparent 62%),
-        linear-gradient(180deg, var(--bg0), var(--bg1));
-      border-top:1px solid var(--stroke);
-    }
-    .footer-grid{
-      padding: 22px 0 10px;
-      display:grid;
-      grid-template-columns: 1.2fr 1fr 1fr 1fr;
-      gap:16px;
-      align-items:start;
-    }
-    .f-brand{display:flex; gap:12px; align-items:flex-start;}
-    .f-title{font-weight:900; letter-spacing:-.3px;}
-    .f-desc{
-      margin-top:6px;
-      color: var(--muted);
-      font-weight:600;
-      line-height:1.3;
-      max-width: 42ch;
-    }
-    .f-col h4{
-      margin:0 0 10px;
-      font-size:.98rem;
-      font-weight:900;
-      color: var(--ink);
-    }
-    .f-links{display:flex; flex-direction:column; gap:8px;}
-    .f-links a{
-      text-decoration:none;
-      color: rgba(11,18,32,.72);
-      font-weight:650;
-    }
-    :root[data-theme="dark"] .f-links a{ color: rgba(255,255,255,.72); }
-    .f-links a:hover{text-decoration:underline; color: var(--ink)}
-    .payrow{
-      padding: 10px 0 16px;
-      display:flex; gap:12px; align-items:center; justify-content:center;
-      opacity:.95;
-      flex-wrap:wrap;
-    }
-    .pay{
-      width:78px; height:38px;
-      border-radius:12px;
-      border:1px solid var(--stroke);
-      background:var(--card);
-      display:grid; place-items:center;
-      font-weight:900;
-      color: var(--muted);
-      box-shadow: 0 12px 22px rgba(2,6,23,.06);
-    }
-    .copyright{
-      text-align:center;
-      padding: 0 0 18px;
-      color: var(--muted);
-      font-weight:700;
-      font-size:.92rem;
-    }
-
-    @media (max-width: 980px){
-      .search{min-width: 40vw}
-      .footer-grid{grid-template-columns: 1fr 1fr; }
-    }
-    @media (max-width: 560px){
-      .search{display:none;}
-      .footer-grid{grid-template-columns: 1fr; }
-    }
-
-    /* Focus visible pro */
-    :focus-visible{
-      outline:none;
-      box-shadow: 0 0 0 5px rgba(47,123,255,.16);
-      border-radius: 12px;
-    }
-    @media (prefers-reduced-motion: reduce){
-      *{transition:none!important; scroll-behavior:auto!important}
-    }
-
-    /* Toaster */
-    .toasts{
-      position: fixed;
-      right: 14px;
-      bottom: 14px;
-      display:flex;
-      flex-direction:column;
-      gap:10px;
-      z-index: 9999;
-      pointer-events:none;
-    }
-    .toast{
-      pointer-events:auto;
-      width: min(380px, calc(100vw - 28px));
-      background:var(--card);
-      border:1px solid var(--stroke);
-      box-shadow: var(--shadow2);
-      border-radius: 16px;
-      padding: 12px 12px;
-      display:flex;
-      gap:10px;
-      align-items:flex-start;
-      transform: translateY(12px);
-      opacity:0;
-      transition: transform .25s var(--ease), opacity .25s var(--ease);
-    }
-    .toast.is-on{transform: translateY(0); opacity:1}
-    .toast .dot{
-      width:12px;height:12px;border-radius:999px;margin-top:4px;
-      background: var(--grad);
-      flex: 0 0 auto;
-    }
-    .toast .t-title{font-weight:900; font-size:.95rem; color: var(--ink)}
-    .toast .t-msg{font-weight:650; font-size:.88rem; color: var(--muted); margin-top:2px; line-height:1.25}
-    .toast .t-close{
-      margin-left:auto;
-      border:0;
-      background:transparent;
-      cursor:pointer;
-      font-weight:900;
-      opacity:.62;
-      color: var(--ink);
-    }
-    .toast .t-close:hover{opacity:1}
-  </style>
+  <!-- CSS PRO -->
+  <link rel="preload" href="{{ url_for('static', filename='css/skyline-pro.css') }}" as="style">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/skyline-pro.css') }}">
 
   {% block extra_head %}{% endblock %}
 </head>
 
 <body>
-  <a class="skip" href="#main">Saltar al contenido</a>
+<a class="skip" href="#main">Saltar al contenido</a>
 
-  <!-- TOP STRIP -->
-  <div class="strip">
-    <div class="container strip-inner">
-      <div class="strip-badges" aria-label="Beneficios">
-        <span class="pill"><span class="dot-grad" aria-hidden="true"></span><b>Marketplace</b> tech + streetwear</span>
-        <span class="pill">🛡️ Pago seguro</span>
-        <span class="pill">🚚 Seguimiento de pedidos</span>
-      </div>
-      <div class="strip-badges" aria-label="Info">
-        <span class="pill">🔥 Ofertas activas</span>
-      </div>
-    </div>
-  </div>
+<!-- TOPBAR -->
+<header class="topbar">
+  <div class="topbar-inner container">
+    <a href="/" class="brand" aria-label="Inicio">
+      <span class="brand-dot"></span>
+      <strong>Skyline Store</strong>
+    </a>
 
-  <!-- HEADER -->
-  <header class="topbar">
-    <div class="container topbar-inner">
-      <a class="brand" href="/" aria-label="Ir a inicio">
-        <span class="brand-mark" aria-hidden="true"></span>
-        <span class="brand-name">
-          SKYLINE <span style="color:var(--primary)">STORE</span>
-          <small>premium marketplace</small>
-        </span>
+    <nav class="nav" aria-label="Navegación principal">
+      <a href="/">Inicio</a>
+      <a href="/shop">Tienda</a>
+      <a href="/shop?ofertas=1">Ofertas</a>
+    </nav>
+
+    <form class="search" action="/shop" method="get" role="search">
+      <input type="search" name="q" placeholder="Buscar productos…" value="{{ request.args.get('q','') }}">
+      <button class="btn btn-primary" type="submit">Buscar</button>
+    </form>
+
+    <div class="row">
+      <a href="/cart" class="icon-btn" aria-label="Carrito">
+        🛒
+        <span class="badge" data-cart-badge>0</span>
       </a>
 
-      <nav class="nav" aria-label="Navegación principal">
-        <a href="/">Inicio</a>
-        <a href="/shop?categoria=ropa">Ropa</a>
-        <a href="/shop?categoria=accesorios">Accesorios</a>
-        <a href="/shop?categoria=tecnologia">Tecnología</a>
-        <a href="/shop?ofertas=1">Ofertas</a>
-      </nav>
+      <a href="/account" class="btn btn-soft">Mi cuenta</a>
+    </div>
+  </div>
+</header>
 
-      <form class="search" action="/shop" method="get" role="search" aria-label="Buscar productos">
-        <svg class="s-ico" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M10.5 19a8.5 8.5 0 1 1 0-17 8.5 8.5 0 0 1 0 17Z" stroke="currentColor" stroke-width="2"/>
-          <path d="M16.8 16.8 21 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-        </svg>
-        <input name="q" type="search" placeholder="Buscar productos, marcas o categorías..."
-               autocomplete="off" value="{{ request.args.get('q','') }}" />
-        <button type="submit" aria-label="Buscar">Buscar</button>
-      </form>
+<!-- FLASH -->
+<div class="container">
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+    <div class="toast {{ cat }}">{{ msg }}</div>
+  {% endfor %}
+{% endwith %}
+</div>
 
-      <div class="actions">
-        <a class="icon-btn" href="/cart" aria-label="Carrito">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M6 7h15l-1.6 8.2a2 2 0 0 1-2 1.6H9.1a2 2 0 0 1-2-1.6L5 3H2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M9 21a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" fill="currentColor"/>
-            <path d="M17 21a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" fill="currentColor"/>
-          </svg>
-          <span class="badge" data-cart-badge>0</span>
-        </a>
+<!-- MAIN -->
+<main id="main" class="container">
+  {% block content %}{% endblock %}
+</main>
 
-        <a class="account" href="/account" aria-label="Mi cuenta">
-          <span class="acc-ico" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none">
-              <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z" stroke="currentColor" stroke-width="2"/>
-              <path d="M20 21a8 8 0 0 0-16 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-            </svg>
-          </span>
-          <span>Mi Cuenta</span>
-        </a>
-
-        {# ✅ Mejora 8: toggle de tema (queda pro y no rompe nada) #}
-        <button class="theme-btn" type="button" aria-label="Cambiar tema" id="themeBtn" title="Tema">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M12 18a6 6 0 1 0 0-12 6 6 0 0 0 0 12Z" stroke="currentColor" stroke-width="2"/>
-            <path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M19.8 4.2l-1.4 1.4M5.6 18.4l-1.4 1.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-          </svg>
-        </button>
-
-        <button class="burger" type="button" aria-label="Abrir menú" aria-expanded="false" id="burger">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-          </svg>
-        </button>
-      </div>
+<!-- FOOTER -->
+<footer class="footer">
+  <div class="container grid grid-4">
+    <div>
+      <strong>Skyline Store</strong>
+      <p class="small">Marketplace premium de tecnología y streetwear.</p>
     </div>
 
-    <div class="mobile" id="mobileMenu" aria-label="Menú móvil">
-      <a href="/">Inicio</a>
-      <a href="/shop?categoria=ropa">Ropa</a>
-      <a href="/shop?categoria=accesorios">Accesorios</a>
-      <a href="/shop?categoria=tecnologia">Tecnología</a>
+    <div>
+      <strong>Explorar</strong>
+      <a href="/shop">Tienda</a><br>
       <a href="/shop?ofertas=1">Ofertas</a>
+    </div>
+
+    <div>
+      <strong>Cuenta</strong>
+      <a href="/account">Mi cuenta</a><br>
       <a href="/cart">Carrito</a>
-      <a href="/account">Mi Cuenta</a>
     </div>
 
-    <div class="container">
-      <div class="offline" id="offlineBanner" role="status" aria-live="polite">
-        <span>Estás sin conexión. Algunas acciones pueden fallar.</span>
-        <button type="button" id="offlineRetry">Reintentar</button>
-      </div>
+    <div>
+      <strong>Legal</strong>
+      <a href="/terms">Términos</a><br>
+      <a href="/privacy">Privacidad</a>
     </div>
-  </header>
-
-  <!-- FLASH -->
-  <div class="container flash-wrap">
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        {% for category, message in messages %}
-          <div class="flash" data-cat="{{ category|e }}" role="status">{{ message }}</div>
-        {% endfor %}
-      {% endif %}
-    {% endwith %}
   </div>
 
-  <!-- CONTENIDO -->
-  <main id="main">
-    {% block content %}{% endblock %}
-  </main>
+  <p class="small">© {{ now().year if now else "2026" }} Skyline Store</p>
+</footer>
 
-  <!-- FOOTER -->
-  <footer>
-    <div class="container footer-grid">
-      <div>
-        <div class="f-brand">
-          <span class="brand-mark" aria-hidden="true" style="width:38px;height:28px;border-radius:12px;"></span>
-          <div>
-            <div class="f-title">Skyline Store</div>
-            <div class="f-desc">Marketplace premium de tech + streetwear. Comprá fácil, rápido y con confianza.</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="f-col">
-        <h4>Explorar</h4>
-        <div class="f-links">
-          <a href="/shop?categoria=ropa">Ropa</a>
-          <a href="/shop?categoria=accesorios">Accesorios</a>
-          <a href="/shop?categoria=tecnologia">Tecnología</a>
-          <a href="/shop?ofertas=1">Ofertas</a>
-        </div>
-      </div>
-
-      <div class="f-col">
-        <h4>Soporte</h4>
-        <div class="f-links">
-          <a href="/help">Ayuda / Contacto</a>
-          <a href="/terms">Términos y Condiciones</a>
-          <a href="/privacy">Política de Privacidad</a>
-        </div>
-      </div>
-
-      <div class="f-col">
-        <h4>Cuenta</h4>
-        <div class="f-links">
-          <a href="/account">Mi cuenta</a>
-          <a href="/cart">Carrito</a>
-          <a href="/shop">Buscar productos</a>
-        </div>
-      </div>
-    </div>
-
-    <div class="container payrow" aria-label="Medios de pago">
-      <div class="pay">MP</div>
-      <div class="pay">VISA</div>
-      <div class="pay">MC</div>
-      <div class="pay">OCA</div>
-    </div>
-
-    <div class="copyright">
-      © <span id="year"></span> Skyline Store. Todos los derechos reservados.
-    </div>
-  </footer>
-
-  <!-- TOASTER -->
-  <div class="toasts" aria-live="polite" aria-label="Notificaciones" id="toasts"></div>
-
-  {# ✅ Mejora 9: CSRF definitivo en TODOS los forms POST (sin tocar cada template) #}
-  <script>
-  (function(){
-    const meta = document.querySelector('meta[name="csrf-token"]');
-    const token = (meta?.getAttribute('content') || '').trim();
-    if(!token) return;
-
-    function ensure(form){
-      const method = (form.getAttribute("method") || "GET").toUpperCase();
-      if(method === "GET") return;
-      let input = form.querySelector('input[name="csrf_token"]');
-      if(!input){
-        input = document.createElement("input");
-        input.type = "hidden";
-        input.name = "csrf_token";
-        form.appendChild(input);
-      }
-      input.value = token;
+<!-- JS GLOBAL -->
+<script>
+/* CSRF auto */
+(() => {
+  const token = document.querySelector('meta[name="csrf-token"]')?.content;
+  if (!token) return;
+  document.querySelectorAll('form').forEach(f => {
+    if (f.method.toUpperCase() !== 'GET' && !f.querySelector('[name=csrf_token]')) {
+      const i = document.createElement('input');
+      i.type = 'hidden'; i.name = 'csrf_token'; i.value = token;
+      f.appendChild(i);
     }
+  });
+})();
 
-    document.querySelectorAll("form").forEach(ensure);
-    document.addEventListener("submit", (e) => {
-      const form = e.target;
-      if(form && form.tagName === "FORM") ensure(form);
-    }, true);
-  })();
-  </script>
+/* Cart badge */
+(() => {
+  const badge = document.querySelector('[data-cart-badge]');
+  if (!badge) return;
+  fetch('/cart/json').then(r => r.json()).then(d => {
+    const c = d?.items_count || 0;
+    badge.textContent = c;
+    badge.style.display = c ? 'flex' : 'none';
+  }).catch(() => {});
+})();
 
-  <script>
-    // Año automático
-    (function(){
-      const y = document.getElementById('year');
-      if(y) y.textContent = String(new Date().getFullYear());
-    })();
+/* Nav active */
+(() => {
+  const path = location.pathname;
+  document.querySelectorAll('.nav a').forEach(a => {
+    if (path.startsWith(a.getAttribute('href'))) {
+      a.classList.add('active');
+    }
+  });
+})();
+</script>
 
-    // Menú móvil + cerrar al navegar
-    (function(){
-      const btn = document.getElementById("burger");
-      const menu = document.getElementById("mobileMenu");
-      if(!btn || !menu) return;
-
-      const setOpen = (open) => {
-        menu.classList.toggle("is-open", !!open);
-        btn.setAttribute("aria-expanded", open ? "true" : "false");
-      };
-
-      btn.addEventListener("click", () => setOpen(!menu.classList.contains("is-open")));
-      menu.querySelectorAll("a").forEach(a => a.addEventListener("click", () => setOpen(false)));
-    })();
-
-    // ✅ Mejora 10: Tema (persistente + respeta sistema si no hay preferencia)
-    (function(){
-      const root = document.documentElement;
-      const btn = document.getElementById("themeBtn");
-      const metaTheme = document.getElementById("themeColor");
-      if(!btn) return;
-
-      const getSys = () => window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-      const getSaved = () => { try { return localStorage.getItem("skyline:theme"); } catch(e){ return null; } };
-
-      const apply = (theme) => {
-        root.setAttribute("data-theme", theme);
-        // theme-color para móviles (aprox)
-        if(metaTheme) metaTheme.setAttribute("content", theme === "dark" ? "#070b12" : "#ffffff");
-      };
-
-      const init = getSaved() || getSys();
-      apply(init);
-
-      btn.addEventListener("click", () => {
-        const cur = root.getAttribute("data-theme") || "light";
-        const next = cur === "dark" ? "light" : "dark";
-        apply(next);
-        try { localStorage.setItem("skyline:theme", next); } catch(e){}
-      });
-    })();
-
-    // Toast global
-    (function(){
-      const host = document.getElementById('toasts');
-      if(!host) return;
-
-      const toast = (title, message, opts={}) => {
-        const t = document.createElement('div');
-        t.className = 'toast';
-        t.innerHTML = `
-          <div class="dot" aria-hidden="true"></div>
-          <div class="t-body">
-            <div class="t-title">${String(title || 'Listo')}</div>
-            ${message ? `<div class="t-msg">${String(message)}</div>` : ``}
-          </div>
-          <button class="t-close" aria-label="Cerrar">✕</button>
-        `;
-        host.appendChild(t);
-
-        const close = () => {
-          t.classList.remove('is-on');
-          setTimeout(() => t.remove(), 240);
-        };
-        t.querySelector('.t-close')?.addEventListener('click', close);
-
-        requestAnimationFrame(() => t.classList.add('is-on'));
-        const ms = Math.max(2200, Math.min(6500, parseInt(opts.timeout || 3200, 10)));
-        setTimeout(close, ms);
-      };
-
-      window.toast = toast;
-    })();
-
-    // Offline banner
-    (function(){
-      const box = document.getElementById('offlineBanner');
-      const btn = document.getElementById('offlineRetry');
-      if(!box) return;
-
-      const set = () => box.classList.toggle('is-on', !navigator.onLine);
-      window.addEventListener('online', set);
-      window.addEventListener('offline', set);
-      set();
-
-      if(btn){
-        btn.addEventListener('click', () => window.location.reload());
-      }
-    })();
-
-    // ✅ Mejora 11: helpers fetch (timeout + retry) + CSRF + manejo auth
-    (function(){
-      const csrf = (document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '').trim();
-
-      const withTimeout = (ms, promise) => {
-        const c = new AbortController();
-        const t = setTimeout(() => c.abort(), ms);
-        return Promise.race([ promise(c.signal).finally(() => clearTimeout(t)) ]);
-      };
-
-      const _req = async (method, url, body, tries=2) => {
-        const headers = {'Accept':'application/json'};
-        if(method !== 'GET') headers['Content-Type'] = 'application/json';
-        if(csrf) headers['X-CSRF-Token'] = csrf;
-
-        let lastErr = null;
-
-        for(let i=0;i<tries;i++){
-          try{
-            const res = await withTimeout(8000, (signal) => fetch(url, {
-              method,
-              headers,
-              body: (method === 'GET') ? undefined : JSON.stringify(body || {}),
-              credentials: 'same-origin',
-              signal
-            }));
-
-            let data = null;
-            try { data = await res.json(); } catch(e) {}
-
-            if(!res.ok){
-              if(res.status === 401 || res.status === 403){
-                window.toast && window.toast("Sesión requerida", "Ingresá para continuar.");
-                setTimeout(() => { window.location.href = "/account"; }, 350);
-                throw new Error("No autorizado");
-              }
-              const msg = (data && (data.message || data.error)) ? (data.message || data.error) : 'Ocurrió un error.';
-              throw new Error(String(msg));
-            }
-            return data;
-          }catch(e){
-            lastErr = e;
-            const isAbort = (String(e && e.name) === 'AbortError');
-            const isNetwork = !navigator.onLine || isAbort || String(e.message || '').toLowerCase().includes('failed');
-            if(i < tries-1 && isNetwork){
-              await new Promise(r => setTimeout(r, 350 + i*350));
-              continue;
-            }
-            throw e;
-          }
-        }
-        throw lastErr || new Error('Error');
-      };
-
-      window.apiGet  = (url) => _req('GET', url, null, 2);
-      window.apiPost = (url, body) => _req('POST', url, body, 2);
-    })();
-
-    // CartStore (cache + sync pestañas) — NO BREAK aunque /cart/json no exista
-    (function(){
-      const KEY = 'skyline:cart:snap:v1';
-      const badge = document.querySelector('[data-cart-badge]');
-      const bc = ('BroadcastChannel' in window) ? new BroadcastChannel('skyline_cart') : null;
-
-      const read = () => { try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch(e){ return null; } };
-      const write = (snap) => {
-        try { localStorage.setItem(KEY, JSON.stringify(snap)); } catch(e){}
-        if(bc) bc.postMessage({type:'cart', snap});
-        window.dispatchEvent(new CustomEvent('cart:updated', {detail:{snap}}));
-      };
-
-      const setBadge = (snap) => {
-        if(!badge) return;
-        const count = snap && typeof snap.items_count === 'number' ? snap.items_count : 0;
-        badge.textContent = String(count);
-        badge.classList.toggle('is-on', count > 0);
-      };
-
-      setBadge(read());
-
-      if(bc){
-        bc.onmessage = (ev) => {
-          if(ev && ev.data && ev.data.type === 'cart'){
-            setBadge(ev.data.snap);
-            try { localStorage.setItem(KEY, JSON.stringify(ev.data.snap)); } catch(e){}
-          }
-        };
-      }
-
-      window.CartStore = {
-        async refresh(){
-          try{
-            const d = await window.apiGet('/cart/json');
-            const snap = d && (d.cart || d) ? (d.cart || d) : null;
-            if(snap) write(snap);
-            setBadge(snap);
-            return snap;
-          }catch(e){
-            return read();
-          }
-        },
-        update(snap){ write(snap); setBadge(snap); },
-        get(){ return read(); }
-      };
-
-      setTimeout(() => { window.CartStore.refresh(); }, 120);
-    })();
-
-    // ✅ Mejora 12: Nav active state (no rompe con querystrings)
-    (function(){
-      const path = (location.pathname || "/").toLowerCase();
-      const links = document.querySelectorAll(".nav a, #mobileMenu a");
-      links.forEach(a => {
-        const href = (a.getAttribute("href") || "").toLowerCase();
-        if(!href || href === "#") return;
-
-        const isHome = (href === "/" && (path === "/" || path === ""));
-        const isShop = href.startsWith("/shop") && path.startsWith("/shop");
-        const isAccount = href.startsWith("/account") && path.startsWith("/account");
-        const isCart = href.startsWith("/cart") && path.startsWith("/cart");
-
-        if(isHome || isShop || isAccount || isCart){
-          a.classList.add("is-active");
-          a.setAttribute("aria-current", "page");
-        }
-      });
-    })();
-  </script>
-
-  {% block extra_js %}{% endblock %}
+{% block extra_js %}{% endblock %}
 </body>
 </html>

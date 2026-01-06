@@ -18,13 +18,16 @@ import logging
 import time
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional
 
-from sqlalchemy import select
 
 from app.models import db
 from app.models.order import Order
-from app.services.order_service import OrderService, OrderServiceError, PaymentMismatchError
+from app.services.order_service import (
+    OrderService,
+    OrderServiceError,
+    PaymentMismatchError,
+)
 from app.integrations.paypal_client import (
     create_order as pp_create_order,
     capture_order as pp_capture_order,
@@ -42,14 +45,18 @@ log = logging.getLogger("paypal_service")
 # Errors
 # -----------------------------------------------------------------------------
 
+
 class PayPalServiceError(RuntimeError):
     pass
+
 
 class PayPalServiceNotFound(PayPalServiceError):
     pass
 
+
 class PayPalServiceMismatch(PayPalServiceError):
     pass
+
 
 class PayPalServiceProviderError(PayPalServiceError):
     pass
@@ -59,12 +66,14 @@ class PayPalServiceProviderError(PayPalServiceError):
 # DTOs
 # -----------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class PayPalCreateResult:
     ok: bool
     paypal_order_id: str
     approve_url: Optional[str]
     raw: Dict[str, Any]
+
 
 @dataclass(frozen=True)
 class PayPalCaptureResult:
@@ -79,8 +88,10 @@ class PayPalCaptureResult:
 # Small utils
 # -----------------------------------------------------------------------------
 
+
 def _now() -> int:
     return int(time.time())
+
 
 def _meta_merge(base: Any, extra: Dict[str, Any]) -> Dict[str, Any]:
     out: Dict[str, Any] = {}
@@ -90,15 +101,19 @@ def _meta_merge(base: Any, extra: Dict[str, Any]) -> Dict[str, Any]:
         out.update(extra)
     return out
 
+
 def _shrink(obj: Any, *, max_keys: int = 80, max_str: int = 900) -> Any:
     if isinstance(obj, dict):
         keys = list(obj.keys())[:max_keys]
-        return {k: _shrink(obj.get(k), max_keys=max_keys, max_str=max_str) for k in keys}
+        return {
+            k: _shrink(obj.get(k), max_keys=max_keys, max_str=max_str) for k in keys
+        }
     if isinstance(obj, list):
         return [_shrink(x, max_keys=max_keys, max_str=max_str) for x in obj[:25]]
     if isinstance(obj, str):
         return obj[:max_str]
     return obj
+
 
 def _get_order(order_id: int) -> Order:
     o = db.session.get(Order, int(order_id))
@@ -106,23 +121,34 @@ def _get_order(order_id: int) -> Order:
         raise PayPalServiceNotFound("Orden no encontrada")
     return o
 
-def _audit(order: Order, event: str, payload: Dict[str, Any], *, extra: Optional[Dict[str, Any]] = None) -> None:
+
+def _audit(
+    order: Order,
+    event: str,
+    payload: Dict[str, Any],
+    *,
+    extra: Optional[Dict[str, Any]] = None,
+) -> None:
     block = {
         "event": event,
         "at": _now(),
         "provider": "paypal",
         "extra": extra or {},
     }
-    order.meta = _meta_merge(order.meta, {
-        "paypal_last_event": block,
-        "paypal_last_payload": _shrink(payload),
-    })
+    order.meta = _meta_merge(
+        order.meta,
+        {
+            "paypal_last_event": block,
+            "paypal_last_payload": _shrink(payload),
+        },
+    )
     order.updated_at = db.func.now()  # type: ignore[attr-defined]
 
 
 # -----------------------------------------------------------------------------
 # Public API
 # -----------------------------------------------------------------------------
+
 
 def create_paypal_order(
     *,
@@ -143,11 +169,15 @@ def create_paypal_order(
 
         # si ya pagada, no tiene sentido crear
         if (order.payment_status or "") == Order.PAY_PAID:
-            return PayPalCreateResult(True, order.paypal_order_id or "", None, {"already_paid": True})
+            return PayPalCreateResult(
+                True, order.paypal_order_id or "", None, {"already_paid": True}
+            )
 
         # idempotencia local: si ya hay paypal_order_id, devolvemos
         if order.paypal_order_id:
-            return PayPalCreateResult(True, str(order.paypal_order_id), None, {"already_created": True})
+            return PayPalCreateResult(
+                True, str(order.paypal_order_id), None, {"already_created": True}
+            )
 
         amount = pp_money_str(order.total)
         currency = pp_cur3(order.currency, "USD")
@@ -155,16 +185,23 @@ def create_paypal_order(
         custom_id = str(order.id)
 
         # guardar intent meta
-        order.meta = _meta_merge(order.meta, {
-            "checkout_key": (order.meta or {}).get("idempotency_key") if isinstance(order.meta, dict) else None,
-            "paypal_intent": {
-                "created_at": _now(),
-                "amount": amount,
-                "currency": currency,
-                "success_url": success_url[:500],
-                "cancel_url": cancel_url[:500],
-            }
-        })
+        order.meta = _meta_merge(
+            order.meta,
+            {
+                "checkout_key": (
+                    (order.meta or {}).get("idempotency_key")
+                    if isinstance(order.meta, dict)
+                    else None
+                ),
+                "paypal_intent": {
+                    "created_at": _now(),
+                    "amount": amount,
+                    "currency": currency,
+                    "success_url": success_url[:500],
+                    "cancel_url": cancel_url[:500],
+                },
+            },
+        )
 
     # 2) llamar PayPal (fuera de tx DB)
     try:
@@ -188,7 +225,9 @@ def create_paypal_order(
         order.paypal_order_id = resp.paypal_order_id
         _audit(order, "create", resp.raw, extra={"approve_url": resp.approve_url})
 
-    return PayPalCreateResult(True, resp.paypal_order_id, resp.approve_url, _shrink(resp.raw))
+    return PayPalCreateResult(
+        True, resp.paypal_order_id, resp.approve_url, _shrink(resp.raw)
+    )
 
 
 def capture_paypal_order(
@@ -211,7 +250,9 @@ def capture_paypal_order(
         order = _get_order(order_id)
 
         if (order.payment_status or "") == Order.PAY_PAID:
-            return PayPalCaptureResult(True, paypal_order_id, "ALREADY_PAID", None, {"already_paid": True})
+            return PayPalCaptureResult(
+                True, paypal_order_id, "ALREADY_PAID", None, {"already_paid": True}
+            )
 
         if order.paypal_order_id and str(order.paypal_order_id) != paypal_order_id:
             raise PayPalServiceMismatch("paypal_order_id no coincide con la orden")
@@ -233,14 +274,20 @@ def capture_paypal_order(
 
     # 3) validar coherencia (tolerancia)
     try:
-        if abs(Decimal(str(paid_amount)) - Decimal(str(expected_amount))) > Decimal("0.05"):
-            raise PayPalServiceMismatch(f"amount mismatch: paid={paid_amount} expected={expected_amount}")
+        if abs(Decimal(str(paid_amount)) - Decimal(str(expected_amount))) > Decimal(
+            "0.05"
+        ):
+            raise PayPalServiceMismatch(
+                f"amount mismatch: paid={paid_amount} expected={expected_amount}"
+            )
     except Exception:
         # si algo raro, igual dejamos que OrderService valide con sus reglas
         pass
 
     if paid_currency != expected_currency:
-        raise PayPalServiceMismatch(f"currency mismatch: paid={paid_currency} expected={expected_currency}")
+        raise PayPalServiceMismatch(
+            f"currency mismatch: paid={paid_currency} expected={expected_currency}"
+        )
 
     # 4) marcar paid usando tu OrderService (fuente de verdad)
     try:
@@ -262,9 +309,16 @@ def capture_paypal_order(
     with db.session.begin():
         o = _get_order(order2.id)
         o.paypal_order_id = paypal_order_id
-        _audit(o, "capture", cap.raw, extra={"status": cap.status, "capture_id": cap.capture_id})
+        _audit(
+            o,
+            "capture",
+            cap.raw,
+            extra={"status": cap.status, "capture_id": cap.capture_id},
+        )
 
-    return PayPalCaptureResult(True, paypal_order_id, cap.status, cap.capture_id, _shrink(cap.raw))
+    return PayPalCaptureResult(
+        True, paypal_order_id, cap.status, cap.capture_id, _shrink(cap.raw)
+    )
 
 
 __all__ = [

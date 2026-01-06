@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from flask import (
     Blueprint,
@@ -69,7 +69,11 @@ def _decimal_arg(name: str) -> Optional[Decimal]:
 
 def _get_client_ip() -> str:
     # ProxyFix ya te acomoda X-Forwarded-For si lo usás en create_app
-    ip = (request.headers.get("X-Forwarded-For", "") or request.remote_addr or "unknown").split(",")[0].strip()
+    ip = (
+        (request.headers.get("X-Forwarded-For", "") or request.remote_addr or "unknown")
+        .split(",")[0]
+        .strip()
+    )
     return ip[:80]
 
 
@@ -269,6 +273,7 @@ def _safe_like(value: str) -> str:
 # ============================================================
 # Routes
 # ============================================================
+
 
 @shop_bp.get("/")
 def root():

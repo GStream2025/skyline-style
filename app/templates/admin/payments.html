@@ -1,15 +1,42 @@
-{# app/templates/admin/payments.html — Skyline Admin Payments (ULTRA PRO / FINAL / NO BREAK) #}
+{# app/templates/admin/payments.html — Skyline Admin Payments (ULTRA PRO MAX / FINAL / NO BREAK) #}
 {% extends "admin/base_admin.html" %}
 {% block title %}Pagos · Skyline Admin{% endblock %}
 
 {% block extra_head %}
 <style>
   /* =========================================================
-    Skyline Admin · Payments (ULTRA PRO)
-    - Responsive + accesible
-    - Estados: ready / needs-config / disabled
-    - Validación inline + toast
-    - UI moderna tipo marketplace
+    Skyline Admin · Payments (ULTRA PRO MAX)
+    Mejoras (30+ reales):
+    1) Accesibilidad: focus visible, aria-live, labels/ids consistentes
+    2) Soporte reduce-motion
+    3) Mejor semántica: main/section/fieldset
+    4) Mejor validación client: number/url/email con patrones y clamp
+    5) Debounce de búsqueda
+    6) Ctrl/Cmd+K
+    7) Guardado AJAX robusto + fallback
+    8) Manejo de errores 419/403/HTML redirect
+    9) Dirty tracking por card + reset al guardar
+    10) “Guardar todo” global + “Reset” por card
+    11) “Copiar” para campos url/email
+    12) “Abrir link” si es URL
+    13) Resumen real de activos/listos/incompletos leyendo data-ready
+    14) Indicador “Recomendado” visible
+    15) Mejor contraste light/dark
+    16) Más tolerante con decimales (fee/min/max)
+    17) Toast con tipos y auto-close controlado
+    18) Mensajes inline sin romper layout
+    19) Evita enviar Enter en search
+    20) Evita doble submit
+    21) Updates “Última actualización” desde respuesta
+    22) Resalta errores backend (si vienen)
+    23) Maneja schema vacío sin “romper”
+    24) Mantiene estado por proveedor (data-enabled/data-ready)
+    25) Anti XSS básico: |e en valores impresos
+    26) Mejor UX en móviles (min-width, grid adaptativo)
+    27) Mejoras de estilo: sombras, pills, estados
+    28) Botón “Ver checkout” + “Guardar todo”
+    29) Evita toast spam (cola simple)
+    30) No depende de librerías
   ========================================================= */
 
   :root{
@@ -48,6 +75,10 @@
     --focus: 0 0 0 4px rgba(37,99,235,.14);
   }
 
+  @media (prefers-reduced-motion: reduce){
+    *{ scroll-behavior:auto !important; transition:none !important; animation:none !important; }
+  }
+
   /* ---- Layout header ---- */
   .pay-wrap{ display:block; }
   .pay-head{
@@ -81,7 +112,7 @@
     background: rgba(255,255,255,.04);
     border-radius: 999px;
     padding: 8px 12px;
-    min-width: 260px;
+    min-width: min(420px, 92vw);
   }
   :root[data-theme="light"] .search{ background: rgba(0,0,0,.02); }
   .search input{
@@ -91,6 +122,25 @@
     font-weight:800;
   }
   .search input::placeholder{ color: var(--p-muted); font-weight:800; opacity:.8; }
+
+  .top-actions{
+    display:flex;gap:10px;flex-wrap:wrap;align-items:center;
+    justify-content:flex-end;
+  }
+  .btn-ghost{
+    display:inline-flex;gap:8px;align-items:center;
+    border-radius: 12px;
+    border:1px solid var(--p-bd2);
+    background: rgba(255,255,255,.06);
+    padding: 9px 12px;
+    font-weight:1000;
+    color: var(--p-tx);
+    cursor:pointer;
+    text-decoration:none;
+    user-select:none;
+  }
+  .btn-ghost:active{ transform: translateY(1px); }
+  .btn-ghost:focus{ outline:none; box-shadow: var(--focus); }
 
   /* ---- Grid + cards ---- */
   .pay-grid{
@@ -164,6 +214,8 @@
   .pill.warn .dot{ background: var(--warn); }
   .pill.bad{ border-color: rgba(239,68,68,.35); background: var(--bad-bg); color: var(--p-tx); }
   .pill.bad .dot{ background: var(--bad); }
+  .pill.info{ border-color: rgba(56,189,248,.35); background: var(--info-bg); color: var(--p-tx); }
+  .pill.info .dot{ background: var(--info); }
 
   /* ---- Toggle ---- */
   .toggle{
@@ -235,6 +287,18 @@
     box-shadow: 0 0 0 4px rgba(239,68,68,.14) !important;
   }
 
+  .inline-msg{
+    margin-top:8px;
+    border:1px solid var(--p-bd2);
+    background: rgba(255,255,255,.04);
+    border-radius: 14px;
+    padding: 10px 12px;
+    color: var(--p-muted);
+    line-height:1.45;
+  }
+  .inline-msg.bad{ border-color: rgba(239,68,68,.30); background: rgba(239,68,68,.07); color: var(--p-tx); }
+  .inline-msg.ok{ border-color: rgba(34,197,94,.30); background: rgba(34,197,94,.07); color: var(--p-tx); }
+
   /* ---- Provider actions ---- */
   .card-actions{
     display:flex;gap:10px;flex-wrap:wrap;align-items:center;
@@ -251,6 +315,18 @@
     cursor:pointer;
   }
   .btn-save-mini:active{ transform: translateY(1px); }
+  .btn-save-mini[disabled]{ opacity:.6; cursor:not-allowed; }
+
+  .btn-mini2{
+    display:inline-flex;gap:8px;align-items:center;
+    border-radius: 12px;
+    border:1px solid var(--p-bd2);
+    background: rgba(255,255,255,.03);
+    padding: 9px 12px;
+    font-weight:1000;
+    color: var(--p-tx);
+    cursor:pointer;
+  }
 
   .muted-line{ color: var(--p-muted); font-weight:900; font-size:.92rem; }
 
@@ -300,18 +376,24 @@
   .toast .tx{ margin-left:auto; border:0; background:transparent; color: inherit; font-weight:1000; cursor:pointer; }
 
   .svg{ width:18px;height:18px; display:block; }
+
+  /* util */
+  .sr-only{
+    position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;
+  }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="pay-wrap">
-  <div class="pay-head">
+<main class="pay-wrap" aria-label="Configuración de pagos">
+  <header class="pay-head">
     <div>
       <h1 class="pay-title">Pagos</h1>
       <p class="pay-sub">
-        Activá métodos de cobro y completá los datos. El checkout mostrará solo lo que esté <b>Activo</b> y listo.
+        Activá métodos de cobro y completá los datos. El checkout mostrará solo lo que esté <b>Activo</b> y <b>Listo</b>.
       </p>
-      <div class="pill-row" aria-label="Resumen">
+
+      <div class="pill-row" aria-label="Resumen de métodos">
         <span class="pill" id="pillCount"><span class="dot"></span> <span>0 activos</span></span>
         <span class="pill ok" id="pillReady"><span class="dot"></span> <span>0 listos</span></span>
         <span class="pill warn" id="pillNeeds"><span class="dot"></span> <span>0 incompletos</span></span>
@@ -321,186 +403,288 @@
     <div class="pay-tools">
       <div class="search" role="search" aria-label="Buscar método">
         <span aria-hidden="true">🔎</span>
-        <input id="q" type="search" placeholder="Buscar: mp, paypal, wise, transferencia…" autocomplete="off">
+        <input id="q" type="search" placeholder="Buscar: mp, paypal, wise, transferencia…" autocomplete="off" />
       </div>
 
-      <div class="mini" title="Regla de oro">
-        🔒 Pegá links públicos / instrucciones · No pegues tokens/secretos
+      <div class="top-actions">
+        <button type="button" class="btn-ghost" id="btnSaveAll" title="Guardar todos los cambios">
+          💾 Guardar todo
+        </button>
+        <button type="button" class="btn-ghost" id="btnShowOnlyActive" title="Alternar ver solo activos">
+          ✅ Solo activos
+        </button>
+        <div class="mini" title="Regla de oro">
+          🔒 Pegá links públicos / instrucciones · No pegues tokens/secretos
+        </div>
       </div>
     </div>
-  </div>
+  </header>
 
-  {# Guardado rápido por proveedor via fetch (misma ruta) #}
   <div class="pay-grid" id="grid">
-
     {% for p in providers %}
-    {% set code = p.code %}
-    {% set enabled = p.enabled %}
-    {% set ready = p.ready if p.ready is defined else false %}
-    {% set errors = p.errors if p.errors is defined else [] %}
-    {% set schema = p.schema if p.schema is defined else [] %}
+      {% set code = p.code %}
+      {% set enabled = p.enabled %}
+      {% set ready = p.ready if p.ready is defined else false %}
+      {% set errors = p.errors if p.errors is defined else [] %}
+      {% set schema = p.schema if p.schema is defined else [] %}
 
-    <section class="card pay-card" data-code="{{ code }}" data-name="{{ (p.name or code) | lower }}">
-      <div class="card-inner">
-        <div class="card-top">
-          <div style="min-width:0">
-            <div class="card-title">
-              <span class="card-ic" aria-hidden="true">
-                <svg class="svg" viewBox="0 0 24 24" fill="none">
-                  <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Z" stroke="currentColor" stroke-width="2" opacity=".8"/>
-                  <path d="M7.5 12c1.2-2.4 2.8-3.6 4.5-3.6S15.3 9.6 16.5 12c-1.2 2.4-2.8 3.6-4.5 3.6S8.7 14.4 7.5 12Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" opacity=".9"/>
-                </svg>
-              </span>
-              <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
-                {{ p.name or code }}
-              </span>
-            </div>
-            <p class="card-desc">
-              Código: <b>{{ code }}</b>{% if p.country %} · País: <b>{{ p.country }}</b>{% endif %}{% if p.kind %} · Tipo: <b>{{ p.kind }}</b>{% endif %}
-            </p>
-
-            <div class="pill-row" aria-label="Estado del método">
-              {% if enabled and ready %}
-                <span class="pill ok"><span class="dot"></span> Listo para checkout</span>
-              {% elif enabled and not ready %}
-                <span class="pill warn"><span class="dot"></span> Activo pero incompleto</span>
-              {% else %}
-                <span class="pill"><span class="dot"></span> Desactivado</span>
-              {% endif %}
-              {% if errors and errors|length %}
-                <span class="pill bad" title="{{ errors|join(' | ') }}"><span class="dot"></span> {{ errors|length }} faltantes</span>
-              {% endif %}
-            </div>
-          </div>
-
-          <label class="toggle" title="Activar método">
-            <span>Activo</span>
-            <span class="switch">
-              <input type="checkbox" class="js-enabled" {% if enabled %}checked{% endif %}>
-              <span class="track"><span class="thumb"></span></span>
-            </span>
-          </label>
-        </div>
-
-        <form class="js-form" method="post" action="{{ url_for('admin_payments.admin_payments_save', code=code) }}" novalidate>
-          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-          <input type="hidden" name="enabled" value="0">
-          <input type="hidden" name="recommended" value="0">
-
-          <div class="fields">
-
-            <div style="display:grid;gap:10px;grid-template-columns: 1fr; align-items:end;">
-              <div style="display:grid;gap:10px;grid-template-columns: 1fr 1fr;">
-                <div>
-                  <label>Orden</label>
-                  <input name="sort_order" value="{{ p.sort_order if p.sort_order is not none else 100 }}" inputmode="numeric" placeholder="10">
-                  <div class="hint">Menor = más arriba en checkout.</div>
-                </div>
-                <div>
-                  <label>Recomendado</label>
-                  <select name="recommended" class="js-recommended">
-                    <option value="0" {% if not p.recommended %}selected{% endif %}>No</option>
-                    <option value="1" {% if p.recommended %}selected{% endif %}>Sí</option>
-                  </select>
-                  <div class="hint">Solo si está <b>Activo</b>.</div>
-                </div>
+      <section class="card pay-card"
+               data-code="{{ code|e }}"
+               data-name="{{ (p.name or code)|lower|e }}"
+               data-enabled="{{ '1' if enabled else '0' }}"
+               data-ready="{{ '1' if ready else '0' }}"
+               aria-label="Método {{ (p.name or code)|e }}">
+        <div class="card-inner">
+          <div class="card-top">
+            <div style="min-width:0">
+              <div class="card-title">
+                <span class="card-ic" aria-hidden="true">
+                  <svg class="svg" viewBox="0 0 24 24" fill="none">
+                    <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Z" stroke="currentColor" stroke-width="2" opacity=".8"/>
+                    <path d="M7.5 12c1.2-2.4 2.8-3.6 4.5-3.6S15.3 9.6 16.5 12c-1.2 2.4-2.8 3.6-4.5 3.6S8.7 14.4 7.5 12Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" opacity=".9"/>
+                  </svg>
+                </span>
+                <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                  {{ (p.name or code)|e }}
+                </span>
+                {% if p.recommended %}
+                  <span class="pill info" title="Método recomendado">
+                    <span class="dot"></span> Recomendado
+                  </span>
+                {% endif %}
               </div>
-            </div>
 
-            <div style="display:grid;gap:10px;grid-template-columns:1fr 1fr;">
-              <div>
-                <label>Fee % (info)</label>
-                <input name="fee_percent" value="{{ p.fee_percent if p.fee_percent is not none else 0 }}" inputmode="numeric" placeholder="0">
-                <div class="hint">Solo informativo (no cobra).</div>
-              </div>
-              <div>
-                <label>ETA (min)</label>
-                <input name="eta_minutes" value="{{ p.eta_minutes if p.eta_minutes is not none else 0 }}" inputmode="numeric" placeholder="0">
-                <div class="hint">Tiempo de confirmación estimado.</div>
-              </div>
-            </div>
+              <p class="card-desc">
+                Código: <b>{{ code|e }}</b>
+                {% if p.country %} · País: <b>{{ p.country|e }}</b>{% endif %}
+                {% if p.kind %} · Tipo: <b>{{ p.kind|e }}</b>{% endif %}
+              </p>
 
-            <div style="display:grid;gap:10px;grid-template-columns:1fr 1fr;">
-              <div>
-                <label>Mínimo</label>
-                <input name="min_amount" value="{{ p.min_amount if p.min_amount is not none else 0 }}" inputmode="numeric" placeholder="0">
-              </div>
-              <div>
-                <label>Máximo (0 = sin)</label>
-                <input name="max_amount" value="{{ p.max_amount if p.max_amount is not none else 0 }}" inputmode="numeric" placeholder="0">
-              </div>
-            </div>
-
-            <div>
-              <label>Notas (opcional)</label>
-              <input name="notes" value="{{ p.notes or '' }}" placeholder="Ej: cuotas, QR, horarios, condiciones..." autocomplete="off">
-              <div class="hint">Se muestra como ayuda en checkout (si lo querés).</div>
-            </div>
-
-            {% if schema and schema|length %}
-            <div style="border-top:1px solid var(--p-bd); padding-top:10px; margin-top:2px;">
-              <div class="muted-line">Configuración del método</div>
-              <div class="hint">Completá lo obligatorio. Lo sensible se guarda enmascarado en el admin.</div>
-            </div>
-
-            {% for f in schema %}
-              {% set k = f.key %}
-              {% set typ = (f.type or 'text') %}
-              {% set req = f.required %}
-              {% set val = '' %}
-              {% if p.config is defined and p.config %}
-                {% set val = p.config.get(k, '') %}
-              {% endif %}
-
-              <div>
-                <label for="{{ code }}__{{ k }}">
-                  {{ k }}{% if req %} <span class="pill bad" style="padding:2px 8px;font-size:.78rem;">obligatorio</span>{% endif %}
-                </label>
-
-                {% if typ == "bool" %}
-                  <select id="{{ code }}__{{ k }}" name="cfg__{{ k }}">
-                    <option value="0" {% if not val %}selected{% endif %}>No</option>
-                    <option value="1" {% if val %}selected{% endif %}>Sí</option>
-                  </select>
-                {% elif typ == "url" %}
-                  <input id="{{ code }}__{{ k }}" name="cfg__{{ k }}" value="{{ val or '' }}" placeholder="https://..." inputmode="url" autocomplete="off">
-                {% elif typ == "email" %}
-                  <input id="{{ code }}__{{ k }}" name="cfg__{{ k }}" value="{{ val or '' }}" placeholder="email@dominio.com" autocomplete="email">
-                {% elif typ == "int" %}
-                  <input id="{{ code }}__{{ k }}" name="cfg__{{ k }}" value="{{ val or '' }}" inputmode="numeric" placeholder="0">
+              <div class="pill-row" aria-label="Estado del método">
+                {% if enabled and ready %}
+                  <span class="pill ok"><span class="dot"></span> Listo para checkout</span>
+                {% elif enabled and not ready %}
+                  <span class="pill warn"><span class="dot"></span> Activo pero incompleto</span>
                 {% else %}
-                  <input id="{{ code }}__{{ k }}" name="cfg__{{ k }}" value="{{ val or '' }}" placeholder="..." autocomplete="off">
+                  <span class="pill"><span class="dot"></span> Desactivado</span>
                 {% endif %}
 
-                <div class="hint">
-                  Tipo: <b>{{ typ }}</b>{% if req %} · Requerido{% endif %}
+                {% if errors and errors|length %}
+                  <span class="pill bad" title="{{ errors|join(' | ')|e }}"><span class="dot"></span> {{ errors|length }} faltantes</span>
+                {% endif %}
+              </div>
+            </div>
+
+            <label class="toggle" title="Activar método" aria-label="Activar {{ code|e }}">
+              <span>Activo</span>
+              <span class="switch">
+                <input type="checkbox" class="js-enabled" {% if enabled %}checked{% endif %} aria-label="Toggle activo">
+                <span class="track"><span class="thumb"></span></span>
+              </span>
+            </label>
+          </div>
+
+          <form class="js-form" method="post"
+                action="{{ url_for('admin_payments.admin_payments_save', code=code) }}"
+                novalidate
+                data-code="{{ code|e }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="enabled" value="0">
+            <input type="hidden" name="recommended" value="{{ '1' if p.recommended else '0' }}">
+
+            <fieldset class="fields" aria-label="Configuración {{ code|e }}">
+              <div style="display:grid;gap:10px;grid-template-columns: 1fr; align-items:end;">
+                <div style="display:grid;gap:10px;grid-template-columns: 1fr 1fr;">
+                  <div>
+                    <label for="{{ code }}__sort_order">Orden</label>
+                    <input id="{{ code }}__sort_order"
+                           name="sort_order"
+                           value="{{ (p.sort_order if p.sort_order is not none else 100)|e }}"
+                           type="number"
+                           inputmode="numeric"
+                           min="-9999"
+                           max="9999"
+                           step="1"
+                           placeholder="10">
+                    <div class="hint">Menor = más arriba en checkout.</div>
+                  </div>
+                  <div>
+                    <label for="{{ code }}__recommended">Recomendado</label>
+                    <select id="{{ code }}__recommended" name="recommended" class="js-recommended">
+                      <option value="0" {% if not p.recommended %}selected{% endif %}>No</option>
+                      <option value="1" {% if p.recommended %}selected{% endif %}>Sí</option>
+                    </select>
+                    <div class="hint">Solo si está <b>Activo</b>.</div>
+                  </div>
                 </div>
               </div>
-            {% endfor %}
-            {% else %}
-              <div class="hint" style="margin-top:8px">
-                Este método no tiene schema configurable (o falta exponerlo). Se guardará config vacía.
+
+              <div style="display:grid;gap:10px;grid-template-columns:1fr 1fr;">
+                <div>
+                  <label for="{{ code }}__fee_percent">Fee % (info)</label>
+                  <input id="{{ code }}__fee_percent"
+                         name="fee_percent"
+                         value="{{ (p.fee_percent if p.fee_percent is not none else 0)|e }}"
+                         type="number"
+                         inputmode="decimal"
+                         min="0"
+                         max="99"
+                         step="0.01"
+                         placeholder="0">
+                  <div class="hint">Solo informativo (no cobra).</div>
+                </div>
+                <div>
+                  <label for="{{ code }}__eta_minutes">ETA (min)</label>
+                  <input id="{{ code }}__eta_minutes"
+                         name="eta_minutes"
+                         value="{{ (p.eta_minutes if p.eta_minutes is not none else 0)|e }}"
+                         type="number"
+                         inputmode="numeric"
+                         min="0"
+                         max="999999"
+                         step="1"
+                         placeholder="0">
+                  <div class="hint">Tiempo de confirmación estimado.</div>
+                </div>
               </div>
-            {% endif %}
 
-          </div>
+              <div style="display:grid;gap:10px;grid-template-columns:1fr 1fr;">
+                <div>
+                  <label for="{{ code }}__min_amount">Mínimo</label>
+                  <input id="{{ code }}__min_amount"
+                         name="min_amount"
+                         value="{{ (p.min_amount if p.min_amount is not none else 0)|e }}"
+                         type="number"
+                         inputmode="decimal"
+                         min="0"
+                         step="0.01"
+                         placeholder="0">
+                </div>
+                <div>
+                  <label for="{{ code }}__max_amount">Máximo (0 = sin)</label>
+                  <input id="{{ code }}__max_amount"
+                         name="max_amount"
+                         value="{{ (p.max_amount if p.max_amount is not none else 0)|e }}"
+                         type="number"
+                         inputmode="decimal"
+                         min="0"
+                         step="0.01"
+                         placeholder="0">
+                </div>
+              </div>
 
-          <div class="card-actions">
-            <button type="submit" class="btn-save-mini js-save">
-              💾 Guardar
-            </button>
-            <span class="muted-line js-state">
-              {% if enabled and ready %}Listo ✅{% elif enabled %}Incompleto ⚠️{% else %}Desactivado{% endif %}
-            </span>
-            <span class="muted-line" style="margin-left:auto;opacity:.9">
-              Última actualización: {{ p.updated_at or '—' }}
-            </span>
-          </div>
-        </form>
-      </div>
-    </section>
+              <div>
+                <label for="{{ code }}__notes">Notas (opcional)</label>
+                <input id="{{ code }}__notes"
+                       name="notes"
+                       value="{{ (p.notes or '')|e }}"
+                       placeholder="Ej: cuotas, QR, horarios, condiciones..."
+                       autocomplete="off"
+                       maxlength="500">
+                <div class="hint">Se muestra como ayuda en checkout (si lo querés).</div>
+              </div>
+
+              {% if schema and schema|length %}
+                <div style="border-top:1px solid var(--p-bd); padding-top:10px; margin-top:2px;">
+                  <div class="muted-line">Configuración del método</div>
+                  <div class="hint">Completá lo obligatorio. Lo sensible se guarda enmascarado en el admin.</div>
+                </div>
+
+                {% for f in schema %}
+                  {% set k = f.key %}
+                  {% set typ = (f.type or 'text') %}
+                  {% set req = f.required %}
+                  {% set val = '' %}
+                  {% if p.config is defined and p.config %}
+                    {% set val = p.config.get(k, '') %}
+                  {% endif %}
+
+                  <div class="js-field" data-ftype="{{ typ|e }}" data-required="{{ '1' if req else '0' }}">
+                    <label for="{{ code }}__{{ k|e }}">
+                      {{ k|e }}
+                      {% if req %}
+                        <span class="pill bad" style="padding:2px 8px;font-size:.78rem;">obligatorio</span>
+                      {% endif %}
+                    </label>
+
+                    {% if typ == "bool" %}
+                      <select id="{{ code }}__{{ k|e }}" name="cfg__{{ k|e }}">
+                        <option value="0" {% if not val %}selected{% endif %}>No</option>
+                        <option value="1" {% if val %}selected{% endif %}>Sí</option>
+                      </select>
+                    {% elif typ == "url" %}
+                      <input id="{{ code }}__{{ k|e }}"
+                             name="cfg__{{ k|e }}"
+                             value="{{ (val or '')|e }}"
+                             placeholder="https://..."
+                             inputmode="url"
+                             autocomplete="off">
+                      <div class="card-actions" style="margin-top:8px">
+                        <button type="button" class="btn-mini2 js-copy" data-copy-from="{{ code }}__{{ k|e }}">📋 Copiar</button>
+                        <button type="button" class="btn-mini2 js-open" data-open-from="{{ code }}__{{ k|e }}">🔗 Abrir</button>
+                      </div>
+                    {% elif typ == "email" %}
+                      <input id="{{ code }}__{{ k|e }}"
+                             name="cfg__{{ k|e }}"
+                             value="{{ (val or '')|e }}"
+                             placeholder="email@dominio.com"
+                             autocomplete="email">
+                      <div class="card-actions" style="margin-top:8px">
+                        <button type="button" class="btn-mini2 js-copy" data-copy-from="{{ code }}__{{ k|e }}">📋 Copiar</button>
+                      </div>
+                    {% elif typ == "int" %}
+                      <input id="{{ code }}__{{ k|e }}"
+                             name="cfg__{{ k|e }}"
+                             value="{{ (val or '')|e }}"
+                             type="number"
+                             inputmode="numeric"
+                             step="1"
+                             placeholder="0">
+                    {% else %}
+                      <input id="{{ code }}__{{ k|e }}"
+                             name="cfg__{{ k|e }}"
+                             value="{{ (val or '')|e }}"
+                             placeholder="..."
+                             autocomplete="off"
+                             maxlength="500">
+                    {% endif %}
+
+                    <div class="hint">
+                      Tipo: <b>{{ typ|e }}</b>{% if req %} · Requerido{% endif %}
+                    </div>
+                  </div>
+                {% endfor %}
+              {% else %}
+                <div class="hint" style="margin-top:8px">
+                  Este método no tiene schema configurable (o falta exponerlo). Se guardará config vacía.
+                </div>
+              {% endif %}
+
+              <div class="inline-msg sr-only js-inline" aria-live="polite"></div>
+            </fieldset>
+
+            <div class="card-actions">
+              <button type="submit" class="btn-save-mini js-save">
+                💾 Guardar
+              </button>
+              <button type="button" class="btn-mini2 js-reset" title="Revertir cambios no guardados de este método">
+                ↩ Reset
+              </button>
+
+              <span class="muted-line js-state"
+                    aria-live="polite">
+                {% if enabled and ready %}Listo ✅{% elif enabled %}Incompleto ⚠️{% else %}Desactivado{% endif %}
+              </span>
+
+              <span class="muted-line" style="margin-left:auto;opacity:.9">
+                Última actualización:
+                <span class="js-updated">{{ (p.updated_at or '—')|e }}</span>
+              </span>
+            </div>
+          </form>
+        </div>
+      </section>
     {% endfor %}
-
   </div>
 
   <div class="safe-note">
@@ -515,9 +699,9 @@
       Tip: si un método está Activo y “Incompleto”, no debería mostrarse en checkout.
     </span>
   </div>
-</div>
+</main>
 
-<div class="toast" id="toast" role="status" aria-live="polite">
+<div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true">
   <div class="trow">
     <div class="ticon" id="toastIcon">✅</div>
     <div style="min-width:0">
@@ -535,62 +719,118 @@
   const $ = (sel, root=document) => root.querySelector(sel);
   const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
 
+  // ------------------------------
+  // Toast (cola simple anti-spam)
+  // ------------------------------
   const toast = $("#toast");
   const toastIcon = $("#toastIcon");
   const toastTitle = $("#toastTitle");
   const toastMsg = $("#toastMsg");
   const toastClose = $("#toastClose");
   let toastTimer = null;
+  let toastQueue = [];
+  let toastShowing = false;
 
-  function showToast(kind, title, msg){
-    // kind: ok|warn|bad|info
+  function _renderToast(t){
     const map = {
-      ok: { ic:"✅" },
+      ok:   { ic:"✅" },
       warn: { ic:"⚠️" },
-      bad: { ic:"⛔" },
+      bad:  { ic:"⛔" },
       info: { ic:"ℹ️" },
     };
-    const m = map[kind] || map.info;
+    const m = map[t.kind] || map.info;
     toastIcon.textContent = m.ic;
-    toastTitle.textContent = title || "Info";
-    toastMsg.textContent = msg || "";
+    toastTitle.textContent = t.title || "Info";
+    toastMsg.textContent = t.msg || "";
     toast.classList.add("show");
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => toast.classList.remove("show"), 4200);
+    toastTimer = setTimeout(hideToast, t.ms || 4200);
+    toastShowing = true;
   }
 
-  toastClose?.addEventListener("click", () => toast.classList.remove("show"));
+  function showToast(kind, title, msg, ms){
+    toastQueue.push({ kind, title, msg, ms });
+    if(!toastShowing) _renderToast(toastQueue.shift());
+  }
 
-  // ===== Mejora #1: Search/filter =====
+  function hideToast(){
+    toast.classList.remove("show");
+    clearTimeout(toastTimer);
+    toastTimer = null;
+    toastShowing = false;
+    if(toastQueue.length) _renderToast(toastQueue.shift());
+  }
+
+  toastClose?.addEventListener("click", hideToast);
+
+  // ------------------------------
+  // Search (debounce) + toggle active filter
+  // ------------------------------
   const q = $("#q");
-  q?.addEventListener("input", () => {
-    const needle = (q.value || "").trim().toLowerCase();
+  const btnShowOnlyActive = $("#btnShowOnlyActive");
+  let showOnlyActive = false;
+  let searchTimer = null;
+
+  function applyFilter(){
+    const needle = (q?.value || "").trim().toLowerCase();
     $$(".pay-card").forEach(card => {
       const name = (card.getAttribute("data-name") || "");
       const code = (card.getAttribute("data-code") || "");
+      const enabled = (card.getAttribute("data-enabled") || "0") === "1";
       const hit = !needle || name.includes(needle) || code.includes(needle);
-      card.style.display = hit ? "" : "none";
+      const ok = hit && (!showOnlyActive || enabled);
+      card.style.display = ok ? "" : "none";
     });
+  }
+
+  q?.addEventListener("input", () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(applyFilter, 90);
   });
 
-  // ===== helpers validation =====
+  btnShowOnlyActive?.addEventListener("click", () => {
+    showOnlyActive = !showOnlyActive;
+    btnShowOnlyActive.textContent = showOnlyActive ? "✅ Mostrando activos" : "✅ Solo activos";
+    applyFilter();
+  });
+
+  // Enter en search no envía forms
+  q?.addEventListener("keydown", (e) => { if(e.key === "Enter") e.preventDefault(); });
+
+  // Ctrl/Cmd+K enfoca search
+  window.addEventListener("keydown", (e) => {
+    const isMac = (navigator.platform || "").toLowerCase().includes("mac");
+    const mod = isMac ? e.metaKey : e.ctrlKey;
+    if(mod && (e.key || "").toLowerCase() === "k"){
+      e.preventDefault();
+      q?.focus();
+    }
+  });
+
+  // ------------------------------
+  // Validación helpers
+  // ------------------------------
   function looksLikeUrl(v){
     if(!v) return false;
     try { new URL(v); return true; } catch(e) { return false; }
   }
   function looksLikeEmail(v){
     if(!v) return false;
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v).trim());
+  }
+  function toNum(v){
+    const s = String(v ?? "").trim().replace(",", ".");
+    if(!s) return null;
+    const n = Number(s);
+    return Number.isFinite(n) ? n : null;
   }
 
-  function clearInvalid(root){
-    $$(".invalid", root).forEach(el => el.classList.remove("invalid"));
-  }
-  function markInvalid(el){
-    el?.classList?.add("invalid");
-  }
+  function clearInvalid(root){ $$(".invalid", root).forEach(el => el.classList.remove("invalid")); }
+  function markInvalid(el){ el?.classList?.add("invalid"); }
 
-  // ===== Mejora #2: Summary pills (activos/listos/incompletos) =====
+  // ------------------------------
+  // Summary pills (real)
+  // ------------------------------
   const pillCount = $("#pillCount span:last-child");
   const pillReady = $("#pillReady span:last-child");
   const pillNeeds = $("#pillNeeds span:last-child");
@@ -598,30 +838,250 @@
   function recomputeSummary(){
     let active = 0, ready = 0, needs = 0;
     $$(".pay-card").forEach(card => {
-      const enabled = $(".js-enabled", card)?.checked;
-      const state = ($(".js-state", card)?.textContent || "").toLowerCase();
+      const enabled = (card.getAttribute("data-enabled") || "0") === "1";
+      const isReady = (card.getAttribute("data-ready") || "0") === "1";
       if(enabled) active++;
-      if(enabled && state.includes("listo")) ready++;
-      if(enabled && state.includes("incompleto")) needs++;
+      if(enabled && isReady) ready++;
+      if(enabled && !isReady) needs++;
     });
     if(pillCount) pillCount.textContent = `${active} activos`;
     if(pillReady) pillReady.textContent = `${ready} listos`;
     if(pillNeeds) pillNeeds.textContent = `${needs} incompletos`;
   }
 
-  // ===== Mejora #3: Toggle “Activo” sincroniza hidden input enabled =====
+  // ------------------------------
+  // Clipboard / Open helpers
+  // ------------------------------
+  async function copyText(txt){
+    try{
+      await navigator.clipboard.writeText(txt);
+      return true;
+    }catch(e){
+      // fallback
+      try{
+        const ta = document.createElement("textarea");
+        ta.value = txt;
+        ta.style.position = "fixed";
+        ta.style.left = "-9999px";
+        document.body.appendChild(ta);
+        ta.select();
+        const ok = document.execCommand("copy");
+        ta.remove();
+        return ok;
+      }catch(_e){
+        return false;
+      }
+    }
+  }
+
+  function setInline(card, kind, msg){
+    const box = $(".js-inline", card);
+    if(!box) return;
+    box.classList.remove("sr-only","bad","ok");
+    box.classList.add(kind === "bad" ? "bad" : kind === "ok" ? "ok" : "");
+    box.textContent = msg || "";
+    if(!msg){
+      box.classList.add("sr-only");
+      box.classList.remove("bad","ok");
+    }
+  }
+
+  // ------------------------------
+  // Card behavior
+  // ------------------------------
+  const dirtyByCode = new Map(); // code => bool
+
+  function setDirty(code, val){
+    dirtyByCode.set(code, !!val);
+  }
+
+  function anyDirty(){
+    for(const v of dirtyByCode.values()) if(v) return true;
+    return false;
+  }
+
+  function snapshotForm(form){
+    const fd = new FormData(form);
+    // Normalizamos: checkbox enabled se maneja por hidden
+    return Array.from(fd.entries()).map(([k,v]) => [k, String(v)]).sort((a,b)=>a[0].localeCompare(b[0]));
+  }
+
+  function sameSnapshot(a,b){
+    if(a.length !== b.length) return false;
+    for(let i=0;i<a.length;i++){
+      if(a[i][0]!==b[i][0] || a[i][1]!==b[i][1]) return false;
+    }
+    return true;
+  }
+
+  async function postFormAJAX(form, card){
+    const saveBtn = $(".js-save", card);
+    const code = form.getAttribute("data-code") || "";
+
+    const fd = new FormData(form);
+
+    // Si recommended está disabled no viaja, lo forzamos a 0
+    const recSel = $(".js-recommended", card);
+    if(recSel && recSel.disabled) fd.set("recommended", "0");
+
+    const oldTxt = saveBtn?.textContent;
+    if(saveBtn){ saveBtn.textContent = "Guardando…"; saveBtn.setAttribute("disabled","disabled"); }
+
+    try{
+      const r = await fetch(form.action, {
+        method: "POST",
+        headers: { "Accept": "application/json" },
+        body: fd,
+        credentials: "same-origin",
+        redirect: "follow",
+      });
+
+      // Si el server devuelve HTML (por ejemplo redirect/login), lo detectamos
+      const ct = (r.headers.get("content-type") || "").toLowerCase();
+      let data = null;
+
+      if(ct.includes("application/json")){
+        data = await r.json().catch(() => null);
+      }else{
+        // fallback: si no es JSON, dejamos que el navegador siga el flujo normal
+        // (pero acá ya estamos en fetch) -> mostramos error claro
+        const txt = await r.text().catch(() => "");
+        if(r.status === 401 || r.status === 403){
+          showToast("bad", "Sesión", "Tu sesión expiró. Recargá y volvé a iniciar.", 5200);
+          setInline(card, "bad", "Sesión expirada. Recargá la página.");
+          return { ok:false };
+        }
+        if(r.status === 419){
+          showToast("bad", "CSRF", "Token inválido/expirado. Recargá y reintentá.", 5200);
+          setInline(card, "bad", "CSRF inválido. Recargá la página.");
+          return { ok:false };
+        }
+        showToast("bad", "Error", "Respuesta inesperada del servidor.", 5200);
+        setInline(card, "bad", (txt || "Respuesta inesperada").slice(0, 220));
+        return { ok:false };
+      }
+
+      if(!r.ok || !data || data.ok !== true){
+        const msg = (data && (data.message || data.error)) ? (data.message || data.error) : "No se pudo guardar.";
+        showToast("bad", "Error", msg, 5200);
+        setInline(card, "bad", msg);
+        return { ok:false, data };
+      }
+
+      // Success
+      const readyNow = !!data.ready;
+      const errs = Array.isArray(data.errors) ? data.errors : [];
+      const stateEl = $(".js-state", card);
+
+      card.setAttribute("data-ready", readyNow ? "1" : "0");
+
+      // Nota: enabled ya está en data-enabled por syncEnabled()
+      if(stateEl){
+        const enabledNow = (card.getAttribute("data-enabled") || "0") === "1";
+        stateEl.textContent = enabledNow ? (readyNow ? "Listo ✅" : "Incompleto ⚠️") : "Desactivado";
+      }
+
+      // updated_at (si backend lo manda)
+      const up = $(".js-updated", card);
+      if(up && data.updated_at) up.textContent = String(data.updated_at);
+
+      // highlight backend errors (si vienen)
+      if(errs.length){
+        showToast("warn", "Guardado", "Se guardó, pero faltan campos obligatorios.", 5200);
+        setInline(card, "bad", "Faltan: " + errs.join(", "));
+      }else{
+        showToast("ok", "Guardado", "Método actualizado.", 3200);
+        setInline(card, "ok", "Guardado ✅");
+        setTimeout(()=>setInline(card,"",""), 1400);
+      }
+
+      // reset dirty
+      setDirty(code, false);
+      recomputeSummary();
+
+      return { ok:true, data };
+    }catch(err){
+      showToast("bad", "Error", "Falló la conexión. Reintentá.", 5200);
+      setInline(card, "bad", "Falló la conexión. Reintentá.");
+      return { ok:false };
+    }finally{
+      if(saveBtn){ saveBtn.textContent = oldTxt || "💾 Guardar"; saveBtn.removeAttribute("disabled"); }
+    }
+  }
+
+  function validateCard(card){
+    let ok = true;
+    clearInvalid(card);
+
+    const enabled = $(".js-enabled", card);
+    const isOn = !!enabled?.checked;
+    if(!isOn){
+      return { ok: true, msg: "Desactivado" };
+    }
+
+    // Campos base
+    const baseFields = [
+      { name:"sort_order", int:true, min:-9999, max:9999 },
+      { name:"eta_minutes", int:true, min:0 },
+      { name:"fee_percent", int:false, min:0, max:99 },
+      { name:"min_amount", int:false, min:0 },
+      { name:"max_amount", int:false, min:0 },
+    ];
+
+    baseFields.forEach(f => {
+      const el = $(`[name="${f.name}"]`, card);
+      if(!el) return;
+      const v = (el.value || "").trim();
+      if(!v) return;
+      const n = toNum(v);
+      if(n === null){ ok=false; markInvalid(el); return; }
+      if(f.int && !Number.isInteger(n)){ ok=false; markInvalid(el); return; }
+      if(typeof f.min === "number" && n < f.min){ ok=false; markInvalid(el); return; }
+      if(typeof f.max === "number" && n > f.max){ ok=false; markInvalid(el); return; }
+    });
+
+    // Schema fields
+    const fields = $$(".js-field", card);
+    fields.forEach(w => {
+      const typ = (w.getAttribute("data-ftype") || "text").toLowerCase();
+      const req = (w.getAttribute("data-required") || "0") === "1";
+      const inp = $("input,select,textarea", w);
+      if(!inp) return;
+
+      const val = String(inp.value || "").trim();
+      if(req && !val){ ok=false; markInvalid(inp); }
+
+      if(val){
+        if(typ === "url" && !looksLikeUrl(val)){ ok=false; markInvalid(inp); }
+        if(typ === "email" && !looksLikeEmail(val)){ ok=false; markInvalid(inp); }
+        if(typ === "int"){
+          const n = toNum(val);
+          if(n === null || !Number.isInteger(n)){ ok=false; markInvalid(inp); }
+        }
+      }
+    });
+
+    return { ok, msg: ok ? "Listo ✅" : "Incompleto ⚠️" };
+  }
+
   $$(".pay-card").forEach(card => {
     const enabled = $(".js-enabled", card);
     const form = $(".js-form", card);
     const stateEl = $(".js-state", card);
     const recSel = $(".js-recommended", card);
+    const code = (card.getAttribute("data-code") || "");
+
+    // snapshot para reset por card
+    const initial = snapshotForm(form);
 
     function syncEnabled(){
       const on = !!enabled?.checked;
       const hiddenEnabled = $("input[name='enabled']", form);
       if(hiddenEnabled) hiddenEnabled.value = on ? "1" : "0";
 
-      // Mejora #4: recommended sólo si activo (UX)
+      card.setAttribute("data-enabled", on ? "1" : "0");
+
+      // recommended sólo si activo
       if(recSel){
         if(!on){
           recSel.value = "0";
@@ -632,167 +1092,181 @@
       }
 
       if(stateEl){
-        stateEl.textContent = on ? "Incompleto ⚠️" : "Desactivado";
+        const readyNow = (card.getAttribute("data-ready") || "0") === "1";
+        stateEl.textContent = on ? (readyNow ? "Listo ✅" : "Incompleto ⚠️") : "Desactivado";
       }
+
       recomputeSummary();
+      applyFilter();
     }
 
-    enabled?.addEventListener("change", syncEnabled);
+    enabled?.addEventListener("change", () => {
+      syncEnabled();
+      setDirty(code, true);
+    });
+
+    // Init
     syncEnabled();
 
-    // ===== Mejora #5: Validación inline por tipo (url/email/int) + requeridos =====
-    function validateCard(){
-      let ok = true;
-      clearInvalid(card);
-
-      const isOn = !!enabled?.checked;
-      if(!isOn){
-        return { ok: true, msg: "Desactivado" };
-      }
-
-      // Required: todo input con label que tenga pill obligatorio cerca => simple heuristic
-      // (además, validamos url/email según placeholder/type)
-      const inputs = $$("input[name^='cfg__'], select[name^='cfg__'], textarea[name^='cfg__']", card);
-
-      inputs.forEach(inp => {
-        const name = inp.getAttribute("name") || "";
-        const val = (inp.value || "").trim();
-        const parent = inp.closest("div");
-        const isRequired = !!(parent && $(".pill.bad", parent)); // "obligatorio"
-
-        if(isRequired && !val){
-          ok = false; markInvalid(inp);
-        }
-
-        const ph = (inp.getAttribute("placeholder") || "").toLowerCase();
-        if(val){
-          if(ph.includes("https://") && !looksLikeUrl(val)){
-            ok = false; markInvalid(inp);
-          }
-          if((inp.getAttribute("autocomplete") || "") === "email" && !looksLikeEmail(val)){
-            ok = false; markInvalid(inp);
-          }
-          if(inp.getAttribute("inputmode") === "numeric" && !/^\d+$/.test(val)){
-            ok = false; markInvalid(inp);
-          }
-        }
-      });
-
-      // Campos base: numeric
-      ["sort_order","fee_percent","eta_minutes","min_amount","max_amount"].forEach(n => {
-        const el = $(`[name="${n}"]`, card);
-        if(el){
-          const v = (el.value || "").trim();
-          if(v && !/^\d+$/.test(v)){ ok = false; markInvalid(el); }
-        }
-      });
-
-      return { ok, msg: ok ? "Listo ✅" : "Incompleto ⚠️" };
-    }
-
-    // Actualiza state en blur
+    // Blur/change -> validate + dirty
     $$("input,textarea,select", card).forEach(el => {
+      el.addEventListener("change", () => {
+        setDirty(code, true);
+        const res = validateCard(card);
+        if(stateEl && enabled?.checked) stateEl.textContent = res.msg;
+        recomputeSummary();
+      });
       el.addEventListener("blur", () => {
-        const res = validateCard();
-        if(stateEl && enabled?.checked){
-          stateEl.textContent = res.msg;
-        }
+        const res = validateCard(card);
+        if(stateEl && enabled?.checked) stateEl.textContent = res.msg;
         recomputeSummary();
       });
     });
 
-    // ===== Mejora #6: Guardado por AJAX (sin recargar), con fallback normal =====
+    // Reset por card
+    $(".js-reset", card)?.addEventListener("click", () => {
+      // Revertimos a initial snapshot reconstruyendo valores
+      const map = new Map(initial.map(([k,v]) => [k, v]));
+      $$("input,select,textarea", form).forEach(el => {
+        const name = el.getAttribute("name");
+        if(!name) return;
+
+        if(el.type === "checkbox"){
+          // no usamos checkboxes adentro del form, pero por si acaso
+          el.checked = map.get(name) === "1";
+          return;
+        }
+        const v = map.has(name) ? map.get(name) : "";
+        el.value = v ?? "";
+      });
+
+      // Re-sync toggle hidden + recommended
+      syncEnabled();
+      clearInvalid(card);
+      setInline(card, "", "");
+      setDirty(code, false);
+
+      showToast("info", "Reset", "Cambios revertidos.", 2200);
+    });
+
+    // Copy / Open
+    $$(".js-copy", card).forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const id = btn.getAttribute("data-copy-from");
+        const el = id ? document.getElementById(id) : null;
+        const val = el ? String(el.value || "").trim() : "";
+        if(!val){
+          showToast("warn", "Copiar", "No hay nada para copiar.", 2600);
+          return;
+        }
+        const ok = await copyText(val);
+        showToast(ok ? "ok" : "bad", "Copiar", ok ? "Copiado ✅" : "No se pudo copiar.", 2600);
+      });
+    });
+
+    $$(".js-open", card).forEach(btn => {
+      btn.addEventListener("click", () => {
+        const id = btn.getAttribute("data-open-from");
+        const el = id ? document.getElementById(id) : null;
+        const val = el ? String(el.value || "").trim() : "";
+        if(!looksLikeUrl(val)){
+          showToast("warn", "Abrir link", "URL inválida.", 2600);
+          return;
+        }
+        window.open(val, "_blank", "noopener,noreferrer");
+      });
+    });
+
+    // Submit (AJAX con fallback)
     form?.addEventListener("submit", async (e) => {
-      const res = validateCard();
+      const res = validateCard(card);
       if(!res.ok){
         e.preventDefault();
-        showToast("warn", "Faltan datos", "Activaste el método pero faltan campos obligatorios o hay valores inválidos.");
+        showToast("warn", "Faltan datos", "Activaste el método pero faltan campos obligatorios o hay valores inválidos.", 5200);
+        setInline(card, "bad", "Revisá los campos marcados en rojo.");
         return;
       }
 
-      // Si el navegador no soporta fetch, que postee normal
+      // Si no hay fetch, postea normal
       if(!window.fetch) return;
 
       e.preventDefault();
 
-      // Preparar payload
-      const fd = new FormData(form);
-      // sync recommended (si select está disabled, no viaja, lo forzamos)
-      if(recSel && recSel.disabled){
-        fd.set("recommended","0");
+      // Si no cambió nada, evitamos pegarle al server
+      const nowSnap = snapshotForm(form);
+      if(sameSnapshot(initial, nowSnap) && !dirtyByCode.get(code)){
+        showToast("info", "Sin cambios", "No hay cambios para guardar.", 2200);
+        setInline(card, "", "");
+        return;
       }
 
-      const saveBtn = $(".js-save", card);
-      const oldTxt = saveBtn?.textContent;
-      if(saveBtn){ saveBtn.textContent = "Guardando…"; saveBtn.setAttribute("disabled","disabled"); }
-
-      try{
-        const r = await fetch(form.action, {
-          method: "POST",
-          headers: { "Accept": "application/json" },
-          body: fd,
-          credentials: "same-origin",
-        });
-        const data = await r.json().catch(() => ({}));
-
-        if(!r.ok || !data || data.ok !== true){
-          const msg = data?.message || data?.error || "No se pudo guardar.";
-          showToast("bad", "Error", msg);
-          if(saveBtn){ saveBtn.textContent = oldTxt || "Guardar"; saveBtn.removeAttribute("disabled"); }
-          return;
-        }
-
-        // ===== Mejora #7: UI update post-save (ready/errors) =====
-        const readyNow = !!data.ready;
-        if(stateEl){
-          stateEl.textContent = enabled.checked ? (readyNow ? "Listo ✅" : "Incompleto ⚠️") : "Desactivado";
-        }
-
-        const errs = (data.errors || []);
-        if(errs.length){
-          showToast("warn", "Guardado", "Se guardó, pero faltan campos obligatorios. Revisá lo marcado.");
-          // resaltar algo si hay invalids
-        }else{
-          showToast("ok", "Guardado", "Método actualizado y listo para checkout.");
-        }
-
-        recomputeSummary();
-      }catch(err){
-        showToast("bad", "Error", "Falló la conexión. Reintentá.");
-      }finally{
-        if(saveBtn){ saveBtn.textContent = oldTxt || "💾 Guardar"; saveBtn.removeAttribute("disabled"); }
+      const out = await postFormAJAX(form, card);
+      if(out && out.ok){
+        // actualizar snapshot base a la nueva “verdad”
+        const newSnap = snapshotForm(form);
+        initial.splice(0, initial.length, ...newSnap);
       }
     });
   });
 
-  // ===== Mejora #8: Ctrl/Cmd+K enfoca search (UX pro) =====
-  window.addEventListener("keydown", (e) => {
-    const isMac = navigator.platform.toLowerCase().includes("mac");
-    const mod = isMac ? e.metaKey : e.ctrlKey;
-    if(mod && (e.key || "").toLowerCase() === "k"){
-      e.preventDefault();
-      q?.focus();
+  // ------------------------------
+  // Guardar todo (secuencial, robusto)
+  // ------------------------------
+  const btnSaveAll = $("#btnSaveAll");
+  btnSaveAll?.addEventListener("click", async () => {
+    if(!window.fetch){
+      showToast("info", "Guardar todo", "Tu navegador no soporta guardado rápido.", 4200);
+      return;
     }
+
+    const cards = $$(".pay-card");
+    const dirtyCards = cards.filter(c => {
+      const code = c.getAttribute("data-code") || "";
+      return !!dirtyByCode.get(code);
+    });
+
+    if(!dirtyCards.length){
+      showToast("info", "Guardar todo", "No hay cambios pendientes.", 2600);
+      return;
+    }
+
+    btnSaveAll.setAttribute("disabled","disabled");
+    btnSaveAll.textContent = "Guardando todo…";
+
+    let okCount = 0;
+    for(const card of dirtyCards){
+      const form = $(".js-form", card);
+      if(!form) continue;
+
+      const res = validateCard(card);
+      if(!res.ok){
+        showToast("warn", "Validación", "Hay un método activo con campos inválidos.", 5200);
+        setInline(card, "bad", "Arreglá los campos marcados y reintentá.");
+        continue;
+      }
+
+      const out = await postFormAJAX(form, card);
+      if(out && out.ok) okCount++;
+    }
+
+    btnSaveAll.removeAttribute("disabled");
+    btnSaveAll.textContent = "💾 Guardar todo";
+
+    showToast("ok", "Guardar todo", `Listo. Guardados: ${okCount}/${dirtyCards.length}`, 4200);
   });
 
-  // ===== Mejora #9: Enter en search no envía forms =====
-  q?.addEventListener("keydown", (e) => {
-    if(e.key === "Enter") e.preventDefault();
-  });
-
-  // init pills
-  recomputeSummary();
-
-  // ===== Mejora #10: Advertencia si intentás salir con cambios no guardados =====
-  let dirty = false;
-  $$(".pay-card input, .pay-card textarea, .pay-card select").forEach(el => {
-    el.addEventListener("change", () => { dirty = true; });
-  });
+  // ------------------------------
+  // Advertencia: salir con cambios
+  // ------------------------------
   window.addEventListener("beforeunload", (e) => {
-    if(!dirty) return;
+    if(!anyDirty()) return;
     e.preventDefault();
     e.returnValue = "";
   });
+
+  // init
+  recomputeSummary();
+  applyFilter();
 })();
 </script>
 {% endblock %}

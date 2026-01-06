@@ -85,6 +85,7 @@ def _clean(v: Optional[str]) -> str:
 # Policy
 # ============================================================
 
+
 @dataclass(frozen=True)
 class PasswordPolicy:
     method: str = _DEFAULT_METHOD
@@ -145,6 +146,7 @@ def get_policy() -> PasswordPolicy:
 # Pepper
 # ============================================================
 
+
 def _pepper(policy: PasswordPolicy) -> str:
     if not policy.use_pepper:
         return ""
@@ -168,7 +170,9 @@ _RE_HAS_UPPER = re.compile(r"[A-Z]")
 _RE_HAS_SYMBOL = re.compile(r"[^A-Za-z0-9]")
 
 
-def validate_password(raw_password: str, policy: Optional[PasswordPolicy] = None) -> Tuple[bool, str]:
+def validate_password(
+    raw_password: str, policy: Optional[PasswordPolicy] = None
+) -> Tuple[bool, str]:
     pol = policy or get_policy()
     pwd = _clean(raw_password)
 
@@ -200,6 +204,7 @@ def validate_password(raw_password: str, policy: Optional[PasswordPolicy] = None
 # ============================================================
 # Hashing / Verify
 # ============================================================
+
 
 def _hash_looks_valid(password_hash: str) -> bool:
     """
@@ -263,7 +268,9 @@ def verify_password(raw_password: str, password_hash: str) -> bool:
     return True
 
 
-def verify_and_maybe_rehash(raw_password: str, password_hash: str) -> Tuple[bool, Optional[str]]:
+def verify_and_maybe_rehash(
+    raw_password: str, password_hash: str
+) -> Tuple[bool, Optional[str]]:
     """
     ✅ Verifica y si el hash quedó viejo (cambió PASSWORD_METHOD),
        retorna (True, new_hash).

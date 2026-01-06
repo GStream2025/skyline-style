@@ -44,7 +44,9 @@ class PrintfulService:
 
         try:
             # Endpoint típico: /store/products
-            r = requests.get(f"{self.BASE}/store/products", headers=self._headers(), timeout=20)
+            r = requests.get(
+                f"{self.BASE}/store/products", headers=self._headers(), timeout=20
+            )
             if r.status_code >= 400:
                 return False, f"HTTP {r.status_code}: {r.text[:180]}"
             data = r.json()
@@ -58,19 +60,21 @@ class PrintfulService:
                 title = (it.get("name") or "Printful item").strip()
                 image = (it.get("thumbnail_url") or "").strip()
                 # Printful no siempre trae precios directos aquí -> dejamos 0 y lo ajustás o lo enriquecés con otro endpoint
-                normalized.append({
-                    "external_id": external_id,
-                    "title": title,
-                    "description": (it.get("description") or "").strip(),
-                    "price": 0,
-                    "compare_at_price": None,
-                    "currency": "USD",
-                    "image_url": image,
-                    "category_slug": "skyline",  # podés mapear por tags/collections
-                    "stock": 999,
-                    "status": "active",
-                    "tags": "printful",
-                })
+                normalized.append(
+                    {
+                        "external_id": external_id,
+                        "title": title,
+                        "description": (it.get("description") or "").strip(),
+                        "price": 0,
+                        "compare_at_price": None,
+                        "currency": "USD",
+                        "image_url": image,
+                        "category_slug": "skyline",  # podés mapear por tags/collections
+                        "stock": 999,
+                        "status": "active",
+                        "tags": "printful",
+                    }
+                )
 
             return True, normalized
 

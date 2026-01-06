@@ -70,7 +70,9 @@ def _safe_dict(v: Any) -> Dict[str, Any]:
     return v if isinstance(v, dict) else {}
 
 
-def _merge_missing(dst: Dict[str, Any], defaults: Dict[str, Any]) -> Tuple[Dict[str, Any], bool]:
+def _merge_missing(
+    dst: Dict[str, Any], defaults: Dict[str, Any]
+) -> Tuple[Dict[str, Any], bool]:
     """Solo agrega keys faltantes o vacías (no pisa admin)."""
     changed = False
     out = dict(dst or {})
@@ -125,7 +127,9 @@ def ensure_payment_providers(
 
         for code, name, order in DEFAULT_PROVIDERS:
             # --- Buscar existente ---
-            p: Optional[PaymentProvider] = PaymentProvider.query.filter_by(code=code).first()
+            p: Optional[PaymentProvider] = PaymentProvider.query.filter_by(
+                code=code
+            ).first()
 
             if not p:
                 # Crear nuevo (pero cuidando carrera)
@@ -169,7 +173,12 @@ def ensure_payment_providers(
             # sort_order válido
             if _safe_has(p, "sort_order"):
                 cur_order = _safe_get(p, "sort_order", None)
-                if cur_order is None or not isinstance(cur_order, int) or cur_order < 0 or cur_order > 9999:
+                if (
+                    cur_order is None
+                    or not isinstance(cur_order, int)
+                    or cur_order < 0
+                    or cur_order > 9999
+                ):
                     if _safe_set(p, "sort_order", int(order)):
                         this_repaired = True
 
@@ -209,7 +218,9 @@ def ensure_payment_providers(
                     this_repaired = True
 
                 # si tu modelo tiene ensure_defaults(), lo usamos (no rompe si no existe)
-                if hasattr(p, "ensure_defaults") and callable(getattr(p, "ensure_defaults")):
+                if hasattr(p, "ensure_defaults") and callable(
+                    getattr(p, "ensure_defaults")
+                ):
                     try:
                         before = dict(_safe_dict(_safe_get(p, "config", {})))
                         p.ensure_defaults()  # type: ignore

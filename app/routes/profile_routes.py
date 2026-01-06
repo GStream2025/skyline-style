@@ -5,7 +5,7 @@ import re
 import secrets
 import time
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any, Tuple, Callable
+from typing import Optional, Dict, Any, Tuple
 
 from flask import (
     Blueprint,
@@ -42,8 +42,8 @@ EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 PHONE_RE = re.compile(r"^[0-9+() \-]{6,40}$")
 
 # rate limit
-RL_PROFILE_LIMIT = 20     # hits
-RL_PROFILE_WINDOW = 60    # seconds
+RL_PROFILE_LIMIT = 20  # hits
+RL_PROFILE_WINDOW = 60  # seconds
 RL_EMAIL_LIMIT = 8
 RL_EMAIL_WINDOW = 60
 RL_PASSWORD_LIMIT = 6
@@ -57,6 +57,7 @@ def _utcnow() -> datetime:
 # ============================================================
 # Content negotiation
 # ============================================================
+
 
 def _wants_json() -> bool:
     accept = (request.headers.get("Accept") or "").lower()
@@ -84,6 +85,7 @@ def _json_or_redirect(payload: Dict[str, Any], endpoint: str, **kwargs):
 # ============================================================
 # Rate limit (sin dependencias)
 # ============================================================
+
 
 def _client_ip() -> str:
     xff = request.headers.get("X-Forwarded-For", "")
@@ -118,14 +120,20 @@ def _rate_limit_or_429(bucket: str, limit: int, window_seconds: int):
     key = f"{bucket}:{ip}:{uid}"
     if _rate_limit(key, limit=limit, window_seconds=window_seconds):
         return None
-    return _json({"ok": False, "error": "too_many_requests"}, 429) if _wants_json() else (
-        flash("Demasiados intentos. Esperá un minuto y probá de nuevo.", "warning") or redirect(url_for("profile.profile_home"))
+    return (
+        _json({"ok": False, "error": "too_many_requests"}, 429)
+        if _wants_json()
+        else (
+            flash("Demasiados intentos. Esperá un minuto y probá de nuevo.", "warning")
+            or redirect(url_for("profile.profile_home"))
+        )
     )
 
 
 # ============================================================
 # Auth helpers
 # ============================================================
+
 
 def _login_required() -> Optional[Any]:
     if session.get("user_id"):
@@ -165,6 +173,7 @@ def _soft_logout() -> None:
 # CSRF (sin Flask-WTF)
 # ============================================================
 
+
 def _ensure_csrf() -> str:
     token = session.get("csrf_token")
     if not token:
@@ -178,7 +187,11 @@ def _check_csrf() -> bool:
     got = (
         (request.headers.get("X-CSRF-Token") or "")
         or (request.form.get("csrf_token") or "")
-        or ((request.get_json(silent=True) or {}).get("csrf_token") if request.is_json else "")
+        or (
+            (request.get_json(silent=True) or {}).get("csrf_token")
+            if request.is_json
+            else ""
+        )
         or ""
     )
     got = str(got).strip()
@@ -198,6 +211,7 @@ def _csrf_required() -> Optional[Any]:
 # ============================================================
 # Sanitizers / Validators
 # ============================================================
+
 
 def _clean_str(v: Optional[str], max_len: int) -> Optional[str]:
     if v is None:
@@ -242,7 +256,11 @@ def _read_payload() -> Dict[str, Any]:
     Si viene JSON, usamos JSON. Sino form.
     Evita mezclar.
     """
-    if (request.headers.get("Content-Type") or "").lower().startswith("application/json"):
+    if (
+        (request.headers.get("Content-Type") or "")
+        .lower()
+        .startswith("application/json")
+    ):
         return request.get_json(silent=True) or {}
     return dict(request.form or {})
 
@@ -274,6 +292,7 @@ def _set_if_has(obj: Any, attr: str, value: Any) -> bool:
 # ============================================================
 # Routes
 # ============================================================
+
 
 @profile_bp.get("/profile")
 def profile_home():
@@ -314,7 +333,9 @@ def profile_update():
     user = _current_user()
     if not user:
         _soft_logout()
-        return _json_or_redirect({"ok": False, "error": "session_invalid", "status": 401}, "auth.login")
+        return _json_or_redirect(
+            {"ok": False, "error": "session_invalid", "status": 401}, "auth.login"
+        )
 
     payload = _read_payload()
 
@@ -353,7 +374,9 @@ def profile_update():
         return redirect(url_for("profile.profile_home"))
 
     if not _commit_or_fail("profile_update"):
-        return _json_or_redirect({"ok": False, "error": "save_failed", "status": 500}, "profile.profile_home")
+        return _json_or_redirect(
+            {"ok": False, "error": "save_failed", "status": 500}, "profile.profile_home"
+        )
 
     if _wants_json():
         return _json({"ok": True, "updated": True})
@@ -379,34 +402,48 @@ def profile_change_email():
     user = _current_user()
     if not user:
         _soft_logout()
-        return _json_or_redirect({"ok": False, "error": "session_invalid", "status": 401}, "auth.login")
+        return _json_or_redirect(
+            {"ok": False, "error": "session_invalid", "status": 401}, "auth.login"
+        )
 
     payload = _read_payload()
     new_email_raw = str(payload.get("email") or "").strip()
 
     ok, out = _validate_email(new_email_raw)
     if not ok:
-        return _json_or_redirect({"ok": False, "error": out, "status": 400}, "profile.profile_home")
+        return _json_or_redirect(
+            {"ok": False, "error": out, "status": 400}, "profile.profile_home"
+        )
 
     new_email = out
 
     if (user.email or "").lower() == new_email:
-        return _json_or_redirect({"ok": True, "message": "same_email", "status": 200}, "profile.profile_home")
+        return _json_or_redirect(
+            {"ok": True, "message": "same_email", "status": 200}, "profile.profile_home"
+        )
 
     # duplicado
     try:
         exists = db.session.query(User).filter(User.email == new_email).first()
     except Exception:
         current_app.logger.exception("Email change: query failed")
-        return _json_or_redirect({"ok": False, "error": "query_failed", "status": 500}, "profile.profile_home")
+        return _json_or_redirect(
+            {"ok": False, "error": "query_failed", "status": 500},
+            "profile.profile_home",
+        )
 
     if exists:
-        return _json_or_redirect({"ok": False, "error": "Ese email ya está en uso.", "status": 409}, "profile.profile_home")
+        return _json_or_redirect(
+            {"ok": False, "error": "Ese email ya está en uso.", "status": 409},
+            "profile.profile_home",
+        )
 
     _set_if_has(user, "email", new_email)
 
     if not _commit_or_fail("profile_email"):
-        return _json_or_redirect({"ok": False, "error": "save_failed", "status": 500}, "profile.profile_home")
+        return _json_or_redirect(
+            {"ok": False, "error": "save_failed", "status": 500}, "profile.profile_home"
+        )
 
     session["user_email"] = new_email
 
@@ -435,7 +472,9 @@ def profile_change_password():
     user = _current_user()
     if not user:
         _soft_logout()
-        return _json_or_redirect({"ok": False, "error": "session_invalid", "status": 401}, "auth.login")
+        return _json_or_redirect(
+            {"ok": False, "error": "session_invalid", "status": 401}, "auth.login"
+        )
 
     payload = _read_payload()
     current_pw = str(payload.get("current_password") or "").strip()
@@ -443,21 +482,43 @@ def profile_change_password():
     new_pw2 = str(payload.get("new_password_2") or "").strip()
 
     if not current_pw or not user.check_password(current_pw):
-        return _json_or_redirect({"ok": False, "error": "Tu contraseña actual no coincide.", "status": 400}, "profile.profile_home")
+        return _json_or_redirect(
+            {"ok": False, "error": "Tu contraseña actual no coincide.", "status": 400},
+            "profile.profile_home",
+        )
 
     if len(new_pw) < 8:
-        return _json_or_redirect({"ok": False, "error": "La nueva contraseña debe tener al menos 8 caracteres.", "status": 400}, "profile.profile_home")
+        return _json_or_redirect(
+            {
+                "ok": False,
+                "error": "La nueva contraseña debe tener al menos 8 caracteres.",
+                "status": 400,
+            },
+            "profile.profile_home",
+        )
 
     if new_pw != new_pw2:
-        return _json_or_redirect({"ok": False, "error": "La confirmación no coincide.", "status": 400}, "profile.profile_home")
+        return _json_or_redirect(
+            {"ok": False, "error": "La confirmación no coincide.", "status": 400},
+            "profile.profile_home",
+        )
 
     if user.check_password(new_pw):
-        return _json_or_redirect({"ok": False, "error": "La nueva contraseña no puede ser igual a la anterior.", "status": 400}, "profile.profile_home")
+        return _json_or_redirect(
+            {
+                "ok": False,
+                "error": "La nueva contraseña no puede ser igual a la anterior.",
+                "status": 400,
+            },
+            "profile.profile_home",
+        )
 
     user.set_password(new_pw)
 
     if not _commit_or_fail("profile_password"):
-        return _json_or_redirect({"ok": False, "error": "save_failed", "status": 500}, "profile.profile_home")
+        return _json_or_redirect(
+            {"ok": False, "error": "save_failed", "status": 500}, "profile.profile_home"
+        )
 
     if _wants_json():
         return _json({"ok": True, "password_updated": True})

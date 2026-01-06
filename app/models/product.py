@@ -16,6 +16,7 @@ from app.models import db  # db único
 # Helpers
 # ============================================================
 
+
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -43,8 +44,12 @@ def slugify(text: str, max_len: int = 180) -> str:
     """Slug simple, estable, portable (sin dependencias)."""
     s = (text or "").strip().lower()
     s = (
-        s.replace("á", "a").replace("é", "e").replace("í", "i")
-         .replace("ó", "o").replace("ú", "u").replace("ñ", "n")
+        s.replace("á", "a")
+        .replace("é", "e")
+        .replace("í", "i")
+        .replace("ó", "o")
+        .replace("ú", "u")
+        .replace("ñ", "n")
     )
     s = re.sub(r"\s+", "-", s)
     s = _slug_re.sub("", s)
@@ -90,20 +95,41 @@ def _unique_slug(conn, base_slug: str, product_id: Optional[int] = None) -> str:
 
 product_tags = db.Table(
     "product_tags",
-    db.Column("product_id", db.Integer, db.ForeignKey("products.id", ondelete="CASCADE"), primary_key=True),
-    db.Column("tag_id", db.Integer, db.ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True),
+    db.Column(
+        "product_id",
+        db.Integer,
+        db.ForeignKey("products.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    db.Column(
+        "tag_id",
+        db.Integer,
+        db.ForeignKey("tags.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
 )
 
 product_categories = db.Table(
     "product_categories",
-    db.Column("product_id", db.Integer, db.ForeignKey("products.id", ondelete="CASCADE"), primary_key=True),
-    db.Column("category_id", db.Integer, db.ForeignKey("categories.id", ondelete="CASCADE"), primary_key=True),
+    db.Column(
+        "product_id",
+        db.Integer,
+        db.ForeignKey("products.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    db.Column(
+        "category_id",
+        db.Integer,
+        db.ForeignKey("categories.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
 )
 
 
 # ============================================================
 # Models
 # ============================================================
+
 
 class Product(db.Model):
     """
@@ -128,8 +154,12 @@ class Product(db.Model):
     description_html = db.Column(db.Text, nullable=True)
 
     # Origen / visibilidad
-    source = db.Column(db.String(20), nullable=False, default="manual")   # manual/printful/dropship/temu
-    status = db.Column(db.String(20), nullable=False, default="draft")    # draft/active/hidden
+    source = db.Column(
+        db.String(20), nullable=False, default="manual"
+    )  # manual/printful/dropship/temu
+    status = db.Column(
+        db.String(20), nullable=False, default="draft"
+    )  # draft/active/hidden
 
     # Precios
     currency = db.Column(db.String(3), nullable=False, default="USD")
@@ -137,11 +167,15 @@ class Product(db.Model):
     compare_at_price = db.Column(db.Numeric(12, 2), nullable=True)
 
     # Stock
-    stock_mode = db.Column(db.String(20), nullable=False, default="finite")  # finite/unlimited/external
+    stock_mode = db.Column(
+        db.String(20), nullable=False, default="finite"
+    )  # finite/unlimited/external
     stock_qty = db.Column(db.Integer, nullable=False, default=0)
 
     # Categoría principal (opcional)
-    category_id = db.Column(db.Integer, db.ForeignKey("categories.id", ondelete="SET NULL"), nullable=True)
+    category_id = db.Column(
+        db.Integer, db.ForeignKey("categories.id", ondelete="SET NULL"), nullable=True
+    )
 
     # Dropshipping / externo
     supplier_name = db.Column(db.String(80), nullable=True)
@@ -155,12 +189,22 @@ class Product(db.Model):
     seo_title = db.Column(db.String(180), nullable=True)
     seo_description = db.Column(db.String(260), nullable=True)
 
-    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, index=True)
-    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow, index=True)
+    created_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, default=utcnow, index=True
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=utcnow,
+        onupdate=utcnow,
+        index=True,
+    )
 
     # Relationships
     category = db.relationship("Category", foreign_keys=[category_id], lazy="select")
-    extra_categories = db.relationship("Category", secondary=product_categories, lazy="select")
+    extra_categories = db.relationship(
+        "Category", secondary=product_categories, lazy="select"
+    )
     tags = db.relationship("Tag", secondary=product_tags, lazy="select")
 
     media = db.relationship(
@@ -296,7 +340,8 @@ class Product(db.Model):
 
     def main_image_url(self) -> Optional[str]:
         imgs = [
-            m for m in (self.media or [])
+            m
+            for m in (self.media or [])
             if (m.type or "").lower() == "image" and (m.url or "").strip()
         ]
         if not imgs:
@@ -306,7 +351,8 @@ class Product(db.Model):
 
     def main_video_url(self) -> Optional[str]:
         vids = [
-            m for m in (self.media or [])
+            m
+            for m in (self.media or [])
             if (m.type or "").lower() == "video" and (m.url or "").strip()
         ]
         if not vids:
@@ -338,7 +384,11 @@ class Product(db.Model):
             "source": self.source,
             "currency": self.currency,
             "price": str(_d(self.price)),
-            "compare_at_price": str(_d(self.compare_at_price)) if self.compare_at_price is not None else None,
+            "compare_at_price": (
+                str(_d(self.compare_at_price))
+                if self.compare_at_price is not None
+                else None
+            ),
             "stock_mode": self.stock_mode,
             "stock_qty": int(self.stock_qty or 0),
             "category_id": self.category_id,
@@ -355,7 +405,12 @@ class ProductMedia(db.Model):
     __tablename__ = "product_media"
 
     id = db.Column(db.Integer, primary_key=True)
-    product_id = db.Column(db.Integer, db.ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True)
+    product_id = db.Column(
+        db.Integer,
+        db.ForeignKey("products.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
 
     # image | video
     type = db.Column(db.String(10), nullable=False, default="image")
@@ -417,6 +472,7 @@ class Tag(db.Model):
 # ============================================================
 # Hooks
 # ============================================================
+
 
 @event.listens_for(Product, "before_insert", propagate=True)
 def _product_before_insert(_mapper, conn, target: Product):

@@ -43,22 +43,34 @@ from typing import Any, Dict, Optional
 
 from app.models import db
 from app.models.order import Order
-from app.services.order_service import OrderService, OrderServiceError, PaymentMismatchError
+from app.services.order_service import (
+    OrderService,
+    OrderServiceError,
+    PaymentMismatchError,
+)
 
 
 # =============================================================================
 # Errors
 # =============================================================================
 
+
 class WiseError(RuntimeError): ...
+
+
 class WiseNotFound(WiseError): ...
+
+
 class WiseAlreadyPaid(WiseError): ...
+
+
 class WiseValidationError(WiseError): ...
 
 
 # =============================================================================
 # DTO
 # =============================================================================
+
 
 @dataclass(frozen=True)
 class WiseStartResult:
@@ -77,9 +89,12 @@ class WiseStartResult:
 
 _TRUE = {"1", "true", "yes", "y", "on"}
 
+
 def _env(k: str, d: str = "") -> str:
     import os
+
     return (os.getenv(k) or d).strip()
+
 
 def _d(v: Any, default: str = "0.00") -> Decimal:
     try:
@@ -89,18 +104,22 @@ def _d(v: Any, default: str = "0.00") -> Decimal:
     except (InvalidOperation, TypeError, ValueError):
         return Decimal(default)
 
+
 def _cur3(v: Any, default: str = "UYU") -> str:
     s = (str(v) if v else default).strip().upper()
     return s[:3] if len(s) >= 3 else default
+
 
 def _merge(a: Any, b: Dict[str, Any]) -> Dict[str, Any]:
     out = a if isinstance(a, dict) else {}
     out.update(b or {})
     return out
 
+
 def _token_ref(prefix: str = "WISE") -> str:
     # ref corta, segura, legible
     return f"{prefix}-{secrets.token_hex(4).upper()}-{int(time.time())}"
+
 
 def _render_template(text: str, *, ref: str, order: Order) -> str:
     # template simple: {{ref}} {{order_number}} {{amount}} {{currency}}
@@ -108,15 +127,16 @@ def _render_template(text: str, *, ref: str, order: Order) -> str:
         return ""
     return (
         text.replace("{{ref}}", ref)
-            .replace("{{order_number}}", order.number or "")
-            .replace("{{amount}}", f"{_d(order.total):.2f}")
-            .replace("{{currency}}", _cur3(order.currency, "UYU"))
+        .replace("{{order_number}}", order.number or "")
+        .replace("{{amount}}", f"{_d(order.total):.2f}")
+        .replace("{{currency}}", _cur3(order.currency, "UYU"))
     )
 
 
 # =============================================================================
 # Public API
 # =============================================================================
+
 
 def start_wise_transfer(
     *,
@@ -136,7 +156,9 @@ def start_wise_transfer(
         if (order.payment_status or "") == Order.PAY_PAID:
             raise WiseAlreadyPaid("La orden ya está pagada")
 
-        cur = _cur3(currency or order.currency or _env("WISE_DEFAULT_CURRENCY", "UYU"), "UYU")
+        cur = _cur3(
+            currency or order.currency or _env("WISE_DEFAULT_CURRENCY", "UYU"), "UYU"
+        )
 
         # referencia idempotente: si ya existe, reusamos
         meta = order.meta if isinstance(order.meta, dict) else {}
@@ -149,7 +171,9 @@ def start_wise_transfer(
         base_instr = instr_usd if cur == "USD" else instr_uyu
         if not base_instr:
             # fallback universal
-            base_instr = "Transferencia vía Wise. Referencia: {{ref}}. Orden: {{order_number}}."
+            base_instr = (
+                "Transferencia vía Wise. Referencia: {{ref}}. Orden: {{order_number}}."
+            )
 
         instructions = _render_template(base_instr, ref=ref, order=order)[:1200]
 
@@ -157,15 +181,18 @@ def start_wise_transfer(
         order.payment_status = Order.PAY_PENDING
         order.status = Order.STATUS_AWAITING_PAYMENT
 
-        order.meta = _merge(order.meta, {
-            "payment_provider": "wise",
-            "wise_ref": ref,
-            "wise_currency": cur,
-            "wise_amount": f"{_d(order.total):.2f}",
-            "wise_started_at": int(time.time()),
-            "wise_instructions": instructions,
-            "wise_note": (note or "")[:300] or None,
-        })
+        order.meta = _merge(
+            order.meta,
+            {
+                "payment_provider": "wise",
+                "wise_ref": ref,
+                "wise_currency": cur,
+                "wise_amount": f"{_d(order.total):.2f}",
+                "wise_started_at": int(time.time()),
+                "wise_instructions": instructions,
+                "wise_note": (note or "")[:300] or None,
+            },
+        )
 
     return WiseStartResult(
         provider="wise",
@@ -242,14 +269,25 @@ def confirm_wise_paid(
     # Auditoría extra
     with db.session.begin():
         order = db.session.get(Order, int(order2.id))
-        order.meta = _merge(order.meta, {
-            "wise_confirmed_at": int(time.time()),
-            "wise_confirmed_by": (actor or "system")[:80],
-            "wise_proof_url": (proof_url or "")[:700] or None,
-            "wise_confirm_note": (note or "")[:400] or None,
-        })
+        order.meta = _merge(
+            order.meta,
+            {
+                "wise_confirmed_at": int(time.time()),
+                "wise_confirmed_by": (actor or "system")[:80],
+                "wise_proof_url": (proof_url or "")[:700] or None,
+                "wise_confirm_note": (note or "")[:400] or None,
+            },
+        )
 
     return order2
 
 
-__all__ = ["WiseStartResult", "start_wise_transfer", "confirm_wise_paid", "WiseError", "WiseNotFound", "WiseAlreadyPaid", "WiseValidationError"]
+__all__ = [
+    "WiseStartResult",
+    "start_wise_transfer",
+    "confirm_wise_paid",
+    "WiseError",
+    "WiseNotFound",
+    "WiseAlreadyPaid",
+    "WiseValidationError",
+]

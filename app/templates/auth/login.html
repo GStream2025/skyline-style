@@ -3,201 +3,297 @@
 
 {% block extra_head %}
 <style>
-/* =========================
- LOGIN — Marketplace Premium
-========================= */
-.auth-wrap{
+/* =========================================================
+   SKYLINE STORE — LOGIN (ULTRA PRO)
+   - Sin dependencias
+   - No pisa estilos globales (prefijo ss-login)
+   - Compatible con base: --max, --stroke, --grad, --shadow2, --ease
+========================================================= */
+
+.ss-login{
+  --ink: var(--ink, #0b1220);
+  --muted: rgba(11,18,32,.62);
+  --soft: rgba(2,6,23,.04);
+  --stroke: var(--stroke, rgba(15,23,42,.12));
+  --shadow: var(--shadow2, 0 28px 70px rgba(2,6,23,.18));
+  --ease: var(--ease, cubic-bezier(.2,.8,.2,1));
+
   min-height: calc(100vh - 180px);
   display:grid;
   place-items:center;
-  padding: 24px 18px;
+  padding: clamp(18px, 3vw, 28px) 14px;
+  background:
+    radial-gradient(820px 460px at 12% 0%, rgba(47,123,255,.10), transparent 60%),
+    radial-gradient(820px 460px at 88% 12%, rgba(255,181,71,.12), transparent 60%),
+    linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0));
 }
 
-.auth-card{
+.ss-login__card{
   width:100%;
-  max-width: 920px;
+  max-width: min(980px, var(--max, 980px));
   display:grid;
   grid-template-columns: 1fr 1fr;
-  gap:18px;
+  gap: clamp(12px, 2vw, 18px);
 }
 
 @media (max-width: 900px){
-  .auth-card{grid-template-columns: 1fr}
+  .ss-login__card{ grid-template-columns: 1fr; }
 }
 
-.auth-left{
+/* ---------- LEFT ---------- */
+.ss-login__left{
   background:
     radial-gradient(420px 260px at 20% 10%, rgba(47,123,255,.18), transparent 60%),
     radial-gradient(420px 260px at 90% 20%, rgba(255,181,71,.20), transparent 60%),
     linear-gradient(180deg, rgba(255,255,255,.96), rgba(255,255,255,.86));
-  border:1px solid var(--stroke);
+  border: 1px solid var(--stroke);
   border-radius: 22px;
-  padding: 26px;
-  box-shadow: var(--shadow2);
+  padding: clamp(18px, 2.6vw, 26px);
+  box-shadow: var(--shadow);
 }
 
-.auth-brand{display:flex; align-items:center; gap:12px;}
-.auth-mark{
-  width:38px;height:28px;
-  border-radius:12px;
-  background: var(--grad);
+.ss-login__brand{ display:flex; align-items:center; gap:12px; }
+.ss-login__mark{
+  width:38px; height:28px;
+  border-radius: 12px;
+  background: var(--grad, linear-gradient(135deg,#2f7bff,#06b6d4));
   box-shadow: 0 12px 22px rgba(2,6,23,.16);
 }
-.auth-title{font-weight: 950; letter-spacing:-.4px;}
-.auth-sub{font-weight:700; color: rgba(11,18,32,.62); font-size:.92rem;}
+.ss-login__title{ font-weight: 1000; letter-spacing:-.4px; color: rgba(11,18,32,.94); }
+.ss-login__sub{ font-weight: 800; color: rgba(11,18,32,.62); font-size:.92rem; margin-top:2px; }
 
-.auth-left h1{
+.ss-login__left h1{
   margin: 16px 0 0;
-  font-weight: 950;
-  letter-spacing:-.6px;
-  font-size: clamp(1.8rem, 4vw, 2.4rem);
+  font-weight: 1000;
+  letter-spacing: -1px;
+  font-size: clamp(1.8rem, 4vw, 2.45rem);
   color: rgba(11,18,32,.95);
+  line-height: 1.08;
 }
-.auth-left p{
+.ss-login__left p{
   margin-top:10px;
-  max-width: 46ch;
+  max-width: 50ch;
   color: rgba(11,18,32,.62);
-  font-weight: 650;
+  font-weight: 780;
+  line-height: 1.55;
 }
 
-.auth-benefits{
-  margin-top:16px;
+.ss-login__benefits{
+  margin-top: 16px;
   display:grid;
-  gap:10px;
+  gap: 10px;
 }
-.benefit{
-  display:flex; gap:12px; align-items:flex-start;
-  padding:12px;
-  border-radius:16px;
+.ss-login__benefit{
+  display:flex;
+  gap: 12px;
+  align-items:flex-start;
+  padding: 12px;
+  border-radius: 16px;
   background: rgba(255,255,255,.80);
-  border:1px solid var(--stroke);
+  border: 1px solid var(--stroke);
 }
-.benefit .dot{
-  width:12px;height:12px;border-radius:99px;
-  background: var(--grad);
-  margin-top:6px;
+.ss-login__dot{
+  width:12px; height:12px;
+  border-radius: 999px;
+  background: var(--grad, linear-gradient(135deg,#2f7bff,#06b6d4));
+  margin-top: 6px;
+  flex: 0 0 auto;
 }
-.benefit b{display:block; font-weight:900;}
-.benefit span{display:block; font-weight:650; color: rgba(11,18,32,.60); font-size:.92rem;}
+.ss-login__benefit b{ display:block; font-weight: 1000; color: rgba(11,18,32,.90); }
+.ss-login__benefit span{ display:block; font-weight: 750; color: rgba(11,18,32,.60); font-size:.92rem; margin-top:2px; }
 
-/* ===== Right / Form ===== */
-.auth-right{
+/* ---------- RIGHT ---------- */
+.ss-login__right{
   background:#fff;
-  border:1px solid var(--stroke);
+  border: 1px solid var(--stroke);
   border-radius: 22px;
-  padding: 26px;
-  box-shadow: var(--shadow2);
+  padding: clamp(18px, 2.6vw, 26px);
+  box-shadow: var(--shadow);
 }
 
-.auth-head{
+.ss-login__head{
   display:flex;
   align-items:center;
   justify-content:space-between;
-  gap:12px;
+  gap: 12px;
 }
-.auth-head h2{margin:0; font-weight: 950; letter-spacing:-.4px;}
-.secure{
-  display:inline-flex; align-items:center; gap:8px;
+.ss-login__head h2{
+  margin:0;
+  font-weight: 1000;
+  letter-spacing: -.4px;
+  color: rgba(11,18,32,.94);
+}
+.ss-login__secure{
+  display:inline-flex;
+  align-items:center;
+  gap: 8px;
   padding: 8px 10px;
-  border-radius:999px;
+  border-radius: 999px;
   background: rgba(47,123,255,.10);
-  border:1px solid rgba(47,123,255,.20);
-  font-weight:800;
-  font-size:.82rem;
+  border: 1px solid rgba(47,123,255,.20);
+  font-weight: 900;
+  font-size: .82rem;
+  color: rgba(11,18,32,.78);
+  white-space: nowrap;
 }
 
-.flash{
-  margin-top:12px;
-  padding:10px 12px;
-  border-radius:14px;
-  border:1px solid var(--stroke);
-  font-weight:850;
-  font-size:.92rem;
+/* Flash */
+.ss-login__flash{
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--stroke);
+  font-weight: 900;
+  font-size: .92rem;
   background: rgba(2,6,23,.03);
 }
-.flash.error{background: rgba(255,0,0,.06); border-color: rgba(255,0,0,.14);}
-.flash.warning{background: rgba(255,181,71,.10); border-color: rgba(255,181,71,.18);}
-.flash.success{background: rgba(34,197,94,.10); border-color: rgba(34,197,94,.18);}
-.flash.info{background: rgba(47,123,255,.08); border-color: rgba(47,123,255,.16);}
+.ss-login__flash.error{ background: rgba(255,0,0,.06); border-color: rgba(255,0,0,.14); }
+.ss-login__flash.warning{ background: rgba(255,181,71,.10); border-color: rgba(255,181,71,.18); }
+.ss-login__flash.success{ background: rgba(34,197,94,.10); border-color: rgba(34,197,94,.18); }
+.ss-login__flash.info{ background: rgba(47,123,255,.08); border-color: rgba(47,123,255,.16); }
 
-.form{margin-top:16px; display:grid; gap:14px;}
-
-.field label{
-  display:block;
-  font-size:.8rem;
-  font-weight:800;
-  color: rgba(11,18,32,.62);
-  margin-bottom:6px;
+.ss-login__form{
+  margin-top: 16px;
+  display:grid;
+  gap: 14px;
 }
 
-.field input{
+.ss-login__field label{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 10px;
+  font-size: .8rem;
+  font-weight: 950;
+  color: rgba(11,18,32,.62);
+  margin-bottom: 6px;
+}
+.ss-login__hint{
+  font-weight: 850;
+  font-size: .78rem;
+  color: rgba(11,18,32,.55);
+}
+
+.ss-login__input{
   width:100%;
   padding: 14px 14px;
   border-radius: 14px;
-  border:1px solid var(--stroke);
-  font-weight:700;
-  font-size:.95rem;
+  border: 1px solid var(--stroke);
+  font-weight: 780;
+  font-size: .96rem;
+  background:#fff;
+  color: rgba(11,18,32,.92);
+  transition: box-shadow .16s var(--ease), border-color .16s var(--ease);
 }
-
-.field input:focus{
-  outline:none;
-  border-color: rgba(47,123,255,.35);
+.ss-login__input:focus{ outline:none; }
+.ss-login__input:focus-visible{
+  border-color: rgba(47,123,255,.40);
   box-shadow: 0 0 0 4px rgba(47,123,255,.14);
 }
+.ss-login__input.is-error{
+  border-color: rgba(255,0,0,.35);
+  box-shadow: 0 0 0 4px rgba(255,0,0,.10);
+}
 
-.pass-wrap{position:relative}
-.pass-toggle{
+/* Autofill */
+.ss-login__input:-webkit-autofill{
+  -webkit-text-fill-color: rgba(11,18,32,.92);
+  transition: background-color 5000s ease-in-out 0s;
+  box-shadow: 0 0 0 1000px #fff inset;
+}
+
+.ss-login__pass-wrap{ position:relative; }
+.ss-login__pass-toggle{
   position:absolute;
   right:10px;
   top:50%;
-  transform:translateY(-50%);
-  border:0;
-  background: rgba(255,255,255,.85);
-  border-radius:10px;
-  padding:6px 10px;
+  transform: translateY(-50%);
+  border: 1px solid var(--stroke);
+  background: rgba(255,255,255,.92);
+  border-radius: 12px;
+  padding: 7px 10px;
   cursor:pointer;
-  font-weight:900;
+  font-weight: 950;
+  color: rgba(11,18,32,.80);
+}
+.ss-login__pass-toggle:focus-visible{
+  outline: 3px solid rgba(59,130,246,.35);
+  outline-offset: 2px;
 }
 
-.submit{
-  margin-top:6px;
+.ss-login__row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.ss-login__check{
+  display:inline-flex;
+  align-items:center;
+  gap: 8px;
+  font-weight: 850;
+  color: rgba(11,18,32,.70);
+  font-size: .92rem;
+  user-select:none;
+}
+.ss-login__check input{
+  width: 16px; height: 16px;
+  accent-color: #2f7bff;
+}
+
+.ss-login__submit{
+  margin-top: 4px;
   width:100%;
   padding: 14px;
   border-radius: 16px;
-  background: var(--grad);
+  background: var(--grad, linear-gradient(135deg,#2f7bff,#06b6d4));
   color:#fff;
   border:0;
-  font-weight:950;
+  font-weight: 1000;
   cursor:pointer;
   box-shadow: 0 16px 30px rgba(2,6,23,.16);
+  transition: transform .18s var(--ease), box-shadow .18s var(--ease), opacity .18s var(--ease);
 }
-.submit:active{transform:translateY(1px)}
-.submit[disabled]{opacity:.85; cursor:not-allowed}
+.ss-login__submit:hover{ transform: translateY(-2px); box-shadow: 0 20px 44px rgba(2,6,23,.18); }
+.ss-login__submit:active{ transform: translateY(0); }
+.ss-login__submit:focus-visible{ outline: 3px solid rgba(59,130,246,.35); outline-offset: 2px; }
+.ss-login__submit[disabled]{ opacity:.85; cursor:not-allowed; transform:none; }
 
-.auth-links{
-  margin-top:10px;
+.ss-login__links{
+  margin-top: 12px;
   display:flex;
   justify-content:space-between;
-  font-size:.9rem;
-  font-weight:800;
   gap:10px;
   flex-wrap:wrap;
+  font-size: .92rem;
+  font-weight: 950;
 }
-.auth-links a{text-decoration:none}
+.ss-login__links a{
+  text-decoration:none;
+  color: rgba(11,18,32,.84);
+  border-bottom: 1px solid rgba(15,23,42,.18);
+}
+.ss-login__links a:hover{ border-bottom-color: rgba(47,123,255,.35); }
+
+@media (prefers-reduced-motion: reduce){
+  .ss-login *{ transition:none !important; }
+  .ss-login__submit:hover{ transform:none !important; }
+}
 </style>
 {% endblock %}
 
 {% block content %}
-<section class="auth-wrap">
-  <div class="auth-card">
+<section class="ss-login" aria-label="Ingresar">
+  <div class="ss-login__card">
 
     <!-- LEFT -->
-    <div class="auth-left">
-      <div class="auth-brand">
-        <span class="auth-mark"></span>
+    <aside class="ss-login__left" aria-label="Beneficios de la cuenta">
+      <div class="ss-login__brand">
+        <span class="ss-login__mark" aria-hidden="true"></span>
         <div>
-          <div class="auth-title">Skyline Store</div>
-          <div class="auth-sub">Marketplace premium</div>
+          <div class="ss-login__title">Skyline Store</div>
+          <div class="ss-login__sub">Marketplace premium</div>
         </div>
       </div>
 
@@ -207,74 +303,107 @@
         y acceder a beneficios exclusivos.
       </p>
 
-      <div class="auth-benefits">
-        <div class="benefit">
-          <span class="dot"></span>
+      <div class="ss-login__benefits">
+        <div class="ss-login__benefit">
+          <span class="ss-login__dot" aria-hidden="true"></span>
           <div><b>Acceso rápido</b><span>Entrá y seguí comprando.</span></div>
         </div>
-        <div class="benefit">
-          <span class="dot"></span>
+        <div class="ss-login__benefit">
+          <span class="ss-login__dot" aria-hidden="true"></span>
           <div><b>Historial</b><span>Pedidos y seguimiento en un lugar.</span></div>
         </div>
       </div>
-    </div>
+    </aside>
 
     <!-- RIGHT -->
-    <div class="auth-right">
-      <div class="auth-head">
+    <div class="ss-login__right" aria-label="Formulario de ingreso">
+      <div class="ss-login__head">
         <h2>Ingresar</h2>
-        <span class="secure">🔒 Seguro</span>
+        <span class="ss-login__secure" title="Conexión segura">🔒 Seguro</span>
       </div>
 
       {# FLASH MESSAGES #}
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
           {% for category, msg in messages %}
-            <div class="flash {{ category|e }}">{{ msg }}</div>
+            <div class="ss-login__flash {{ category|e }}">{{ msg }}</div>
           {% endfor %}
         {% endif %}
       {% endwith %}
 
-      <form method="post" action="{{ url_for('auth.login') }}" class="form" id="loginForm" novalidate>
-        {# CSRF token (CRÍTICO) #}
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <form method="post"
+            action="{{ url_for('auth.login', next=next) }}"
+            class="ss-login__form"
+            id="loginForm"
+            novalidate>
+
+        {# CSRF compatible: csrf_token() (Flask-WTF) o csrf_token variable #}
+        {% if csrf_token is defined %}
+          {% if csrf_token is callable %}
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          {% else %}
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          {% endif %}
+        {% endif %}
 
         {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
 
-        <div class="field">
-          <label for="email">Correo electrónico</label>
-          <input id="email" type="email" name="email" required autocomplete="email"
+        <div class="ss-login__field">
+          <label for="email">
+            <span>Correo electrónico</span>
+            <span class="ss-login__hint">Requerido</span>
+          </label>
+          <input id="email"
+                 class="ss-login__input"
+                 type="email"
+                 name="email"
+                 required
+                 autocomplete="email"
+                 inputmode="email"
                  value="{{ request.form.get('email','') if request.method=='POST' else '' }}"
                  placeholder="tu@email.com">
         </div>
 
-        <div class="field">
-          <label for="password">Contraseña</label>
-          <div class="pass-wrap">
-            <input id="password" type="password" name="password" required autocomplete="current-password"
+        <div class="ss-login__field">
+          <label for="password">
+            <span>Contraseña</span>
+            <span class="ss-login__hint">Requerido</span>
+          </label>
+          <div class="ss-login__pass-wrap">
+            <input id="password"
+                   class="ss-login__input"
+                   type="password"
+                   name="password"
+                   required
+                   autocomplete="current-password"
                    placeholder="Tu contraseña">
-            <button type="button" class="pass-toggle" id="togglePass" aria-label="Mostrar contraseña">👁</button>
+            <button type="button"
+                    class="ss-login__pass-toggle"
+                    id="togglePass"
+                    aria-label="Mostrar u ocultar contraseña"
+                    aria-pressed="false">👁</button>
           </div>
         </div>
 
-        <button type="submit" class="submit" id="submitBtn">Entrar</button>
+        <div class="ss-login__row" aria-label="Opciones">
+          <label class="ss-login__check">
+            <input type="checkbox" name="remember" value="1">
+            Mantener sesión
+          </label>
 
-        <div class="auth-links">
-          <a href="{{ url_for('auth.register') }}">Crear cuenta</a>
-
-          {# si más adelante agregás reset, esto no rompe #}
           {% if 'auth.forgot' in current_app.view_functions %}
-            <a href="{{ url_for('auth.forgot') }}">Olvidé mi contraseña</a>
-          {% else %}
-            <a href="{{ url_for('shop.shop') }}">Seguir como invitado</a>
+            <a href="{{ url_for('auth.forgot') }}" class="ss-login__hint" style="text-decoration:none;border:0;color:rgba(47,123,255,.95);font-weight:950;">
+              Olvidé mi contraseña
+            </a>
           {% endif %}
         </div>
 
-        {% if 'auth.forgot' not in current_app.view_functions %}
-          <div class="auth-links" style="margin-top:0">
-            <a href="{{ url_for('shop.shop') }}">Seguir como invitado</a>
-          </div>
-        {% endif %}
+        <button type="submit" class="ss-login__submit" id="submitBtn">Entrar</button>
+
+        <div class="ss-login__links" aria-label="Links">
+          <a href="{{ url_for('auth.register', next=next) }}">Crear cuenta</a>
+          <a href="{{ url_for('shop.shop') }}">Seguir como invitado</a>
+        </div>
       </form>
     </div>
 
@@ -283,20 +412,41 @@
 
 <script>
 (function(){
+  const email = document.getElementById("email");
   const pass = document.getElementById("password");
   const toggle = document.getElementById("togglePass");
   const form = document.getElementById("loginForm");
   const btn = document.getElementById("submitBtn");
 
+  function setError(el, on){
+    if(!el) return;
+    el.classList.toggle("is-error", !!on);
+  }
+
   if(toggle && pass){
     toggle.addEventListener("click", () => {
-      pass.type = pass.type === "password" ? "text" : "password";
+      const show = pass.type === "password";
+      pass.type = show ? "text" : "password";
+      toggle.setAttribute("aria-pressed", show ? "true" : "false");
     });
   }
 
-  // anti doble submit
   if(form && btn){
-    form.addEventListener("submit", () => {
+    form.addEventListener("submit", (e) => {
+      let ok = true;
+
+      if(email && !email.checkValidity()){ setError(email, true); ok = false; }
+      else setError(email, false);
+
+      if(pass && pass.value.trim().length < 1){ setError(pass, true); ok = false; }
+      else setError(pass, false);
+
+      if(!ok){
+        e.preventDefault();
+        return;
+      }
+
+      // anti doble submit
       btn.disabled = true;
       btn.textContent = "Entrando…";
     });

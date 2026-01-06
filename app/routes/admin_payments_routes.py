@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List
 
 from flask import (
     Blueprint,
@@ -34,6 +34,7 @@ _TRUE = {"1", "true", "yes", "y", "on", "checked"}
 # ============================================================
 # Helpers base (PRO)
 # ============================================================
+
 
 def _wants_json() -> bool:
     p = (request.path or "").lower()
@@ -112,6 +113,7 @@ def _audit_user_email() -> str:
         uid = int(session.get("user_id") or 0)
         if uid:
             from app.models import User  # import local
+
             u = db.session.get(User, uid)
             if u:
                 return (getattr(u, "email", "") or "").lower()[:120]
@@ -124,6 +126,7 @@ def _audit_user_email() -> str:
 # Security gates (ULTRA)
 # ============================================================
 
+
 def _csrf_ok() -> bool:
     """
     CSRF PRO:
@@ -134,11 +137,14 @@ def _csrf_ok() -> bool:
         return True
 
     header_name = (current_app.config.get("CSRF_HEADER") or "X-CSRF-Token").strip()
-    sent = (request.headers.get(header_name) or request.form.get("csrf_token") or "").strip()
+    sent = (
+        request.headers.get(header_name) or request.form.get("csrf_token") or ""
+    ).strip()
     tok = (session.get("csrf_token") or "").strip()
 
     try:
         import secrets
+
         return bool(tok) and bool(sent) and secrets.compare_digest(tok, sent)
     except Exception:
         return False
@@ -164,8 +170,11 @@ def _admin_required():
     # fallback: validar contra DB (owner/admin)
     try:
         from app.models import User  # import local para no romper imports
+
         u = db.session.get(User, int(uid))
-        if u and (bool(getattr(u, "is_admin", False)) or bool(getattr(u, "is_owner", False))):
+        if u and (
+            bool(getattr(u, "is_admin", False)) or bool(getattr(u, "is_owner", False))
+        ):
             session["is_admin"] = True
             session["user_email"] = (getattr(u, "email", "") or "").lower()
             return None
@@ -198,6 +207,7 @@ def _rate_limit(key: str, seconds: float = 0.6) -> bool:
 # ============================================================
 # Provider helpers (PRO)
 # ============================================================
+
 
 def _payments_available() -> bool:
     return PaymentProvider is not None and PaymentProviderService is not None
@@ -246,7 +256,10 @@ def _provider_to_ui_dict(p) -> Dict[str, Any]:
         try:
             prev = p.as_dict(masked=True)
         except Exception:
-            prev = {"code": getattr(p, "code", ""), "name": getattr(p, "name", "Provider")}
+            prev = {
+                "code": getattr(p, "code", ""),
+                "name": getattr(p, "name", "Provider"),
+            }
 
     try:
         prev.setdefault("schema", p.config_schema_for(getattr(p, "code", "")))
@@ -290,6 +303,7 @@ def _sanitize_cfg(cfg: Dict[str, Any]) -> Dict[str, Any]:
 # Routes (ULTRA)
 # ============================================================
 
+
 @admin_payments_bp.get("/payments")
 def admin_payments_page():
     guard = _admin_required()
@@ -302,16 +316,12 @@ def admin_payments_page():
 
     _bootstrap_defaults_if_needed()
 
-    providers = (
-        PaymentProvider.query  # type: ignore[attr-defined]
-        .order_by(
-            PaymentProvider.enabled.desc(),       # type: ignore[attr-defined]
-            PaymentProvider.recommended.desc(),   # type: ignore[attr-defined]
-            PaymentProvider.sort_order.asc(),     # type: ignore[attr-defined]
-            PaymentProvider.name.asc(),           # type: ignore[attr-defined]
-        )
-        .all()
-    )
+    providers = PaymentProvider.query.order_by(  # type: ignore[attr-defined]
+        PaymentProvider.enabled.desc(),  # type: ignore[attr-defined]
+        PaymentProvider.recommended.desc(),  # type: ignore[attr-defined]
+        PaymentProvider.sort_order.asc(),  # type: ignore[attr-defined]
+        PaymentProvider.name.asc(),  # type: ignore[attr-defined]
+    ).all()
 
     items: List[Dict[str, Any]] = [_provider_to_ui_dict(p) for p in providers]
 
@@ -380,10 +390,10 @@ def admin_payments_save(code: str):
     p.sort_order = _clamp_int(_read_int("sort_order", 100), 0, 9999)
 
     kind = (_read_str("kind", 20) or getattr(p, "kind", "other")).lower().strip()
-    p.kind = (kind[:20] if kind else (getattr(p, "kind", "other") or "other"))
+    p.kind = kind[:20] if kind else (getattr(p, "kind", "other") or "other")
 
     country = (_read_str("country", 2) or getattr(p, "country", "UY")).upper().strip()
-    p.country = (country[:2] if len(country) == 2 else "UY")
+    p.country = country[:2] if len(country) == 2 else "UY"
 
     p.fee_percent = _clamp_int(_read_int("fee_percent", 0), 0, 100)
     p.eta_minutes = _clamp_int(_read_int("eta_minutes", 0), 0, 100000)
@@ -440,7 +450,9 @@ def admin_payments_save(code: str):
     except Exception as e:
         db.session.rollback()
         if _wants_json():
-            return _json({"ok": False, "error": "config_invalid", "message": str(e)}, 400)
+            return _json(
+                {"ok": False, "error": "config_invalid", "message": str(e)}, 400
+            )
         flash(f"Config inválida: {e}", "error")
         return _safe_redirect("admin_payments.admin_payments_page")
 

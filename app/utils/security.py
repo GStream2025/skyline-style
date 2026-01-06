@@ -177,7 +177,7 @@ def safe_next_url(default_endpoint: str = "main.home", **endpoint_kwargs) -> str
       - form next
     """
     try:
-        nxt = (request.args.get("next") or request.form.get("next") or "")
+        nxt = request.args.get("next") or request.form.get("next") or ""
     except Exception:
         nxt = ""
 

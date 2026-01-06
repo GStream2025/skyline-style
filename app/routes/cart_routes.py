@@ -57,6 +57,7 @@ _REQ_CACHE_KEY = "_cart_snapshot_cache"
 # Helpers base
 # ============================================================
 
+
 def _now_ts() -> int:
     return int(time())
 
@@ -77,7 +78,11 @@ def _money(x: Any) -> str:
 def _is_json_request() -> bool:
     accept = (request.headers.get("Accept") or "").lower()
     ctype = (request.headers.get("Content-Type") or "").lower()
-    return ("application/json" in accept) or ("application/json" in ctype) or request.args.get("json") == "1"
+    return (
+        ("application/json" in accept)
+        or ("application/json" in ctype)
+        or request.args.get("json") == "1"
+    )
 
 
 def _endpoint_exists(endpoint: str) -> bool:
@@ -106,7 +111,9 @@ def _reply(
 ):
     if _is_json_request() or html_redirect_endpoint is None:
         return jsonify(payload), status
-    return redirect(_url_for_safe(html_redirect_endpoint, fallback_path=fallback_path, **ep_kwargs))
+    return redirect(
+        _url_for_safe(html_redirect_endpoint, fallback_path=fallback_path, **ep_kwargs)
+    )
 
 
 def _err(
@@ -120,12 +127,18 @@ def _err(
     payload: Dict[str, Any] = {"ok": False, "error": {"code": code, "message": message}}
     if details:
         payload["error"]["details"] = details
-    return _reply(payload, status=status, html_redirect_endpoint=html_redirect_endpoint, fallback_path="/cart")
+    return _reply(
+        payload,
+        status=status,
+        html_redirect_endpoint=html_redirect_endpoint,
+        fallback_path="/cart",
+    )
 
 
 # ============================================================
 # CSRF (opcional / no rompe)
 # ============================================================
+
 
 def _csrf_enabled() -> bool:
     return bool((session.get(CSRF_SESSION_KEY) or "").strip())
@@ -136,7 +149,11 @@ def _check_csrf() -> bool:
     got = (
         (request.headers.get("X-CSRF-Token") or "")
         or (request.form.get("csrf_token") or "")
-        or ((request.get_json(silent=True) or {}).get("csrf_token") if request.is_json else "")
+        or (
+            (request.get_json(silent=True) or {}).get("csrf_token")
+            if request.is_json
+            else ""
+        )
         or ""
     )
     got = str(got).strip()
@@ -144,6 +161,7 @@ def _check_csrf() -> bool:
         return True  # no existe => no exigimos
     try:
         import secrets
+
         return bool(got) and secrets.compare_digest(token, got)
     except Exception:
         return token == got
@@ -152,13 +170,18 @@ def _check_csrf() -> bool:
 def _csrf_required() -> Optional[Any]:
     if request.method in {"POST", "PUT", "PATCH", "DELETE"} and _csrf_enabled():
         if not _check_csrf():
-            return _err("csrf_invalid", "Token inválido. Recargá la página e intentá de nuevo.", 400)
+            return _err(
+                "csrf_invalid",
+                "Token inválido. Recargá la página e intentá de nuevo.",
+                400,
+            )
     return None
 
 
 # ============================================================
 # Rate-limit por bucket
 # ============================================================
+
 
 def _rate_limit_ok(bucket: str) -> bool:
     try:
@@ -192,6 +215,7 @@ def _rate_limit_ok(bucket: str) -> bool:
 # Qty helpers
 # ============================================================
 
+
 def _clamp_qty(qty: int) -> int:
     if qty < MIN_QTY_PER_ITEM:
         return MIN_QTY_PER_ITEM
@@ -217,6 +241,7 @@ def _parse_qty(value: Any, default: int = 1) -> int:
 # ============================================================
 # Cart session structure
 # ============================================================
+
 
 def _invalidate_snapshot_cache() -> None:
     try:
@@ -250,8 +275,15 @@ def _cart() -> Dict[str, Any]:
                 qty = _parse_qty(v.get("qty") or v.get("q") or 1, 1)
                 if qty <= 0:
                     continue
-                new_items[str(k)] = {"q": qty, "a": int(v.get("added_at") or v.get("a") or _now_ts())}
-        c = {"v": CART_SCHEMA_VERSION, "items": new_items, "meta": dict(c.get("meta") or {})}
+                new_items[str(k)] = {
+                    "q": qty,
+                    "a": int(v.get("added_at") or v.get("a") or _now_ts()),
+                }
+        c = {
+            "v": CART_SCHEMA_VERSION,
+            "items": new_items,
+            "meta": dict(c.get("meta") or {}),
+        }
         session[CART_SESSION_KEY] = c
         session.modified = True
 
@@ -259,7 +291,10 @@ def _cart() -> Dict[str, Any]:
     c.setdefault("meta", {})
 
     # currency normalizada + whitelist
-    cur = str(c["meta"].get("currency") or DEFAULT_CURRENCY).strip().upper()[:3] or DEFAULT_CURRENCY
+    cur = (
+        str(c["meta"].get("currency") or DEFAULT_CURRENCY).strip().upper()[:3]
+        or DEFAULT_CURRENCY
+    )
     if cur not in ALLOWED_CURRENCIES:
         cur = DEFAULT_CURRENCY
     c["meta"]["currency"] = cur
@@ -279,6 +314,7 @@ def _save_cart(c: Dict[str, Any]) -> None:
 # ============================================================
 # Product helpers
 # ============================================================
+
 
 def _get_product(product_id: int) -> Optional[Product]:
     try:
@@ -325,9 +361,9 @@ def _product_image(p: Product) -> Optional[str]:
 
 
 def _product_currency(p: Product) -> str:
-    c = (getattr(p, "currency", None) or DEFAULT_CURRENCY)
+    c = getattr(p, "currency", None) or DEFAULT_CURRENCY
     c = str(c).strip().upper()
-    c = (c[:3] if len(c) >= 3 else DEFAULT_CURRENCY)
+    c = c[:3] if len(c) >= 3 else DEFAULT_CURRENCY
     return c if c in ALLOWED_CURRENCIES else DEFAULT_CURRENCY
 
 
@@ -358,7 +394,9 @@ def _is_available(p: Product, qty: int) -> Tuple[bool, str, int]:
     return True, "", qty
 
 
-def _apply_offer_discount_if_any(p: Product, unit_price: Decimal) -> Tuple[Decimal, Optional[str]]:
+def _apply_offer_discount_if_any(
+    p: Product, unit_price: Decimal
+) -> Tuple[Decimal, Optional[str]]:
     if Offer is None or not hasattr(Offer, "query"):
         return unit_price, None
 
@@ -372,6 +410,7 @@ def _apply_offer_discount_if_any(p: Product, unit_price: Decimal) -> Tuple[Decim
         # vigencia robusta (UTC naive)
         try:
             from datetime import datetime
+
             now_dt = datetime.utcnow()
             starts = getattr(o, "starts_at", None)
             ends = getattr(o, "ends_at", None)
@@ -382,7 +421,9 @@ def _apply_offer_discount_if_any(p: Product, unit_price: Decimal) -> Tuple[Decim
         except Exception:
             pass
 
-        dtype = (getattr(o, "discount_type", None) or getattr(o, "type", "none") or "none").lower()
+        dtype = (
+            getattr(o, "discount_type", None) or getattr(o, "type", "none") or "none"
+        ).lower()
         dval = _d(getattr(o, "discount_value", None) or getattr(o, "value", 0))
         if dval <= 0:
             return unit_price, None
@@ -408,6 +449,7 @@ def _apply_offer_discount_if_any(p: Product, unit_price: Decimal) -> Tuple[Decim
 # ============================================================
 # Snapshot (anti-trampa real)
 # ============================================================
+
 
 @dataclass
 class CartLine:
@@ -468,7 +510,10 @@ def cart_snapshot() -> Dict[str, Any]:
         c["items"] = items
         _save_cart(c)
 
-    cart_currency = str(c.get("meta", {}).get("currency") or DEFAULT_CURRENCY).upper()[:3] or DEFAULT_CURRENCY
+    cart_currency = (
+        str(c.get("meta", {}).get("currency") or DEFAULT_CURRENCY).upper()[:3]
+        or DEFAULT_CURRENCY
+    )
     if cart_currency not in ALLOWED_CURRENCIES:
         cart_currency = DEFAULT_CURRENCY
         c["meta"]["currency"] = cart_currency
@@ -510,7 +555,11 @@ def cart_snapshot() -> Dict[str, Any]:
         discounted_unit, badge = _apply_offer_discount_if_any(p, base_unit)
 
         compare_at_display = None
-        if compare_at_dec is not None and compare_at_dec > base_unit and compare_at_dec > 0:
+        if (
+            compare_at_dec is not None
+            and compare_at_dec > base_unit
+            and compare_at_dec > 0
+        ):
             compare_at_display = _money(compare_at_dec)
 
         if discounted_unit < base_unit:
@@ -524,23 +573,25 @@ def cart_snapshot() -> Dict[str, Any]:
 
         added_at = int((row or {}).get("a") or _now_ts())
 
-        lines.append(CartLine(
-            product_id=pid,
-            qty=qty,
-            title=_product_title(p),
-            slug=getattr(p, "slug", None),
-            image_url=_product_image(p),
-            currency=cart_currency,  # forzamos moneda del carrito
-            unit_price=discounted_unit,
-            unit_price_display=_money(discounted_unit),
-            line_total=line_total,
-            line_total_display=_money(line_total),
-            compare_at_display=compare_at_display,
-            discount_badge=badge,
-            available=True,
-            note=(msg or None),
-            added_at=added_at,
-        ))
+        lines.append(
+            CartLine(
+                product_id=pid,
+                qty=qty,
+                title=_product_title(p),
+                slug=getattr(p, "slug", None),
+                image_url=_product_image(p),
+                currency=cart_currency,  # forzamos moneda del carrito
+                unit_price=discounted_unit,
+                unit_price_display=_money(discounted_unit),
+                line_total=line_total,
+                line_total_display=_money(line_total),
+                compare_at_display=compare_at_display,
+                discount_badge=badge,
+                available=True,
+                note=(msg or None),
+                added_at=added_at,
+            )
+        )
 
         # normaliza session
         items[str(pid)] = {"q": qty, "a": added_at}
@@ -579,6 +630,7 @@ def cart_snapshot() -> Dict[str, Any]:
 # Public hook (futuro carrito en DB)
 # ============================================================
 
+
 def merge_cart_items(into_user_id: int) -> None:
     _ = into_user_id
     return
@@ -587,6 +639,7 @@ def merge_cart_items(into_user_id: int) -> None:
 # ============================================================
 # ROUTES
 # ============================================================
+
 
 @cart_bp.get("/")
 def cart_view():
@@ -616,7 +669,11 @@ def cart_json():
 @cart_bp.get("/count")
 def cart_count():
     snap = cart_snapshot()
-    return jsonify(ok=True, items_count=int(snap.get("items_count") or 0), distinct_items=int(snap.get("distinct_items") or 0))
+    return jsonify(
+        ok=True,
+        items_count=int(snap.get("items_count") or 0),
+        distinct_items=int(snap.get("distinct_items") or 0),
+    )
 
 
 # ✅ PRO: EL LINK ÚNICO PARA “FINALIZAR COMPRA”
@@ -640,7 +697,12 @@ def cart_checkout_bridge():
         return redirect(url_for("checkout.checkout_home"))
 
     # fallbacks (si alguna vez tuviste otros nombres)
-    for ep in ("shop.checkout", "shop.checkout_home", "main.checkout", "main.checkout_home"):
+    for ep in (
+        "shop.checkout",
+        "shop.checkout_home",
+        "main.checkout",
+        "main.checkout_home",
+    ):
         if _endpoint_exists(ep):
             return redirect(url_for(ep))
 
@@ -652,13 +714,16 @@ def cart_checkout_bridge():
 # ACTIONS
 # ============================================================
 
+
 @cart_bp.post("/add")
 def cart_add():
     gate = _csrf_required()
     if gate:
         return gate
     if not _rate_limit_ok("add"):
-        return _err("rate_limited", "Demasiadas acciones. Probá de nuevo en un momento.", 429)
+        return _err(
+            "rate_limited", "Demasiadas acciones. Probá de nuevo en un momento.", 429
+        )
 
     data = request.get_json(silent=True) or request.form
     pid = data.get("product_id") or data.get("id")
@@ -685,7 +750,11 @@ def cart_add():
     if new_qty <= 0:
         items.pop(str(pid_int), None)
         _save_cart(c)
-        return _reply({"ok": True, "cart": cart_snapshot()}, status=200, html_redirect_endpoint="cart.cart_view")
+        return _reply(
+            {"ok": True, "cart": cart_snapshot()},
+            status=200,
+            html_redirect_endpoint="cart.cart_view",
+        )
 
     ok, msg, allowed = _is_available(p, new_qty)
     if not ok:
@@ -698,7 +767,11 @@ def cart_add():
     c["items"] = items
     _save_cart(c)
 
-    return _reply({"ok": True, "cart": cart_snapshot()}, status=200, html_redirect_endpoint="cart.cart_view")
+    return _reply(
+        {"ok": True, "cart": cart_snapshot()},
+        status=200,
+        html_redirect_endpoint="cart.cart_view",
+    )
 
 
 @cart_bp.post("/update")
@@ -707,7 +780,9 @@ def cart_update():
     if gate:
         return gate
     if not _rate_limit_ok("update"):
-        return _err("rate_limited", "Demasiadas acciones. Probá de nuevo en un momento.", 429)
+        return _err(
+            "rate_limited", "Demasiadas acciones. Probá de nuevo en un momento.", 429
+        )
 
     data = request.get_json(silent=True) or request.form
 
@@ -743,7 +818,11 @@ def cart_update():
             if allowed > 0:
                 qty = _clamp_qty(allowed)
             else:
-                return ("not_available", 400, msg or "Producto no disponible o sin stock.")
+                return (
+                    "not_available",
+                    400,
+                    msg or "Producto no disponible o sin stock.",
+                )
 
         items[str(pid_int)]["q"] = qty
         items[str(pid_int)].setdefault("a", _now_ts())
@@ -768,7 +847,11 @@ def cart_update():
     c["items"] = items
     _save_cart(c)
 
-    return _reply({"ok": True, "cart": cart_snapshot()}, status=200, html_redirect_endpoint="cart.cart_view")
+    return _reply(
+        {"ok": True, "cart": cart_snapshot()},
+        status=200,
+        html_redirect_endpoint="cart.cart_view",
+    )
 
 
 @cart_bp.post("/remove")
@@ -777,7 +860,9 @@ def cart_remove():
     if gate:
         return gate
     if not _rate_limit_ok("remove"):
-        return _err("rate_limited", "Demasiadas acciones. Probá de nuevo en un momento.", 429)
+        return _err(
+            "rate_limited", "Demasiadas acciones. Probá de nuevo en un momento.", 429
+        )
 
     data = request.get_json(silent=True) or request.form
     pid = data.get("product_id") or data.get("id")
@@ -791,7 +876,11 @@ def cart_remove():
     c["items"].pop(str(pid_int), None)
     _save_cart(c)
 
-    return _reply({"ok": True, "cart": cart_snapshot()}, status=200, html_redirect_endpoint="cart.cart_view")
+    return _reply(
+        {"ok": True, "cart": cart_snapshot()},
+        status=200,
+        html_redirect_endpoint="cart.cart_view",
+    )
 
 
 @cart_bp.post("/clear")
@@ -800,13 +889,19 @@ def cart_clear():
     if gate:
         return gate
     if not _rate_limit_ok("clear"):
-        return _err("rate_limited", "Demasiadas acciones. Probá de nuevo en un momento.", 429)
+        return _err(
+            "rate_limited", "Demasiadas acciones. Probá de nuevo en un momento.", 429
+        )
 
     session.pop(CART_SESSION_KEY, None)
     session.modified = True
     _invalidate_snapshot_cache()
 
-    return _reply({"ok": True, "cart": cart_snapshot()}, status=200, html_redirect_endpoint="cart.cart_view")
+    return _reply(
+        {"ok": True, "cart": cart_snapshot()},
+        status=200,
+        html_redirect_endpoint="cart.cart_view",
+    )
 
 
 __all__ = ["cart_bp", "cart_snapshot", "merge_cart_items"]

@@ -1,7 +1,6 @@
 ﻿from __future__ import annotations
 
 import os
-from typing import Optional
 
 
 # =============================================================================
@@ -40,7 +39,9 @@ PRINTFUL_API_KEY: str = _env(
 )
 
 # --- BASE URL ------------------------------------------------
-PRINTFUL_BASE_URL: str = _env("PRINTFUL_BASE_URL", "https://api.printful.com").rstrip("/")
+PRINTFUL_BASE_URL: str = _env("PRINTFUL_BASE_URL", "https://api.printful.com").rstrip(
+    "/"
+)
 
 # --- Feature flag --------------------------------------------
 # Permite desactivar Printful sin borrar código
@@ -82,6 +83,7 @@ PRINTFUL_DEBUG: bool = _env_bool("PRINTFUL_DEBUG", default=False)
 # =============================================================================
 # Helpers públicos (opcionales, pero útiles)
 # =============================================================================
+
 
 def printful_enabled() -> bool:
     """

@@ -33,11 +33,15 @@ import secrets
 import time
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional
 
 from app.models import db
 from app.models.order import Order
-from app.services.order_service import OrderService, OrderServiceError, PaymentMismatchError
+from app.services.order_service import (
+    OrderService,
+    OrderServiceError,
+    PaymentMismatchError,
+)
 
 _TRUE = {"1", "true", "yes", "y", "on"}
 
@@ -47,11 +51,14 @@ _TRUE = {"1", "true", "yes", "y", "on"}
 # -----------------------------------------------------------------------------
 def _env(k: str, d: str = "") -> str:
     import os
+
     return (os.getenv(k) or d).strip()
+
 
 def _bool_env(k: str, d: bool = False) -> bool:
     v = _env(k, "")
     return v.lower() in _TRUE if v else d
+
 
 def _d(v: Any, default: str = "0.00") -> Decimal:
     try:
@@ -63,12 +70,15 @@ def _d(v: Any, default: str = "0.00") -> Decimal:
     except (InvalidOperation, ValueError, TypeError):
         return Decimal(default)
 
+
 def _money_str(v: Any) -> str:
     return f"{_d(v):.2f}"
+
 
 def _upper3(v: Any, default: str = "USD") -> str:
     s = (str(v) if v is not None else default).strip().upper()
     return s[:3] if len(s) >= 3 else default
+
 
 def _safe_str(v: Any, max_len: int) -> Optional[str]:
     if v is None:
@@ -78,6 +88,7 @@ def _safe_str(v: Any, max_len: int) -> Optional[str]:
         return None
     return s[:max_len]
 
+
 def _meta_merge(base: Any, extra: Dict[str, Any]) -> Dict[str, Any]:
     out: Dict[str, Any] = {}
     if isinstance(base, dict):
@@ -85,8 +96,10 @@ def _meta_merge(base: Any, extra: Dict[str, Any]) -> Dict[str, Any]:
     out.update(extra or {})
     return out
 
+
 def _now_ts() -> int:
     return int(time.time())
+
 
 def _make_reference(order_number: str, order_id: int) -> str:
     """
@@ -95,6 +108,7 @@ def _make_reference(order_number: str, order_id: int) -> str:
     rnd = secrets.token_hex(2).upper()  # 4 chars
     base = (order_number or f"ORD{order_id}").replace(" ", "")[:24]
     return f"WS-{base}-{rnd}"[:40]
+
 
 def _wise_instructions_text(currency: str) -> str:
     """
@@ -106,6 +120,7 @@ def _wise_instructions_text(currency: str) -> str:
     if txt:
         return txt
     return f"Transferencia por Wise ({currency}). Enviá el pago y adjuntá comprobante."
+
 
 def _tolerance() -> Decimal:
     try:
@@ -151,7 +166,10 @@ def get_or_create_wise_payment(
         wise_meta = meta.get("wise") if isinstance(meta.get("wise"), dict) else {}
 
         # si ya existe, devolver
-        if wise_meta.get("reference") and wise_meta.get("status") in {"pending", "confirmed"}:
+        if wise_meta.get("reference") and wise_meta.get("status") in {
+            "pending",
+            "confirmed",
+        }:
             return WisePaymentInfo(
                 ok=True,
                 order_id=order.id,
@@ -159,7 +177,10 @@ def get_or_create_wise_payment(
                 currency=_upper3(order.currency, "USD"),
                 amount=_money_str(order.total),
                 reference=str(wise_meta.get("reference")),
-                instructions=str(wise_meta.get("instructions") or _wise_instructions_text(_upper3(order.currency, "USD"))),
+                instructions=str(
+                    wise_meta.get("instructions")
+                    or _wise_instructions_text(_upper3(order.currency, "USD"))
+                ),
                 status=str(wise_meta.get("status") or "pending"),
                 meta=wise_meta,
             )
@@ -183,12 +204,15 @@ def get_or_create_wise_payment(
             "checkout_key": _safe_str(checkout_key, 120),
         }
 
-        order.meta = _meta_merge(meta, {
-            "payment_provider": "wise",
-            "wise": wise_payload,
-            # para UI: no hay redirect_url, mostramos instrucciones
-            "redirect_url": None,
-        })
+        order.meta = _meta_merge(
+            meta,
+            {
+                "payment_provider": "wise",
+                "wise": wise_payload,
+                # para UI: no hay redirect_url, mostramos instrucciones
+                "redirect_url": None,
+            },
+        )
         order.payment_method = "wise"
         order.payment_status = Order.PAY_PENDING
 
@@ -234,7 +258,10 @@ def confirm_wise_payment_manual(
                 currency=_upper3(order.currency, "USD"),
                 amount=_money_str(order.total),
                 reference=str(wise_meta.get("reference") or reference or ""),
-                instructions=str(wise_meta.get("instructions") or _wise_instructions_text(_upper3(order.currency, "USD"))),
+                instructions=str(
+                    wise_meta.get("instructions")
+                    or _wise_instructions_text(_upper3(order.currency, "USD"))
+                ),
                 status="confirmed",
                 meta=wise_meta,
             )
@@ -278,13 +305,16 @@ def confirm_wise_payment_manual(
 
         meta = order.meta if isinstance(order.meta, dict) else {}
         wise_meta = meta.get("wise") if isinstance(meta.get("wise"), dict) else {}
-        wise_meta = _meta_merge(wise_meta, {
-            "status": "confirmed",
-            "confirmed_at": _now_ts(),
-            "reference": _safe_str(reference, 80) or wise_meta.get("reference"),
-            "evidence_url": _safe_str(evidence_url, 500),
-            "admin_note": _safe_str(admin_note, 500),
-        })
+        wise_meta = _meta_merge(
+            wise_meta,
+            {
+                "status": "confirmed",
+                "confirmed_at": _now_ts(),
+                "reference": _safe_str(reference, 80) or wise_meta.get("reference"),
+                "evidence_url": _safe_str(evidence_url, 500),
+                "admin_note": _safe_str(admin_note, 500),
+            },
+        )
 
         order.meta = _meta_merge(meta, {"wise": wise_meta})
 
@@ -295,10 +325,17 @@ def confirm_wise_payment_manual(
             currency=_upper3(order.currency, "USD"),
             amount=_money_str(order.total),
             reference=str(wise_meta.get("reference") or ""),
-            instructions=str(wise_meta.get("instructions") or _wise_instructions_text(_upper3(order.currency, "USD"))),
+            instructions=str(
+                wise_meta.get("instructions")
+                or _wise_instructions_text(_upper3(order.currency, "USD"))
+            ),
             status="confirmed",
             meta=wise_meta,
         )
 
 
-__all__ = ["get_or_create_wise_payment", "confirm_wise_payment_manual", "WisePaymentInfo"]
+__all__ = [
+    "get_or_create_wise_payment",
+    "confirm_wise_payment_manual",
+    "WisePaymentInfo",
+]

@@ -43,7 +43,11 @@ def _bool_env(key: str, default: bool = False) -> bool:
     if v is None:
         return default
     s = str(v).strip().lower()
-    return s in {"1", "true", "yes", "y", "on"} if s in {"1", "true", "yes", "y", "on", "0", "false", "no", "n", "off"} else default
+    return (
+        s in {"1", "true", "yes", "y", "on"}
+        if s in {"1", "true", "yes", "y", "on", "0", "false", "no", "n", "off"}
+        else default
+    )
 
 
 ENV = _normalize_env()

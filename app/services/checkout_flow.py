@@ -38,9 +38,16 @@ log = logging.getLogger("checkout_flow")
 # Errors
 # =============================================================================
 
+
 class CheckoutError(RuntimeError): ...
+
+
 class CheckoutValidationError(CheckoutError): ...
+
+
 class CheckoutProviderError(CheckoutError): ...
+
+
 class CheckoutNotFoundError(CheckoutError): ...
 
 
@@ -48,8 +55,10 @@ class CheckoutNotFoundError(CheckoutError): ...
 # Helpers
 # =============================================================================
 
+
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
 
 def _d(v: Any, default="0.00") -> Decimal:
     try:
@@ -57,26 +66,32 @@ def _d(v: Any, default="0.00") -> Decimal:
     except (InvalidOperation, TypeError, ValueError):
         return Decimal(default)
 
+
 def _money(v: Any) -> Decimal:
     d = _d(v)
     return d if d >= Decimal("0.00") else Decimal("0.00")
+
 
 def _currency(v: Optional[str], default="USD") -> str:
     s = (v or default).upper().strip()
     return s[:3] if len(s) >= 3 else default
 
+
 def _email(v: str) -> str:
     return (v or "").strip().lower()
+
 
 def _country(v: Optional[str]) -> Optional[str]:
     s = (v or "").strip().upper()
     return s[:2] if s else None
+
 
 def _safe(v: Any, n: int) -> Optional[str]:
     if v is None:
         return None
     s = str(v).strip()
     return s[:n] if s else None
+
 
 def _merge(a: Optional[dict], b: Optional[dict]) -> dict:
     out = dict(a or {})
@@ -85,6 +100,7 @@ def _merge(a: Optional[dict], b: Optional[dict]) -> dict:
             out[k] = v
     return out
 
+
 def _token(n: int = 12) -> str:
     return secrets.token_urlsafe(n)
 
@@ -92,6 +108,7 @@ def _token(n: int = 12) -> str:
 # =============================================================================
 # DTOs
 # =============================================================================
+
 
 @dataclass(frozen=True)
 class CheckoutState:
@@ -122,6 +139,7 @@ class PaymentStartResult:
 # =============================================================================
 # Checkout Flow
 # =============================================================================
+
 
 class CheckoutFlow:
     """
@@ -227,14 +245,17 @@ class CheckoutFlow:
             raise CheckoutValidationError("Proveedor inválido")
 
         with db.session.begin():
-            order.meta = _merge(order.meta, {
-                "checkout_key": checkout_key,
-                "payment_provider": provider,
-                "success_url": _safe(success_url, 500),
-                "cancel_url": _safe(cancel_url, 500),
-                "intent_created_at": utcnow().isoformat(),
-                "intent_extra": extra_meta,
-            })
+            order.meta = _merge(
+                order.meta,
+                {
+                    "checkout_key": checkout_key,
+                    "payment_provider": provider,
+                    "success_url": _safe(success_url, 500),
+                    "cancel_url": _safe(cancel_url, 500),
+                    "intent_created_at": utcnow().isoformat(),
+                    "intent_extra": extra_meta,
+                },
+            )
             order.payment_method = provider
             order.payment_status = Order.PAY_PENDING
             order.updated_at = utcnow()

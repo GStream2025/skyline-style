@@ -1,8 +1,9 @@
 ﻿# app/models/order.py
 from __future__ import annotations
 
+import time
 from datetime import datetime, timezone
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Optional, Any, Dict
 
 from sqlalchemy import Index, CheckConstraint, event
@@ -14,12 +15,13 @@ from app.models import db
 # Time / Decimal helpers (blindados)
 # ============================================================
 
+
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
 def _d(v: Any, default: str = "0.00") -> Decimal:
-    """Decimal seguro (no rompe con None, '', floats, basura)."""
+    """Decimal seguro (None, '', floats, basura)."""
     try:
         if v is None or v == "":
             return Decimal(default)
@@ -30,10 +32,37 @@ def _d(v: Any, default: str = "0.00") -> Decimal:
         return Decimal(default)
 
 
-def _clamp_money(v: Any) -> Decimal:
-    """Evita montos negativos y normaliza a Decimal."""
-    dv = _d(v)
-    return dv if dv >= Decimal("0.00") else Decimal("0.00")
+def _money(v: Any) -> Decimal:
+    """Money >=0 y con 2 decimales."""
+    dv = _d(v, "0.00")
+    if dv < Decimal("0.00"):
+        dv = Decimal("0.00")
+    return dv.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def _rate(v: Any) -> Decimal:
+    """Rate 0..0.8000 con 4 decimales (comisiones)."""
+    dv = _d(v, "0.0000")
+    if dv < Decimal("0.0000"):
+        dv = Decimal("0.0000")
+    if dv > Decimal("0.8000"):
+        dv = Decimal("0.8000")
+    return dv.quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+
+
+def _clip_str(v: Any, n: int) -> Optional[str]:
+    if v is None:
+        return None
+    s = str(v).strip()
+    return s[:n] if s else None
+
+
+def _meta(base: Optional[dict], extra: Optional[dict]) -> dict:
+    out = dict(base or {})
+    for k, v in (extra or {}).items():
+        if v is not None:
+            out[k] = v
+    return out
 
 
 # JSON portable: JSON real en Postgres, TEXT en SQLite
@@ -44,16 +73,17 @@ MetaType = db.JSON().with_variant(db.Text(), "sqlite")
 # Order
 # ============================================================
 
+
 class Order(db.Model):
     """
-    Skyline Store — Order ULTRA PRO (FINAL / ZERO-CRASH)
+    Skyline Store — Order ULTRA PRO (FINAL / ZERO-CRASH++)
 
-    ✅ No depende de User para mapear (evita el error 'User failed to locate a name')
-    ✅ Totales blindados + auto-recompute
-    ✅ CheckConstraints de no-negativos
-    ✅ Snapshot de cliente (checkout sin cuenta)
-    ✅ Compatible SQLite/Postgres
-    ✅ Relación con User se crea desde User (backref="user") -> ver parche en user.py
+    ✅ Diseñado para producción:
+    - No depende de User para mapear
+    - Totales blindados, constraints y recompute seguro
+    - Soporta afiliados + comisiones (Item 1)
+    - Idempotencia (checkout) + referencia de pago (provider_payment_id)
+    - Compatible SQLite/Postgres
     """
 
     __tablename__ = "orders"
@@ -78,6 +108,24 @@ class Order(db.Model):
     PAY_REFUNDED = "refunded"
 
     # -------------------------
+    # Fulfillment (opcional)
+    # -------------------------
+    FULFILL_NONE = "none"
+    FULFILL_QUEUED = "queued"
+    FULFILL_SENT = "sent"
+    FULFILL_DONE = "done"
+    FULFILL_FAILED = "failed"
+
+    # -------------------------
+    # Payout afiliado (opcional)
+    # -------------------------
+    PAYOUT_NONE = "none"
+    PAYOUT_PENDING = "pending"
+    PAYOUT_PAID = "paid"
+    PAYOUT_REVERSED = "reversed"
+    PAYOUT_HOLD = "hold"
+
+    # -------------------------
     # Métodos de pago
     # -------------------------
     PM_PAYPAL = "paypal"
@@ -99,9 +147,40 @@ class Order(db.Model):
         STATUS_REFUNDED,
     }
     _ALLOWED_PAY_STATUS = {PAY_PENDING, PAY_PAID, PAY_FAILED, PAY_REFUNDED}
+    _ALLOWED_FULFILL = {
+        FULFILL_NONE,
+        FULFILL_QUEUED,
+        FULFILL_SENT,
+        FULFILL_DONE,
+        FULFILL_FAILED,
+    }
+    _ALLOWED_PAYOUT = {
+        PAYOUT_NONE,
+        PAYOUT_PENDING,
+        PAYOUT_PAID,
+        PAYOUT_REVERSED,
+        PAYOUT_HOLD,
+    }
     _ALLOWED_PM = {
-        PM_PAYPAL, PM_MP_UY, PM_MP_AR, PM_BANK, PM_CASH,
-        PM_WISE, PM_PAYONEER, PM_PAXUM,
+        PM_PAYPAL,
+        PM_MP_UY,
+        PM_MP_AR,
+        PM_BANK,
+        PM_CASH,
+        PM_WISE,
+        PM_PAYONEER,
+        PM_PAXUM,
+    }
+
+    # Transiciones válidas (para service/admin)
+    _ALLOWED_TRANSITIONS = {
+        STATUS_AWAITING_PAYMENT: {STATUS_PAID, STATUS_CANCELLED},
+        STATUS_PAID: {STATUS_PROCESSING, STATUS_REFUNDED},
+        STATUS_PROCESSING: {STATUS_SHIPPED, STATUS_CANCELLED},
+        STATUS_SHIPPED: {STATUS_DELIVERED},
+        STATUS_DELIVERED: set(),
+        STATUS_CANCELLED: set(),
+        STATUS_REFUNDED: set(),
     }
 
     # -------------------------
@@ -109,16 +188,37 @@ class Order(db.Model):
     # -------------------------
     id = db.Column(db.Integer, primary_key=True)
 
-    # número humano de orden (lo seteás en service/checkout)
     number = db.Column(db.String(40), unique=True, index=True, nullable=False)
 
-    # FK (no rompe si User no existe cargado todavía)
     user_id = db.Column(
         db.Integer,
         db.ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
+
+    # -------------------------
+    # Affiliate / Commission (Item 1)
+    # -------------------------
+    affiliate_code = db.Column(db.String(80), index=True, nullable=True)
+    affiliate_sub = db.Column(db.String(120), index=True, nullable=True)
+
+    commission_rate_applied = db.Column(
+        db.Numeric(6, 4), nullable=False, default=Decimal("0.0000")
+    )
+    commission_amount = db.Column(
+        db.Numeric(12, 2), nullable=False, default=Decimal("0.00")
+    )
+    payout_status = db.Column(
+        db.String(20), nullable=False, default=PAYOUT_NONE, index=True
+    )
+
+    # -------------------------
+    # Idempotencia / Pago (más robusto)
+    # -------------------------
+    idempotency_key = db.Column(db.String(80), nullable=True, index=True)
+    payment_provider = db.Column(db.String(40), nullable=True, index=True)
+    provider_payment_id = db.Column(db.String(140), nullable=True, index=True)
 
     # -------------------------
     # Snapshot cliente
@@ -140,9 +240,19 @@ class Order(db.Model):
     # -------------------------
     # Estado / pago
     # -------------------------
-    status = db.Column(db.String(30), nullable=False, default=STATUS_AWAITING_PAYMENT, index=True)
-    payment_method = db.Column(db.String(30), nullable=False, default=PM_PAYPAL, index=True)
-    payment_status = db.Column(db.String(30), nullable=False, default=PAY_PENDING, index=True)
+    status = db.Column(
+        db.String(30), nullable=False, default=STATUS_AWAITING_PAYMENT, index=True
+    )
+    payment_method = db.Column(
+        db.String(30), nullable=False, default=PM_PAYPAL, index=True
+    )
+    payment_status = db.Column(
+        db.String(30), nullable=False, default=PAY_PENDING, index=True
+    )
+
+    fulfillment_status = db.Column(
+        db.String(20), nullable=False, default=FULFILL_NONE, index=True
+    )
 
     currency = db.Column(db.String(3), nullable=False, default="USD", index=True)
 
@@ -150,13 +260,17 @@ class Order(db.Model):
     # Totales (Numeric)
     # -------------------------
     subtotal = db.Column(db.Numeric(12, 2), nullable=False, default=Decimal("0.00"))
-    discount_total = db.Column(db.Numeric(12, 2), nullable=False, default=Decimal("0.00"))
-    shipping_total = db.Column(db.Numeric(12, 2), nullable=False, default=Decimal("0.00"))
+    discount_total = db.Column(
+        db.Numeric(12, 2), nullable=False, default=Decimal("0.00")
+    )
+    shipping_total = db.Column(
+        db.Numeric(12, 2), nullable=False, default=Decimal("0.00")
+    )
     tax_total = db.Column(db.Numeric(12, 2), nullable=False, default=Decimal("0.00"))
     total = db.Column(db.Numeric(12, 2), nullable=False, default=Decimal("0.00"))
 
     # -------------------------
-    # Referencias externas
+    # Referencias externas legacy
     # -------------------------
     paypal_order_id = db.Column(db.String(120), index=True)
     mp_payment_id = db.Column(db.String(120), index=True)
@@ -174,11 +288,19 @@ class Order(db.Model):
     # Timestamps
     # -------------------------
     paid_at = db.Column(db.DateTime(timezone=True), index=True)
-    cancelled_at = db.Column(db.DateTime(timezone=True))
-    refunded_at = db.Column(db.DateTime(timezone=True))
+    cancelled_at = db.Column(db.DateTime(timezone=True), index=True)
+    refunded_at = db.Column(db.DateTime(timezone=True), index=True)
 
-    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, index=True)
-    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+    created_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, default=utcnow, index=True
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=utcnow,
+        onupdate=utcnow,
+        index=True,
+    )
 
     # -------------------------
     # Metadata libre
@@ -188,10 +310,6 @@ class Order(db.Model):
     # ----------------------------------------------------------
     # Relationships
     # ----------------------------------------------------------
-    # ❌ NO relationship("User") ACÁ.
-    # ✅ La relación con User se define desde User con backref="user".
-    # Resultado: Order.user existe, pero NO rompe el mapper al arrancar.
-
     items = db.relationship(
         "OrderItem",
         back_populates="order",
@@ -200,66 +318,138 @@ class Order(db.Model):
         passive_deletes=True,
     )
 
+    # ----------------------------------------------------------
+    # Constraints PRO (más seguridad)
+    # ----------------------------------------------------------
     __table_args__ = (
+        # money nonneg
         CheckConstraint("subtotal >= 0", name="ck_orders_subtotal_nonneg"),
         CheckConstraint("discount_total >= 0", name="ck_orders_discount_nonneg"),
         CheckConstraint("shipping_total >= 0", name="ck_orders_shipping_nonneg"),
         CheckConstraint("tax_total >= 0", name="ck_orders_tax_nonneg"),
         CheckConstraint("total >= 0", name="ck_orders_total_nonneg"),
+        # commission nonneg
+        CheckConstraint(
+            "commission_rate_applied >= 0", name="ck_orders_comm_rate_nonneg"
+        ),
+        CheckConstraint("commission_amount >= 0", name="ck_orders_comm_amt_nonneg"),
     )
 
     # -------------------------
-    # Validaciones suaves
+    # Validaciones suaves + normalización
     # -------------------------
     @validates("currency")
-    def _v_currency(self, _k, v: str) -> str:
-        return (v or "USD").strip().upper()[:3]
+    def _v_currency(self, _k: str, v: str) -> str:
+        s = (v or "USD").strip().upper()
+        s = s[:3]
+        return s if len(s) == 3 else "USD"
 
     @validates("status")
-    def _v_status(self, _k, v: str) -> str:
-        v = (v or "").strip().lower()
-        return v if v in self._ALLOWED_STATUS else self.STATUS_AWAITING_PAYMENT
+    def _v_status(self, _k: str, v: str) -> str:
+        s = (v or "").strip().lower()
+        return s if s in self._ALLOWED_STATUS else self.STATUS_AWAITING_PAYMENT
 
     @validates("payment_status")
-    def _v_payment_status(self, _k, v: str) -> str:
-        v = (v or "").strip().lower()
-        return v if v in self._ALLOWED_PAY_STATUS else self.PAY_PENDING
+    def _v_payment_status(self, _k: str, v: str) -> str:
+        s = (v or "").strip().lower()
+        return s if s in self._ALLOWED_PAY_STATUS else self.PAY_PENDING
+
+    @validates("fulfillment_status")
+    def _v_fulfillment(self, _k: str, v: str) -> str:
+        s = (v or "").strip().lower()
+        return s if s in self._ALLOWED_FULFILL else self.FULFILL_NONE
+
+    @validates("payout_status")
+    def _v_payout(self, _k: str, v: str) -> str:
+        s = (v or "").strip().lower()
+        return s if s in self._ALLOWED_PAYOUT else self.PAYOUT_NONE
 
     @validates("payment_method")
-    def _v_payment_method(self, _k, v: str) -> str:
-        v = (v or "").strip().lower()
-        return v if v in self._ALLOWED_PM else self.PM_PAYPAL
+    def _v_payment_method(self, _k: str, v: str) -> str:
+        s = (v or "").strip().lower()
+        return s if s in self._ALLOWED_PM else self.PM_PAYPAL
 
     @validates("customer_email")
-    def _v_email(self, _k, v: Optional[str]) -> Optional[str]:
+    def _v_email(self, _k: str, v: Optional[str]) -> Optional[str]:
         return v.strip().lower()[:255] if v else None
 
     @validates("number")
-    def _v_number(self, _k, v: str) -> str:
-        # evita vacío/espacios
+    def _v_number(self, _k: str, v: str) -> str:
         vv = (v or "").strip()
         if not vv:
-            # NO generamos acá para no sorprender; lo ideal es en servicio.
-            # Pero igual devolvemos algo para no romper inserts.
             vv = f"ORD-{int(time.time())}"
         return vv[:40]
+
+    @validates("affiliate_code")
+    def _v_aff(self, _k: str, v: Optional[str]) -> Optional[str]:
+        if not v:
+            return None
+        s = v.strip().lower().replace(" ", "-")
+        cleaned = "".join(ch for ch in s if ch.isalnum() or ch in {"-", "_"})
+        return cleaned[:80] if cleaned else None
+
+    @validates("affiliate_sub")
+    def _v_sub(self, _k: str, v: Optional[str]) -> Optional[str]:
+        return _clip_str(v, 120)
+
+    @validates("idempotency_key")
+    def _v_idem(self, _k: str, v: Optional[str]) -> Optional[str]:
+        return _clip_str(v, 80)
+
+    @validates("provider_payment_id")
+    def _v_ppid(self, _k: str, v: Optional[str]) -> Optional[str]:
+        return _clip_str(v, 140)
+
+    @validates("payment_provider")
+    def _v_provider(self, _k: str, v: Optional[str]) -> Optional[str]:
+        return _clip_str((v or "").strip().lower() if v else None, 40)
 
     # -------------------------
     # Helpers PRO
     # -------------------------
-    def recompute_totals(self) -> None:
-        sub = Decimal("0.00")
-        for it in (self.items or []):
-            it.recompute_line_total()
-            sub += _d(it.line_total)
+    def add_meta(self, **extra: Any) -> None:
+        self.meta = _meta(self.meta, extra)
 
-        self.subtotal = _clamp_money(sub)
-        self.total = _clamp_money(
+    def touch_updated(self) -> None:
+        self.updated_at = utcnow()
+
+    def recompute_totals(self) -> None:
+        """
+        Recalcula subtotal/total.
+        - Recompute de items es seguro
+        - Clamp de dinero
+        """
+        sub = Decimal("0.00")
+        for it in self.items or []:
+            it.recompute_line_total()
+            sub += _d(it.line_total, "0.00")
+
+        self.subtotal = _money(sub)
+        self.discount_total = _money(self.discount_total)
+        self.shipping_total = _money(self.shipping_total)
+        self.tax_total = _money(self.tax_total)
+
+        self.total = _money(
             _d(self.subtotal)
             - _d(self.discount_total)
             + _d(self.shipping_total)
             + _d(self.tax_total)
         )
+
+    def can_transition_to(self, to_status: str) -> bool:
+        cur = (self.status or "").strip().lower()
+        nxt = (to_status or "").strip().lower()
+        return nxt in self._ALLOWED_TRANSITIONS.get(cur, set())
+
+    def transition_to(self, to_status: str) -> None:
+        to_status = (to_status or "").strip().lower()
+        if not self.can_transition_to(to_status):
+            raise ValueError(f"Transición inválida: {self.status} -> {to_status}")
+        self.status = to_status
+        if to_status == self.STATUS_CANCELLED:
+            self.cancelled_at = utcnow()
+        if to_status == self.STATUS_REFUNDED:
+            self.refunded_at = utcnow()
 
     def mark_paid(self) -> None:
         self.status = self.STATUS_PAID
@@ -275,6 +465,26 @@ class Order(db.Model):
         self.payment_status = self.PAY_REFUNDED
         self.refunded_at = utcnow()
 
+    def apply_commission_snapshot(self, *, sales_in_month: int, rate: Any) -> None:
+        """
+        Guarda snapshot de comisión ya calculada por el service.
+        """
+        r = _rate(rate)
+        amt = (_money(self.total) * r).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        self.commission_rate_applied = r
+        self.commission_amount = amt
+        self.payout_status = (
+            self.PAYOUT_PENDING if amt > Decimal("0.00") else self.PAYOUT_NONE
+        )
+        self.add_meta(
+            commission={
+                "sales_in_month": int(max(0, sales_in_month)),
+                "rate": str(r),
+                "amount": str(amt),
+                "snap_at": utcnow().isoformat(),
+            }
+        )
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "id": self.id,
@@ -289,17 +499,25 @@ class Order(db.Model):
             "shipping_total": str(_d(self.shipping_total)),
             "tax_total": str(_d(self.tax_total)),
             "total": str(_d(self.total)),
+            "affiliate_code": self.affiliate_code,
+            "affiliate_sub": self.affiliate_sub,
+            "commission_rate_applied": str(_d(self.commission_rate_applied, "0.0000")),
+            "commission_amount": str(_d(self.commission_amount, "0.00")),
+            "payout_status": self.payout_status,
+            "payment_provider": self.payment_provider,
+            "provider_payment_id": self.provider_payment_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "paid_at": self.paid_at.isoformat() if self.paid_at else None,
         }
 
     def __repr__(self) -> str:
-        return f"<Order {self.number} total={self.total}>"
+        return f"<Order {self.number} total={self.total} status={self.status}>"
 
 
 # ============================================================
 # OrderItem
 # ============================================================
+
 
 class OrderItem(db.Model):
     __tablename__ = "order_items"
@@ -330,50 +548,89 @@ class OrderItem(db.Model):
 
     meta = db.Column(MetaType)
 
-    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, index=True)
+    created_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, default=utcnow, index=True
+    )
 
     order = db.relationship("Order", back_populates="items", lazy="select")
 
+    __table_args__ = (
+        CheckConstraint("qty >= 1", name="ck_order_items_qty_ge_1"),
+        CheckConstraint("unit_price >= 0", name="ck_order_items_unit_price_nonneg"),
+        CheckConstraint("line_total >= 0", name="ck_order_items_line_total_nonneg"),
+    )
+
     @validates("qty")
-    def _v_qty(self, _k, v: int) -> int:
+    def _v_qty(self, _k: str, v: Any) -> int:
         try:
-            return max(1, int(v))
+            n = int(v)
         except Exception:
-            return 1
+            n = 1
+        if n < 1:
+            n = 1
+        if n > 999:
+            n = 999
+        return n
 
     @validates("currency")
-    def _v_cur(self, _k, v: str) -> str:
-        return (v or "USD").strip().upper()[:3]
+    def _v_cur(self, _k: str, v: str) -> str:
+        s = (v or "USD").strip().upper()
+        s = s[:3]
+        return s if len(s) == 3 else "USD"
+
+    @validates("title_snapshot")
+    def _v_title(self, _k: str, v: str) -> str:
+        s = (v or "").strip()
+        return s[:200] if s else "Producto"
 
     def recompute_line_total(self) -> None:
-        self.line_total = _clamp_money(_d(self.unit_price) * Decimal(self.qty or 1))
+        self.unit_price = _money(self.unit_price)
+        self.line_total = _money(_d(self.unit_price) * Decimal(int(self.qty or 1)))
+
+    def __repr__(self) -> str:
+        return f"<OrderItem id={self.id} product_id={self.product_id} qty={self.qty}>"
 
 
 # ============================================================
-# Eventos: auto-recompute de totales
+# Eventos: recompute seguro (sin loops raros)
 # ============================================================
+
 
 @event.listens_for(OrderItem, "before_insert")
 @event.listens_for(OrderItem, "before_update")
 def _oi_before_save(_mapper, _connection, target: OrderItem) -> None:
-    target.recompute_line_total()
+    try:
+        target.recompute_line_total()
+    except Exception:
+        # no rompemos inserts
+        pass
 
 
 @event.listens_for(Order, "before_insert")
 @event.listens_for(Order, "before_update")
 def _o_before_save(_mapper, _connection, target: Order) -> None:
+    # Recompute totals solo si hay items cargados (evita queries inesperadas en flush)
     try:
-        target.recompute_totals()
+        if getattr(target, "items", None) is not None:
+            target.recompute_totals()
     except Exception:
         pass
 
 
 # ============================================================
-# Índices PRO
+# Índices PRO (dashboards y búsquedas)
 # ============================================================
 
 Index("ix_orders_status_created", Order.status, Order.created_at)
 Index("ix_orders_payment_status_created", Order.payment_status, Order.created_at)
 Index("ix_orders_user_created", Order.user_id, Order.created_at)
+
+Index("ix_orders_aff_created", Order.affiliate_code, Order.created_at)
+Index("ix_orders_provider_pid", Order.payment_provider, Order.provider_payment_id)
+Index("ix_orders_idem_user", Order.user_id, Order.idempotency_key)
+
+Index("ix_orders_payout_status_created", Order.payout_status, Order.created_at)
+Index("ix_orders_fulfillment_created", Order.fulfillment_status, Order.created_at)
+
 Index("ix_order_items_order_created", OrderItem.order_id, OrderItem.created_at)
 Index("ix_order_items_product_created", OrderItem.product_id, OrderItem.created_at)

@@ -40,7 +40,12 @@ class Event(db.Model):
     id = db.Column(db.Integer, primary_key=True)
 
     # Usuario (opcional) — si hay tabla users, mejor con FK; si no, igual funciona con nullable.
-    user_id = db.Column(db.Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    user_id = db.Column(
+        db.Integer,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     # Session / visitante
     session_id = db.Column(db.String(128), nullable=True, index=True)
@@ -55,7 +60,9 @@ class Event(db.Model):
     ref = db.Column(db.String(255), nullable=True)
 
     # Marketing (opcional)
-    source = db.Column(db.String(80), nullable=True, index=True)  # ej: "google", "instagram", "email"
+    source = db.Column(
+        db.String(80), nullable=True, index=True
+    )  # ej: "google", "instagram", "email"
     utm_source = db.Column(db.String(80), nullable=True, index=True)
     utm_medium = db.Column(db.String(80), nullable=True, index=True)
     utm_campaign = db.Column(db.String(120), nullable=True, index=True)
@@ -67,7 +74,9 @@ class Event(db.Model):
     # Datos flexibles
     payload = db.Column(PayloadType, nullable=True)
 
-    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, index=True)
+    created_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, default=utcnow, index=True
+    )
 
     # -------------------------
     # Validaciones suaves
@@ -75,7 +84,7 @@ class Event(db.Model):
     @validates("name")
     def _v_name(self, _k, v: str) -> str:
         v = (v or "").strip()
-        return (v[:80] if v else "event")
+        return v[:80] if v else "event"
 
     @validates("path", "ref")
     def _v_paths(self, _k, v: Optional[str]) -> Optional[str]:
@@ -116,7 +125,9 @@ class Event(db.Model):
         Si idempotency_key ya existe, devuelve el existente (no duplica).
         """
         if idempotency_key:
-            existing = db.session.query(cls).filter_by(idempotency_key=idempotency_key).first()
+            existing = (
+                db.session.query(cls).filter_by(idempotency_key=idempotency_key).first()
+            )
             if existing:
                 return existing
 

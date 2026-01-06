@@ -5,12 +5,6 @@ from decimal import Decimal
 from typing import Optional
 
 from sqlalchemy import (
-    Boolean,
-    DateTime,
-    ForeignKey,
-    Integer,
-    Numeric,
-    String,
     Index,
 )
 from sqlalchemy.orm import relationship, validates
@@ -22,6 +16,7 @@ from app.models import db
 # Time helper
 # ============================================================
 
+
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -29,6 +24,7 @@ def utcnow() -> datetime:
 # ============================================================
 # Offer
 # ============================================================
+
 
 class Offer(db.Model):
     """
@@ -54,7 +50,9 @@ class Offer(db.Model):
     sort_order = db.Column(db.Integer, nullable=False, default=0, index=True)
 
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
-    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+    updated_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
+    )
 
     # -------------------------
     # Contenido visible (UI)
@@ -78,7 +76,9 @@ class Offer(db.Model):
     # -------------------------
     # none | percent | amount
     discount_type = db.Column(db.String(16), nullable=False, default="none")
-    discount_value = db.Column(db.Numeric(10, 2), nullable=False, default=Decimal("0.00"))
+    discount_value = db.Column(
+        db.Numeric(10, 2), nullable=False, default=Decimal("0.00")
+    )
 
     # Vigencia (opcional)
     starts_at = db.Column(db.DateTime(timezone=True), nullable=True)
@@ -109,7 +109,9 @@ class Offer(db.Model):
     @validates("theme")
     def _v_theme(self, _k, v: str) -> str:
         v = (v or "auto").strip().lower()
-        return v if v in {"auto", "amber", "emerald", "sky", "rose", "slate"} else "auto"
+        return (
+            v if v in {"auto", "amber", "emerald", "sky", "rose", "slate"} else "auto"
+        )
 
     @validates("title")
     def _v_title(self, _k, v: str) -> str:

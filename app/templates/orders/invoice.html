@@ -1,37 +1,413 @@
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<title>Factura {{ order.number }}</title>
+{# ==========================================================
+   FILE: app/templates/orders/invoice.html
+   Skyline Store — Invoice (PRO)
+   - Usa base.html (misma identidad visual)
+   - Print friendly (A4)
+   - Robusto: no rompe si faltan campos
+   - Sin Tailwind / sin dependencias
+   - Compatible con base: --max, --stroke, --grad, --shadow2, --ease
+========================================================== #}
+
+{% extends "base.html" %}
+{% block title %}Factura {{ (order.number if order and order.number else (order.id if order else '—')) }} · Skyline Store{% endblock %}
+
+{% block extra_head %}
 <style>
-  body{font-family:Arial;margin:40px}
-  h1{margin-bottom:10px}
-  table{width:100%;border-collapse:collapse}
-  th,td{border:1px solid #ccc;padding:8px}
+  .inv{ padding: 18px 0 44px; }
+  .inv .wrap{ max-width: var(--max); margin:0 auto; padding: 0 18px; display:grid; gap: 14px; }
+
+  .card{
+    background: rgba(255,255,255,.96);
+    border: 1px solid var(--stroke);
+    border-radius: 26px;
+    box-shadow: var(--shadow2);
+    overflow:hidden;
+  }
+
+  .head{
+    padding: 18px 18px 14px;
+    background:
+      radial-gradient(circle at 18% 0%, rgba(47,123,255,.10), transparent 55%),
+      radial-gradient(circle at 85% 15%, rgba(245,158,11,.10), transparent 55%),
+      linear-gradient(180deg, rgba(255,255,255,.94), rgba(255,255,255,.84));
+    border-bottom: 1px solid rgba(15,23,42,.08);
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap: 12px;
+    flex-wrap:wrap;
+  }
+
+  .brand{
+    display:flex;
+    align-items:center;
+    gap:10px;
+  }
+  .logo{
+    width:42px;height:42px;border-radius: 14px;
+    display:grid;place-items:center;
+    border: 1px solid rgba(15,23,42,.10);
+    background: rgba(255,255,255,.92);
+  }
+  .logo i{
+    width:12px;height:12px;border-radius:999px;
+    background: var(--grad);
+    display:inline-block;
+    box-shadow: 0 0 0 6px rgba(47,123,255,.10);
+  }
+  h1{
+    margin:0;
+    font-weight:1000;
+    letter-spacing:-.6px;
+    color: rgba(11,18,32,.95);
+    font-size: clamp(1.25rem, 2.2vw, 1.85rem);
+    line-height:1.15;
+  }
+  .sub{
+    margin-top: 6px;
+    color: rgba(11,18,32,.62);
+    font-weight: 850;
+    line-height: 1.45;
+  }
+
+  .actions{
+    display:flex; flex-wrap:wrap; gap:10px; align-items:center;
+  }
+  .btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap: 8px;
+    text-decoration:none;
+    font-weight: 1000;
+    padding: 10px 12px;
+    border-radius: 14px;
+    border: 1px solid rgba(15,23,42,.10);
+    background: rgba(255,255,255,.94);
+    color: rgba(11,18,32,.92);
+    transition: transform .18s var(--ease), box-shadow .18s var(--ease);
+    cursor:pointer;
+    user-select:none;
+  }
+  .btn:hover{ transform: translateY(-2px); box-shadow: 0 14px 26px rgba(2,6,23,.10); }
+  .btn:active{ transform: translateY(0); }
+  .btn:focus-visible{ outline: 3px solid rgba(59,130,246,.35); outline-offset: 2px; }
+  .btn.primary{
+    background: var(--grad);
+    color:#fff;
+    border-color: rgba(47,123,255,.22);
+  }
+
+  .grid{
+    padding: 14px 18px 18px;
+    display:grid;
+    gap: 12px;
+  }
+
+  .meta{
+    display:grid;
+    gap: 12px;
+  }
+  @media(min-width: 980px){
+    .meta{ grid-template-columns: 1fr 1fr; }
+  }
+
+  .box{
+    border-radius: 22px;
+    border: 1px solid rgba(15,23,42,.10);
+    background: rgba(255,255,255,.96);
+    padding: 12px 14px;
+    box-shadow: 0 14px 26px rgba(2,6,23,.06);
+  }
+  .box h2{
+    margin:0 0 8px;
+    font-size: 1.02rem;
+    font-weight: 1000;
+    color: rgba(11,18,32,.92);
+  }
+
+  .kv{
+    display:grid;
+    gap: 8px;
+  }
+  .kv .row{
+    display:flex;
+    justify-content:space-between;
+    gap: 12px;
+    padding: 10px 10px;
+    border-radius: 16px;
+    background: rgba(15,23,42,.03);
+    border: 1px solid rgba(15,23,42,.06);
+    font-weight: 900;
+    color: rgba(11,18,32,.90);
+  }
+  .kv .row span{ color: rgba(11,18,32,.62); font-weight: 850; }
+
+  .tablewrap{
+    border-radius: 22px;
+    border: 1px solid rgba(15,23,42,.10);
+    overflow:hidden;
+    background: rgba(255,255,255,.96);
+  }
+  table{ width:100%; border-collapse:collapse; }
+  thead th{
+    text-align:left;
+    padding: 12px 14px;
+    background: rgba(248,250,252,.92);
+    border-bottom: 1px solid rgba(15,23,42,.10);
+    font-weight: 1000;
+    color: rgba(11,18,32,.88);
+    font-size: .92rem;
+    letter-spacing: .02em;
+  }
+  tbody td{
+    padding: 12px 14px;
+    border-bottom: 1px solid rgba(15,23,42,.08);
+    vertical-align: top;
+    color: rgba(11,18,32,.90);
+    font-weight: 850;
+  }
+  tbody tr:last-child td{ border-bottom:none; }
+  .muted{ color: rgba(11,18,32,.62); font-weight: 800; font-size: .9rem; }
+  .right{ text-align:right; white-space:nowrap; }
+  .nowrap{ white-space:nowrap; }
+  .name{
+    font-weight: 1000;
+    color: rgba(11,18,32,.92);
+    line-height: 1.15;
+    word-break: break-word;
+  }
+
+  .totals{
+    margin-top: 12px;
+    display:grid;
+    gap: 10px;
+    justify-content:end;
+  }
+  .totals .trow{
+    width: min(440px, 100%);
+    display:flex;
+    justify-content:space-between;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 16px;
+    border: 1px solid rgba(15,23,42,.10);
+    background: rgba(255,255,255,.96);
+    font-weight: 950;
+    color: rgba(11,18,32,.92);
+  }
+  .totals .trow span{ color: rgba(11,18,32,.62); font-weight: 900; }
+  .totals .grand{
+    font-size: 1.1rem;
+    border-color: rgba(47,123,255,.22);
+    box-shadow: 0 14px 26px rgba(2,6,23,.08);
+  }
+
+  .foot{
+    margin-top: 6px;
+    font-size: .88rem;
+    color: rgba(11,18,32,.55);
+    font-weight: 850;
+    line-height: 1.45;
+  }
+
+  @media print{
+    .ss-header, .ss-footer, nav, .actions{ display:none !important; }
+    .inv{ padding:0; }
+    .card, .box{ box-shadow:none; }
+    .wrap{ padding:0 !important; }
+  }
 </style>
-</head>
-<body>
+{% endblock %}
 
-<h1>Factura · Skyline Store</h1>
-<p>Pedido: {{ order.number }}</p>
-<p>Fecha: {{ order.created_at.strftime("%d/%m/%Y") }}</p>
+{% block content %}
+{# ---------- Normalización segura ---------- #}
+{% set invoice_no = (order.number if order and order.number else (order.id if order else '—')) %}
+{% set created_at = (order.created_at if order and order.created_at is defined else none) %}
+{% set created_str = (created_at.strftime("%d/%m/%Y") if created_at else '') %}
+{% set currency = (currency if currency is defined else '$') %}
 
-<table>
-<thead>
-<tr><th>Producto</th><th>Cant.</th><th>Precio</th></tr>
-</thead>
-<tbody>
-{% for it in order.items %}
-<tr>
-<td>{{ it.title }}</td>
-<td>{{ it.qty }}</td>
-<td>$ {{ "%.2f"|format(it.price) }}</td>
-</tr>
+{# Items: puede venir order.items o "items" externo #}
+{% set items_list = (items if items is defined and items else (order.items if order and order.items is defined and order.items else [])) %}
+
+{# Totales: si backend los pasa, se usan; si no, se calculan #}
+{% set shipping = (shipping if shipping is defined else (order.shipping_total if order and order.shipping_total is defined else 0)) %}
+{% set discount = (discount if discount is defined else (order.discount_total if order and order.discount_total is defined else 0)) %}
+{% set taxes = (taxes if taxes is defined else (order.tax_total if order and order.tax_total is defined else 0)) %}
+
+{% set subtotal = 0 %}
+{% for it in items_list %}
+  {% set qty = (it.qty if it.qty is not none else 1) %}
+  {% set price = (it.price if it.price is not none else 0) %}
+  {% set subtotal = subtotal + (qty * price) %}
 {% endfor %}
-</tbody>
-</table>
 
-<h3>Total: $ {{ "%.2f"|format(order.total) }}</h3>
+{% set total = (order.total if order and order.total is not none else (subtotal + shipping + taxes - discount)) %}
 
-</body>
-</html>
+{# Datos cliente (opcionales) #}
+{% set customer_name = (customer_name if customer_name is defined else (order.customer_name if order and order.customer_name is defined else '')) %}
+{% set customer_email = (customer_email if customer_email is defined else (order.email if order and order.email is defined else '')) %}
+{% set customer_phone = (customer_phone if customer_phone is defined else (order.phone if order and order.phone is defined else '')) %}
+{% set customer_doc = (customer_doc if customer_doc is defined else (order.document if order and order.document is defined else '')) %}
+{% set billing_address = (billing_address if billing_address is defined else (order.billing_address if order and order.billing_address is defined else '')) %}
+
+<section class="inv" aria-label="Factura">
+  <div class="wrap">
+    <article class="card">
+      <header class="head">
+        <div class="brand">
+          <div class="logo" aria-hidden="true"><i></i></div>
+          <div>
+            <h1>Factura · Skyline Store</h1>
+            <div class="sub">
+              Pedido <b id="invNo">{{ invoice_no }}</b>
+              {% if created_str %} · Fecha: <b>{{ created_str }}</b>{% endif %}
+            </div>
+          </div>
+        </div>
+
+        <div class="actions" aria-label="Acciones">
+          <button class="btn" type="button" id="btnCopy">📋 Copiar N°</button>
+          <button class="btn" type="button" id="btnPrint">🖨️ Imprimir</button>
+          <a class="btn primary" href="{{ url_for('main.home') }}">Volver</a>
+        </div>
+      </header>
+
+      <div class="grid">
+
+        <section class="meta" aria-label="Datos de factura">
+          <div class="box">
+            <h2>Detalles</h2>
+            <div class="kv">
+              <div class="row"><span>N° factura / pedido</span><b>{{ invoice_no }}</b></div>
+              <div class="row"><span>Fecha</span><b>{{ created_str if created_str else '—' }}</b></div>
+              <div class="row"><span>Estado</span><b>{{ (order.status|capitalize) if order and order.status else '—' }}</b></div>
+            </div>
+          </div>
+
+          <div class="box">
+            <h2>Cliente</h2>
+            <div class="kv">
+              <div class="row"><span>Nombre</span><b>{{ customer_name if customer_name else '—' }}</b></div>
+              <div class="row"><span>Email</span><b class="nowrap">{{ customer_email if customer_email else '—' }}</b></div>
+              <div class="row"><span>Teléfono</span><b>{{ customer_phone if customer_phone else '—' }}</b></div>
+              {% if customer_doc %}
+              <div class="row"><span>Documento</span><b>{{ customer_doc }}</b></div>
+              {% endif %}
+              {% if billing_address %}
+              <div class="row"><span>Dirección</span><b>{{ billing_address }}</b></div>
+              {% endif %}
+            </div>
+          </div>
+        </section>
+
+        <section class="tablewrap" aria-label="Productos de la factura">
+          <table>
+            <thead>
+              <tr>
+                <th>Producto</th>
+                <th class="right">Cant.</th>
+                <th class="right">Precio</th>
+                <th class="right">Subtotal</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% if items_list and items_list|length > 0 %}
+                {% for it in items_list %}
+                  {% set qty = (it.qty if it.qty is not none else 1) %}
+                  {% set price = (it.price if it.price is not none else 0) %}
+                  <tr>
+                    <td>
+                      <div class="name">{{ it.title or 'Producto' }}</div>
+                      {% if it.sku is defined and it.sku %}
+                        <div class="muted">SKU: {{ it.sku }}</div>
+                      {% endif %}
+                    </td>
+                    <td class="right">{{ qty }}</td>
+                    <td class="right">{{ currency }} {{ "%.2f"|format(price) }}</td>
+                    <td class="right">{{ currency }} {{ "%.2f"|format(qty * price) }}</td>
+                  </tr>
+                {% endfor %}
+              {% else %}
+                <tr>
+                  <td colspan="4" class="muted">No hay productos para mostrar.</td>
+                </tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </section>
+
+        <section class="totals" aria-label="Totales">
+          <div class="trow"><span>Subtotal</span><b>{{ currency }} {{ "%.2f"|format(subtotal or 0) }}</b></div>
+          {% if shipping and shipping != 0 %}
+          <div class="trow"><span>Envío</span><b>{{ currency }} {{ "%.2f"|format(shipping) }}</b></div>
+          {% endif %}
+          {% if taxes and taxes != 0 %}
+          <div class="trow"><span>Impuestos</span><b>{{ currency }} {{ "%.2f"|format(taxes) }}</b></div>
+          {% endif %}
+          {% if discount and discount != 0 %}
+          <div class="trow"><span>Descuento</span><b>- {{ currency }} {{ "%.2f"|format(discount) }}</b></div>
+          {% endif %}
+          <div class="trow grand"><span>Total</span><b>{{ currency }} {{ "%.2f"|format(total or 0) }}</b></div>
+
+          <div class="foot">
+            Esta factura corresponde al pedido {{ invoice_no }}. Conservála para cualquier reclamo o garantía.
+          </div>
+        </section>
+
+      </div>
+    </article>
+  </div>
+</section>
+
+<script>
+(function(){
+  const invNo = document.getElementById("invNo");
+  const btnCopy = document.getElementById("btnCopy");
+  const btnPrint = document.getElementById("btnPrint");
+
+  function toast(text){
+    const t = document.createElement("div");
+    t.textContent = text;
+    t.style.position = "fixed";
+    t.style.left = "50%";
+    t.style.bottom = "18px";
+    t.style.transform = "translateX(-50%)";
+    t.style.padding = "10px 12px";
+    t.style.borderRadius = "999px";
+    t.style.fontWeight = "900";
+    t.style.background = "rgba(11,18,32,.92)";
+    t.style.color = "#fff";
+    t.style.boxShadow = "0 18px 38px rgba(2,6,23,.18)";
+    t.style.zIndex = "9999";
+    document.body.appendChild(t);
+    setTimeout(()=>{ t.style.opacity = "0"; t.style.transition = "opacity .25s ease"; }, 900);
+    setTimeout(()=>{ t.remove(); }, 1200);
+  }
+
+  async function copyText(value){
+    if(!value) return;
+    try{
+      await navigator.clipboard.writeText(value);
+      toast("Copiado ✅");
+    }catch(e){
+      const ta = document.createElement("textarea");
+      ta.value = value;
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      try{ document.execCommand("copy"); toast("Copiado ✅"); }catch(_){ toast("No se pudo copiar"); }
+      ta.remove();
+    }
+  }
+
+  if(btnCopy && invNo){
+    btnCopy.addEventListener("click", ()=> copyText((invNo.textContent || "").trim()));
+  }
+  if(btnPrint){
+    btnPrint.addEventListener("click", ()=> window.print());
+  }
+})();
+</script>
+{% endblock %}
