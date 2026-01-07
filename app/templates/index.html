@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Skyline Store · Moda urbana premium{% endblock %}
+{% block title %}Skyline Store · Tech + Streetwear premium{% endblock %}
 
 {% block extra_head %}
 <meta name="description" content="{{ meta_description | default('Skyline Store · Moda urbana premium, accesorios y tecnología.') }}">
@@ -10,438 +10,385 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 
 <link rel="preload" as="image" href="{{ url_for('static', filename='img/banners/hero_home.png') }}">
+<link rel="prefetch" href="{{ url_for('shop.shop') }}">
 
 <style>
-/* ==========================================================================
-   HOME — ULTRA PRO ENTERPRISE (v3)
-   - Mejor contraste + jerarquía real
-   - Micro-interacciones + motion suave
-   - Productos: skeleton + reveal + hover premium
-   - Categories: “chip cards” con estados
-   - Responsive real + accesibilidad + focus visible
-   - Sin romper otras páginas (todo scope: .home-pro)
-========================================================================== */
+/* ======================================================================
+   HOME — SKYLINE PRO (FINAL)
+   - NO duplica header search (home usa "hint", no buscador completo)
+   - Layout marketplace real: hero + categories grid + featured + trust
+   - Account: reducido a confianza, no roba ventas
+   - Compat btn-* (scoped) por si hay clases viejas
+====================================================================== */
 
 .home-pro{padding:22px 0 34px}
-
-/* A11y helpers */
 .home-pro .sr-only{
   position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;
   overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0
 }
 
-/* Local tokens (no pisan global) */
-.home-pro{
-  --hp-ink: rgba(8,16,34,.92);
-  --hp-muted: rgba(8,16,34,.62);
-  --hp-soft: rgba(8,16,34,.48);
-  --hp-border: rgba(8,16,34,.10);
-  --hp-border2: rgba(8,16,34,.14);
-  --hp-glass: rgba(255,255,255,.74);
-  --hp-glass2: rgba(255,255,255,.60);
-  --hp-card: rgba(255,255,255,.88);
-  --hp-shadow: 0 18px 55px rgba(8,16,34,.12);
-  --hp-shadow2: 0 28px 85px rgba(8,16,34,.16);
-  --hp-inset: inset 0 1px 0 rgba(255,255,255,.72);
-  --hp-radius: 22px;
-  --hp-radius2: 28px;
-  --hp-ease: cubic-bezier(.2,.9,.2,1);
+/* Compat (solo en home): soporta tus clases previas */
+.home-pro .btn-primary{ /* maps -> .btn.primary */
+  color:#fff;background:linear-gradient(135deg,var(--p),var(--p2));
+  border:1px solid transparent;
+}
+.home-pro .btn-soft{ /* maps -> .btn.ghost */
+  background:rgba(255,255,255,.86);
+  border:1px solid var(--border);
+  color:var(--ink);
+}
+@media(prefers-color-scheme:dark){
+  .home-pro .btn-soft{background:rgba(255,255,255,.06)}
+}
+.home-pro .btn-ghost{
+  background:transparent;border:1px solid var(--border);color:var(--ink);
 }
 
-/* Subtle “page glow” behind hero zone */
-.home-pro .hp-wrap{
-  position:relative;
-}
+/* Backdrop local (más pro, menos “pastel”) */
+.home-pro .hp-wrap{position:relative}
 .home-pro .hp-wrap::before{
   content:"";
-  position:absolute;
-  inset:-140px -80px auto -80px;
-  height:520px;
+  position:absolute;inset:-160px -80px auto -80px;height:560px;
   background:
-    radial-gradient(900px 420px at 12% 30%, rgba(45,108,223,.16), transparent 60%),
-    radial-gradient(860px 420px at 88% 25%, rgba(255,176,32,.14), transparent 62%),
-    radial-gradient(860px 520px at 55% 95%, rgba(59,177,255,.12), transparent 60%);
+    radial-gradient(980px 520px at 12% 25%, rgba(37,99,235,.18), transparent 62%),
+    radial-gradient(980px 520px at 88% 20%, rgba(6,182,212,.14), transparent 62%),
+    radial-gradient(980px 620px at 52% 96%, rgba(245,158,11,.12), transparent 62%);
   filter: blur(10px);
   opacity:.95;
   pointer-events:none;
 }
 
-/* TOP */
+/* TOP STRIP: beneficios + quick links (sin buscador acá) */
 .hp-top{
-  position:relative;
   display:flex;align-items:flex-start;justify-content:space-between;gap:18px;
   margin:0 0 18px;
 }
-
-/* Benefits */
 .hp-badges{display:flex;gap:10px;flex-wrap:wrap}
 .hp-badge{
   display:inline-flex;align-items:center;gap:10px;
   padding:9px 12px;border-radius:999px;
-  background:var(--hp-card);
-  border:1px solid var(--hp-border);
-  box-shadow: var(--hp-inset), 0 12px 28px rgba(8,16,34,.08);
+  background: rgba(255,255,255,.82);
+  border:1px solid var(--border);
+  box-shadow: var(--sh1);
   font-weight:950;letter-spacing:.12em;text-transform:uppercase;font-size:.70rem;
-  color:rgba(8,16,34,.70);
-  transition: transform .22s var(--hp-ease), box-shadow .22s var(--hp-ease), background .22s var(--hp-ease);
+  color:rgba(10,16,32,.70);
+  transition: transform var(--t), box-shadow var(--t), background var(--t);
 }
-.hp-badge:hover{
-  transform: translateY(-2px);
-  background: rgba(255,255,255,.94);
-  box-shadow: var(--hp-inset), 0 18px 45px rgba(8,16,34,.12);
+@media(prefers-color-scheme:dark){
+  .hp-badge{background: rgba(255,255,255,.06); box-shadow:none; color: rgba(238,242,255,.75)}
 }
+.hp-badge:hover{transform:translateY(-2px);box-shadow:var(--sh2)}
 .hp-dot{
   width:9px;height:9px;border-radius:999px;
-  background: linear-gradient(135deg, var(--primary), var(--primary-2));
-  box-shadow: 0 12px 24px rgba(45,108,223,.25);
+  background: linear-gradient(135deg, var(--p), var(--p2));
+  box-shadow:0 12px 24px rgba(37,99,235,.22);
 }
-
-/* Quick actions */
 .hp-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
 .hp-action{
   display:inline-flex;align-items:center;gap:10px;
   padding:10px 12px;border-radius:16px;
-  background:rgba(255,255,255,.74);
-  border:1px solid var(--hp-border);
-  box-shadow: var(--hp-inset), 0 14px 34px rgba(8,16,34,.08);
-  font-weight:950;color:rgba(8,16,34,.76);
-  transition: transform .22s var(--hp-ease), box-shadow .22s var(--hp-ease), background .22s var(--hp-ease);
+  background: rgba(255,255,255,.78);
+  border:1px solid var(--border);
+  box-shadow: var(--sh1);
+  font-weight:950;color:rgba(10,16,32,.78);
+  transition: transform var(--t), box-shadow var(--t), background var(--t);
 }
-.hp-action:hover{
-  transform: translateY(-2px);
-  box-shadow: var(--hp-inset), 0 22px 60px rgba(8,16,34,.12);
-  background: rgba(255,255,255,.95);
+@media(prefers-color-scheme:dark){
+  .hp-action{background: rgba(255,255,255,.06); box-shadow:none; color: rgba(238,242,255,.78)}
 }
+.hp-action:hover{transform:translateY(-2px);box-shadow:var(--sh2);background:rgba(255,255,255,.92)}
+@media(prefers-color-scheme:dark){.hp-action:hover{background:rgba(255,255,255,.08)}}
 .hp-action .mini{
   width:8px;height:8px;border-radius:999px;
-  background: linear-gradient(135deg, var(--accent), var(--primary-2));
-  box-shadow: 0 10px 18px rgba(255,176,32,.22);
+  background: linear-gradient(135deg, var(--acc), var(--p2));
+  box-shadow:0 10px 18px rgba(245,158,11,.18);
 }
 
-/* Search (premium) */
-.hp-search{
-  display:flex;align-items:center;gap:10px;
-  padding:10px 12px;border-radius:18px;
-  background: rgba(255,255,255,.84);
-  border:1px solid var(--hp-border2);
-  box-shadow: var(--hp-inset), 0 18px 48px rgba(8,16,34,.10);
-  position:relative;
-  overflow:hidden;
+/* Right hint: “Usá / para buscar” (no duplica buscador) */
+.hp-hint{
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,.78);
+  box-shadow: var(--sh1);
+  padding: 12px 14px;
+  max-width: 420px;
 }
-.hp-search::before{
-  content:"";
-  position:absolute;inset:-60%;
-  background:
-    radial-gradient(circle at 22% 28%, rgba(45,108,223,.18), transparent 55%),
-    radial-gradient(circle at 78% 30%, rgba(255,176,32,.14), transparent 55%);
-  filter: blur(26px);
-  opacity:.55;
-  pointer-events:none;
+@media(prefers-color-scheme:dark){
+  .hp-hint{background: rgba(255,255,255,.06); box-shadow:none}
 }
-.hp-search .sicon{
-  position:relative;
-  width:34px;height:34px;border-radius:14px;
-  display:grid;place-items:center;
-  background: rgba(45,108,223,.10);
-  border: 1px solid rgba(45,108,223,.18);
-  color: rgba(45,108,223,.95);
-  font-weight:950;
-}
-.hp-search input{
-  position:relative;
-  border:0;background:transparent;outline:none;
-  min-width:320px;max-width:520px;width:100%;
-  padding:0;color:var(--hp-ink);font-weight:800;
-}
-.hp-search input::placeholder{color:rgba(8,16,34,.42)}
-.hp-search .btn{white-space:nowrap;position:relative}
+.hp-hint b{font-weight:1000}
+.hp-hint .k{font-weight:1000;padding:2px 8px;border-radius:999px;border:1px solid var(--border);background:rgba(255,255,255,.72)}
+@media(prefers-color-scheme:dark){.hp-hint .k{background:rgba(255,255,255,.06)}}
 
-/* Responsive top */
 @media(max-width:1020px){
   .hp-top{flex-direction:column;align-items:stretch}
-  .hp-search input{min-width:160px}
+  .hp-hint{max-width:none}
 }
 
-/* HERO GRID */
-.hp-heroGrid{
-  position:relative;
-  display:grid;gap:18px;
-  grid-template-columns: 320px 1fr 360px;
-  align-items:stretch;
-}
-@media(max-width:1180px){
-  .hp-heroGrid{grid-template-columns: 1fr}
-}
-
-/* Panels */
-.hp-side, .hp-panel{
-  border-radius:var(--hp-radius2);
-  border:1px solid var(--hp-border);
-  background: var(--hp-glass);
-  box-shadow: var(--hp-shadow);
-  overflow:hidden;
-  transform: translateY(0);
-  transition: transform .25s var(--hp-ease), box-shadow .25s var(--hp-ease), background .25s var(--hp-ease);
-}
-.hp-side:hover, .hp-panel:hover{
-  transform: translateY(-3px);
-  box-shadow: var(--hp-shadow2);
-  background: rgba(255,255,255,.82);
-}
-.hp-side .inner, .hp-panel .inner{padding:18px}
-
-/* Categories */
-.hp-side h3{
-  margin:0 0 10px;
-  font-size:.78rem;letter-spacing:.16em;text-transform:uppercase;
-  color:rgba(8,16,34,.56);font-weight:950;
-}
-.hp-cats{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
-.hp-cats a{
-  display:flex;align-items:center;justify-content:space-between;gap:10px;
-  padding:12px 12px;border-radius:18px;
-  border:1px solid rgba(8,16,34,.10);
-  background: rgba(255,255,255,.86);
-  box-shadow: var(--hp-inset), 0 14px 34px rgba(8,16,34,.08);
-  transition: transform .22s var(--hp-ease), box-shadow .22s var(--hp-ease), background .22s var(--hp-ease);
-  font-weight:950;color:rgba(8,16,34,.78);
-  position:relative;
-  overflow:hidden;
-}
-.hp-cats a::before{
-  content:"";
-  position:absolute;inset:-80%;
-  background: radial-gradient(circle at 18% 28%, rgba(45,108,223,.14), transparent 55%);
-  filter: blur(26px);
-  opacity:.0;
-  transition: opacity .22s var(--hp-ease);
-}
-.hp-cats a:hover::before{opacity:.95}
-.hp-cats a:hover{
-  transform:translateY(-2px);
-  box-shadow: var(--hp-inset), 0 24px 70px rgba(8,16,34,.12);
-  background: rgba(255,255,255,.96);
-}
-.hp-cats .arrow{
-  opacity:.55;font-weight:950;
-  width:30px;height:30px;border-radius:12px;
-  display:grid;place-items:center;
-  background: rgba(8,16,34,.04);
-  border: 1px solid rgba(8,16,34,.08);
-}
-
-/* HERO */
+/* HERO: usa tu .hero global (premium) y lo potencia con layout */
 .hp-hero{
   position:relative;
-  border-radius: calc(var(--hp-radius2) + 6px);
-  border:1px solid rgba(8,16,34,.12);
-  background: rgba(255,255,255,.74);
-  box-shadow: var(--hp-shadow2);
+}
+.hp-heroGrid{
+  display:grid;gap:18px;
+  grid-template-columns: 1fr 420px;
+  align-items:stretch;
+}
+@media(max-width:980px){
+  .hp-heroGrid{grid-template-columns:1fr}
+}
+
+/* hero content */
+.hp-heroMain{
+  position:relative;
+  border-radius: var(--r-xl);
   overflow:hidden;
-  min-height:460px;
+  border:1px solid var(--border);
+  box-shadow: var(--sh2);
+  background: rgba(255,255,255,.74);
+  min-height: 460px;
   isolation:isolate;
 }
-.hp-hero::before{
-  content:"";
-  position:absolute;inset:-45%;
-  background:
-    radial-gradient(circle at 22% 28%, rgba(45,108,223,.26), transparent 55%),
-    radial-gradient(circle at 78% 30%, rgba(255,176,32,.18), transparent 55%),
-    radial-gradient(circle at 45% 88%, rgba(59,177,255,.18), transparent 55%);
-  filter:blur(34px);
-  opacity:.95;
-  pointer-events:none;
-  z-index:0;
+@media(prefers-color-scheme:dark){
+  .hp-heroMain{background: rgba(9,12,24,.62); box-shadow:none}
 }
 .hp-heroMedia{position:absolute;inset:0;z-index:0}
 .hp-heroMedia img{
   width:100%;height:100%;object-fit:cover;
-  transform: scale(1.045);
-  filter: saturate(1.05) contrast(1.05) brightness(.98);
-  transition: transform .9s var(--hp-ease);
+  transform: scale(1.06);
+  filter: saturate(1.05) contrast(1.06) brightness(.98);
+  transition: transform .9s var(--ease), filter .9s var(--ease);
 }
 .hp-heroShade{
   position:absolute;inset:0;z-index:1;
   background:
-    radial-gradient(900px 520px at 52% 18%, rgba(255,255,255,.22), transparent 60%),
-    linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.72));
+    radial-gradient(900px 520px at 50% 12%, rgba(255,255,255,.18), transparent 60%),
+    linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.78));
+}
+@media(prefers-color-scheme:dark){
+  .hp-heroShade{
+    background:
+      radial-gradient(900px 520px at 50% 12%, rgba(255,255,255,.06), transparent 60%),
+      linear-gradient(180deg, rgba(0,0,0,.10), rgba(0,0,0,.48));
+  }
 }
 .hp-heroInner{
-  position:relative;
-  padding:24px;
-  display:grid;
-  gap:14px;
+  position:relative;z-index:2;
   height:100%;
+  padding: clamp(18px, 2.8vw, 28px);
+  display:grid;gap:14px;
   align-content:end;
-  z-index:2;
 }
 .hp-kicker{
   display:inline-flex;align-items:center;gap:10px;
   padding:8px 12px;border-radius:999px;
-  background: rgba(255,255,255,.88);
-  border:1px solid rgba(8,16,34,.10);
-  box-shadow: var(--hp-inset), 0 16px 44px rgba(8,16,34,.10);
+  background: rgba(255,255,255,.86);
+  border:1px solid rgba(10,16,32,.10);
+  box-shadow: var(--sh1);
   font-weight:950;letter-spacing:.16em;text-transform:uppercase;font-size:.70rem;
-  color:rgba(8,16,34,.70);
+  color:rgba(10,16,32,.70);
   width:fit-content;
+}
+@media(prefers-color-scheme:dark){
+  .hp-kicker{background: rgba(255,255,255,.08); color: rgba(238,242,255,.78); box-shadow:none}
 }
 .hp-kicker .dot{
   width:9px;height:9px;border-radius:999px;
-  background: linear-gradient(90deg, var(--success), var(--primary-2));
+  background: linear-gradient(90deg, var(--good), var(--p2));
   box-shadow: 0 14px 30px rgba(22,163,74,.18);
 }
 .hp-title{
-  font-size:clamp(2.2rem, 3.3vw, 3.25rem);
-  line-height:1.01;
-  letter-spacing:-.045em;
   margin:0;
-  color: rgba(8,16,34,.94);
-  text-shadow: 0 18px 60px rgba(8,16,34,.12);
+  font-size:clamp(2.25rem, 3.6vw, 3.4rem);
+  line-height:1.01;
+  letter-spacing:-.048em;
+  font-weight:1000;
+  color: var(--ink);
+  text-shadow: 0 18px 60px rgba(10,16,32,.12);
 }
 .hp-title .grad{
-  background:linear-gradient(135deg, var(--primary), var(--primary-2));
+  background:linear-gradient(135deg, var(--p), var(--p2));
   -webkit-background-clip:text;background-clip:text;color:transparent;
 }
 .hp-sub{
-  max-width:62ch;
+  max-width:62ch;margin:0;
   font-size:1.05rem;
-  color: rgba(8,16,34,.66);
+  color: var(--muted);
   font-weight:700;
-  margin:0;
 }
 .hp-ctas{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px}
+.hp-ctas .btn{border-radius:999px;padding:12px 14px;font-weight:1000}
 .hp-proof{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px}
 .hp-pill{
   display:inline-flex;align-items:center;gap:8px;
-  padding:8px 10px;border-radius:999px;
+  padding:9px 11px;border-radius:999px;
   background: rgba(255,255,255,.82);
-  border:1px solid rgba(8,16,34,.10);
-  box-shadow: var(--hp-inset), 0 12px 28px rgba(8,16,34,.08);
-  font-weight:900;font-size:.88rem;color:rgba(8,16,34,.70);
+  border:1px solid rgba(10,16,32,.10);
+  box-shadow: var(--sh1);
+  font-weight:950;font-size:.86rem;color:rgba(10,16,32,.74);
 }
-.hp-pill .p{
-  width:8px;height:8px;border-radius:999px;
-  background: linear-gradient(135deg, var(--primary), var(--primary-2));
+@media(prefers-color-scheme:dark){
+  .hp-pill{background: rgba(255,255,255,.06); box-shadow:none; color: rgba(238,242,255,.78); border-color: rgba(148,163,184,.18)}
 }
+.hp-pill .p{width:8px;height:8px;border-radius:999px;background:linear-gradient(135deg,var(--p),var(--p2))}
 
-/* Right panel */
-.hp-panel .title{font-weight:950;font-size:1.1rem;margin:0 0 6px;color:rgba(8,16,34,.92)}
-.hp-panel .muted{color:rgba(8,16,34,.65);font-weight:700;margin:0 0 12px}
-.hp-panel .ctaRow{display:flex;gap:10px;flex-wrap:wrap}
-.hp-panel .secure{
+/* Side trust panel (ANTES era “tu cuenta gigante”) */
+.hp-trust{
+  border-radius: var(--r-xl);
+  border:1px solid var(--border);
+  background: rgba(255,255,255,.82);
+  box-shadow: var(--sh1);
+  overflow:hidden;
+}
+@media(prefers-color-scheme:dark){
+  .hp-trust{background: rgba(9,12,24,.62); box-shadow:none}
+}
+.hp-trust .inner{padding:18px}
+.hp-trust .row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.hp-secure{
   display:inline-flex;align-items:center;gap:8px;
   padding:7px 10px;border-radius:999px;
-  background:rgba(22,163,74,.12);color:rgba(22,163,74,.95);
+  background:rgba(22,163,74,.12);
   border:1px solid rgba(22,163,74,.20);
+  color:rgba(22,163,74,.95);
   font-weight:950;font-size:.78rem;
 }
-.hp-panel .card.compact{
-  background: rgba(255,255,255,.86);
-  border: 1px solid rgba(8,16,34,.10);
-  box-shadow: var(--hp-inset), 0 16px 44px rgba(8,16,34,.08);
-}
+.hp-trust .title{font-weight:1000;font-size:1.1rem;margin:0}
+.hp-trust .muted{color:var(--muted);font-weight:700;margin:6px 0 12px}
+.hp-trust .ctaRow{display:flex;gap:10px;flex-wrap:wrap}
+.hp-trust .ctaRow .btn{flex:1;border-radius:14px;padding:11px 12px;font-weight:1000}
+.hp-trust .miniList{margin-top:14px;padding:12px;border-radius:18px;border:1px solid var(--border);background:rgba(255,255,255,.70)}
+@media(prefers-color-scheme:dark){.hp-trust .miniList{background:rgba(255,255,255,.06)}}
+.hp-trust .miniList b{font-weight:1000}
 
-/* FEATURED */
+/* Categories grid (marketplace real) */
+.hp-catsGrid{
+  display:grid;gap:12px;margin-top:12px;
+  grid-template-columns: repeat(2, 1fr);
+}
+@media(min-width:980px){
+  .hp-catsGrid{grid-template-columns: repeat(4, 1fr);gap:14px}
+}
+.hp-cat{
+  display:flex;align-items:center;gap:10px;
+  padding:14px 14px;border-radius:18px;
+  border:1px solid var(--border);
+  background: rgba(255,255,255,.86);
+  box-shadow: var(--sh1);
+  transition: transform var(--t), box-shadow var(--t), border-color var(--t);
+}
+@media(prefers-color-scheme:dark){
+  .hp-cat{background: rgba(255,255,255,.06); box-shadow:none}
+}
+.hp-cat:hover{transform:translateY(-4px);box-shadow:var(--sh2);border-color:rgba(37,99,235,.22)}
+.hp-ico{
+  width:40px;height:40px;border-radius:14px;
+  background: linear-gradient(135deg, rgba(37,99,235,.14), rgba(6,182,212,.10));
+  border:1px solid rgba(37,99,235,.14);
+  display:grid;place-items:center;font-weight:1000;
+}
+.hp-cat b{font-weight:1000}
+.hp-cat span{display:block;font-size:.9rem;color:var(--muted)}
+
+/* FEATURED header */
 .hp-head{
   display:flex;align-items:flex-end;justify-content:space-between;gap:14px;
   margin:24px 0 12px;
 }
-.hp-head .sub{color:rgba(8,16,34,.56);font-weight:800}
-.hp-products{margin-top:12px}
+.hp-head .sub{color:var(--muted);font-weight:800}
 
-/* Improve product cards (visual) */
-.home-pro .product-card{
-  transform: translateY(0);
-  transition: transform .25s var(--hp-ease), box-shadow .25s var(--hp-ease);
-  will-change: transform;
+/* Products grid uses your global gridP/cardP feel */
+.hpGrid{margin-top:12px}
+
+/* Product card pro */
+.hpCard{
+  border-radius: calc(var(--r-lg) + 2px);
+  border: 1px solid rgba(10,16,32,.10);
+  background: linear-gradient(180deg, rgba(255,255,255,.96), rgba(255,255,255,.86));
+  box-shadow: var(--sh1);
+  overflow:hidden;
+  transition: transform var(--t), box-shadow var(--t), border-color var(--t), filter var(--t);
 }
-.home-pro .product-card:hover{
-  transform: translateY(-4px);
+@media(prefers-color-scheme:dark){
+  .hpCard{
+    border-color: rgba(148,163,184,.18);
+    background: linear-gradient(180deg, rgba(12,16,34,.88), rgba(12,16,34,.78));
+    box-shadow:none;
+  }
 }
-.home-pro .product-media{
-  border-radius: 20px;
-}
-.home-pro .product-media img{
-  transition: transform .75s var(--hp-ease), filter .75s var(--hp-ease);
-}
-.home-pro .product-card:hover .product-media img{
-  transform: scale(1.08);
-  filter: saturate(1.08) contrast(1.06);
-}
-.home-pro .product-chip{
+.hpCard:hover{transform:translateY(-8px);box-shadow:var(--sh2);border-color:rgba(37,99,235,.22);filter:saturate(1.05)}
+.hpMedia{position:relative;aspect-ratio: 1/1;overflow:hidden;background:rgba(255,255,255,.55)}
+@media(prefers-color-scheme:dark){.hpMedia{background:rgba(255,255,255,.04)}}
+.hpMedia img{width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity var(--t), transform .65s var(--ease)}
+.hpCard:hover .hpMedia img{transform:scale(1.08);opacity:1}
+.hpChip{
+  position:absolute;left:10px;top:10px;
+  padding:8px 10px;border-radius:999px;
+  background: rgba(255,255,255,.78);
+  border:1px solid var(--border);
+  font-weight:1000;font-size:.8rem;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
 }
+@media(prefers-color-scheme:dark){.hpChip{background: rgba(9,12,24,.62)}}
+.hpMeta{padding:12px 12px 14px;display:grid;gap:8px}
+.hpName{font-weight:1000;line-height:1.15;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.hpSub{font-size:.88rem;color:var(--muted);font-weight:700}
+.hpPrice{font-weight:1000;font-size:1.08rem;color:var(--ink)}
+.hpActions{display:flex;gap:10px;padding:0 12px 14px}
+.hpActions .btn{flex:1;border-radius:14px;padding:11px 12px;font-weight:1000}
 
-/* Skeleton */
+/* Skeletons */
 .hp-skel{
-  position:relative;
-  overflow:hidden;
-  border-radius: 18px;
-  border:1px solid rgba(8,16,34,.10);
+  position:relative;overflow:hidden;
+  border-radius: 18px;border:1px solid rgba(10,16,32,.10);
   background: rgba(255,255,255,.78);
-  box-shadow: var(--hp-inset), 0 16px 44px rgba(8,16,34,.08);
+  box-shadow: var(--sh1);
   height: 420px;
 }
+@media(prefers-color-scheme:dark){.hp-skel{background: rgba(255,255,255,.06); box-shadow:none}}
 .hp-skel::before{
-  content:"";
-  position:absolute;inset:0;
-  background: linear-gradient(90deg,
-    rgba(255,255,255,.0),
-    rgba(255,255,255,.65),
-    rgba(255,255,255,.0)
-  );
+  content:"";position:absolute;inset:0;
+  background: linear-gradient(90deg, rgba(255,255,255,.0), rgba(255,255,255,.55), rgba(255,255,255,.0));
   transform: translateX(-60%);
   animation: hpShimmer 1.15s infinite;
   opacity:.9;
 }
-@keyframes hpShimmer{
-  to{transform: translateX(60%)}
-}
+@keyframes hpShimmer{to{transform: translateX(60%)}}
 
-/* Reveal animation */
-.hp-reveal{
-  opacity:0;
-  transform: translateY(10px);
-  transition: opacity .55s var(--hp-ease), transform .55s var(--hp-ease);
-}
-.hp-reveal.is-in{
-  opacity:1;
-  transform: translateY(0);
-}
+/* Reveal */
+.hp-reveal{opacity:0;transform:translateY(10px);transition: opacity .55s var(--ease), transform .55s var(--ease)}
+.hp-reveal.is-in{opacity:1;transform:translateY(0)}
 
-/* Back-to-top */
+/* ToTop */
 .to-top{
   position:fixed;right:18px;bottom:18px;
   width:46px;height:46px;border-radius:16px;
-  border:1px solid rgba(8,16,34,.12);
+  border:1px solid rgba(10,16,32,.12);
   background:rgba(255,255,255,.78);
-  box-shadow:0 20px 70px rgba(8,16,34,.16);
-  cursor:pointer;
-  display:none;
-  font-weight:950;
-  transition: transform .22s var(--hp-ease), box-shadow .22s var(--hp-ease), background .22s var(--hp-ease);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  box-shadow:var(--sh2);
+  cursor:pointer;display:none;font-weight:1000;
+  transition: transform var(--t), box-shadow var(--t), background var(--t);
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  z-index:80;
 }
-.to-top:hover{
-  transform:translateY(-2px);
-  box-shadow:0 28px 95px rgba(8,16,34,.20);
-  background:#fff
-}
+@media(prefers-color-scheme:dark){.to-top{background: rgba(9,12,24,.62); box-shadow:none}}
+.to-top:hover{transform:translateY(-2px)}
 
-/* Focus visible (scoped, premium) */
+/* Sticky CTA (mobile sales booster) */
+.hpSticky{margin-top:0}
+
+/* Focus visible (scoped) */
 .home-pro a:focus-visible,
-.home-pro button:focus-visible,
-.home-pro input:focus-visible{
+.home-pro button:focus-visible{
   outline:none;
-  box-shadow: 0 0 0 7px rgba(45,108,223,.18);
+  box-shadow: 0 0 0 7px rgba(37,99,235,.18);
   border-radius: 16px;
 }
 
 /* Reduce motion */
 @media(prefers-reduced-motion:reduce){
-  .hp-badge,.hp-action,.hp-side,.hp-panel,.product-card,.hp-reveal,.to-top,
+  .hp-badge,.hp-action,.hpCard,.hp-reveal,.to-top,
   .hp-heroMedia img,.hp-skel::before{transition:none!important;animation:none!important}
 }
 </style>
@@ -449,15 +396,15 @@
 
 {% block content %}
 <section class="home-pro">
-  <div class="hp-wrap">
+  <div class="hp-wrap section">
 
-    <!-- TOP BENEFITS + SEARCH -->
-    <section class="hp-top">
-      <div class="stack" style="gap:12px">
+    <!-- TOP: Beneficios + Quick links + hint -->
+    <section class="hp-top" aria-label="Beneficios y accesos">
+      <div>
         <div class="hp-badges" aria-label="Beneficios">
           <span class="hp-badge"><span class="hp-dot"></span> Envío rápido</span>
           <span class="hp-badge"><span class="hp-dot"></span> Pago seguro</span>
-          <span class="hp-badge"><span class="hp-dot"></span> Soporte 24/7</span>
+          <span class="hp-badge"><span class="hp-dot"></span> Soporte real</span>
           <span class="hp-badge"><span class="hp-dot"></span> Compra protegida</span>
         </div>
 
@@ -468,32 +415,17 @@
         </div>
       </div>
 
-      <form class="hp-search" action="{{ url_for('shop.shop') }}" method="get" role="search" aria-label="Buscar productos">
-        <span class="sicon" aria-hidden="true">⌕</span>
-        <label for="q" class="sr-only">Buscar</label>
-        <input id="q" name="q" placeholder="Buscar en Skyline Store…" autocomplete="off">
-        <button class="btn btn-primary btn-sm" type="submit">Buscar</button>
-      </form>
+      <div class="hp-hint" aria-label="Consejo de búsqueda">
+        <b>Tip:</b> usá <span class="k">/</span> para enfocarte en el buscador del header y encontrar productos en 1 segundo.
+        <div style="margin-top:8px" class="small">La búsqueda principal está arriba (más pro, sin duplicados).</div>
+      </div>
     </section>
 
-    <!-- HERO GRID -->
-    <section class="hp-heroGrid">
+    <!-- HERO + TRUST -->
+    <section class="hp-heroGrid" aria-label="Hero principal y confianza">
 
-      <!-- LEFT: Categories -->
-      <aside class="hp-side hp-reveal" data-reveal aria-label="Categorías">
-        <div class="inner">
-          <h3>Categorías</h3>
-          <ul class="hp-cats">
-            <li><a href="{{ url_for('shop.shop') }}?categoria=ropa">Ropa urbana <span class="arrow">→</span></a></li>
-            <li><a href="{{ url_for('shop.shop') }}?categoria=accesorios">Accesorios <span class="arrow">→</span></a></li>
-            <li><a href="{{ url_for('shop.shop') }}?categoria=tecnologia">Tecnología <span class="arrow">→</span></a></li>
-            <li><a href="{{ url_for('shop.shop') }}?sort=new">Lo nuevo <span class="arrow">→</span></a></li>
-          </ul>
-        </div>
-      </aside>
-
-      <!-- CENTER: Hero -->
-      <div class="hp-hero hp-reveal" data-reveal aria-label="Hero principal">
+      <!-- HERO MAIN -->
+      <div class="hp-heroMain hp-reveal" data-reveal>
         <div class="hp-heroMedia" aria-hidden="true">
           <img
             id="hpHeroImg"
@@ -507,91 +439,128 @@
 
         <div class="hp-heroInner">
           <span class="hp-kicker"><span class="dot"></span> TEMPORADA 2026</span>
-          <h1 class="hp-title">Streetwear <span class="grad">premium</span></h1>
-          <p class="hp-sub">Moda urbana + tecnología con diseño profesional. Comprá rápido, seguro y con una experiencia tipo marketplace.</p>
+          <h1 class="hp-title">Streetwear <span class="grad">premium</span> + Tech</h1>
+          <p class="hp-sub">Moda urbana y tecnología seleccionada. Experiencia tipo marketplace: rápida, segura y con soporte real.</p>
 
           <div class="hp-ctas">
-            <a href="{{ url_for('shop.shop') }}" class="btn btn-primary">Explorar tienda</a>
-            <a href="{{ url_for('shop.shop') }}?sort=new" class="btn btn-soft">Novedades</a>
-            <a href="{{ url_for('shop.shop') }}?q=oferta" class="btn">Ver ofertas</a>
+            <a href="{{ url_for('shop.shop') }}" class="btn primary">Comprar ahora</a>
+            <a href="{{ url_for('shop.shop') }}?q=oferta" class="btn ghost">Ver ofertas</a>
+            <a href="{{ url_for('shop.shop') }}?sort=new" class="btn ghost">Novedades</a>
           </div>
 
-          <div class="hp-proof" aria-label="Prueba social">
+          <div class="hp-proof" aria-label="Confianza rápida">
             <span class="hp-pill"><span class="p"></span> Checkout optimizado</span>
             <span class="hp-pill"><span class="p"></span> Envíos rápidos</span>
-            <span class="hp-pill"><span class="p"></span> Soporte real</span>
+            <span class="hp-pill"><span class="p"></span> Atención real</span>
           </div>
         </div>
       </div>
 
-      <!-- RIGHT: Account panel -->
-      <aside class="hp-panel hp-reveal" data-reveal aria-label="Acceso a cuenta">
+      <!-- TRUST (antes “Tu cuenta gigante”) -->
+      <aside class="hp-trust hp-reveal" data-reveal aria-label="Seguridad y cuenta">
         <div class="inner">
-          <div class="row between" style="align-items:center">
-            <p class="title" style="margin:0">Tu cuenta</p>
-            <span class="secure">● Seguro</span>
+          <div class="row">
+            <p class="title">Compra segura</p>
+            <span class="hp-secure">● Verificado</span>
           </div>
-          <p class="muted">Accedé a pedidos, guardá favoritos y recibí promos exclusivas.</p>
+          <p class="muted">Accedé a pedidos, favoritos y cupones. Tu cuenta está protegida.</p>
+
           <div class="ctaRow">
-            <a class="btn btn-primary" href="/account">Ingresar</a>
-            <a class="btn btn-soft" href="/account">Crear cuenta</a>
+            <a class="btn primary" href="/account">Ingresar</a>
+            <a class="btn ghost" href="/account">Crear cuenta</a>
           </div>
 
-          <div style="margin-top:14px" class="card compact">
-            <p class="card-title" style="margin:0 0 6px">Beneficios</p>
-            <p class="card-muted" style="margin:0">Seguimiento de pedidos · cupones · drops exclusivos</p>
+          <div class="miniList">
+            <b>Incluye</b>
+            <div class="small" style="margin-top:6px">
+              Seguimiento de pedidos · cupones · drops exclusivos · soporte
+            </div>
+          </div>
+
+          <hr>
+
+          <div class="small">
+            <b>Pago:</b> MercadoPago / Transferencia / (próximamente más) <br>
+            <b>Envíos:</b> rápidos y con seguimiento
           </div>
         </div>
       </aside>
 
     </section>
 
-    <!-- FEATURED -->
-    <section class="hp-products">
-      <header class="hp-head">
+    <!-- CATEGORIES GRID (marketplace) -->
+    <section aria-label="Categorías" style="margin-top:16px">
+      <div class="hp-head">
+        <div>
+          <h2 class="hp-reveal" data-reveal>Categorías</h2>
+          <div class="sub hp-reveal" data-reveal>Encontrá rápido lo que buscás</div>
+        </div>
+        <a class="btn ghost hp-reveal" data-reveal href="{{ url_for('shop.shop') }}">Ver todo →</a>
+      </div>
+
+      <div class="hp-catsGrid">
+        <a class="hp-cat hp-reveal" data-reveal href="{{ url_for('shop.shop') }}?categoria=ropa">
+          <span class="hp-ico">👕</span>
+          <div><b>Ropa urbana</b><span>Lo más vendido</span></div>
+        </a>
+        <a class="hp-cat hp-reveal" data-reveal href="{{ url_for('shop.shop') }}?categoria=accesorios">
+          <span class="hp-ico">🧢</span>
+          <div><b>Accesorios</b><span>Street essentials</span></div>
+        </a>
+        <a class="hp-cat hp-reveal" data-reveal href="{{ url_for('shop.shop') }}?categoria=tecnologia">
+          <span class="hp-ico">⌚</span>
+          <div><b>Tecnología</b><span>Gadgets premium</span></div>
+        </a>
+        <a class="hp-cat hp-reveal" data-reveal href="{{ url_for('shop.shop') }}?q=oferta">
+          <span class="hp-ico">🔥</span>
+          <div><b>Ofertas</b><span>Descuentos reales</span></div>
+        </a>
+      </div>
+    </section>
+
+    <!-- FEATURED PRODUCTS -->
+    <section class="hpGrid" aria-label="Productos destacados">
+      <div class="hp-head">
         <div>
           <h2 class="hp-reveal" data-reveal>Destacados</h2>
           <div class="sub hp-reveal" data-reveal>Selección premium curada para vos</div>
         </div>
-        <a class="btn btn-ghost hp-reveal" data-reveal href="{{ url_for('shop.shop') }}">Ver todo →</a>
-      </header>
+        <a class="btn ghost hp-reveal" data-reveal href="{{ url_for('shop.shop') }}">Ver todo →</a>
+      </div>
 
       {% set featured_list = featured if featured is defined else [] %}
 
-      <div class="grid grid-4" id="hpGrid">
+      <div class="gridP" id="hpGrid">
         {% if featured_list|length == 0 %}
-          {# Skeletons si no hay productos aún #}
           <div class="hp-skel"></div>
           <div class="hp-skel"></div>
           <div class="hp-skel"></div>
           <div class="hp-skel"></div>
 
-          <div class="empty" style="grid-column:1 / -1">
-            <h3 style="margin:0 0 8px">Todavía no hay productos destacados</h3>
+          <div class="card" style="grid-column:1 / -1; padding:18px">
+            <h3 style="margin:0 0 6px">Todavía no hay productos destacados</h3>
             <p style="margin:0">Cargalos desde Admin → Productos y van a aparecer acá automáticamente.</p>
             <div style="margin-top:12px">
-              <a class="btn btn-primary" href="{{ url_for('shop.shop') }}">Ir a la tienda</a>
+              <a class="btn primary" href="{{ url_for('shop.shop') }}">Ir a la tienda</a>
             </div>
           </div>
         {% else %}
           {% for p in featured_list %}
-            <article class="card hp-cardP product-card hp-reveal" data-reveal>
-              <div class="product-media">
-                <span class="product-chip">Destacado</span>
-                <img src="{{ p.img }}" alt="{{ p.title }}" loading="lazy" decoding="async">
+            <article class="hpCard hp-reveal" data-reveal aria-label="Producto destacado">
+              <div class="hpMedia">
+                <span class="hpChip">Destacado</span>
+                <img src="{{ p.img }}" alt="{{ p.title }}" loading="lazy" decoding="async" onload="this.style.opacity=1">
               </div>
 
-              <div class="product-meta">
-                <div class="stack" style="gap:6px">
-                  <div class="product-name">{{ p.title }}</div>
-                  <div class="product-sub">Selección premium</div>
-                </div>
-                <div class="price">{{ p.price }}</div>
+              <div class="hpMeta">
+                <div class="hpName">{{ p.title }}</div>
+                <div class="hpSub">Selección premium</div>
+                <div class="hpPrice">{{ p.price }}</div>
               </div>
 
-              <div class="product-actions">
-                <a class="btn btn-primary buy" href="{{ p.href }}">Comprar</a>
-                <a class="btn btn-soft" href="{{ p.href }}">Ver detalles</a>
+              <div class="hpActions">
+                <a class="btn primary" href="{{ p.href }}">Comprar</a>
+                <a class="btn ghost" href="{{ p.href }}">Detalles</a>
               </div>
             </article>
           {% endfor %}
@@ -602,22 +571,24 @@
   </div>
 </section>
 
+<!-- Sticky CTA (mobile) -->
+<div class="sticky-cta" id="hpSticky">
+  <div class="inner">
+    <div>
+      <b>Skyline Store</b>
+      <p class="small">Explorá ofertas y drops premium</p>
+    </div>
+    <a class="cta-btn" href="{{ url_for('shop.shop') }}">Comprar</a>
+  </div>
+</div>
+
 <button class="to-top" id="toTop" aria-label="Volver arriba">↑</button>
 
 <script>
-/* ==========================================================================
-   HOME JS — 30 mejoras de micro-UX (sin librerías)
-   - reveal on scroll (IntersectionObserver)
-   - parallax sutil en hero (mouse + scroll)
-   - sticky “to top” inteligente
-   - smooth focus on search (slash /)
-   - trim del buscador
-   - reduce motion respetado
-========================================================================== */
 (() => {
   const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  // 1) Reveal on scroll
+  // Reveal
   const items = [...document.querySelectorAll('[data-reveal]')];
   if (!reduce && 'IntersectionObserver' in window && items.length) {
     const io = new IntersectionObserver((entries) => {
@@ -633,42 +604,38 @@
     items.forEach(el => el.classList.add('is-in'));
   }
 
-  // 2) ToTop show/hide
+  // ToTop
   const btn = document.getElementById("toTop");
+  const sticky = document.getElementById("hpSticky");
   const onScroll = () => {
-    if (!btn) return;
-    btn.style.display = (window.scrollY > 520) ? "inline-flex" : "none";
+    const y = window.scrollY || 0;
+    if (btn) btn.style.display = (y > 520) ? "inline-flex" : "none";
+    // Sticky CTA: aparece luego del hero (mejora conversión mobile)
+    if (sticky) sticky.classList.toggle("is-on", y > 420);
   };
   window.addEventListener("scroll", onScroll, { passive: true });
   onScroll();
-
-  // 3) ToTop click
   btn && btn.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
 
-  // 4) Search UX: trim + focus shortcut "/"
-  const searchInput = document.querySelector('.hp-search input[name="q"]');
-  if (searchInput) {
-    searchInput.addEventListener('change', () => { searchInput.value = (searchInput.value || '').trim(); });
+  // Shortcut "/" para enfocar el buscador del HEADER (global)
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
+    const tag = (document.activeElement && document.activeElement.tagName) || '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
 
-    document.addEventListener('keydown', (e) => {
-      if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        const tag = (document.activeElement && document.activeElement.tagName) || '';
-        if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-        e.preventDefault();
-        searchInput.focus({ preventScroll: true });
-      }
-      if (e.key === 'Escape' && document.activeElement === searchInput) {
-        searchInput.blur();
-      }
-    });
-  }
+    // intenta encontrar el input del topbar (ajustá selector si tu header usa otro)
+    const topSearch = document.querySelector('.topbar input[name="q"], .topbar input[type="search"], .topbar input');
+    if (topSearch) {
+      e.preventDefault();
+      topSearch.focus({ preventScroll: true });
+    }
+  });
 
-  // 5) Hero parallax (super sutil)
-  const hero = document.querySelector('.hp-hero');
+  // Parallax sutil hero
+  const hero = document.querySelector('.hp-heroMain');
   const heroImg = document.getElementById('hpHeroImg');
   if (!reduce && hero && heroImg) {
     let rx = 0, ry = 0, sx = 0, sy = 0;
-
     const tick = () => {
       sx += (rx - sx) * 0.08;
       sy += (ry - sy) * 0.08;
@@ -684,19 +651,7 @@
       rx = px * 10;
       ry = py * 8;
     });
-
-    hero.addEventListener('mouseleave', () => {
-      rx = 0; ry = 0;
-    });
-
-    // scroll lift
-    window.addEventListener('scroll', () => {
-      const r = hero.getBoundingClientRect();
-      const t = Math.max(-1, Math.min(1, (r.top - 120) / 500));
-      heroImg.style.filter = `saturate(${1.05 + (t*-0.03)}) contrast(${1.05 + (t*-0.02)}) brightness(${0.98 + (t*-0.02)})`;
-    }, { passive: true });
-  } else if (heroImg) {
-    heroImg.style.transform = 'scale(1.045)';
+    hero.addEventListener('mouseleave', () => { rx = 0; ry = 0; });
   }
 })();
 </script>

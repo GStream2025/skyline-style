@@ -1,0 +1,73 @@
+{# ---------------------------------------------------------------------------
+  Skyline Store · Price Row (v2 PRO)
+  vars:
+    - price (required): number/Decimal/str
+    - currency (optional): 'UYU' | 'USD' | ...
+    - compare_at (optional): previous price
+    - discount_pct (optional): 0-100 (si no lo pasás, lo calculo si puedo)
+    - show_free (optional): bool (si price=0 -> "Gratis")
+    - locale (optional): 'es_UY' (placeholder para futuro)
+--------------------------------------------------------------------------- #}
+
+{% set _cur = (currency|default('UYU'))|upper|trim %}
+{% set _show_free = show_free|default(true) %}
+
+{# ---- helpers ---- #}
+{% macro _as_decimal(v) -%}
+  {# No tenemos Decimal real en Jinja, pero normalizamos strings tipo "1.234,56" -> "1234.56" #}
+  {{ (v|string)
+      |replace(' ', '')
+      |replace('.', '')
+      |replace(',', '.')
+  }}
+{%- endmacro %}
+
+{% set _p_raw = price if price is not none else '' %}
+{% set _c_raw = compare_at if compare_at is not none else '' %}
+
+{% set _p_norm = _as_decimal(_p_raw) %}
+{% set _c_norm = _as_decimal(_c_raw) %}
+
+{# Intento de números (Jinja: float) con fallback seguro #}
+{% set _p_num = (_p_norm|float) if _p_norm else none %}
+{% set _c_num = (_c_norm|float) if _c_norm else none %}
+
+{# ---- descuentos ---- #}
+{% set _pct = discount_pct if discount_pct is not none else none %}
+{% if _pct is none and _c_num and _p_num is not none and _c_num > 0 and _p_num < _c_num %}
+  {% set _pct = (((_c_num - _p_num) / _c_num) * 100) | round(0, 'common') %}
+{% endif %}
+
+{# ---- flags UI ---- #}
+{% set _has_compare = (compare_at is not none) and (_c_raw|string|trim != '') %}
+{% set _is_free = (_show_free and _p_num is not none and _p_num <= 0) %}
+
+<div class="priceRowP"
+     role="group"
+     aria-label="Precio"
+     data-currency="{{ _cur }}"
+     {% if _pct is not none %}data-discount="{{ _pct }}"{% endif %}>
+
+  <div class="priceMainP">
+    <span class="priceP">
+      {% if _is_free %}
+        Gratis
+      {% else %}
+        {{ price }}
+      {% endif %}
+    </span>
+
+    <span class="curP" aria-label="Moneda">{{ _cur }}</span>
+
+    {% if _pct is not none and _pct|int > 0 %}
+      <span class="badgeDiscountP" aria-label="Descuento">{{ _pct|int }}% OFF</span>
+    {% endif %}
+  </div>
+
+  {% if _has_compare %}
+    <div class="compareWrapP" aria-label="Precio anterior">
+      <span class="compareP">{{ compare_at }}</span>
+      <span class="curP isMuted" aria-hidden="true">{{ _cur }}</span>
+    </div>
+  {% endif %}
+</div>

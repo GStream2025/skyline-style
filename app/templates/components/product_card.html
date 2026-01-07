@@ -1,0 +1,91 @@
+{# templates/components/product_card.html
+   Skyline Store — Product Card (FINAL PRO)
+   ✅ 5 mejoras nuevas:
+   1) Fallback de imagen + lazy sin “onload inline” (menos bug, más limpio)
+   2) Link “stretched” (toda la card clickeable a Detalles) sin romper botones
+   3) Precio con micro-label + soporte de compare_at (tachado) + badge auto
+   4) Chips opcionales (envío/stock) y rating opcional (si existe)
+   5) Accesibilidad real: aria-labels + foco visible + orden correcto
+#}
+
+{# ---------------------------
+   Entradas esperadas:
+   img, title, price, href
+   Opcionales:
+   sub, badge, compare_at, currency, ship, stock, rating, reviews
+   fallback_img (si no, usa placeholder interno)
+---------------------------- #}
+
+{% set _currency = currency|default('UYU') %}
+{% set _fallback = fallback_img|default(url_for('static', filename='img/placeholders/product.png')) %}
+
+<article class="cardP" aria-label="Producto: {{ title }}">
+  <div class="mediaP">
+    {# Badge manual o automático si hay compare_at #}
+    {% if badge %}
+      <span class="badgeP">{{ badge }}</span>
+    {% elif compare_at %}
+      <span class="badgeP">Oferta</span>
+    {% endif %}
+
+    {# Chips opcionales #}
+    <div class="chipsP" aria-hidden="true">
+      {% if ship %}<span class="chipP">{{ ship }}</span>{% endif %}
+      {% if stock is not none %}
+        {% if stock|int > 0 %}
+          <span class="chipP ok">En stock</span>
+        {% else %}
+          <span class="chipP bad">Sin stock</span>
+        {% endif %}
+      {% endif %}
+    </div>
+
+    <img
+      src="{{ img }}"
+      alt="{{ title }}"
+      loading="lazy"
+      decoding="async"
+      onerror="this.onerror=null;this.src='{{ _fallback }}';"
+    >
+
+    {# Stretched link: toda la card abre Detalles (sin tapar botones) #}
+    <a class="stretchedP" href="{{ href }}" aria-label="Ver detalles de {{ title }}"></a>
+  </div>
+
+  <div class="metaP">
+    <div class="titleP">{{ title }}</div>
+
+    {% if sub %}
+      <div class="subP">{{ sub }}</div>
+    {% endif %}
+
+    {# Rating opcional #}
+    {% if rating %}
+      <div class="ratingP" aria-label="Calificación {{ rating }} de 5">
+        <span class="star" aria-hidden="true">★</span>
+        <span class="val">{{ rating }}</span>
+        {% if reviews %}<span class="rev">({{ reviews }})</span>{% endif %}
+      </div>
+    {% endif %}
+
+    <div class="priceRowP">
+      <div class="priceP">{{ price }}</div>
+      <div class="curP">{{ _currency }}</div>
+
+      {% if compare_at %}
+        <div class="compareP" aria-label="Precio anterior">{{ compare_at }}</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="actionsP">
+    {# Si no hay stock, deshabilita comprar #}
+    {% if stock is not none and stock|int <= 0 %}
+      <button class="btn ghost disabled" type="button" aria-disabled="true" tabindex="-1">Sin stock</button>
+      <a class="btn ghost" href="{{ href }}">Detalles</a>
+    {% else %}
+      <a class="btn primary" href="{{ href }}">Comprar</a>
+      <a class="btn ghost" href="{{ href }}">Detalles</a>
+    {% endif %}
+  </div>
+</article>

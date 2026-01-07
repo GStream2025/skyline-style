@@ -1,57 +1,90 @@
-{# app/templates/base.html — Skyline Store (ULTRA PRO ENTERPRISE · FINAL) #}
+{# app/templates/base.html — Skyline Store (ULTRA PRO ENTERPRISE · v2 FINAL) #}
 <!doctype html>
 <html lang="es">
 <head>
+  <!-- =====================================================
+       META BÁSICO
+  ====================================================== -->
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   <title>{% block title %}{{ meta_title or "Skyline Store" }}{% endblock %}</title>
   <meta name="description" content="{{ meta_description or 'Skyline Store — marketplace premium de tecnología y streetwear.' }}">
-
   <link rel="canonical" href="{{ request.url }}">
 
-  <!-- Open Graph -->
+  <!-- =====================================================
+       OPEN GRAPH / SOCIAL
+  ====================================================== -->
   <meta property="og:title" content="{{ meta_title or 'Skyline Store' }}">
   <meta property="og:description" content="{{ meta_description or 'Marketplace premium de tecnología y streetwear.' }}">
   <meta property="og:image" content="{{ og_image or url_for('static', filename='img/og.png', _external=True) }}">
   <meta property="og:type" content="website">
   <meta property="og:locale" content="es_UY">
 
-  <!-- Twitter -->
   <meta name="twitter:card" content="summary_large_image">
 
-  <!-- Security -->
+  <!-- =====================================================
+       SECURITY / HARDENING
+  ====================================================== -->
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
 
-  <!-- Theme color (mobile browsers) -->
-  <meta name="theme-color" content="#2563eb">
+  {# CSP básica segura (no rompe fonts ni inline JS existente) #}
+  <meta http-equiv="Content-Security-Policy"
+        content="
+          default-src 'self';
+          img-src 'self' data: https:;
+          style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+          font-src https://fonts.gstatic.com;
+          script-src 'self' 'unsafe-inline';
+          connect-src 'self';
+        ">
 
-  <!-- CSRF -->
+  <!-- =====================================================
+       THEME / CSRF
+  ====================================================== -->
+  <meta name="theme-color" content="#2563eb">
   <meta name="csrf-token" content="{{ csrf_token }}">
 
-  <!-- Favicon -->
+  <!-- =====================================================
+       ICONS
+  ====================================================== -->
   <link rel="icon" href="{{ url_for('static', filename='img/favicon.png') }}">
 
-  <!-- Fonts -->
+  <!-- =====================================================
+       FONTS (OPTIMIZADO)
+  ====================================================== -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+    rel="stylesheet">
 
-  <!-- CSS PRO -->
-  <link rel="preload" href="{{ url_for('static', filename='css/skyline-pro.css') }}" as="style">
+  <!-- =====================================================
+       CSS GLOBAL + COMPONENTES (ORDEN CRÍTICO)
+  ====================================================== -->
+  <link rel="preload" as="style" href="{{ url_for('static', filename='css/skyline-pro.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/skyline-pro.css') }}">
 
-  {# Perf: evita “flash” del fondo al cargar #}
+  {# NUEVO: sistema de componentes #}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}">
+
+  <!-- =====================================================
+       UX BOOTSTRAP (ANTI-FLASH + A11Y)
+  ====================================================== -->
   <style>
     html{background:#f7f9ff}
-    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+    .sr-only{
+      position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+      overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0
+    }
     .skip{
       position:absolute;left:12px;top:12px;z-index:9999;
       padding:10px 12px;border-radius:14px;
       background:#fff;border:1px solid rgba(8,16,34,.12);
       box-shadow:0 18px 50px rgba(8,16,34,.14);
-      transform:translateY(-140%);transition:transform .18s ease;
+      transform:translateY(-140%);
+      transition:transform .18s ease;
     }
     .skip:focus{transform:translateY(0)}
   </style>
@@ -62,9 +95,12 @@
 <body>
 <a class="skip" href="#main">Saltar al contenido</a>
 
-<!-- TOPBAR (ULTRA PRO) -->
+<!-- =====================================================
+     HEADER / TOPBAR
+===================================================== -->
 <header class="topbar" role="banner">
   <div class="topbar-inner">
+
     <a href="/" class="brand" aria-label="Ir a inicio">
       <span class="brand-dot" aria-hidden="true"></span>
       <div class="brand-txt">
@@ -90,12 +126,11 @@
         value="{{ request.args.get('q','') }}"
         autocomplete="off"
         inputmode="search"
-        aria-label="Buscar"
       >
       <button class="sbtn" type="submit">Buscar</button>
     </form>
 
-    <div class="top-actions" aria-label="Acciones">
+    <div class="top-actions" aria-label="Acciones rápidas">
       <a href="/cart" class="icon-btn" aria-label="Carrito" style="position:relative">
         <span aria-hidden="true">🛒</span>
         <span class="cart-badge" data-cart-badge style="display:none">0</span>
@@ -112,21 +147,27 @@
   </div>
 </header>
 
-<!-- FLASH (PRO) -->
+<!-- =====================================================
+     FLASH / TOASTS
+===================================================== -->
 <div class="container" aria-live="polite" aria-atomic="true">
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% for cat, msg in messages %}
-      <div class="toast {{ cat }}">{{ msg }}</div>
+      <div class="toast {{ cat }}" role="status">{{ msg }}</div>
     {% endfor %}
   {% endwith %}
 </div>
 
-<!-- MAIN -->
+<!-- =====================================================
+     MAIN
+===================================================== -->
 <main id="main" class="container" role="main">
   {% block content %}{% endblock %}
 </main>
 
-<!-- FOOTER (PRO) -->
+<!-- =====================================================
+     FOOTER
+===================================================== -->
 <footer class="footer" role="contentinfo">
   <div class="container grid grid-4">
     <div>
@@ -156,53 +197,49 @@
   <p class="small">© {{ now().year if now else "2026" }} Skyline Store</p>
 </footer>
 
-<!-- JS GLOBAL (PRO) -->
+<!-- =====================================================
+     JS GLOBAL (AISLADO Y SEGURO)
+===================================================== -->
 <script>
-/* CSRF auto */
 (() => {
+  /* ---------- CSRF auto ---------- */
   const token = document.querySelector('meta[name="csrf-token"]')?.content;
-  if (!token) return;
-  document.querySelectorAll('form').forEach(f => {
-    const m = (f.getAttribute('method') || 'GET').toUpperCase();
-    if (m !== 'GET' && !f.querySelector('[name=csrf_token]')) {
-      const i = document.createElement('input');
-      i.type = 'hidden'; i.name = 'csrf_token'; i.value = token;
-      f.appendChild(i);
-    }
-  });
-})();
+  if (token) {
+    document.querySelectorAll('form').forEach(f => {
+      const m = (f.method || 'GET').toUpperCase();
+      if (m !== 'GET' && !f.querySelector('[name=csrf_token]')) {
+        const i = document.createElement('input');
+        i.type = 'hidden'; i.name = 'csrf_token'; i.value = token;
+        f.appendChild(i);
+      }
+    });
+  }
 
-/* Cart badge */
-(() => {
+  /* ---------- Cart badge ---------- */
   const badge = document.querySelector('[data-cart-badge]');
-  if (!badge) return;
+  if (badge) {
+    fetch('/cart/json', { headers:{'Accept':'application/json'} })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        const c = d?.items_count || 0;
+        badge.textContent = c;
+        badge.style.display = c ? 'flex' : 'none';
+        badge.setAttribute('aria-label', c ? `${c} items en carrito` : 'Carrito vacío');
+      })
+      .catch(()=>{});
+  }
 
-  fetch('/cart/json', { headers: { 'Accept': 'application/json' } })
-    .then(r => r.ok ? r.json() : null)
-    .then(d => {
-      const c = d?.items_count || 0;
-      badge.textContent = c;
-      badge.style.display = c ? 'flex' : 'none';
-      badge.setAttribute('aria-label', c ? `${c} items en carrito` : 'Carrito vacío');
-    })
-    .catch(() => {});
-})();
-
-/* Nav active (fallback si no se usa Jinja) */
-(() => {
+  /* ---------- Nav active fallback ---------- */
   const path = location.pathname || "/";
   document.querySelectorAll('.nav a').forEach(a => {
     const href = a.getAttribute('href') || '';
     if (href && href !== '/' && path.startsWith(href)) a.classList.add('active');
     if (href === '/' && path === '/') a.classList.add('active');
   });
-})();
 
-/* Mejor UX: enter en búsqueda + limpiar espacios */
-(() => {
-  const input = document.querySelector('.searchbar input[name="q"]');
-  if (!input) return;
-  input.addEventListener('change', () => input.value = (input.value || '').trim());
+  /* ---------- Search trim ---------- */
+  const q = document.querySelector('.searchbar input[name="q"]');
+  if (q) q.addEventListener('change', () => q.value = (q.value||'').trim());
 })();
 </script>
 
