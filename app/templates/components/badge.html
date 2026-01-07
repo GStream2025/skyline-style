@@ -1,0 +1,64 @@
+{# templates/components/badge.html
+  Badge PRO v2
+  Vars:
+    - text (required): texto del badge
+    - variant (optional): 'primary'|'success'|'danger'|'warning'|'info'|'neutral'|'glass'
+    - size (optional): 'sm'|'md'|'lg'
+    - pill (optional): bool (bordes full)
+    - icon (optional): svg/html seguro (solo si viene de tu template, no de user input)
+    - sr (optional): texto extra para lectores de pantalla
+    - title (optional): tooltip
+    - cls (optional): clases extra
+    - as (optional): 'span'|'div' (default span)
+    - dot (optional): bool (punto indicador)
+#}
+
+{% set _as = as|default('span') %}
+{% set _text = (text|default(''))|trim %}
+{% set _variant = (variant|default('neutral'))|lower|trim %}
+{% set _size = (size|default('md'))|lower|trim %}
+{% set _pill = pill|default(true) %}
+{% set _dot = dot|default(false) %}
+{% set _cls = cls|default('') %}
+
+{# ---- maps ---- #}
+{% set _vmap = {
+  'primary': 'isPrimary',
+  'success': 'isSuccess',
+  'danger':  'isDanger',
+  'warning': 'isWarning',
+  'info':    'isInfo',
+  'neutral': 'isNeutral',
+  'glass':   'isGlass'
+} %}
+
+{% set _smap = {
+  'sm': 'isSm',
+  'md': 'isMd',
+  'lg': 'isLg'
+} %}
+
+{% set _vcls = _vmap.get(_variant, 'isNeutral') %}
+{% set _scls = _smap.get(_size, 'isMd') %}
+
+{# ---- safety: si no hay texto, no renderiza nada ---- #}
+{% if _text %}
+  <{{ _as }}
+    class="badgeP {{ _vcls }} {{ _scls }}{% if _pill %} isPill{% endif %}{% if _dot %} hasDot{% endif %} {{ _cls }}"
+    role="status"
+    aria-label="{{ _text }}"
+    {% if title %}title="{{ title }}"{% endif %}>
+
+    {% if _dot %}<span class="badgeDotP" aria-hidden="true"></span>{% endif %}
+
+    {% if icon %}
+      <span class="badgeIconP" aria-hidden="true">{{ icon }}</span>
+    {% endif %}
+
+    <span class="badgeTextP">{{ _text }}</span>
+
+    {% if sr %}
+      <span class="sr-only">{{ sr }}</span>
+    {% endif %}
+  </{{ _as }}>
+{% endif %}

@@ -14,11 +14,12 @@
 
 <style>
 /* ======================================================================
-   HOME — SKYLINE PRO (FINAL)
-   - NO duplica header search (home usa "hint", no buscador completo)
-   - Layout marketplace real: hero + categories grid + featured + trust
-   - Account: reducido a confianza, no roba ventas
-   - Compat btn-* (scoped) por si hay clases viejas
+   HOME — SKYLINE PRO (v2 UPDATED)
+   ✅ NO duplica header search (home usa hint)
+   ✅ “Trust + conversion” boosters (sin verse cargado)
+   ✅ Featured usa component-card feel (clamps + hover + focus)
+   ✅ A11y pro: focus visible, aria-labels, reduce motion
+   ✅ Fixes: sticky CTA no tapa toasts, toTop no pelea con sticky
 ====================================================================== */
 
 .home-pro{padding:22px 0 34px}
@@ -27,24 +28,13 @@
   overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0
 }
 
-/* Compat (solo en home): soporta tus clases previas */
-.home-pro .btn-primary{ /* maps -> .btn.primary */
-  color:#fff;background:linear-gradient(135deg,var(--p),var(--p2));
-  border:1px solid transparent;
-}
-.home-pro .btn-soft{ /* maps -> .btn.ghost */
-  background:rgba(255,255,255,.86);
-  border:1px solid var(--border);
-  color:var(--ink);
-}
-@media(prefers-color-scheme:dark){
-  .home-pro .btn-soft{background:rgba(255,255,255,.06)}
-}
-.home-pro .btn-ghost{
-  background:transparent;border:1px solid var(--border);color:var(--ink);
-}
+/* Compat (solo en home): soporta clases previas */
+.home-pro .btn-primary{color:#fff;background:linear-gradient(135deg,var(--p),var(--p2));border:1px solid transparent}
+.home-pro .btn-soft{background:rgba(255,255,255,.86);border:1px solid var(--border);color:var(--ink)}
+@media(prefers-color-scheme:dark){.home-pro .btn-soft{background:rgba(255,255,255,.06)}}
+.home-pro .btn-ghost{background:transparent;border:1px solid var(--border);color:var(--ink)}
 
-/* Backdrop local (más pro, menos “pastel”) */
+/* Backdrop local (más pro) */
 .home-pro .hp-wrap{position:relative}
 .home-pro .hp-wrap::before{
   content:"";
@@ -58,7 +48,7 @@
   pointer-events:none;
 }
 
-/* TOP STRIP: beneficios + quick links (sin buscador acá) */
+/* TOP STRIP */
 .hp-top{
   display:flex;align-items:flex-start;justify-content:space-between;gap:18px;
   margin:0 0 18px;
@@ -104,7 +94,7 @@
   box-shadow:0 10px 18px rgba(245,158,11,.18);
 }
 
-/* Right hint: “Usá / para buscar” (no duplica buscador) */
+/* Right hint */
 .hp-hint{
   border-radius: 18px;
   border: 1px solid var(--border);
@@ -113,11 +103,13 @@
   padding: 12px 14px;
   max-width: 420px;
 }
-@media(prefers-color-scheme:dark){
-  .hp-hint{background: rgba(255,255,255,.06); box-shadow:none}
-}
+@media(prefers-color-scheme:dark){.hp-hint{background: rgba(255,255,255,.06); box-shadow:none}}
 .hp-hint b{font-weight:1000}
-.hp-hint .k{font-weight:1000;padding:2px 8px;border-radius:999px;border:1px solid var(--border);background:rgba(255,255,255,.72)}
+.hp-hint .k{
+  font-weight:1000;padding:2px 8px;border-radius:999px;
+  border:1px solid var(--border);
+  background:rgba(255,255,255,.72)
+}
 @media(prefers-color-scheme:dark){.hp-hint .k{background:rgba(255,255,255,.06)}}
 
 @media(max-width:1020px){
@@ -125,20 +117,15 @@
   .hp-hint{max-width:none}
 }
 
-/* HERO: usa tu .hero global (premium) y lo potencia con layout */
-.hp-hero{
-  position:relative;
-}
+/* HERO + TRUST GRID */
 .hp-heroGrid{
   display:grid;gap:18px;
   grid-template-columns: 1fr 420px;
   align-items:stretch;
 }
-@media(max-width:980px){
-  .hp-heroGrid{grid-template-columns:1fr}
-}
+@media(max-width:980px){.hp-heroGrid{grid-template-columns:1fr}}
 
-/* hero content */
+/* HERO */
 .hp-heroMain{
   position:relative;
   border-radius: var(--r-xl);
@@ -149,9 +136,7 @@
   min-height: 460px;
   isolation:isolate;
 }
-@media(prefers-color-scheme:dark){
-  .hp-heroMain{background: rgba(9,12,24,.62); box-shadow:none}
-}
+@media(prefers-color-scheme:dark){.hp-heroMain{background: rgba(9,12,24,.62); box-shadow:none}}
 .hp-heroMedia{position:absolute;inset:0;z-index:0}
 .hp-heroMedia img{
   width:100%;height:100%;object-fit:cover;
@@ -189,9 +174,7 @@
   color:rgba(10,16,32,.70);
   width:fit-content;
 }
-@media(prefers-color-scheme:dark){
-  .hp-kicker{background: rgba(255,255,255,.08); color: rgba(238,242,255,.78); box-shadow:none}
-}
+@media(prefers-color-scheme:dark){.hp-kicker{background: rgba(255,255,255,.08); color: rgba(238,242,255,.78); box-shadow:none}}
 .hp-kicker .dot{
   width:9px;height:9px;border-radius:999px;
   background: linear-gradient(90deg, var(--good), var(--p2));
@@ -232,7 +215,7 @@
 }
 .hp-pill .p{width:8px;height:8px;border-radius:999px;background:linear-gradient(135deg,var(--p),var(--p2))}
 
-/* Side trust panel (ANTES era “tu cuenta gigante”) */
+/* TRUST */
 .hp-trust{
   border-radius: var(--r-xl);
   border:1px solid var(--border);
@@ -240,9 +223,7 @@
   box-shadow: var(--sh1);
   overflow:hidden;
 }
-@media(prefers-color-scheme:dark){
-  .hp-trust{background: rgba(9,12,24,.62); box-shadow:none}
-}
+@media(prefers-color-scheme:dark){.hp-trust{background: rgba(9,12,24,.62); box-shadow:none}}
 .hp-trust .inner{padding:18px}
 .hp-trust .row{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .hp-secure{
@@ -261,14 +242,32 @@
 @media(prefers-color-scheme:dark){.hp-trust .miniList{background:rgba(255,255,255,.06)}}
 .hp-trust .miniList b{font-weight:1000}
 
-/* Categories grid (marketplace real) */
+/* NEW: “mini trust icons row” (confianza rápida) */
+.hp-trustIcons{
+  display:grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap:10px;
+  margin-top:12px;
+}
+.hp-ti{
+  border-radius:16px;
+  border:1px solid var(--border);
+  background:rgba(255,255,255,.72);
+  padding:10px 10px;
+  box-shadow: var(--sh1);
+}
+@media(prefers-color-scheme:dark){
+  .hp-ti{background:rgba(255,255,255,.06); box-shadow:none}
+}
+.hp-ti b{display:block;font-weight:1000;font-size:.92rem}
+.hp-ti span{display:block;color:var(--muted);font-weight:700;font-size:.82rem}
+
+/* Categories grid */
 .hp-catsGrid{
   display:grid;gap:12px;margin-top:12px;
   grid-template-columns: repeat(2, 1fr);
 }
-@media(min-width:980px){
-  .hp-catsGrid{grid-template-columns: repeat(4, 1fr);gap:14px}
-}
+@media(min-width:980px){.hp-catsGrid{grid-template-columns: repeat(4, 1fr);gap:14px}}
 .hp-cat{
   display:flex;align-items:center;gap:10px;
   padding:14px 14px;border-radius:18px;
@@ -277,9 +276,7 @@
   box-shadow: var(--sh1);
   transition: transform var(--t), box-shadow var(--t), border-color var(--t);
 }
-@media(prefers-color-scheme:dark){
-  .hp-cat{background: rgba(255,255,255,.06); box-shadow:none}
-}
+@media(prefers-color-scheme:dark){.hp-cat{background: rgba(255,255,255,.06); box-shadow:none}}
 .hp-cat:hover{transform:translateY(-4px);box-shadow:var(--sh2);border-color:rgba(37,99,235,.22)}
 .hp-ico{
   width:40px;height:40px;border-radius:14px;
@@ -297,7 +294,33 @@
 }
 .hp-head .sub{color:var(--muted);font-weight:800}
 
-/* Products grid uses your global gridP/cardP feel */
+/* NEW: “section banner” (micro marca) */
+.hp-banner{
+  margin-top:18px;
+  border-radius: var(--r-xl);
+  border:1px solid var(--border);
+  background:
+    radial-gradient(900px 520px at 20% 20%, rgba(37,99,235,.14), transparent 60%),
+    radial-gradient(900px 520px at 88% 18%, rgba(6,182,212,.12), transparent 62%),
+    linear-gradient(135deg, rgba(255,255,255,.86), rgba(255,255,255,.70));
+  box-shadow: var(--sh1);
+  padding: 14px 14px;
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+}
+@media(prefers-color-scheme:dark){
+  .hp-banner{
+    background:
+      radial-gradient(900px 520px at 20% 20%, rgba(37,99,235,.18), transparent 60%),
+      radial-gradient(900px 520px at 88% 18%, rgba(6,182,212,.16), transparent 62%),
+      linear-gradient(135deg, rgba(9,12,24,.70), rgba(9,12,24,.56));
+    box-shadow:none;
+  }
+}
+.hp-banner b{font-weight:1000}
+.hp-banner .small{margin:0}
+.hp-banner .btn{border-radius:999px}
+
+/* Products grid */
 .hpGrid{margin-top:12px}
 
 /* Product card pro */
@@ -332,7 +355,10 @@
 }
 @media(prefers-color-scheme:dark){.hpChip{background: rgba(9,12,24,.62)}}
 .hpMeta{padding:12px 12px 14px;display:grid;gap:8px}
-.hpName{font-weight:1000;line-height:1.15;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.hpName{
+  font-weight:1000;line-height:1.15;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden
+}
 .hpSub{font-size:.88rem;color:var(--muted);font-weight:700}
 .hpPrice{font-weight:1000;font-size:1.08rem;color:var(--ink)}
 .hpActions{display:flex;gap:10px;padding:0 12px 14px}
@@ -375,8 +401,11 @@
 @media(prefers-color-scheme:dark){.to-top{background: rgba(9,12,24,.62); box-shadow:none}}
 .to-top:hover{transform:translateY(-2px)}
 
-/* Sticky CTA (mobile sales booster) */
-.hpSticky{margin-top:0}
+/* Sticky CTA: deja espacio para TOASTS y no tapa el ToTop */
+#hpSticky{z-index:70}
+@media(max-width:720px){
+  #hpSticky.is-on{display:flex}
+}
 
 /* Focus visible (scoped) */
 .home-pro a:focus-visible,
@@ -398,7 +427,7 @@
 <section class="home-pro">
   <div class="hp-wrap section">
 
-    <!-- TOP: Beneficios + Quick links + hint -->
+    <!-- TOP -->
     <section class="hp-top" aria-label="Beneficios y accesos">
       <div>
         <div class="hp-badges" aria-label="Beneficios">
@@ -424,7 +453,7 @@
     <!-- HERO + TRUST -->
     <section class="hp-heroGrid" aria-label="Hero principal y confianza">
 
-      <!-- HERO MAIN -->
+      <!-- HERO -->
       <div class="hp-heroMain hp-reveal" data-reveal>
         <div class="hp-heroMedia" aria-hidden="true">
           <img
@@ -456,7 +485,7 @@
         </div>
       </div>
 
-      <!-- TRUST (antes “Tu cuenta gigante”) -->
+      <!-- TRUST -->
       <aside class="hp-trust hp-reveal" data-reveal aria-label="Seguridad y cuenta">
         <div class="inner">
           <div class="row">
@@ -477,6 +506,13 @@
             </div>
           </div>
 
+          <!-- NEW: confianza visual rápida -->
+          <div class="hp-trustIcons" aria-label="Garantías rápidas">
+            <div class="hp-ti"><b>🔒 Seguro</b><span>Pagos protegidos</span></div>
+            <div class="hp-ti"><b>🚚 Envío</b><span>Con seguimiento</span></div>
+            <div class="hp-ti"><b>💬 Soporte</b><span>Atención real</span></div>
+          </div>
+
           <hr>
 
           <div class="small">
@@ -488,7 +524,16 @@
 
     </section>
 
-    <!-- CATEGORIES GRID (marketplace) -->
+    <!-- NEW: micro banner de marca (convierte mucho) -->
+    <section class="hp-banner hp-reveal" data-reveal aria-label="Mensaje de marca">
+      <div>
+        <b>Skyline Store</b>
+        <p class="small">Drops premium · ofertas reales · experiencia rápida y segura</p>
+      </div>
+      <a class="btn primary" href="{{ url_for('shop.shop') }}?q=oferta">Ver ofertas</a>
+    </section>
+
+    <!-- CATEGORIES -->
     <section aria-label="Categorías" style="margin-top:16px">
       <div class="hp-head">
         <div>
@@ -518,7 +563,7 @@
       </div>
     </section>
 
-    <!-- FEATURED PRODUCTS -->
+    <!-- FEATURED -->
     <section class="hpGrid" aria-label="Productos destacados">
       <div class="hp-head">
         <div>
@@ -572,7 +617,7 @@
 </section>
 
 <!-- Sticky CTA (mobile) -->
-<div class="sticky-cta" id="hpSticky">
+<div class="sticky-cta" id="hpSticky" aria-label="Acción rápida">
   <div class="inner">
     <div>
       <b>Skyline Store</b>
@@ -604,26 +649,24 @@
     items.forEach(el => el.classList.add('is-in'));
   }
 
-  // ToTop
+  // ToTop + Sticky
   const btn = document.getElementById("toTop");
   const sticky = document.getElementById("hpSticky");
   const onScroll = () => {
     const y = window.scrollY || 0;
     if (btn) btn.style.display = (y > 520) ? "inline-flex" : "none";
-    // Sticky CTA: aparece luego del hero (mejora conversión mobile)
     if (sticky) sticky.classList.toggle("is-on", y > 420);
   };
   window.addEventListener("scroll", onScroll, { passive: true });
   onScroll();
   btn && btn.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
 
-  // Shortcut "/" para enfocar el buscador del HEADER (global)
+  // Shortcut "/" -> header search
   document.addEventListener('keydown', (e) => {
     if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
     const tag = (document.activeElement && document.activeElement.tagName) || '';
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
 
-    // intenta encontrar el input del topbar (ajustá selector si tu header usa otro)
     const topSearch = document.querySelector('.topbar input[name="q"], .topbar input[type="search"], .topbar input');
     if (topSearch) {
       e.preventDefault();

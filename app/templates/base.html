@@ -1,4 +1,9 @@
-{# app/templates/base.html — Skyline Store (ULTRA PRO ENTERPRISE · v2 FINAL) #}
+{# app/templates/base.html — Skyline Store (ULTRA PRO ENTERPRISE · v3.1 FINAL)
+   ✅ Actualizado para TOASTS PRO por archivo (toasts.css + componente)
+   ✅ Removido el “Toast auto-hide (si usás .toast)” viejo (ya no aplica)
+   ✅ Shortcut “/” enfoca buscador del header (pro UX)
+   ✅ ARIA y pequeñas mejoras sin romper nada
+#}
 <!doctype html>
 <html lang="es">
 <head>
@@ -20,7 +25,6 @@
   <meta property="og:image" content="{{ og_image or url_for('static', filename='img/og.png', _external=True) }}">
   <meta property="og:type" content="website">
   <meta property="og:locale" content="es_UY">
-
   <meta name="twitter:card" content="summary_large_image">
 
   <!-- =====================================================
@@ -29,10 +33,14 @@
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
 
-  {# CSP básica segura (no rompe fonts ni inline JS existente) #}
+  {# CSP razonable (compatible con inline JS actual)
+     Si más adelante querés CSP estricta con nonce, lo hacemos #}
   <meta http-equiv="Content-Security-Policy"
         content="
           default-src 'self';
+          base-uri 'self';
+          form-action 'self';
+          frame-ancestors 'self';
           img-src 'self' data: https:;
           style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
           font-src https://fonts.gstatic.com;
@@ -47,18 +55,17 @@
   <meta name="csrf-token" content="{{ csrf_token }}">
 
   <!-- =====================================================
-       ICONS
+       ICONS / PRELOADS
   ====================================================== -->
   <link rel="icon" href="{{ url_for('static', filename='img/favicon.png') }}">
+  <link rel="preload" as="image" href="{{ og_image or url_for('static', filename='img/og.png') }}">
 
   <!-- =====================================================
        FONTS (OPTIMIZADO)
   ====================================================== -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
-    rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 
   <!-- =====================================================
        CSS GLOBAL + COMPONENTES (ORDEN CRÍTICO)
@@ -66,8 +73,11 @@
   <link rel="preload" as="style" href="{{ url_for('static', filename='css/skyline-pro.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/skyline-pro.css') }}">
 
-  {# NUEVO: sistema de componentes #}
+  <link rel="preload" as="style" href="{{ url_for('static', filename='css/components.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}">
+
+  {# NOTA: toasts.css se incorpora vía components.css (bundle):
+     @import "../components/toasts.css"; #}
 
   <!-- =====================================================
        UX BOOTSTRAP (ANTI-FLASH + A11Y)
@@ -110,9 +120,9 @@
     </a>
 
     <nav class="nav" aria-label="Navegación principal">
-      <a href="/" {% if request.path == "/" %}class="active"{% endif %}>Inicio</a>
-      <a href="/shop" {% if request.path.startswith("/shop") %}class="active"{% endif %}>Tienda</a>
-      <a href="/shop?ofertas=1">Ofertas</a>
+      <a href="/" {% if request.path == "/" %}class="active" aria-current="page"{% endif %}>Inicio</a>
+      <a href="/shop" {% if request.path.startswith("/shop") %}class="active" aria-current="page"{% endif %}>Tienda</a>
+      <a href="/shop?ofertas=1" {% if request.args.get('ofertas') %}class="active"{% endif %}>Ofertas</a>
     </nav>
 
     <form class="searchbar" action="/shop" method="get" role="search" aria-label="Buscar productos">
@@ -148,21 +158,26 @@
 </header>
 
 <!-- =====================================================
-     FLASH / TOASTS
+     TOASTS (COMPONENTE PRO)
+     Nota: podés setear opciones antes del include:
+       {% set timeout = 4200 %}
+       {% set position = "tr" %}
+       {% set show_progress = true %}
 ===================================================== -->
-<div class="container" aria-live="polite" aria-atomic="true">
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% for cat, msg in messages %}
-      <div class="toast {{ cat }}" role="status">{{ msg }}</div>
-    {% endfor %}
-  {% endwith %}
-</div>
+{% include "components/toasts.html" %}
 
 <!-- =====================================================
      MAIN
 ===================================================== -->
 <main id="main" class="container" role="main">
+
+  {# Slot PRO: contenido arriba del bloque principal (chips, breadcrumb, etc.) #}
+  {% block top_content %}{% endblock %}
+
   {% block content %}{% endblock %}
+
+  {# Slot PRO: contenido abajo (pagination global, banners, etc.) #}
+  {% block bottom_content %}{% endblock %}
 </main>
 
 <!-- =====================================================
@@ -202,10 +217,13 @@
 ===================================================== -->
 <script>
 (() => {
+  const $ = (sel, root=document) => root.querySelector(sel);
+  const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+
   /* ---------- CSRF auto ---------- */
-  const token = document.querySelector('meta[name="csrf-token"]')?.content;
+  const token = $('meta[name="csrf-token"]')?.content;
   if (token) {
-    document.querySelectorAll('form').forEach(f => {
+    $$('form').forEach(f => {
       const m = (f.method || 'GET').toUpperCase();
       if (m !== 'GET' && !f.querySelector('[name=csrf_token]')) {
         const i = document.createElement('input');
@@ -216,7 +234,7 @@
   }
 
   /* ---------- Cart badge ---------- */
-  const badge = document.querySelector('[data-cart-badge]');
+  const badge = $('[data-cart-badge]');
   if (badge) {
     fetch('/cart/json', { headers:{'Accept':'application/json'} })
       .then(r => r.ok ? r.json() : null)
@@ -231,15 +249,25 @@
 
   /* ---------- Nav active fallback ---------- */
   const path = location.pathname || "/";
-  document.querySelectorAll('.nav a').forEach(a => {
+  $$('.nav a').forEach(a => {
     const href = a.getAttribute('href') || '';
     if (href && href !== '/' && path.startsWith(href)) a.classList.add('active');
     if (href === '/' && path === '/') a.classList.add('active');
   });
 
   /* ---------- Search trim ---------- */
-  const q = document.querySelector('.searchbar input[name="q"]');
+  const q = $('.searchbar input[name="q"]');
   if (q) q.addEventListener('change', () => q.value = (q.value||'').trim());
+
+  /* ---------- Shortcut "/" para enfocar buscador del header ---------- */
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
+    const tag = (document.activeElement && document.activeElement.tagName) || '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    if (!q) return;
+    e.preventDefault();
+    q.focus({ preventScroll: true });
+  });
 })();
 </script>
 

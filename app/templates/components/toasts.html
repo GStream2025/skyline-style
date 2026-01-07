@@ -1,0 +1,138 @@
+{# templates/components/toasts.html — Skyline Store (PRO)
+   Vars:
+     - timeout (ms, default 3800)
+     - position: "tr"|"tl"|"br"|"bl" (default "tr")
+     - show_progress: true/false (default true)
+#}
+{% set _timeout = timeout|default(3800) %}
+{% set _pos = position|default("tr") %}
+{% set _progress = (show_progress if show_progress is not none else true) %}
+
+<div class="ss-toasts ss-toasts--{{ _pos }}"
+     aria-live="polite"
+     aria-relevant="additions removals"
+     aria-atomic="false"
+     data-default-timeout="{{ _timeout }}"
+     data-progress="{{ '1' if _progress else '0' }}">
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}
+      {% set c = (cat or 'info')|lower %}
+      {% if c in ['message'] %}{% set c = 'info' %}{% endif %}
+      {% if c in ['danger'] %}{% set c = 'error' %}{% endif %}
+
+      <div class="ss-toast ss-toast--{{ c }}"
+           role="{{ 'alert' if c == 'error' else 'status' }}"
+           tabindex="0"
+           data-timeout="{{ _timeout }}">
+
+        <div class="ss-toast__icon" aria-hidden="true">
+          {% if c == 'success' %}✓{% elif c == 'warning' %}!{% elif c == 'error' %}×{% else %}i{% endif %}
+        </div>
+
+        <div class="ss-toast__body">
+          <div class="ss-toast__title">
+            {% if c == 'success' %}Listo{% elif c == 'warning' %}Atención{% elif c == 'error' %}Error{% else %}Aviso{% endif %}
+          </div>
+          <div class="ss-toast__msg">{{ msg }}</div>
+        </div>
+
+        <button class="ss-toast__close" type="button" aria-label="Cerrar notificación">×</button>
+
+        {% if _progress %}
+          <div class="ss-toast__bar" aria-hidden="true"></div>
+        {% endif %}
+      </div>
+    {% endfor %}
+  {% endwith %}
+</div>
+
+<script>
+(() => {
+  const root = document.querySelector('.ss-toasts');
+  if (!root) return;
+
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const defaultTimeout = parseInt(root.dataset.defaultTimeout || '3800', 10);
+  const showProgress = (root.dataset.progress || '1') === '1';
+
+  const toasts = Array.from(root.querySelectorAll('.ss-toast'));
+  if (!toasts.length) return;
+
+  const now = () => performance.now();
+
+  toasts.forEach((toast) => {
+    const btn = toast.querySelector('.ss-toast__close');
+    const bar = toast.querySelector('.ss-toast__bar');
+
+    let t = parseInt(toast.dataset.timeout || defaultTimeout, 10);
+    if (!Number.isFinite(t) || t < 800) t = 800;
+
+    let start = now();
+    let remaining = t;
+    let raf = 0;
+    let paused = false;
+
+    const setBar = (msLeft) => {
+      if (!showProgress || !bar) return;
+      const pct = Math.max(0, Math.min(1, msLeft / t));
+      bar.style.transform = `scaleX(${pct})`;
+    };
+
+    const removeToast = () => {
+      cancelAnimationFrame(raf);
+      toast.classList.add('is-leaving');
+
+      const finish = () => {
+        toast.remove();
+        if (!root.querySelector('.ss-toast')) root.remove();
+      };
+
+      if (reduce) return finish();
+      toast.addEventListener('transitionend', finish, { once: true });
+      window.setTimeout(finish, 420);
+    };
+
+    const tick = () => {
+      if (paused) return;
+      const elapsed = now() - start;
+      const left = Math.max(0, remaining - elapsed);
+      setBar(left);
+      if (left <= 0) return removeToast();
+      raf = requestAnimationFrame(tick);
+    };
+
+    const pause = () => {
+      if (paused) return;
+      paused = true;
+      const elapsed = now() - start;
+      remaining = Math.max(0, remaining - elapsed);
+      start = now();
+    };
+
+    const resume = () => {
+      if (!paused) return;
+      paused = false;
+      start = now();
+      raf = requestAnimationFrame(tick);
+    };
+
+    toast.addEventListener('mouseenter', pause);
+    toast.addEventListener('mouseleave', resume);
+    toast.addEventListener('focusin', pause);
+    toast.addEventListener('focusout', resume);
+
+    btn && btn.addEventListener('click', removeToast);
+    toast.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        removeToast();
+      }
+    });
+
+    setBar(t);
+    if (!reduce) raf = requestAnimationFrame(tick);
+    else window.setTimeout(removeToast, t);
+  });
+})();
+</script>

@@ -1,0 +1,84 @@
+{# templates/components/chips.html — Skyline Store (PRO v1)
+  Renderiza una fila (o wrap) de "chips" para filtros/categorías/tags.
+
+  Vars:
+    - items (required): lista de dicts u objetos con:
+        - label (required)
+        - href (optional)        -> si existe, chip es <a>
+        - active (optional)      -> bool
+        - disabled (optional)    -> bool
+        - count (optional)       -> número (ej: 12)
+        - icon (optional)        -> emoji o SVG html seguro
+        - aria (optional)        -> aria-label custom
+        - value (optional)       -> data-value (para JS)
+    - title (optional): título a la izquierda (ej: "Categorías")
+    - size (optional): 'sm'|'md'|'lg' (default md)
+    - tone (optional): 'neutral'|'primary'|'glass' (default neutral)
+    - wrap (optional): bool (default true)
+    - cls (optional): clases extra en el contenedor
+    - id (optional): id del contenedor
+    - aria_label (optional): aria-label del contenedor (default "Chips")
+#}
+
+{% set _items = items|default([]) %}
+{% set _title = (title|default(''))|trim %}
+{% set _size = (size|default('md'))|lower|trim %}
+{% set _tone = (tone|default('neutral'))|lower|trim %}
+{% set _wrap = wrap|default(true) %}
+{% set _cls = (cls|default(''))|trim %}
+{% set _id = (id|default(''))|trim %}
+{% set _aria = (aria_label|default('Chips'))|trim %}
+
+{% set _size_cls = 'isSm' if _size == 'sm' else ('isLg' if _size == 'lg' else 'isMd') %}
+{% set _tone_cls = 'isPrimary' if _tone == 'primary' else ('isGlass' if _tone == 'glass' else 'isNeutral') %}
+
+{% if _items and _items|length > 0 %}
+  <section class="chips {{ _size_cls }} {{ _tone_cls }}{% if _wrap %} isWrap{% endif %} {{ _cls }}"
+           {% if _id %}id="{{ _id }}"{% endif %}
+           role="group"
+           aria-label="{{ _aria }}">
+
+    {% if _title %}
+      <div class="chips__title">{{ _title }}</div>
+    {% endif %}
+
+    <div class="chips__row">
+      {% for it in _items %}
+        {% set label = (it.label if it is not mapping else it.get('label')) %}
+        {% set href = (it.href if it is not mapping else it.get('href')) %}
+        {% set active = (it.active if it is not mapping else it.get('active')) %}
+        {% set disabled = (it.disabled if it is not mapping else it.get('disabled')) %}
+        {% set count = (it.count if it is not mapping else it.get('count')) %}
+        {% set icon = (it.icon if it is not mapping else it.get('icon')) %}
+        {% set aria = (it.aria if it is not mapping else it.get('aria')) %}
+        {% set value = (it.value if it is not mapping else it.get('value')) %}
+
+        {% set _label = (label|default(''))|trim %}
+        {% if _label %}
+          {% if href %}
+            <a class="chip{% if active %} isActive{% endif %}{% if disabled %} isDisabled{% endif %}"
+               href="{{ href }}"
+               {% if disabled %}aria-disabled="true" tabindex="-1"{% endif %}
+               aria-label="{{ aria|default(_label) }}"
+               {% if value is not none %}data-value="{{ value }}"{% endif %}>
+              {% if icon %}<span class="chip__icon" aria-hidden="true">{{ icon }}</span>{% endif %}
+              <span class="chip__txt">{{ _label }}</span>
+              {% if count is not none %}<span class="chip__count" aria-hidden="true">{{ count }}</span>{% endif %}
+            </a>
+          {% else %}
+            <button class="chip{% if active %} isActive{% endif %}{% if disabled %} isDisabled{% endif %}"
+                    type="button"
+                    {% if disabled %}disabled aria-disabled="true"{% endif %}
+                    aria-pressed="{{ 'true' if active else 'false' }}"
+                    aria-label="{{ aria|default(_label) }}"
+                    {% if value is not none %}data-value="{{ value }}"{% endif %}>
+              {% if icon %}<span class="chip__icon" aria-hidden="true">{{ icon }}</span>{% endif %}
+              <span class="chip__txt">{{ _label }}</span>
+              {% if count is not none %}<span class="chip__count" aria-hidden="true">{{ count }}</span>{% endif %}
+            </button>
+          {% endif %}
+        {% endif %}
+      {% endfor %}
+    </div>
+  </section>
+{% endif %}

@@ -1,0 +1,103 @@
+{# templates/components/section_header.html — Skyline Store (ENTERPRISE v4)
+  Vars:
+    - title (required)
+    - subtitle (optional)
+    - eyebrow (optional): texto chico arriba (ej: "Destacados")
+    - badge (optional): texto del badge (ej: "Nuevo")
+    - badge_variant (optional): primary|success|warning|danger
+    - align (optional): left|center|split (default left)
+    - size (optional): sm|md|lg|xl (default md)
+    - id (optional): id del header (para anclas)
+    - href (optional): link principal
+    - link_text (optional): texto del link (default "Ver todo")
+    - link_icon (optional): icono/emoji
+    - secondary_href (optional)
+    - secondary_text (optional)
+    - secondary_icon (optional)
+    - cls (optional): clases extra
+#}
+
+{% set _title = (title|default(''))|trim %}
+{% if not _title %}{% exit %}{% endif %}
+
+{% set _subtitle = (subtitle|default(''))|trim %}
+{% set _eyebrow = (eyebrow|default(''))|trim %}
+{% set _badge = (badge|default(''))|trim %}
+{% set _badge_variant = (badge_variant|default('primary'))|lower %}
+{% set _align = (align|default('left'))|lower %}
+{% set _size = (size|default('md'))|lower %}
+{% set _id = (id|default(''))|trim %}
+{% set _href = (href|default(''))|trim %}
+{% set _link_text = (link_text|default('Ver todo'))|trim %}
+{% set _link_icon = (link_icon|default('→')) %}
+{% set _shref = (secondary_href|default(''))|trim %}
+{% set _stext = (secondary_text|default(''))|trim %}
+{% set _sicon = (secondary_icon|default('')) %}
+{% set _cls = (cls|default(''))|trim %}
+
+{% set _align_cls =
+  'isCenter' if _align == 'center' else
+  'isSplit' if _align == 'split' else
+  'isLeft'
+%}
+
+{% set _size_cls =
+  'isSm' if _size == 'sm' else
+  'isLg' if _size == 'lg' else
+  'isXl' if _size == 'xl' else
+  'isMd'
+%}
+
+<header class="sectionHeader {{ _align_cls }} {{ _size_cls }} {{ _cls }}"
+        {% if _id %}id="{{ _id }}"{% endif %}
+        role="group"
+        aria-labelledby="{{ _id ~ '__title' if _id else 'section-title' }}">
+
+  <!-- TEXTO -->
+  <div class="sectionHeader__txt">
+
+    {% if _eyebrow %}
+      <div class="sectionHeader__eyebrow">{{ _eyebrow }}</div>
+    {% endif %}
+
+    <div class="sectionHeader__titleRow">
+      <h2 class="sectionHeader__title"
+          id="{{ _id ~ '__title' if _id else 'section-title' }}">
+        {{ _title }}
+      </h2>
+
+      {% if _badge %}
+        {% include "components/badge.html" with
+          text=_badge
+          variant=_badge_variant
+          size="sm"
+        %}
+      {% endif %}
+    </div>
+
+    {% if _subtitle %}
+      <p class="sectionHeader__sub">{{ _subtitle }}</p>
+    {% endif %}
+  </div>
+
+  <!-- ACCIONES -->
+  {% if _href or _shref %}
+    <div class="sectionHeader__actions">
+
+      {% if _shref %}
+        <a href="{{ _shref }}" class="btn ghost sectionHeader__btn">
+          {% if _sicon %}<span aria-hidden="true">{{ _sicon }}</span>{% endif %}
+          <span>{{ _stext }}</span>
+        </a>
+      {% endif %}
+
+      {% if _href %}
+        <a href="{{ _href }}" class="btn primary sectionHeader__btn">
+          <span>{{ _link_text }}</span>
+          {% if _link_icon %}<span aria-hidden="true">{{ _link_icon }}</span>{% endif %}
+        </a>
+      {% endif %}
+
+    </div>
+  {% endif %}
+</header>

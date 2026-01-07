@@ -1,0 +1,72 @@
+{# templates/components/rating.html — Skyline Store (PRO v3)
+  Vars:
+    - value (required): float|int (0–5)
+    - max (optional): int (default 5)
+    - count (optional): int (cantidad de reseñas)
+    - size (optional): 'sm'|'md'|'lg' (default md)
+    - readonly (optional): bool (default true)
+    - show_text (optional): bool (default false)
+    - precision (optional): 0|1 (decimales a mostrar, default 1)
+    - icon (optional): estrella/emoji/SVG
+    - id (optional)
+    - cls (optional)
+#}
+
+{% set _value = value|default(0) %}
+{% set _max = max|default(5) %}
+{% set _count = count %}
+{% set _size = (size|default('md'))|lower %}
+{% set _readonly = readonly|default(true) %}
+{% set _show_text = show_text|default(false) %}
+{% set _precision = precision|default(1) %}
+{% set _icon = icon|default('★') %}
+{% set _id = id|default('') %}
+{% set _cls = cls|default('') %}
+
+{% set _val = (_value if _value >= 0 else 0) %}
+{% set _pct = (_val / _max * 100) if _max else 0 %}
+{% set _rounded = _val|round(_precision, 'common') %}
+
+{% set _label =
+  'Excelente' if _val >= 4.5 else
+  'Muy bueno' if _val >= 4 else
+  'Bueno' if _val >= 3 else
+  'Regular' if _val > 0 else
+  'Sin calificar'
+%}
+
+<div class="rating {{ 'isReadonly' if _readonly else 'isInteractive' }} is{{ _size|capitalize }} {{ _cls }}"
+     {% if _id %}id="{{ _id }}"{% endif %}
+     role="img"
+     aria-label="Calificación {{ _rounded }} de {{ _max }}">
+
+  <div class="rating__stars"
+       data-rating="{{ _rounded }}"
+       data-max="{{ _max }}"
+       style="--rating-pct: {{ _pct }}%">
+
+    {# Base (estrellas grises) #}
+    <div class="rating__base" aria-hidden="true">
+      {% for i in range(_max) %}
+        <span class="rating__star">{{ _icon }}</span>
+      {% endfor %}
+    </div>
+
+    {# Fill (estrellas activas) #}
+    <div class="rating__fill" aria-hidden="true">
+      {% for i in range(_max) %}
+        <span class="rating__star">{{ _icon }}</span>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="rating__meta">
+    <span class="rating__value">{{ _rounded }}</span>
+    {% if _count is not none %}
+      <span class="rating__count">({{ _count }})</span>
+    {% endif %}
+    {% if _show_text %}
+      <span class="rating__label">{{ _label }}</span>
+    {% endif %}
+  </div>
+</div>
