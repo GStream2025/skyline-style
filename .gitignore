@@ -1,6 +1,6 @@
 ﻿# =====================================================
 # SKYLINE STORE — .gitignore (ULTRA PRO / FINAL)
-# Flask · SQLAlchemy · Render · Postgres · Production Ready
+# Flask · SQLAlchemy · Render · Postgres · Production
 # =====================================================
 
 # -----------------------------------------------------
@@ -15,17 +15,18 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 .dmypy.json
-.pyre/
 .pytype/
 .pyright/
 .pyrightcache/
 .pycoverage/
-coverage.xml
 .coverage
+coverage.xml
 htmlcov/
 *.cover
 
-# Python build artifacts
+# -----------------------------------------------------
+# BUILD / DIST
+# -----------------------------------------------------
 build/
 dist/
 *.egg-info/
@@ -44,9 +45,8 @@ env.bak/
 venv.bak/
 
 # -----------------------------------------------------
-# ENVIRONMENT / SECRETS (CRÍTICO)
+# ENV / SECRETS (CRÍTICO — NUNCA VERSIONAR)
 # -----------------------------------------------------
-# Nunca subir secretos
 .env
 .env.*
 .env.production
@@ -60,10 +60,10 @@ venv.bak/
 .env.render
 render.env
 
-# Permitimos ejemplo
+# Permitimos solo el ejemplo
 !.env.example
 
-# Keys / certs / tokens / creds (comunes)
+# Keys / certs / credentials
 *.pem
 *.key
 *.p12
@@ -93,11 +93,11 @@ logs/
 *.socket
 *.lock
 
-# Flask runtime folder (si lo usás)
+# Flask runtime
 instance/
 
 # -----------------------------------------------------
-# SQLITE LOCAL (DEV) — NUNCA versionar
+# DATABASES LOCALES (DEV)
 # -----------------------------------------------------
 *.sqlite
 *.sqlite3
@@ -108,10 +108,10 @@ instance/
 skyline_local.db
 
 # -----------------------------------------------------
-# ALEMBIC / MIGRATIONS (cache)
+# ALEMBIC / MIGRATIONS (CACHE)
 # -----------------------------------------------------
-alembic/versions/*.pyc
 **/alembic/__pycache__/
+**/alembic/versions/*.pyc
 **/migrations/__pycache__/
 **/migrations/versions/*.pyc
 
@@ -131,7 +131,7 @@ desktop.ini
 *.tmp
 
 # -----------------------------------------------------
-# NODE / FRONTEND (si lo agregás ahora o después)
+# FRONTEND / NODE (FUTURO)
 # -----------------------------------------------------
 node_modules/
 npm-debug.log*
@@ -145,7 +145,7 @@ yarn-error.log*
 dist/
 
 # -----------------------------------------------------
-# ARCHIVOS PESADOS / BACKUPS / DUMPS
+# BACKUPS / ARCHIVOS PESADOS
 # -----------------------------------------------------
 *.zip
 *.rar
@@ -155,30 +155,30 @@ dist/
 *.tgz
 
 _backup_*/
-backups/
 backup/
+backups/
 *.dump
 *.sql
 *.sql.gz
 
 # -----------------------------------------------------
-# UPLOADS (USUARIOS) / MEDIA DINÁMICA
+# UPLOADS / MEDIA DINÁMICA
 # -----------------------------------------------------
-# Assets oficiales → app/static/img/ (versionar)
+# Assets oficiales → versionar en app/static/img/
 # Uploads dinámicos → NO versionar
 app/static/uploads/**
 
-# mantenemos estructura con gitkeep
+# Mantener estructura
 !app/static/uploads/.gitkeep
 !app/static/uploads/products/
 !app/static/uploads/products/.gitkeep
 
-# thumbnails / temporales si se generan
+# Temporales
 app/static/uploads/**/thumbs/**
 app/static/uploads/**/tmp/**
 
 # -----------------------------------------------------
-# DEPLOY / PLATFORM CACHES
+# DEPLOY / PLATFORMS
 # -----------------------------------------------------
 .render/
 .render-cache/
@@ -190,7 +190,7 @@ app/static/uploads/**/tmp/**
 docker-compose.override.yml
 
 # -----------------------------------------------------
-# NOTEBOOKS / DATA SCI (si usás)
+# NOTEBOOKS / DATA
 # -----------------------------------------------------
 .ipynb_checkpoints/
 *.ipynb
@@ -198,20 +198,3 @@ docker-compose.override.yml
 # -----------------------------------------------------
 # FIN
 # -----------------------------------------------------
-
-# ---- Skyline Store (auto) ----
-.env
-*.env
-!.env.example
-.venv/
-venv/
-__pycache__/
-*.pyc
-instance/
-static/uploads/
-coverage_html/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-dist/
-build/

@@ -1,91 +1,98 @@
 # =====================================================
 # SKYLINE STORE — .gitattributes (ULTRA PRO / FINAL)
-# Windows + Render/Linux friendly · NO MÁS ERRORES DE EOL
-# =====================================================
+# Windows + Render/Linux friendly
 # Objetivo:
-# - Evitar diffs falsos por saltos de línea
-# - Mantener scripts de Windows en CRLF
-# - Mantener servidor (Linux/Render) en LF
-# - Proteger binarios (no tocar)
-# - Mejorar merges de archivos grandes y locks
+# - Eliminar diffs falsos por EOL
+# - LF en servidor (Linux / Render)
+# - CRLF solo en scripts Windows
+# - Binarios intocables
+# - Merges limpios y previsibles
 # =====================================================
 
 # -----------------------------------------------------
-# 1) DEFAULTS (todo texto normalizado)
+# 1) DEFAULTS
+# Todo texto se normaliza automáticamente
 # -----------------------------------------------------
 * text=auto
 
 # -----------------------------------------------------
-# 2) CÓDIGO (SIEMPRE LF para Linux/Render)
+# 2) CÓDIGO / CONFIG (SIEMPRE LF)
+# Compatible con Render, Docker y Linux
 # -----------------------------------------------------
-*.py      text eol=lf
-*.wsgi    text eol=lf
-*.jinja   text eol=lf
-*.j2      text eol=lf
-*.html    text eol=lf
-*.css     text eol=lf
-*.js      text eol=lf
-*.mjs     text eol=lf
-*.json    text eol=lf
-*.yml     text eol=lf
-*.yaml    text eol=lf
-*.toml    text eol=lf
-*.ini     text eol=lf
-*.cfg     text eol=lf
-*.md      text eol=lf
-*.txt     text eol=lf
-*.env*    text eol=lf
-Dockerfile text eol=lf
-*.sh      text eol=lf
+*.py        text eol=lf
+*.wsgi      text eol=lf
+*.jinja     text eol=lf
+*.j2        text eol=lf
+*.html      text eol=lf
+*.css       text eol=lf
+*.js        text eol=lf
+*.mjs       text eol=lf
+*.json      text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.toml      text eol=lf
+*.ini       text eol=lf
+*.cfg       text eol=lf
+*.md        text eol=lf
+*.txt       text eol=lf
+*.env*      text eol=lf
+Dockerfile  text eol=lf
+*.sh        text eol=lf
 
 # -----------------------------------------------------
-# 3) WINDOWS SCRIPTS (CRLF para PowerShell/CMD)
+# 3) WINDOWS / POWERSHELL (CRLF)
+# Para ejecución nativa en Windows
 # -----------------------------------------------------
-*.ps1     text eol=crlf
-*.psm1    text eol=crlf
-*.psd1    text eol=crlf
-*.cmd     text eol=crlf
-*.bat     text eol=crlf
+*.ps1       text eol=crlf
+*.psm1      text eol=crlf
+*.psd1      text eol=crlf
+*.cmd       text eol=crlf
+*.bat       text eol=crlf
 
 # -----------------------------------------------------
-# 4) BINARIOS (NUNCA CONVERTIR / NUNCA DIFF)
+# 4) BINARIOS (NUNCA TOCAR / NUNCA DIFF)
 # -----------------------------------------------------
-*.png     -text
-*.jpg     -text
-*.jpeg    -text
-*.webp    -text
-*.gif     -text
-*.ico     -text
-*.pdf     -text
-*.zip     -text
-*.rar     -text
-*.7z      -text
-*.tar     -text
-*.gz      -text
-*.tgz     -text
-*.woff    -text
-*.woff2   -text
-*.ttf     -text
-*.otf     -text
-*.eot     -text
-*.mp4     -text
-*.mov     -text
-*.avi     -text
-*.mp3     -text
-*.wav     -text
+*.png       -text
+*.jpg       -text
+*.jpeg      -text
+*.webp      -text
+*.gif       -text
+*.ico       -text
+*.pdf       -text
+
+*.zip       -text
+*.rar       -text
+*.7z        -text
+*.tar       -text
+*.gz        -text
+*.tgz       -text
+
+*.woff      -text
+*.woff2     -text
+*.ttf       -text
+*.otf       -text
+*.eot       -text
+
+*.mp4       -text
+*.mov       -text
+*.avi       -text
+*.mp3       -text
+*.wav       -text
 
 # -----------------------------------------------------
-# 5) MERGE / DIFF (evita conflictos y ruido)
+# 5) MERGE / LOCK FILES
+# Evita conflictos inútiles
 # -----------------------------------------------------
-# Locks: que no intente mergear (gana uno u otro)
-*.lock    -text merge=ours
-poetry.lock -text merge=ours
-Pipfile.lock -text merge=ours
+*.lock          -text merge=ours
+poetry.lock    -text merge=ours
+Pipfile.lock   -text merge=ours
 
-# SQLite (local): si existiera (no se debe versionar igual)
-*.db      -text
-*.sqlite  -text
-*.sqlite3 -text
+# -----------------------------------------------------
+# 6) BASES DE DATOS (aunque no se versionen)
+# -----------------------------------------------------
+*.db        -text
+*.sqlite    -text
+*.sqlite3   -text
 
 # -----------------------------------------------------
 # FIN

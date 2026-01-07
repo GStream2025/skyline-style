@@ -9,29 +9,29 @@ services:
 
     healthCheckPath: /health
 
-    # Build pro y reproducible (usa pip limpio)
+    # Build reproducible + rápido
     buildCommand: |
       python -m pip install --upgrade pip setuptools wheel
       pip install --no-cache-dir -r requirements.txt
 
-    # Start command pro (gunicorn estable)
+    # Gunicorn sólido para Render
     startCommand: >
-      gunicorn "wsgi:app"
-      --bind "0.0.0.0:${PORT}"
-      --workers "${WEB_CONCURRENCY:-2}"
-      --threads "${GUNICORN_THREADS:-4}"
-      --timeout "${GUNICORN_TIMEOUT:-120}"
-      --graceful-timeout "${GUNICORN_GRACEFUL_TIMEOUT:-30}"
-      --keep-alive "${GUNICORN_KEEPALIVE:-5}"
-      --max-requests "${GUNICORN_MAX_REQUESTS:-1000}"
-      --max-requests-jitter "${GUNICORN_MAX_REQUESTS_JITTER:-100}"
-      --access-logfile "-"
-      --error-logfile "-"
-      --log-level "${LOG_LEVEL:-info}"
+      gunicorn wsgi:app
+      --bind 0.0.0.0:$PORT
+      --workers ${WEB_CONCURRENCY:-2}
+      --threads ${GUNICORN_THREADS:-4}
+      --timeout ${GUNICORN_TIMEOUT:-120}
+      --graceful-timeout ${GUNICORN_GRACEFUL_TIMEOUT:-30}
+      --keep-alive ${GUNICORN_KEEPALIVE:-5}
+      --max-requests ${GUNICORN_MAX_REQUESTS:-1000}
+      --max-requests-jitter ${GUNICORN_MAX_REQUESTS_JITTER:-100}
+      --access-logfile -
+      --error-logfile -
+      --log-level ${LOG_LEVEL:-info}
 
     envVars:
       # -------------------------
-      # Python / runtime
+      # Runtime
       # -------------------------
       - key: PYTHON_VERSION
         value: 3.12.9
@@ -44,39 +44,40 @@ services:
       - key: DEBUG
         value: "0"
       - key: LOG_LEVEL
-        value: INFO
+        value: info
 
       # -------------------------
-      # Seguridad cookies / HTTPS
+      # Seguridad / HTTPS / Proxy
+      # CLAVE para CSRF y sesiones en Render
       # -------------------------
+      - key: FORCE_HTTPS
+        value: "1"
+      - key: TRUST_PROXY_HEADERS
+        value: "1"
       - key: COOKIE_SECURE
         value: "1"
       - key: SESSION_SAMESITE
         value: Lax
-      - key: FORCE_HTTPS
+      - key: SESSION_COOKIE_HTTPONLY
         value: "1"
 
-      # Recomendado para proxies/CDN (si tu app lo usa)
-      - key: TRUST_PROXY_HEADERS
-        value: "1"
+      # Token CSRF con más tolerancia en mobile
+      - key: WTF_CSRF_TIME_LIMIT
+        value: "3600"
 
-      # 🔐 Obligatorio (ponerlo en Render Dashboard)
+      # -------------------------
+      # Secrets (solo dashboard)
+      # -------------------------
       - key: SECRET_KEY
         sync: false
-
-      # -------------------------
-      # DB (ponerlo en Render Dashboard)
-      # -------------------------
       - key: DATABASE_URL
         sync: false
 
       # -------------------------
-      # Uploads
-      # En Render FREE el filesystem NO es persistente.
-      # Si subís imágenes desde admin, te conviene S3/Cloudinary.
+      # Uploads (ojo: FREE no persiste)
       # -------------------------
       - key: UPLOADS_DIR
-        value: "static/uploads"
+        value: static/uploads
 
       # -------------------------
       # Printful
@@ -89,7 +90,7 @@ services:
         value: "300"
 
       # -------------------------
-      # Mercado Pago (si usás integración real)
+      # Mercado Pago
       # -------------------------
       - key: MP_ACCESS_TOKEN
         sync: false
@@ -97,7 +98,7 @@ services:
         sync: false
 
       # -------------------------
-      # Admin bootstrap (ponerlos en Render Dashboard)
+      # Admin bootstrap
       # -------------------------
       - key: ADMIN_EMAIL
         sync: false
