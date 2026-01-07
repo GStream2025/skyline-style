@@ -1,11 +1,16 @@
 /* ======================================================================
-   SKYLINE STORE — PRO ENTERPRISE UI · FINAL MASTER
+   SKYLINE STORE — PRO ENTERPRISE UI · FINAL MASTER (v2 ULTRA)
    Claro · elegante · premium · consistente · escalable
    Nivel: Shopify Plus · Stripe · Apple · Amazon Brand
+   ✔️ Nav + Search premium
+   ✔️ Hero + Sections pro
+   ✔️ Product grid real
+   ✔️ Fix de “HTML crudo” (ul/li, headings, etc.)
+   ✔️ Mejor responsive + accesibilidad + micro-interacciones
 ====================================================================== */
 
 /* ==============================
-   RESET + BASE (mejora #1)
+   RESET + BASE
 ============================== */
 *,*::before,*::after{box-sizing:border-box}
 html,body{margin:0;padding:0}
@@ -18,6 +23,7 @@ body{
   line-height:1.55;
   -webkit-font-smoothing:antialiased;
   text-rendering:optimizeLegibility;
+  overflow-x:hidden;
 }
 img{max-width:100%;display:block}
 a{text-decoration:none;color:inherit}
@@ -25,13 +31,14 @@ button,input,select,textarea{font-family:inherit}
 ::selection{background:rgba(45,108,223,.18)}
 
 /* ==============================
-   DESIGN TOKENS (mejoras #2–#5)
+   DESIGN TOKENS
 ============================== */
 :root{
   --bg:#f6f7fb;
   --surface:#ffffff;
   --surface-soft:rgba(255,255,255,.94);
   --surface-glass:rgba(255,255,255,.75);
+  --surface-glass-2:rgba(255,255,255,.62);
 
   --text:#0b1220;
   --muted:rgba(11,18,32,.65);
@@ -54,19 +61,23 @@ button,input,select,textarea{font-family:inherit}
   --r-md:14px;
   --r-lg:18px;
   --r-xl:26px;
+  --r-2xl:34px;
 
   --sh-0:0 1px 0 rgba(255,255,255,.7);
   --sh-1:0 10px 28px rgba(11,18,32,.08);
   --sh-2:0 22px 60px rgba(11,18,32,.12);
   --sh-3:0 35px 90px rgba(11,18,32,.16);
+  --sh-in:inset 0 1px 0 rgba(255,255,255,.75);
 
   --t-fast:.14s cubic-bezier(.2,.9,.2,1);
   --t:.22s cubic-bezier(.2,.9,.2,1);
   --t-slow:.38s cubic-bezier(.2,.9,.2,1);
+
+  --focus:0 0 0 7px rgba(45,108,223,.18);
 }
 
 /* ==============================
-   BACKGROUND PREMIUM (mejoras #6–#7)
+   BACKGROUND PREMIUM
 ============================== */
 body{
   background:
@@ -78,29 +89,34 @@ body{
 }
 
 /* ==============================
-   TYPOGRAPHY (mejoras #8–#9)
+   TYPOGRAPHY
 ============================== */
 h1,h2,h3,h4,h5{
   margin:0;
-  font-weight:900;
+  font-weight:950;
   letter-spacing:-.03em;
   color:var(--text);
 }
-h1{font-size:2.35rem;line-height:1.06}
-h2{font-size:1.6rem;line-height:1.12}
-h3{font-size:1.25rem}
-p{margin:.4rem 0;color:var(--muted)}
+h1{font-size:clamp(2rem,3vw,2.6rem);line-height:1.05}
+h2{font-size:clamp(1.35rem,2.2vw,1.75rem);line-height:1.12}
+h3{font-size:1.18rem}
+p{margin:.45rem 0;color:var(--muted)}
 .small{font-size:.85rem;color:var(--muted)}
 .kicker{
   font-size:.72rem;
   text-transform:uppercase;
   letter-spacing:.12em;
   color:var(--muted-soft);
-  font-weight:800;
+  font-weight:900;
 }
 
+/* Fix “HTML crudo” */
+ul{padding-left:1.15rem;margin:.3rem 0;color:var(--muted)}
+li{margin:.25rem 0}
+hr{border:0;border-top:1px solid var(--border);margin:18px 0}
+
 /* ==============================
-   LAYOUT SYSTEM (mejoras #10–#11)
+   LAYOUT SYSTEM
 ============================== */
 .container{
   max-width:1280px;
@@ -110,25 +126,31 @@ p{margin:.4rem 0;color:var(--muted)}
 .stack{display:flex;flex-direction:column;gap:18px}
 .row{display:flex;align-items:center;gap:14px}
 .row.between{justify-content:space-between}
+.row.wrap{flex-wrap:wrap}
 .grid{display:grid;gap:20px}
 .grid-2{grid-template-columns:repeat(2,1fr)}
 .grid-3{grid-template-columns:repeat(3,1fr)}
 .grid-4{grid-template-columns:repeat(4,1fr)}
+.grid-5{grid-template-columns:repeat(5,1fr)}
 
+@media(max-width:1100px){
+  .grid-5{grid-template-columns:repeat(3,1fr)}
+}
 @media(max-width:900px){
-  .grid-2,.grid-3,.grid-4{grid-template-columns:1fr}
-  .container{padding:20px}
+  .grid-2,.grid-3,.grid-4,.grid-5{grid-template-columns:1fr}
+  .container{padding:18px}
 }
 
 /* ==============================
-   TOPBAR / NAV (mejoras #12–#14)
+   TOPBAR / NAV (ULTRA)
 ============================== */
 .topbar{
   position:sticky;
   top:0;
   z-index:60;
   background:var(--surface-glass);
-  backdrop-filter:blur(20px);
+  backdrop-filter:blur(22px);
+  -webkit-backdrop-filter:blur(22px);
   border-bottom:1px solid var(--border);
 }
 .topbar-inner{
@@ -145,47 +167,130 @@ p{margin:.4rem 0;color:var(--muted)}
   display:flex;
   align-items:center;
   gap:10px;
+  white-space:nowrap;
 }
 .brand-dot{
   width:12px;height:12px;border-radius:999px;
   background:conic-gradient(from 210deg,var(--primary),var(--primary-2),var(--accent));
   box-shadow:0 18px 60px rgba(45,108,223,.45);
 }
+
+.nav{display:flex;gap:6px;align-items:center}
 .nav a{
   padding:10px 12px;
   border-radius:12px;
   color:var(--muted);
-  transition:all var(--t);
+  transition:transform var(--t), box-shadow var(--t), background var(--t), color var(--t);
 }
 .nav a:hover{
-  background:rgba(255,255,255,.7);
+  background:rgba(255,255,255,.72);
   box-shadow:var(--sh-1);
+  transform:translateY(-1px);
 }
 .nav a.active{
   background:rgba(45,108,223,.10);
   color:var(--primary);
+  border:1px solid rgba(45,108,223,.16);
+}
+
+/* Topbar actions */
+.topbar-actions{display:flex;align-items:center;gap:10px}
+.searchbar{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 12px;
+  border-radius:16px;
+  border:1px solid rgba(11,18,32,.10);
+  background:rgba(255,255,255,.80);
+  box-shadow:var(--sh-in), 0 12px 26px rgba(11,18,32,.06);
+}
+.searchbar input{
+  border:0;
+  padding:0;
+  background:transparent;
+  min-width:240px;
+  outline:none;
+}
+.searchbar input::placeholder{color:rgba(11,18,32,.42)}
+@media(max-width:980px){
+  .searchbar input{min-width:140px}
+}
+@media(max-width:760px){
+  .nav{display:none}
 }
 
 /* ==============================
-   BUTTON SYSTEM (mejoras #15–#17)
+   HERO / SECTIONS (NEW)
+============================== */
+.hero{
+  position:relative;
+  border-radius:var(--r-2xl);
+  border:1px solid var(--border);
+  background:
+    radial-gradient(900px 460px at 16% 20%, rgba(45,108,223,.18), transparent 62%),
+    radial-gradient(900px 520px at 86% 22%, rgba(255,176,32,.16), transparent 62%),
+    radial-gradient(900px 520px at 48% 110%, rgba(22,163,74,.12), transparent 62%),
+    rgba(255,255,255,.72);
+  box-shadow:var(--sh-2);
+  overflow:hidden;
+}
+.hero::before{
+  content:"";
+  position:absolute;
+  inset:-50%;
+  background:
+    radial-gradient(circle at 22% 26%, rgba(45,108,223,.22), transparent 55%),
+    radial-gradient(circle at 78% 30%, rgba(255,176,32,.18), transparent 55%),
+    radial-gradient(circle at 40% 84%, rgba(22,163,74,.14), transparent 55%);
+  filter:blur(28px);
+  opacity:.95;
+}
+.hero-inner{
+  position:relative;
+  padding:22px;
+  display:grid;
+  gap:16px;
+}
+@media(min-width:980px){
+  .hero-inner{grid-template-columns:1.25fr .75fr;align-items:end}
+}
+.hero-badges{display:flex;flex-wrap:wrap;gap:10px}
+.hero-badge{
+  display:inline-flex;align-items:center;gap:10px;
+  padding:8px 12px;
+  border-radius:999px;
+  background:rgba(255,255,255,.86);
+  border:1px solid rgba(11,18,32,.10);
+  box-shadow:0 10px 22px rgba(11,18,32,.06);
+  font-weight:900;
+  letter-spacing:.10em;
+  text-transform:uppercase;
+  font-size:.72rem;
+  color:rgba(11,18,32,.75);
+}
+.hero-badge .dot{
+  width:9px;height:9px;border-radius:999px;
+  background:linear-gradient(135deg,var(--primary),var(--primary-2));
+}
+.hero-cta{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+
+/* ==============================
+   BUTTON SYSTEM
 ============================== */
 .btn{
   display:inline-flex;
   align-items:center;
+  justify-content:center;
   gap:10px;
   padding:12px 18px;
   border-radius:14px;
   border:1px solid var(--border);
   background:var(--surface-soft);
   cursor:pointer;
-  font-weight:700;
-  transition:transform var(--t), box-shadow var(--t), background var(--t);
+  font-weight:800;
+  transition:transform var(--t), box-shadow var(--t), background var(--t), border-color var(--t);
   box-shadow:var(--sh-0);
 }
-.btn:hover{
-  transform:translateY(-1px);
-  box-shadow:var(--sh-1);
-}
+.btn:hover{transform:translateY(-1px);box-shadow:var(--sh-1)}
 .btn:active{transform:scale(.985)}
 .btn-primary{
   background:linear-gradient(135deg,var(--primary),var(--primary-2));
@@ -202,10 +307,13 @@ p{margin:.4rem 0;color:var(--muted)}
   background:transparent;
   border-color:transparent;
   box-shadow:none;
+  color:var(--muted);
 }
+.btn-ghost:hover{background:rgba(255,255,255,.65);border-color:rgba(11,18,32,.08)}
+.btn-sm{padding:10px 12px;border-radius:12px;font-size:.92rem}
 
 /* ==============================
-   CARDS (mejoras #18–#19)
+   CARDS
 ============================== */
 .card{
   position:relative;
@@ -221,46 +329,65 @@ p{margin:.4rem 0;color:var(--muted)}
   content:"";
   position:absolute;
   inset:0;
-  background:
-    radial-gradient(800px 260px at 20% -20%,
-    rgba(45,108,223,.10),transparent 60%);
+  background:radial-gradient(800px 260px at 20% -20%, rgba(45,108,223,.10),transparent 60%);
   pointer-events:none;
 }
-.card:hover{
-  transform:translateY(-3px);
-  box-shadow:var(--sh-2);
-}
+.card:hover{transform:translateY(-3px);box-shadow:var(--sh-2)}
+.card.compact{padding:16px;border-radius:16px}
+.card-title{font-weight:950}
+.card-muted{color:var(--muted);font-size:.92rem}
 
 /* ==============================
-   PRODUCT CARD (mejora #20)
+   PRODUCT CARD (ULTRA)
 ============================== */
+.product-card{display:flex;flex-direction:column;gap:12px}
 .product-media{
   border-radius:var(--r-lg);
   overflow:hidden;
   border:1px solid var(--border);
   background:linear-gradient(180deg,#fff,#f7f8fd);
   box-shadow:var(--sh-1);
+  position:relative;
 }
 .product-media img{
   width:100%;
   height:260px;
   object-fit:cover;
+  transform:scale(1.02);
+  transition:transform var(--t-slow);
+}
+.product-card:hover .product-media img{transform:scale(1.07)}
+.product-chip{
+  position:absolute;
+  top:12px;left:12px;
+  padding:6px 10px;
+  border-radius:999px;
+  background:rgba(255,255,255,.88);
+  border:1px solid rgba(11,18,32,.10);
+  box-shadow:0 10px 22px rgba(11,18,32,.08);
+  font-weight:900;
+  font-size:.72rem;
+  color:rgba(11,18,32,.75);
 }
 .price{
   font-size:1.15rem;
-  font-weight:900;
+  font-weight:950;
 }
 .price-old{
   font-size:.9rem;
   color:var(--muted-soft);
   text-decoration:line-through;
 }
+.product-meta{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.product-name{font-weight:950;line-height:1.2}
+.product-sub{font-size:.86rem;color:var(--muted)}
+.product-actions{display:flex;gap:10px;flex-wrap:wrap}
 
 /* ==============================
-   FORMS (mejoras #21–#22)
+   FORMS
 ============================== */
 .field{display:flex;flex-direction:column;gap:6px}
-label{font-size:.8rem;font-weight:800;color:var(--muted)}
+label{font-size:.8rem;font-weight:900;color:var(--muted)}
 input,select,textarea{
   padding:12px 14px;
   border-radius:14px;
@@ -273,9 +400,10 @@ input:focus,select:focus,textarea:focus{
   border-color:rgba(45,108,223,.55);
   box-shadow:0 0 0 7px rgba(45,108,223,.14);
 }
+input[type="search"]::-webkit-search-cancel-button{display:none}
 
 /* ==============================
-   TABLES (mejora #23)
+   TABLES
 ============================== */
 .table{
   width:100%;
@@ -308,11 +436,12 @@ input:focus,select:focus,textarea:focus{
   padding:6px 10px;
   border-radius:999px;
   font-size:.72rem;
-  font-weight:900;
+  font-weight:950;
 }
 .badge.success{background:rgba(22,163,74,.14);color:var(--success)}
 .badge.warn{background:rgba(245,158,11,.18);color:var(--warning)}
 .badge.danger{background:rgba(220,38,38,.18);color:var(--danger)}
+.badge.info{background:rgba(37,99,235,.14);color:var(--info)}
 
 /* ==============================
    EMPTY / STATES
@@ -322,7 +451,8 @@ input:focus,select:focus,textarea:focus{
   padding:44px;
   border:2px dashed var(--border);
   border-radius:var(--r-xl);
-  background:rgba(255,255,255,.6);
+  background:rgba(255,255,255,.65);
+  box-shadow:0 18px 46px rgba(11,18,32,.06);
 }
 
 /* ==============================
@@ -359,23 +489,26 @@ input:focus,select:focus,textarea:focus{
 }
 
 /* ==============================
-   ACCESSIBILITY (final)
+   ACCESSIBILITY
 ============================== */
 :focus-visible{
   outline:none;
-  box-shadow:0 0 0 7px rgba(45,108,223,.18);
+  box-shadow:var(--focus);
   border-radius:14px;
 }
 @media(prefers-reduced-motion:reduce){
   *{animation:none!important;transition:none!important}
 }
+
 /* ======================================================================
    SKYLINE STORE — PROFILE (Light Premium · Unified)
    Pegalo al final de skyline-pro.css
 ====================================================================== */
-
 .ss-profile__wrap{display:block}
-.ss-title__name{background:linear-gradient(135deg,var(--primary),var(--primary-2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.ss-title__name{
+  background:linear-gradient(135deg,var(--primary),var(--primary-2));
+  -webkit-background-clip:text;background-clip:text;color:transparent
+}
 
 .ss-hero--profile{
   position:relative;
@@ -407,7 +540,9 @@ input:focus,select:focus,textarea:focus{
   gap:14px;
 }
 @media (min-width: 980px){
-  .ss-hero--profile .ss-hero__inner{grid-template-columns: 1.2fr .8fr;align-items:end;padding:22px}
+  .ss-hero--profile .ss-hero__inner{
+    grid-template-columns: 1.2fr .8fr;align-items:end;padding:22px
+  }
 }
 
 .ss-kicker{
@@ -417,7 +552,7 @@ input:focus,select:focus,textarea:focus{
   background:rgba(255,255,255,.88);
   border:1px solid var(--border);
   box-shadow:var(--sh-1);
-  font-weight:900;
+  font-weight:950;
   letter-spacing:.14em;
   text-transform:uppercase;
   font-size:.76rem;
@@ -439,7 +574,7 @@ input:focus,select:focus,textarea:focus{
   flex-wrap:wrap;
   gap:10px;
   color:rgba(11,18,32,.70);
-  font-weight:750;
+  font-weight:850;
   font-size:.92rem;
 }
 .ss-inline-info__item{
@@ -471,7 +606,7 @@ input:focus,select:focus,textarea:focus{
   border-radius:14px;
   border:1px solid rgba(11,18,32,.10);
   background:rgba(255,255,255,.86);
-  font-weight:900;
+  font-weight:950;
   text-decoration:none;
   transition: transform var(--t), box-shadow var(--t);
   box-shadow:0 12px 22px rgba(11,18,32,.06);
