@@ -1,4 +1,4 @@
-{# app/templates/base.html — Skyline Store (PRO ENTERPRISE FINAL) #}
+{# app/templates/base.html — Skyline Store (ULTRA PRO ENTERPRISE · FINAL) #}
 <!doctype html>
 <html lang="es">
 <head>
@@ -7,6 +7,7 @@
 
   <title>{% block title %}{{ meta_title or "Skyline Store" }}{% endblock %}</title>
   <meta name="description" content="{{ meta_description or 'Skyline Store — marketplace premium de tecnología y streetwear.' }}">
+
   <link rel="canonical" href="{{ request.url }}">
 
   <!-- Open Graph -->
@@ -14,6 +15,7 @@
   <meta property="og:description" content="{{ meta_description or 'Marketplace premium de tecnología y streetwear.' }}">
   <meta property="og:image" content="{{ og_image or url_for('static', filename='img/og.png', _external=True) }}">
   <meta property="og:type" content="website">
+  <meta property="og:locale" content="es_UY">
 
   <!-- Twitter -->
   <meta name="twitter:card" content="summary_large_image">
@@ -21,6 +23,9 @@
   <!-- Security -->
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
+
+  <!-- Theme color (mobile browsers) -->
+  <meta name="theme-color" content="#2563eb">
 
   <!-- CSRF -->
   <meta name="csrf-token" content="{{ csrf_token }}">
@@ -37,58 +42,92 @@
   <link rel="preload" href="{{ url_for('static', filename='css/skyline-pro.css') }}" as="style">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/skyline-pro.css') }}">
 
+  {# Perf: evita “flash” del fondo al cargar #}
+  <style>
+    html{background:#f7f9ff}
+    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+    .skip{
+      position:absolute;left:12px;top:12px;z-index:9999;
+      padding:10px 12px;border-radius:14px;
+      background:#fff;border:1px solid rgba(8,16,34,.12);
+      box-shadow:0 18px 50px rgba(8,16,34,.14);
+      transform:translateY(-140%);transition:transform .18s ease;
+    }
+    .skip:focus{transform:translateY(0)}
+  </style>
+
   {% block extra_head %}{% endblock %}
 </head>
 
 <body>
 <a class="skip" href="#main">Saltar al contenido</a>
 
-<!-- TOPBAR -->
-<header class="topbar">
-  <div class="topbar-inner container">
-    <a href="/" class="brand" aria-label="Inicio">
-      <span class="brand-dot"></span>
-      <strong>Skyline Store</strong>
+<!-- TOPBAR (ULTRA PRO) -->
+<header class="topbar" role="banner">
+  <div class="topbar-inner">
+    <a href="/" class="brand" aria-label="Ir a inicio">
+      <span class="brand-dot" aria-hidden="true"></span>
+      <div class="brand-txt">
+        <strong class="brand-name">Skyline Store</strong>
+        <span class="brand-sub">Tech + Streetwear premium</span>
+      </div>
     </a>
 
     <nav class="nav" aria-label="Navegación principal">
-      <a href="/">Inicio</a>
-      <a href="/shop">Tienda</a>
+      <a href="/" {% if request.path == "/" %}class="active"{% endif %}>Inicio</a>
+      <a href="/shop" {% if request.path.startswith("/shop") %}class="active"{% endif %}>Tienda</a>
       <a href="/shop?ofertas=1">Ofertas</a>
     </nav>
 
-    <form class="search" action="/shop" method="get" role="search">
-      <input type="search" name="q" placeholder="Buscar productos…" value="{{ request.args.get('q','') }}">
-      <button class="btn btn-primary" type="submit">Buscar</button>
+    <form class="searchbar" action="/shop" method="get" role="search" aria-label="Buscar productos">
+      <span class="sicon" aria-hidden="true">⌕</span>
+      <label class="sr-only" for="q">Buscar</label>
+      <input
+        id="q"
+        type="search"
+        name="q"
+        placeholder="Buscar productos…"
+        value="{{ request.args.get('q','') }}"
+        autocomplete="off"
+        inputmode="search"
+        aria-label="Buscar"
+      >
+      <button class="sbtn" type="submit">Buscar</button>
     </form>
 
-    <div class="row">
-      <a href="/cart" class="icon-btn" aria-label="Carrito">
-        🛒
-        <span class="badge" data-cart-badge>0</span>
+    <div class="top-actions" aria-label="Acciones">
+      <a href="/cart" class="icon-btn" aria-label="Carrito" style="position:relative">
+        <span aria-hidden="true">🛒</span>
+        <span class="cart-badge" data-cart-badge style="display:none">0</span>
       </a>
 
-      <a href="/account" class="btn btn-soft">Mi cuenta</a>
+      <a href="/account" class="account-chip" aria-label="Mi cuenta">
+        <span class="avatar" aria-hidden="true"></span>
+        <span class="account-txt">
+          <span class="t1">Mi cuenta</span>
+          <span class="t2">Entrar / Crear</span>
+        </span>
+      </a>
     </div>
   </div>
 </header>
 
-<!-- FLASH -->
-<div class="container">
-{% with messages = get_flashed_messages(with_categories=true) %}
-  {% for cat, msg in messages %}
-    <div class="toast {{ cat }}">{{ msg }}</div>
-  {% endfor %}
-{% endwith %}
+<!-- FLASH (PRO) -->
+<div class="container" aria-live="polite" aria-atomic="true">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}
+      <div class="toast {{ cat }}">{{ msg }}</div>
+    {% endfor %}
+  {% endwith %}
 </div>
 
 <!-- MAIN -->
-<main id="main" class="container">
+<main id="main" class="container" role="main">
   {% block content %}{% endblock %}
 </main>
 
-<!-- FOOTER -->
-<footer class="footer">
+<!-- FOOTER (PRO) -->
+<footer class="footer" role="contentinfo">
   <div class="container grid grid-4">
     <div>
       <strong>Skyline Store</strong>
@@ -96,19 +135,19 @@
     </div>
 
     <div>
-      <strong>Explorar</strong>
+      <strong>Explorar</strong><br>
       <a href="/shop">Tienda</a><br>
       <a href="/shop?ofertas=1">Ofertas</a>
     </div>
 
     <div>
-      <strong>Cuenta</strong>
+      <strong>Cuenta</strong><br>
       <a href="/account">Mi cuenta</a><br>
       <a href="/cart">Carrito</a>
     </div>
 
     <div>
-      <strong>Legal</strong>
+      <strong>Legal</strong><br>
       <a href="/terms">Términos</a><br>
       <a href="/privacy">Privacidad</a>
     </div>
@@ -117,14 +156,15 @@
   <p class="small">© {{ now().year if now else "2026" }} Skyline Store</p>
 </footer>
 
-<!-- JS GLOBAL -->
+<!-- JS GLOBAL (PRO) -->
 <script>
 /* CSRF auto */
 (() => {
   const token = document.querySelector('meta[name="csrf-token"]')?.content;
   if (!token) return;
   document.querySelectorAll('form').forEach(f => {
-    if (f.method.toUpperCase() !== 'GET' && !f.querySelector('[name=csrf_token]')) {
+    const m = (f.getAttribute('method') || 'GET').toUpperCase();
+    if (m !== 'GET' && !f.querySelector('[name=csrf_token]')) {
       const i = document.createElement('input');
       i.type = 'hidden'; i.name = 'csrf_token'; i.value = token;
       f.appendChild(i);
@@ -136,21 +176,33 @@
 (() => {
   const badge = document.querySelector('[data-cart-badge]');
   if (!badge) return;
-  fetch('/cart/json').then(r => r.json()).then(d => {
-    const c = d?.items_count || 0;
-    badge.textContent = c;
-    badge.style.display = c ? 'flex' : 'none';
-  }).catch(() => {});
+
+  fetch('/cart/json', { headers: { 'Accept': 'application/json' } })
+    .then(r => r.ok ? r.json() : null)
+    .then(d => {
+      const c = d?.items_count || 0;
+      badge.textContent = c;
+      badge.style.display = c ? 'flex' : 'none';
+      badge.setAttribute('aria-label', c ? `${c} items en carrito` : 'Carrito vacío');
+    })
+    .catch(() => {});
 })();
 
-/* Nav active */
+/* Nav active (fallback si no se usa Jinja) */
 (() => {
-  const path = location.pathname;
+  const path = location.pathname || "/";
   document.querySelectorAll('.nav a').forEach(a => {
-    if (path.startsWith(a.getAttribute('href'))) {
-      a.classList.add('active');
-    }
+    const href = a.getAttribute('href') || '';
+    if (href && href !== '/' && path.startsWith(href)) a.classList.add('active');
+    if (href === '/' && path === '/') a.classList.add('active');
   });
+})();
+
+/* Mejor UX: enter en búsqueda + limpiar espacios */
+(() => {
+  const input = document.querySelector('.searchbar input[name="q"]');
+  if (!input) return;
+  input.addEventListener('change', () => input.value = (input.value || '').trim());
 })();
 </script>
 

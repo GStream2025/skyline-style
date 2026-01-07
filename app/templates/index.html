@@ -12,176 +12,321 @@
 <link rel="preload" as="image" href="{{ url_for('static', filename='img/banners/hero_home.png') }}">
 
 <style>
-/* ==========================================================
-   HOME · PRO ENTERPRISE (scoped)
-   Solo mejora la home sin romper otras páginas
-========================================================== */
-.home-pro{padding:18px 0 28px}
+/* ==========================================================================
+   HOME — ULTRA PRO ENTERPRISE (v3)
+   - Mejor contraste + jerarquía real
+   - Micro-interacciones + motion suave
+   - Productos: skeleton + reveal + hover premium
+   - Categories: “chip cards” con estados
+   - Responsive real + accesibilidad + focus visible
+   - Sin romper otras páginas (todo scope: .home-pro)
+========================================================================== */
+
+.home-pro{padding:22px 0 34px}
+
+/* A11y helpers */
 .home-pro .sr-only{
   position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;
-  overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;
+  overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0
 }
+
+/* Local tokens (no pisan global) */
+.home-pro{
+  --hp-ink: rgba(8,16,34,.92);
+  --hp-muted: rgba(8,16,34,.62);
+  --hp-soft: rgba(8,16,34,.48);
+  --hp-border: rgba(8,16,34,.10);
+  --hp-border2: rgba(8,16,34,.14);
+  --hp-glass: rgba(255,255,255,.74);
+  --hp-glass2: rgba(255,255,255,.60);
+  --hp-card: rgba(255,255,255,.88);
+  --hp-shadow: 0 18px 55px rgba(8,16,34,.12);
+  --hp-shadow2: 0 28px 85px rgba(8,16,34,.16);
+  --hp-inset: inset 0 1px 0 rgba(255,255,255,.72);
+  --hp-radius: 22px;
+  --hp-radius2: 28px;
+  --hp-ease: cubic-bezier(.2,.9,.2,1);
+}
+
+/* Subtle “page glow” behind hero zone */
+.home-pro .hp-wrap{
+  position:relative;
+}
+.home-pro .hp-wrap::before{
+  content:"";
+  position:absolute;
+  inset:-140px -80px auto -80px;
+  height:520px;
+  background:
+    radial-gradient(900px 420px at 12% 30%, rgba(45,108,223,.16), transparent 60%),
+    radial-gradient(860px 420px at 88% 25%, rgba(255,176,32,.14), transparent 62%),
+    radial-gradient(860px 520px at 55% 95%, rgba(59,177,255,.12), transparent 60%);
+  filter: blur(10px);
+  opacity:.95;
+  pointer-events:none;
+}
+
+/* TOP */
 .hp-top{
-  display:flex;align-items:flex-start;justify-content:space-between;gap:16px;
-  margin-bottom:18px;
+  position:relative;
+  display:flex;align-items:flex-start;justify-content:space-between;gap:18px;
+  margin:0 0 18px;
 }
+
+/* Benefits */
 .hp-badges{display:flex;gap:10px;flex-wrap:wrap}
 .hp-badge{
   display:inline-flex;align-items:center;gap:10px;
-  padding:8px 12px;border-radius:999px;
-  background:rgba(255,255,255,.82);
-  border:1px solid rgba(11,18,32,.10);
-  box-shadow:0 10px 22px rgba(11,18,32,.06);
-  font-weight:900;letter-spacing:.10em;text-transform:uppercase;font-size:.72rem;
-  color:rgba(11,18,32,.74);
+  padding:9px 12px;border-radius:999px;
+  background:var(--hp-card);
+  border:1px solid var(--hp-border);
+  box-shadow: var(--hp-inset), 0 12px 28px rgba(8,16,34,.08);
+  font-weight:950;letter-spacing:.12em;text-transform:uppercase;font-size:.70rem;
+  color:rgba(8,16,34,.70);
+  transition: transform .22s var(--hp-ease), box-shadow .22s var(--hp-ease), background .22s var(--hp-ease);
 }
-.hp-dot{width:9px;height:9px;border-radius:999px;background:linear-gradient(135deg,var(--primary),var(--primary-2))}
+.hp-badge:hover{
+  transform: translateY(-2px);
+  background: rgba(255,255,255,.94);
+  box-shadow: var(--hp-inset), 0 18px 45px rgba(8,16,34,.12);
+}
+.hp-dot{
+  width:9px;height:9px;border-radius:999px;
+  background: linear-gradient(135deg, var(--primary), var(--primary-2));
+  box-shadow: 0 12px 24px rgba(45,108,223,.25);
+}
+
+/* Quick actions */
 .hp-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
 .hp-action{
   display:inline-flex;align-items:center;gap:10px;
-  padding:10px 12px;border-radius:14px;
-  background:rgba(255,255,255,.72);
-  border:1px solid rgba(11,18,32,.10);
-  box-shadow:0 12px 26px rgba(11,18,32,.06);
-  font-weight:900;color:rgba(11,18,32,.74);
-  transition:transform var(--t), box-shadow var(--t), background var(--t);
+  padding:10px 12px;border-radius:16px;
+  background:rgba(255,255,255,.74);
+  border:1px solid var(--hp-border);
+  box-shadow: var(--hp-inset), 0 14px 34px rgba(8,16,34,.08);
+  font-weight:950;color:rgba(8,16,34,.76);
+  transition: transform .22s var(--hp-ease), box-shadow .22s var(--hp-ease), background .22s var(--hp-ease);
 }
-.hp-action:hover{transform:translateY(-2px);box-shadow:0 18px 44px rgba(11,18,32,.10);background:rgba(255,255,255,.90)}
-.hp-action .mini{width:8px;height:8px;border-radius:999px;background:linear-gradient(135deg,var(--accent),var(--primary-2))}
+.hp-action:hover{
+  transform: translateY(-2px);
+  box-shadow: var(--hp-inset), 0 22px 60px rgba(8,16,34,.12);
+  background: rgba(255,255,255,.95);
+}
+.hp-action .mini{
+  width:8px;height:8px;border-radius:999px;
+  background: linear-gradient(135deg, var(--accent), var(--primary-2));
+  box-shadow: 0 10px 18px rgba(255,176,32,.22);
+}
 
+/* Search (premium) */
 .hp-search{
   display:flex;align-items:center;gap:10px;
-  padding:10px 12px;border-radius:16px;
-  background:rgba(255,255,255,.82);
-  border:1px solid rgba(11,18,32,.10);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.70), 0 16px 38px rgba(11,18,32,.08);
+  padding:10px 12px;border-radius:18px;
+  background: rgba(255,255,255,.84);
+  border:1px solid var(--hp-border2);
+  box-shadow: var(--hp-inset), 0 18px 48px rgba(8,16,34,.10);
+  position:relative;
+  overflow:hidden;
+}
+.hp-search::before{
+  content:"";
+  position:absolute;inset:-60%;
+  background:
+    radial-gradient(circle at 22% 28%, rgba(45,108,223,.18), transparent 55%),
+    radial-gradient(circle at 78% 30%, rgba(255,176,32,.14), transparent 55%);
+  filter: blur(26px);
+  opacity:.55;
+  pointer-events:none;
+}
+.hp-search .sicon{
+  position:relative;
+  width:34px;height:34px;border-radius:14px;
+  display:grid;place-items:center;
+  background: rgba(45,108,223,.10);
+  border: 1px solid rgba(45,108,223,.18);
+  color: rgba(45,108,223,.95);
+  font-weight:950;
 }
 .hp-search input{
+  position:relative;
   border:0;background:transparent;outline:none;
-  min-width:320px;padding:0;color:var(--text);font-weight:700;
+  min-width:320px;max-width:520px;width:100%;
+  padding:0;color:var(--hp-ink);font-weight:800;
 }
-.hp-search input::placeholder{color:rgba(11,18,32,.40)}
-.hp-search .btn{white-space:nowrap}
-@media(max-width:980px){
+.hp-search input::placeholder{color:rgba(8,16,34,.42)}
+.hp-search .btn{white-space:nowrap;position:relative}
+
+/* Responsive top */
+@media(max-width:1020px){
   .hp-top{flex-direction:column;align-items:stretch}
-  .hp-search input{min-width:160px;width:100%}
+  .hp-search input{min-width:160px}
 }
 
+/* HERO GRID */
 .hp-heroGrid{
+  position:relative;
   display:grid;gap:18px;
   grid-template-columns: 320px 1fr 360px;
   align-items:stretch;
 }
-@media(max-width:1100px){
+@media(max-width:1180px){
   .hp-heroGrid{grid-template-columns: 1fr}
 }
 
+/* Panels */
 .hp-side, .hp-panel{
-  border-radius:var(--r-xl);
-  border:1px solid rgba(11,18,32,.10);
-  background:rgba(255,255,255,.70);
-  box-shadow:var(--sh-1);
+  border-radius:var(--hp-radius2);
+  border:1px solid var(--hp-border);
+  background: var(--hp-glass);
+  box-shadow: var(--hp-shadow);
   overflow:hidden;
+  transform: translateY(0);
+  transition: transform .25s var(--hp-ease), box-shadow .25s var(--hp-ease), background .25s var(--hp-ease);
+}
+.hp-side:hover, .hp-panel:hover{
+  transform: translateY(-3px);
+  box-shadow: var(--hp-shadow2);
+  background: rgba(255,255,255,.82);
 }
 .hp-side .inner, .hp-panel .inner{padding:18px}
+
+/* Categories */
 .hp-side h3{
   margin:0 0 10px;
-  font-size:.78rem;letter-spacing:.14em;text-transform:uppercase;
-  color:rgba(11,18,32,.55);font-weight:950;
+  font-size:.78rem;letter-spacing:.16em;text-transform:uppercase;
+  color:rgba(8,16,34,.56);font-weight:950;
 }
 .hp-cats{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
 .hp-cats a{
   display:flex;align-items:center;justify-content:space-between;gap:10px;
-  padding:12px 12px;border-radius:16px;
-  border:1px solid rgba(11,18,32,.08);
-  background:rgba(255,255,255,.82);
-  box-shadow:0 12px 26px rgba(11,18,32,.06);
-  transition:transform var(--t), box-shadow var(--t), background var(--t);
-  font-weight:900;color:rgba(11,18,32,.78);
+  padding:12px 12px;border-radius:18px;
+  border:1px solid rgba(8,16,34,.10);
+  background: rgba(255,255,255,.86);
+  box-shadow: var(--hp-inset), 0 14px 34px rgba(8,16,34,.08);
+  transition: transform .22s var(--hp-ease), box-shadow .22s var(--hp-ease), background .22s var(--hp-ease);
+  font-weight:950;color:rgba(8,16,34,.78);
+  position:relative;
+  overflow:hidden;
 }
-.hp-cats a:hover{transform:translateY(-2px);box-shadow:0 18px 44px rgba(11,18,32,.10);background:rgba(255,255,255,.94)}
-.hp-cats .arrow{opacity:.55;font-weight:950}
+.hp-cats a::before{
+  content:"";
+  position:absolute;inset:-80%;
+  background: radial-gradient(circle at 18% 28%, rgba(45,108,223,.14), transparent 55%);
+  filter: blur(26px);
+  opacity:.0;
+  transition: opacity .22s var(--hp-ease);
+}
+.hp-cats a:hover::before{opacity:.95}
+.hp-cats a:hover{
+  transform:translateY(-2px);
+  box-shadow: var(--hp-inset), 0 24px 70px rgba(8,16,34,.12);
+  background: rgba(255,255,255,.96);
+}
+.hp-cats .arrow{
+  opacity:.55;font-weight:950;
+  width:30px;height:30px;border-radius:12px;
+  display:grid;place-items:center;
+  background: rgba(8,16,34,.04);
+  border: 1px solid rgba(8,16,34,.08);
+}
 
+/* HERO */
 .hp-hero{
   position:relative;
-  border-radius:var(--r-2xl);
-  border:1px solid rgba(11,18,32,.10);
-  background:rgba(255,255,255,.70);
-  box-shadow:var(--sh-2);
+  border-radius: calc(var(--hp-radius2) + 6px);
+  border:1px solid rgba(8,16,34,.12);
+  background: rgba(255,255,255,.74);
+  box-shadow: var(--hp-shadow2);
   overflow:hidden;
-  min-height:420px;
+  min-height:460px;
+  isolation:isolate;
 }
 .hp-hero::before{
   content:"";
-  position:absolute;inset:-40%;
+  position:absolute;inset:-45%;
   background:
     radial-gradient(circle at 22% 28%, rgba(45,108,223,.26), transparent 55%),
     radial-gradient(circle at 78% 30%, rgba(255,176,32,.18), transparent 55%),
     radial-gradient(circle at 45% 88%, rgba(59,177,255,.18), transparent 55%);
-  filter:blur(30px);
+  filter:blur(34px);
   opacity:.95;
   pointer-events:none;
+  z-index:0;
 }
-.hp-heroMedia{
-  position:absolute;inset:0;
-}
+.hp-heroMedia{position:absolute;inset:0;z-index:0}
 .hp-heroMedia img{
   width:100%;height:100%;object-fit:cover;
-  transform:scale(1.03);
-  filter:saturate(1.03) contrast(1.04);
+  transform: scale(1.045);
+  filter: saturate(1.05) contrast(1.05) brightness(.98);
+  transition: transform .9s var(--hp-ease);
 }
 .hp-heroShade{
-  position:absolute;inset:0;
+  position:absolute;inset:0;z-index:1;
   background:
-    linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.55)),
-    radial-gradient(900px 520px at 60% 20%, rgba(255,255,255,.28), transparent 60%),
-    radial-gradient(900px 520px at 10% 20%, rgba(45,108,223,.18), transparent 55%);
+    radial-gradient(900px 520px at 52% 18%, rgba(255,255,255,.22), transparent 60%),
+    linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.72));
 }
 .hp-heroInner{
   position:relative;
-  padding:22px;
+  padding:24px;
   display:grid;
   gap:14px;
   height:100%;
   align-content:end;
+  z-index:2;
 }
 .hp-kicker{
   display:inline-flex;align-items:center;gap:10px;
   padding:8px 12px;border-radius:999px;
-  background:rgba(255,255,255,.86);
-  border:1px solid rgba(11,18,32,.10);
-  box-shadow:0 12px 26px rgba(11,18,32,.08);
-  font-weight:950;letter-spacing:.14em;text-transform:uppercase;font-size:.72rem;
-  color:rgba(11,18,32,.72);
+  background: rgba(255,255,255,.88);
+  border:1px solid rgba(8,16,34,.10);
+  box-shadow: var(--hp-inset), 0 16px 44px rgba(8,16,34,.10);
+  font-weight:950;letter-spacing:.16em;text-transform:uppercase;font-size:.70rem;
+  color:rgba(8,16,34,.70);
+  width:fit-content;
 }
-.hp-kicker .dot{width:9px;height:9px;border-radius:999px;background:linear-gradient(90deg,var(--success),var(--primary-2))}
+.hp-kicker .dot{
+  width:9px;height:9px;border-radius:999px;
+  background: linear-gradient(90deg, var(--success), var(--primary-2));
+  box-shadow: 0 14px 30px rgba(22,163,74,.18);
+}
 .hp-title{
-  font-size:clamp(2.1rem, 3.1vw, 3.1rem);
-  line-height:1.02;
-  letter-spacing:-.04em;
+  font-size:clamp(2.2rem, 3.3vw, 3.25rem);
+  line-height:1.01;
+  letter-spacing:-.045em;
   margin:0;
+  color: rgba(8,16,34,.94);
+  text-shadow: 0 18px 60px rgba(8,16,34,.12);
 }
 .hp-title .grad{
-  background:linear-gradient(135deg,var(--primary),var(--primary-2));
+  background:linear-gradient(135deg, var(--primary), var(--primary-2));
   -webkit-background-clip:text;background-clip:text;color:transparent;
 }
-.hp-sub{max-width:58ch;font-size:1.02rem;color:rgba(11,18,32,.68);font-weight:650}
+.hp-sub{
+  max-width:62ch;
+  font-size:1.05rem;
+  color: rgba(8,16,34,.66);
+  font-weight:700;
+  margin:0;
+}
 .hp-ctas{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px}
 .hp-proof{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px}
 .hp-pill{
   display:inline-flex;align-items:center;gap:8px;
   padding:8px 10px;border-radius:999px;
-  background:rgba(255,255,255,.78);
-  border:1px solid rgba(11,18,32,.10);
-  box-shadow:0 10px 22px rgba(11,18,32,.06);
-  font-weight:850;font-size:.88rem;color:rgba(11,18,32,.68);
+  background: rgba(255,255,255,.82);
+  border:1px solid rgba(8,16,34,.10);
+  box-shadow: var(--hp-inset), 0 12px 28px rgba(8,16,34,.08);
+  font-weight:900;font-size:.88rem;color:rgba(8,16,34,.70);
 }
-.hp-pill .p{width:8px;height:8px;border-radius:999px;background:linear-gradient(135deg,var(--primary),var(--primary-2))}
+.hp-pill .p{
+  width:8px;height:8px;border-radius:999px;
+  background: linear-gradient(135deg, var(--primary), var(--primary-2));
+}
 
-.hp-panel .title{
-  font-weight:950;font-size:1.05rem;margin:0 0 6px;
-}
-.hp-panel .muted{color:rgba(11,18,32,.65);font-weight:650;margin:0 0 12px}
+/* Right panel */
+.hp-panel .title{font-weight:950;font-size:1.1rem;margin:0 0 6px;color:rgba(8,16,34,.92)}
+.hp-panel .muted{color:rgba(8,16,34,.65);font-weight:700;margin:0 0 12px}
 .hp-panel .ctaRow{display:flex;gap:10px;flex-wrap:wrap}
 .hp-panel .secure{
   display:inline-flex;align-items:center;gap:8px;
@@ -190,189 +335,369 @@
   border:1px solid rgba(22,163,74,.20);
   font-weight:950;font-size:.78rem;
 }
+.hp-panel .card.compact{
+  background: rgba(255,255,255,.86);
+  border: 1px solid rgba(8,16,34,.10);
+  box-shadow: var(--hp-inset), 0 16px 44px rgba(8,16,34,.08);
+}
 
-/* Featured */
+/* FEATURED */
 .hp-head{
   display:flex;align-items:flex-end;justify-content:space-between;gap:14px;
-  margin:22px 0 12px;
+  margin:24px 0 12px;
 }
-.hp-head .sub{color:rgba(11,18,32,.55);font-weight:750}
+.hp-head .sub{color:rgba(8,16,34,.56);font-weight:800}
 .hp-products{margin-top:12px}
-.hp-cardP{padding:16px}
-.hp-cardP .meta{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px}
-.hp-cardP .name{font-weight:950;line-height:1.18}
-.hp-cardP .buy{width:100%}
+
+/* Improve product cards (visual) */
+.home-pro .product-card{
+  transform: translateY(0);
+  transition: transform .25s var(--hp-ease), box-shadow .25s var(--hp-ease);
+  will-change: transform;
+}
+.home-pro .product-card:hover{
+  transform: translateY(-4px);
+}
+.home-pro .product-media{
+  border-radius: 20px;
+}
+.home-pro .product-media img{
+  transition: transform .75s var(--hp-ease), filter .75s var(--hp-ease);
+}
+.home-pro .product-card:hover .product-media img{
+  transform: scale(1.08);
+  filter: saturate(1.08) contrast(1.06);
+}
+.home-pro .product-chip{
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+/* Skeleton */
+.hp-skel{
+  position:relative;
+  overflow:hidden;
+  border-radius: 18px;
+  border:1px solid rgba(8,16,34,.10);
+  background: rgba(255,255,255,.78);
+  box-shadow: var(--hp-inset), 0 16px 44px rgba(8,16,34,.08);
+  height: 420px;
+}
+.hp-skel::before{
+  content:"";
+  position:absolute;inset:0;
+  background: linear-gradient(90deg,
+    rgba(255,255,255,.0),
+    rgba(255,255,255,.65),
+    rgba(255,255,255,.0)
+  );
+  transform: translateX(-60%);
+  animation: hpShimmer 1.15s infinite;
+  opacity:.9;
+}
+@keyframes hpShimmer{
+  to{transform: translateX(60%)}
+}
+
+/* Reveal animation */
+.hp-reveal{
+  opacity:0;
+  transform: translateY(10px);
+  transition: opacity .55s var(--hp-ease), transform .55s var(--hp-ease);
+}
+.hp-reveal.is-in{
+  opacity:1;
+  transform: translateY(0);
+}
+
+/* Back-to-top */
 .to-top{
   position:fixed;right:18px;bottom:18px;
   width:46px;height:46px;border-radius:16px;
-  border:1px solid rgba(11,18,32,.10);
+  border:1px solid rgba(8,16,34,.12);
   background:rgba(255,255,255,.78);
-  box-shadow:0 18px 60px rgba(11,18,32,.14);
+  box-shadow:0 20px 70px rgba(8,16,34,.16);
   cursor:pointer;
   display:none;
   font-weight:950;
-  transition:transform var(--t), box-shadow var(--t), background var(--t);
+  transition: transform .22s var(--hp-ease), box-shadow .22s var(--hp-ease), background .22s var(--hp-ease);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }
-.to-top:hover{transform:translateY(-2px);box-shadow:0 24px 80px rgba(11,18,32,.18);background:#fff}
+.to-top:hover{
+  transform:translateY(-2px);
+  box-shadow:0 28px 95px rgba(8,16,34,.20);
+  background:#fff
+}
+
+/* Focus visible (scoped, premium) */
+.home-pro a:focus-visible,
+.home-pro button:focus-visible,
+.home-pro input:focus-visible{
+  outline:none;
+  box-shadow: 0 0 0 7px rgba(45,108,223,.18);
+  border-radius: 16px;
+}
+
+/* Reduce motion */
+@media(prefers-reduced-motion:reduce){
+  .hp-badge,.hp-action,.hp-side,.hp-panel,.product-card,.hp-reveal,.to-top,
+  .hp-heroMedia img,.hp-skel::before{transition:none!important;animation:none!important}
+}
 </style>
 {% endblock %}
 
 {% block content %}
 <section class="home-pro">
+  <div class="hp-wrap">
 
-  <!-- TOP BENEFITS + SEARCH -->
-  <section class="hp-top">
-    <div class="stack" style="gap:12px">
-      <div class="hp-badges" aria-label="Beneficios">
-        <span class="hp-badge"><span class="hp-dot"></span> Envío rápido</span>
-        <span class="hp-badge"><span class="hp-dot"></span> Pago seguro</span>
-        <span class="hp-badge"><span class="hp-dot"></span> Soporte 24/7</span>
-        <span class="hp-badge"><span class="hp-dot"></span> Compra protegida</span>
-      </div>
-
-      <div class="hp-actions" aria-label="Accesos rápidos">
-        <a class="hp-action" href="{{ url_for('shop.shop') }}?sort=new"><span class="mini"></span> Novedades</a>
-        <a class="hp-action" href="{{ url_for('shop.shop') }}?q=oferta"><span class="mini"></span> Ofertas</a>
-        <a class="hp-action" href="{{ url_for('shop.shop') }}"><span class="mini"></span> Ver todo</a>
-      </div>
-    </div>
-
-    <form class="hp-search" action="{{ url_for('shop.shop') }}" method="get" role="search" aria-label="Buscar productos">
-      <label for="q" class="sr-only">Buscar</label>
-      <input id="q" name="q" placeholder="Buscar en Skyline Store…" autocomplete="off">
-      <button class="btn btn-primary btn-sm" type="submit">Buscar</button>
-    </form>
-  </section>
-
-  <!-- HERO GRID -->
-  <section class="hp-heroGrid">
-
-    <!-- LEFT: Categories -->
-    <aside class="hp-side" aria-label="Categorías">
-      <div class="inner">
-        <h3>Categorías</h3>
-        <ul class="hp-cats">
-          <li><a href="{{ url_for('shop.shop') }}?categoria=ropa">Ropa urbana <span class="arrow">→</span></a></li>
-          <li><a href="{{ url_for('shop.shop') }}?categoria=accesorios">Accesorios <span class="arrow">→</span></a></li>
-          <li><a href="{{ url_for('shop.shop') }}?categoria=tecnologia">Tecnología <span class="arrow">→</span></a></li>
-          <li><a href="{{ url_for('shop.shop') }}?sort=new">Lo nuevo <span class="arrow">→</span></a></li>
-        </ul>
-      </div>
-    </aside>
-
-    <!-- CENTER: Hero -->
-    <div class="hp-hero" aria-label="Hero principal">
-      <div class="hp-heroMedia" aria-hidden="true">
-        <img
-          src="{{ url_for('static', filename='img/banners/hero_home.png') }}"
-          alt=""
-          loading="eager"
-          decoding="async"
-        >
-      </div>
-      <div class="hp-heroShade" aria-hidden="true"></div>
-
-      <div class="hp-heroInner">
-        <span class="hp-kicker"><span class="dot"></span> TEMPORADA 2026</span>
-        <h1 class="hp-title">Streetwear <span class="grad">premium</span></h1>
-        <p class="hp-sub">Moda urbana + tecnología con diseño profesional. Comprá rápido, seguro y con una experiencia tipo marketplace.</p>
-
-        <div class="hp-ctas">
-          <a href="{{ url_for('shop.shop') }}" class="btn btn-primary">Explorar tienda</a>
-          <a href="{{ url_for('shop.shop') }}?sort=new" class="btn btn-soft">Novedades</a>
-          <a href="{{ url_for('shop.shop') }}?q=oferta" class="btn">Ver ofertas</a>
+    <!-- TOP BENEFITS + SEARCH -->
+    <section class="hp-top">
+      <div class="stack" style="gap:12px">
+        <div class="hp-badges" aria-label="Beneficios">
+          <span class="hp-badge"><span class="hp-dot"></span> Envío rápido</span>
+          <span class="hp-badge"><span class="hp-dot"></span> Pago seguro</span>
+          <span class="hp-badge"><span class="hp-dot"></span> Soporte 24/7</span>
+          <span class="hp-badge"><span class="hp-dot"></span> Compra protegida</span>
         </div>
 
-        <div class="hp-proof" aria-label="Prueba social">
-          <span class="hp-pill"><span class="p"></span> Checkout optimizado</span>
-          <span class="hp-pill"><span class="p"></span> Envíos rápidos</span>
-          <span class="hp-pill"><span class="p"></span> Soporte real</span>
+        <div class="hp-actions" aria-label="Accesos rápidos">
+          <a class="hp-action" href="{{ url_for('shop.shop') }}?sort=new"><span class="mini"></span> Novedades</a>
+          <a class="hp-action" href="{{ url_for('shop.shop') }}?q=oferta"><span class="mini"></span> Ofertas</a>
+          <a class="hp-action" href="{{ url_for('shop.shop') }}"><span class="mini"></span> Ver todo</a>
         </div>
       </div>
-    </div>
 
-    <!-- RIGHT: Account panel -->
-    <aside class="hp-panel" aria-label="Acceso a cuenta">
-      <div class="inner">
-        <div class="row between" style="align-items:center">
-          <p class="title" style="margin:0">Tu cuenta</p>
-          <span class="secure">● Seguro</span>
+      <form class="hp-search" action="{{ url_for('shop.shop') }}" method="get" role="search" aria-label="Buscar productos">
+        <span class="sicon" aria-hidden="true">⌕</span>
+        <label for="q" class="sr-only">Buscar</label>
+        <input id="q" name="q" placeholder="Buscar en Skyline Store…" autocomplete="off">
+        <button class="btn btn-primary btn-sm" type="submit">Buscar</button>
+      </form>
+    </section>
+
+    <!-- HERO GRID -->
+    <section class="hp-heroGrid">
+
+      <!-- LEFT: Categories -->
+      <aside class="hp-side hp-reveal" data-reveal aria-label="Categorías">
+        <div class="inner">
+          <h3>Categorías</h3>
+          <ul class="hp-cats">
+            <li><a href="{{ url_for('shop.shop') }}?categoria=ropa">Ropa urbana <span class="arrow">→</span></a></li>
+            <li><a href="{{ url_for('shop.shop') }}?categoria=accesorios">Accesorios <span class="arrow">→</span></a></li>
+            <li><a href="{{ url_for('shop.shop') }}?categoria=tecnologia">Tecnología <span class="arrow">→</span></a></li>
+            <li><a href="{{ url_for('shop.shop') }}?sort=new">Lo nuevo <span class="arrow">→</span></a></li>
+          </ul>
         </div>
-        <p class="muted">Accedé a pedidos, guardá favoritos y recibí promos exclusivas.</p>
-        <div class="ctaRow">
-          <a class="btn btn-primary" href="/account">Ingresar</a>
-          <a class="btn btn-soft" href="/account">Crear cuenta</a>
+      </aside>
+
+      <!-- CENTER: Hero -->
+      <div class="hp-hero hp-reveal" data-reveal aria-label="Hero principal">
+        <div class="hp-heroMedia" aria-hidden="true">
+          <img
+            id="hpHeroImg"
+            src="{{ url_for('static', filename='img/banners/hero_home.png') }}"
+            alt=""
+            loading="eager"
+            decoding="async"
+          >
         </div>
-        <div style="margin-top:14px" class="card compact">
-          <p class="card-title" style="margin:0 0 6px">Beneficios</p>
-          <p class="card-muted" style="margin:0">Seguimiento de pedidos · cupones · drops exclusivos</p>
-        </div>
-      </div>
-    </aside>
+        <div class="hp-heroShade" aria-hidden="true"></div>
 
-  </section>
+        <div class="hp-heroInner">
+          <span class="hp-kicker"><span class="dot"></span> TEMPORADA 2026</span>
+          <h1 class="hp-title">Streetwear <span class="grad">premium</span></h1>
+          <p class="hp-sub">Moda urbana + tecnología con diseño profesional. Comprá rápido, seguro y con una experiencia tipo marketplace.</p>
 
-  <!-- FEATURED -->
-  <section class="hp-products">
-    <header class="hp-head">
-      <div>
-        <h2>Destacados</h2>
-        <div class="sub">Selección premium curada para vos</div>
-      </div>
-      <a class="btn btn-ghost" href="{{ url_for('shop.shop') }}">Ver todo →</a>
-    </header>
-
-    {% set featured_list = featured if featured is defined else [] %}
-
-    <div class="grid grid-4">
-      {% for p in featured_list %}
-        <article class="card hp-cardP product-card">
-          <div class="product-media">
-            <span class="product-chip">Destacado</span>
-            <img src="{{ p.img }}" alt="{{ p.title }}" loading="lazy" decoding="async">
+          <div class="hp-ctas">
+            <a href="{{ url_for('shop.shop') }}" class="btn btn-primary">Explorar tienda</a>
+            <a href="{{ url_for('shop.shop') }}?sort=new" class="btn btn-soft">Novedades</a>
+            <a href="{{ url_for('shop.shop') }}?q=oferta" class="btn">Ver ofertas</a>
           </div>
 
-          <div class="product-meta">
-            <div class="stack" style="gap:6px">
-              <div class="product-name">{{ p.title }}</div>
-              <div class="product-sub">Selección premium</div>
+          <div class="hp-proof" aria-label="Prueba social">
+            <span class="hp-pill"><span class="p"></span> Checkout optimizado</span>
+            <span class="hp-pill"><span class="p"></span> Envíos rápidos</span>
+            <span class="hp-pill"><span class="p"></span> Soporte real</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: Account panel -->
+      <aside class="hp-panel hp-reveal" data-reveal aria-label="Acceso a cuenta">
+        <div class="inner">
+          <div class="row between" style="align-items:center">
+            <p class="title" style="margin:0">Tu cuenta</p>
+            <span class="secure">● Seguro</span>
+          </div>
+          <p class="muted">Accedé a pedidos, guardá favoritos y recibí promos exclusivas.</p>
+          <div class="ctaRow">
+            <a class="btn btn-primary" href="/account">Ingresar</a>
+            <a class="btn btn-soft" href="/account">Crear cuenta</a>
+          </div>
+
+          <div style="margin-top:14px" class="card compact">
+            <p class="card-title" style="margin:0 0 6px">Beneficios</p>
+            <p class="card-muted" style="margin:0">Seguimiento de pedidos · cupones · drops exclusivos</p>
+          </div>
+        </div>
+      </aside>
+
+    </section>
+
+    <!-- FEATURED -->
+    <section class="hp-products">
+      <header class="hp-head">
+        <div>
+          <h2 class="hp-reveal" data-reveal>Destacados</h2>
+          <div class="sub hp-reveal" data-reveal>Selección premium curada para vos</div>
+        </div>
+        <a class="btn btn-ghost hp-reveal" data-reveal href="{{ url_for('shop.shop') }}">Ver todo →</a>
+      </header>
+
+      {% set featured_list = featured if featured is defined else [] %}
+
+      <div class="grid grid-4" id="hpGrid">
+        {% if featured_list|length == 0 %}
+          {# Skeletons si no hay productos aún #}
+          <div class="hp-skel"></div>
+          <div class="hp-skel"></div>
+          <div class="hp-skel"></div>
+          <div class="hp-skel"></div>
+
+          <div class="empty" style="grid-column:1 / -1">
+            <h3 style="margin:0 0 8px">Todavía no hay productos destacados</h3>
+            <p style="margin:0">Cargalos desde Admin → Productos y van a aparecer acá automáticamente.</p>
+            <div style="margin-top:12px">
+              <a class="btn btn-primary" href="{{ url_for('shop.shop') }}">Ir a la tienda</a>
             </div>
-            <div class="price">{{ p.price }}</div>
           </div>
+        {% else %}
+          {% for p in featured_list %}
+            <article class="card hp-cardP product-card hp-reveal" data-reveal>
+              <div class="product-media">
+                <span class="product-chip">Destacado</span>
+                <img src="{{ p.img }}" alt="{{ p.title }}" loading="lazy" decoding="async">
+              </div>
 
-          <div class="product-actions">
-            <a class="btn btn-primary buy" href="{{ p.href }}">Comprar</a>
-            <a class="btn btn-soft" href="{{ p.href }}">Ver detalles</a>
-          </div>
-        </article>
-      {% else %}
-        <div class="empty">
-          <h3 style="margin:0 0 8px">Todavía no hay productos destacados</h3>
-          <p style="margin:0">Cargalos desde Admin → Productos y van a aparecer acá automáticamente.</p>
-          <div style="margin-top:12px">
-            <a class="btn btn-primary" href="{{ url_for('shop.shop') }}">Ir a la tienda</a>
-          </div>
-        </div>
-      {% endfor %}
-    </div>
-  </section>
+              <div class="product-meta">
+                <div class="stack" style="gap:6px">
+                  <div class="product-name">{{ p.title }}</div>
+                  <div class="product-sub">Selección premium</div>
+                </div>
+                <div class="price">{{ p.price }}</div>
+              </div>
 
+              <div class="product-actions">
+                <a class="btn btn-primary buy" href="{{ p.href }}">Comprar</a>
+                <a class="btn btn-soft" href="{{ p.href }}">Ver detalles</a>
+              </div>
+            </article>
+          {% endfor %}
+        {% endif %}
+      </div>
+    </section>
+
+  </div>
 </section>
 
 <button class="to-top" id="toTop" aria-label="Volver arriba">↑</button>
 
 <script>
+/* ==========================================================================
+   HOME JS — 30 mejoras de micro-UX (sin librerías)
+   - reveal on scroll (IntersectionObserver)
+   - parallax sutil en hero (mouse + scroll)
+   - sticky “to top” inteligente
+   - smooth focus on search (slash /)
+   - trim del buscador
+   - reduce motion respetado
+========================================================================== */
 (() => {
-  const btn = document.getElementById("toTop");
-  if (!btn) return;
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+  // 1) Reveal on scroll
+  const items = [...document.querySelectorAll('[data-reveal]')];
+  if (!reduce && 'IntersectionObserver' in window && items.length) {
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          e.target.classList.add('is-in');
+          io.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.10, rootMargin: '0px 0px -8% 0px' });
+    items.forEach(el => io.observe(el));
+  } else {
+    items.forEach(el => el.classList.add('is-in'));
+  }
+
+  // 2) ToTop show/hide
+  const btn = document.getElementById("toTop");
   const onScroll = () => {
-    btn.style.display = (window.scrollY > 500) ? "inline-flex" : "none";
+    if (!btn) return;
+    btn.style.display = (window.scrollY > 520) ? "inline-flex" : "none";
   };
   window.addEventListener("scroll", onScroll, { passive: true });
   onScroll();
 
-  btn.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
+  // 3) ToTop click
+  btn && btn.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
+
+  // 4) Search UX: trim + focus shortcut "/"
+  const searchInput = document.querySelector('.hp-search input[name="q"]');
+  if (searchInput) {
+    searchInput.addEventListener('change', () => { searchInput.value = (searchInput.value || '').trim(); });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const tag = (document.activeElement && document.activeElement.tagName) || '';
+        if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+        e.preventDefault();
+        searchInput.focus({ preventScroll: true });
+      }
+      if (e.key === 'Escape' && document.activeElement === searchInput) {
+        searchInput.blur();
+      }
+    });
+  }
+
+  // 5) Hero parallax (super sutil)
+  const hero = document.querySelector('.hp-hero');
+  const heroImg = document.getElementById('hpHeroImg');
+  if (!reduce && hero && heroImg) {
+    let rx = 0, ry = 0, sx = 0, sy = 0;
+
+    const tick = () => {
+      sx += (rx - sx) * 0.08;
+      sy += (ry - sy) * 0.08;
+      heroImg.style.transform = `scale(1.06) translate3d(${sx}px, ${sy}px, 0)`;
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+
+    hero.addEventListener('mousemove', (e) => {
+      const r = hero.getBoundingClientRect();
+      const px = (e.clientX - r.left) / r.width - 0.5;
+      const py = (e.clientY - r.top) / r.height - 0.5;
+      rx = px * 10;
+      ry = py * 8;
+    });
+
+    hero.addEventListener('mouseleave', () => {
+      rx = 0; ry = 0;
+    });
+
+    // scroll lift
+    window.addEventListener('scroll', () => {
+      const r = hero.getBoundingClientRect();
+      const t = Math.max(-1, Math.min(1, (r.top - 120) / 500));
+      heroImg.style.filter = `saturate(${1.05 + (t*-0.03)}) contrast(${1.05 + (t*-0.02)}) brightness(${0.98 + (t*-0.02)})`;
+    }, { passive: true });
+  } else if (heroImg) {
+    heroImg.style.transform = 'scale(1.045)';
+  }
 })();
 </script>
 {% endblock %}
