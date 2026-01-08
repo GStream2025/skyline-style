@@ -8,8 +8,18 @@ import threading
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
-from flask import Blueprint, current_app, jsonify, make_response, render_template, request, url_for
+from flask import (
+    Blueprint,
+    current_app,
+    jsonify,
+    make_response,
+    render_template,
+    request,
+    url_for,
+    has_request_context,
+)
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.models import db
 
@@ -18,6 +28,9 @@ log = logging.getLogger("main_routes")
 
 _TRUE = {"1", "true", "yes", "y", "on"}
 
+# -------------------------
+# Cache home
+# -------------------------
 _HOME_CACHE_TTL = int(os.getenv("HOME_CACHE_TTL", "120") or "120")
 _HOME_CACHE_TTL = max(10, min(_HOME_CACHE_TTL, 3600))
 
@@ -36,8 +49,14 @@ SEO_DEFAULTS = {
 }
 
 
+# ============================================================
+# Helpers (E1/E2/E4)
+# ============================================================
+
 def _is_json_request() -> bool:
     try:
+        if not has_request_context():
+            return False
         if request.args.get("json") == "1":
             return True
         accept = (request.headers.get("Accept") or "").lower()
@@ -62,12 +81,11 @@ def _template_exists(name: str) -> bool:
 
 def _canonical() -> str:
     try:
-        return request.base_url
+        if has_request_context():
+            return request.base_url
     except Exception:
-        try:
-            return request.url.split("?")[0]
-        except Exception:
-            return "/"
+        pass
+    return "/"
 
 
 def _abs_url(path_or_url: str) -> str:
@@ -79,9 +97,11 @@ def _abs_url(path_or_url: str) -> str:
     if not s.startswith("/"):
         s = "/" + s
     try:
-        return request.url_root.rstrip("/") + s
+        if has_request_context():
+            return request.url_root.rstrip("/") + s
     except Exception:
-        return s
+        pass
+    return s
 
 
 def _safe_text(s: Any, max_len: int = 200) -> str:
@@ -99,22 +119,21 @@ def _rollback_silent() -> None:
         pass
 
 
-def _render_safe(template: str, *, status: int = 200, **ctx):
-    ctx.setdefault("meta_title", SEO_DEFAULTS["meta_title"])
-    ctx.setdefault("meta_description", SEO_DEFAULTS["meta_description"])
-    ctx.setdefault("og_image", SEO_DEFAULTS["og_image"])
-    ctx.setdefault("robots", SEO_DEFAULTS["robots"])
-    ctx.setdefault("canonical", _canonical())
-    ctx.setdefault("og_image_abs", _abs_url(ctx.get("og_image") or ""))
+def safe_url_for(endpoint: str, **values) -> str:
+    """E1) url_for que NO rompe nunca."""
+    try:
+        # si el endpoint no existe, url_for tira BuildError.
+        if not has_request_context():
+            return "/"
+        vf = getattr(current_app, "view_functions", {}) or {}
+        if endpoint not in vf:
+            return "/"
+        return url_for(endpoint, **values)
+    except Exception:
+        return "/"
 
-    if _template_exists(template):
-        return render_template(template, **ctx), status
 
-    if _is_json_request():
-        safe_ctx = {k: v for k, v in ctx.items() if k not in {"featured"}}
-        safe_ctx["featured_count"] = len(ctx.get("featured") or [])
-        return jsonify(ok=True, template_missing=template, data=safe_ctx), status
-
+def _render_fallback_html(template: str, ctx: Dict[str, Any], status: int = 200):
     title = _safe_text(ctx.get("meta_title") or SEO_DEFAULTS["meta_title"], 120)
     desc = _safe_text(ctx.get("meta_description") or SEO_DEFAULTS["meta_description"], 240)
     templ = _safe_text(template, 120)
@@ -141,12 +160,46 @@ def _render_safe(template: str, *, status: int = 200, **ctx):
   <div class="card">
     <h1>{title}</h1>
     <p>{desc}</p>
-    <p style="opacity:.6">Template faltante: <code>{templ}</code></p>
+    <p style="opacity:.6">Fallback activado (template: <code>{templ}</code>)</p>
   </div>
 </body>
 </html>"""
     return html_doc, status, {"Content-Type": "text/html; charset=utf-8"}
 
+
+def _render_safe(template: str, *, status: int = 200, **ctx):
+    """
+    E4) Render blindado:
+    - Si falta template => fallback.
+    - Si template existe pero revienta => fallback igual (sin 500).
+    """
+    ctx.setdefault("meta_title", SEO_DEFAULTS["meta_title"])
+    ctx.setdefault("meta_description", SEO_DEFAULTS["meta_description"])
+    ctx.setdefault("og_image", SEO_DEFAULTS["og_image"])
+    ctx.setdefault("robots", SEO_DEFAULTS["robots"])
+    ctx.setdefault("canonical", _canonical())
+    ctx.setdefault("og_image_abs", _abs_url(ctx.get("og_image") or ""))
+
+    if _is_json_request():
+        safe_ctx = {k: v for k, v in ctx.items() if k not in {"featured"}}
+        safe_ctx["featured_count"] = len(ctx.get("featured") or [])
+        return jsonify(ok=True, template=template, data=safe_ctx), status
+
+    # template missing
+    if not _template_exists(template):
+        return _render_fallback_html(template, ctx, status)
+
+    # template exists but might crash
+    try:
+        return render_template(template, **ctx), status
+    except Exception as e:
+        log.warning("Template error (%s): %s", template, e)
+        return _render_fallback_html(template, ctx, status)
+
+
+# ============================================================
+# Models (safe)
+# ============================================================
 
 def _get_model(name: str):
     try:
@@ -155,6 +208,10 @@ def _get_model(name: str):
     except Exception:
         return None
 
+
+# ============================================================
+# Product helpers
+# ============================================================
 
 def _product_title(p: Any) -> str:
     t = getattr(p, "title", None) or getattr(p, "name", None) or "Producto"
@@ -192,8 +249,9 @@ def _product_href(p: Any) -> str:
     slug = (getattr(p, "slug", "") or "").strip()
     if not slug:
         return "/shop"
+    # E1) no BuildError
     try:
-        return url_for("shop.product_detail", slug=slug)
+        return safe_url_for("shop.product_detail", slug=slug) or f"/shop?q={slug}"
     except Exception:
         return f"/shop?q={slug}"
 
@@ -272,20 +330,78 @@ def _money_label(currency: str, price_value: Any) -> str:
         return f"{currency} {str(price_value)}"
 
 
-def _db_signature() -> str:
+# ============================================================
+# Featured builder + cache signature (E3)
+# ============================================================
+
+def _table_exists_products() -> bool:
+    """E3) Confirma tabla products sin romper."""
     try:
+        # Works on Postgres & SQLite
+        row = db.session.execute(
+            text("SELECT 1 FROM information_schema.tables WHERE table_name='products' LIMIT 1")
+        ).first()
+        if row:
+            return True
+    except Exception:
+        pass
+    try:
+        # SQLite fallback
+        row2 = db.session.execute(
+            text("SELECT name FROM sqlite_master WHERE type='table' AND name='products' LIMIT 1")
+        ).first()
+        return bool(row2)
+    except Exception:
+        _rollback_silent()
+        return False
+
+
+def _column_exists_products(col: str) -> bool:
+    """E3) Detecta columna de products."""
+    try:
+        row = db.session.execute(
+            text(
+                "SELECT 1 FROM information_schema.columns "
+                "WHERE table_name='products' AND column_name=:c LIMIT 1"
+            ),
+            {"c": col},
+        ).first()
+        if row:
+            return True
+    except Exception:
+        pass
+    try:
+        # SQLite fallback: PRAGMA table_info
+        rows = db.session.execute(text("PRAGMA table_info(products)")).fetchall()
+        return any((r[1] == col) for r in rows)  # r[1]=name
+    except Exception:
+        _rollback_silent()
+        return False
+
+
+def _db_signature() -> str:
+    """
+    Firma best-effort para invalidar cache.
+    - No rompe si tabla/columna no existen.
+    """
+    try:
+        if not _table_exists_products():
+            return "0|"
         row = db.session.execute(text("SELECT COUNT(*) FROM products")).first()
         ct = int(row[0]) if row else 0
+
         mx = None
-        try:
+        if _column_exists_products("updated_at"):
             row2 = db.session.execute(text("SELECT MAX(updated_at) FROM products")).first()
             mx = row2[0] if row2 else None
-        except Exception:
-            mx = None
+        elif _column_exists_products("created_at"):
+            row3 = db.session.execute(text("SELECT MAX(created_at) FROM products")).first()
+            mx = row3[0] if row3 else None
+
         return f"{ct}|{mx}"
     except Exception:
         _rollback_silent()
-    return ""
+        return ""
 
 
 def _build_featured(limit: int = 8) -> List[Dict[str, Any]]:
@@ -361,10 +477,17 @@ def _static_featured() -> List[Dict[str, Any]]:
 
 
 def _cache_key_home() -> str:
-    # Mejora 2: key estable y extensible (lang optional)
+    """
+    E2) Key estable sin depender de request context.
+    """
     cur = str(current_app.config.get("CURRENCY", "UYU") or "UYU").upper()
-    lang = (request.headers.get("Accept-Language") or "").split(",")[0].strip().lower()
-    lang = lang[:8] if lang else "default"
+    lang = "default"
+    try:
+        if has_request_context():
+            lang = (request.headers.get("Accept-Language") or "").split(",")[0].strip().lower() or "default"
+            lang = lang[:8]
+    except Exception:
+        lang = "default"
     return f"home|cur={cur}|lang={lang}"
 
 
@@ -373,6 +496,7 @@ def _get_cached_featured(key: str) -> Optional[List[Dict[str, Any]]]:
     ts = float(bucket.get("ts") or 0.0)
     if (time.time() - ts) > _HOME_CACHE_TTL:
         return None
+
     try:
         sig = _db_signature()
         old = bucket.get("sig") or ""
@@ -380,6 +504,7 @@ def _get_cached_featured(key: str) -> Optional[List[Dict[str, Any]]]:
             return None
     except Exception:
         pass
+
     featured = bucket.get("featured")
     return featured if isinstance(featured, list) and featured else None
 
@@ -388,10 +513,7 @@ def _set_cached_featured(key: str, items: List[Dict[str, Any]]) -> None:
     _HOME_CACHE.setdefault(key, {})
     _HOME_CACHE[key]["ts"] = time.time()
     _HOME_CACHE[key]["featured"] = items
-    try:
-        _HOME_CACHE[key]["sig"] = _db_signature()
-    except Exception:
-        _HOME_CACHE[key]["sig"] = ""
+    _HOME_CACHE[key]["sig"] = _db_signature() or ""
 
 
 def _get_or_build_featured(key: str, limit: int = 8) -> List[Dict[str, Any]]:
@@ -403,6 +525,7 @@ def _get_or_build_featured(key: str, limit: int = 8) -> List[Dict[str, Any]]:
         cached2 = _get_cached_featured(key)
         if cached2:
             return cached2
+
         ev = _HOME_INFLIGHT.get(key)
         if ev is None:
             ev = threading.Event()
@@ -427,6 +550,10 @@ def _get_or_build_featured(key: str, limit: int = 8) -> List[Dict[str, Any]]:
                 ev2.set()
 
 
+# ============================================================
+# Routes
+# ============================================================
+
 @main_bp.get("/")
 def home():
     key = _cache_key_home()
@@ -439,10 +566,9 @@ def home():
         "og_image_abs": _abs_url(SEO_DEFAULTS.get("og_image", "")),
     }
 
-    # Mejora 1: fallback inteligente de template
-    if _template_exists("home.html"):
-        return _render_safe("home.html", **ctx)
-    return _render_safe("index.html", **ctx)
+    # home.html primero, si no existe usa index.html
+    template = "home.html" if _template_exists("home.html") else "index.html"
+    return _render_safe(template, **ctx)
 
 
 @main_bp.get("/healthz")
@@ -459,9 +585,12 @@ def healthz():
             "cache_age": int(time.time() - float(bucket.get("ts") or 0.0)),
             "cache_key": key,
         }, 200
-    except Exception as e:
+    except SQLAlchemyError as e:
         _rollback_silent()
         log.warning("Health DB error: %s", e)
+        return {"ok": False, "db": "error"}, 500
+    except Exception as e:
+        log.warning("Health error: %s", e)
         return {"ok": False, "db": "error"}, 500
 
 
@@ -483,9 +612,7 @@ def _best_lastmod(p: Any) -> Optional[str]:
         if not v:
             continue
         try:
-            # Mejora 3: ISO limpio
-            iso = v.replace(microsecond=0).isoformat()
-            return iso
+            return v.replace(microsecond=0).isoformat()
         except Exception:
             try:
                 return str(v)
@@ -496,13 +623,18 @@ def _best_lastmod(p: Any) -> Optional[str]:
 
 @main_bp.get("/sitemap.xml")
 def sitemap_xml():
-    base = (request.url_root or "").rstrip("/")
+    base = ""
+    try:
+        base = (request.url_root or "").rstrip("/") if has_request_context() else ""
+    except Exception:
+        base = ""
+
     urls: List[Tuple[str, Optional[str]]] = []
 
     def add(path: str, lastmod: Optional[str] = None):
         if not path.startswith("/"):
             path = "/" + path
-        urls.append((base + path, lastmod))
+        urls.append(((base + path) if base else path, lastmod))
 
     add("/")
     add("/shop")
@@ -534,10 +666,11 @@ def sitemap_xml():
                 if not slug:
                     continue
                 lastmod = _best_lastmod(p)
-                try:
-                    add(url_for("shop.product_detail", slug=slug), lastmod=lastmod)
-                except Exception:
-                    add(f"/shop?q={slug}", lastmod=None)
+                href = safe_url_for("shop.product_detail", slug=slug)
+                if href == "/":
+                    href = f"/shop?q={slug}"
+                add(href, lastmod=lastmod)
+
         except Exception:
             _rollback_silent()
 
