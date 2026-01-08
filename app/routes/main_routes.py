@@ -1,16 +1,4 @@
 # app/routes/main_routes.py
-"""
-Skyline Store · Main Routes (ULTRA PRO FINAL / ZERO-500 v2)
-
-✅ NO importa modelos al import-time (evita mapper/init issues)
-✅ DB signature compatible SQLite/Postgres (sin NOW())
-✅ Featured + cache bulletproof (anti-stampede + TTL + firma best-effort)
-✅ Render seguro: template faltante -> HTML/JSON fallback sin 500
-✅ Sitemap/robots ultra safe + lastmod best-effort
-✅ Health separado (/healthz)
-✅ Featured payload consistente para templates (price_value/currency/compare_at/discount_pct)
-"""
-
 from __future__ import annotations
 
 import html
@@ -20,41 +8,25 @@ import threading
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
-from flask import (
-    Blueprint,
-    current_app,
-    jsonify,
-    make_response,
-    render_template,
-    request,
-    url_for,
-)
+from flask import Blueprint, current_app, jsonify, make_response, render_template, request, url_for
 from sqlalchemy import text
 
-from app.models import db  # ✅ solo db (no Product proxy)
+from app.models import db
 
 main_bp = Blueprint("main", __name__)
 log = logging.getLogger("main_routes")
 
 _TRUE = {"1", "true", "yes", "y", "on"}
 
-# -------------------------
-# Cache home
-# -------------------------
 _HOME_CACHE_TTL = int(os.getenv("HOME_CACHE_TTL", "120") or "120")
 _HOME_CACHE_TTL = max(10, min(_HOME_CACHE_TTL, 3600))
 
-# Cache per-key (permite futuro: idioma/moneda/tenant)
 _HOME_CACHE: Dict[str, Dict[str, Any]] = {}
 _HOME_LOCK = threading.Lock()
-
-# Anti-stampede: una sola construcción en vuelo
 _HOME_INFLIGHT: Dict[str, threading.Event] = {}
 
 SEO_DEFAULTS = {
-    "meta_title": os.getenv(
-        "SEO_TITLE", "Skyline Store · Moda urbana, accesorios y tecnología"
-    ),
+    "meta_title": os.getenv("SEO_TITLE", "Skyline Store · Moda urbana, accesorios y tecnología"),
     "meta_description": os.getenv(
         "SEO_DESCRIPTION",
         "Comprá moda urbana, accesorios y tecnología en un solo lugar. Envíos rápidos y pagos seguros.",
@@ -63,19 +35,8 @@ SEO_DEFAULTS = {
     "robots": os.getenv("SEO_ROBOTS", "index,follow"),
 }
 
-# ============================================================
-# Helpers
-# ============================================================
-
 
 def _is_json_request() -> bool:
-    """
-    Detección robusta:
-    - ?json=1
-    - Accept incluye application/json
-    - XHR
-    - rutas /api/*
-    """
     try:
         if request.args.get("json") == "1":
             return True
@@ -100,7 +61,6 @@ def _template_exists(name: str) -> bool:
 
 
 def _canonical() -> str:
-    # canonical sin query
     try:
         return request.base_url
     except Exception:
@@ -129,8 +89,7 @@ def _safe_text(s: Any, max_len: int = 200) -> str:
         out = str(s or "").strip()
     except Exception:
         out = ""
-    out = out[:max_len]
-    return html.escape(out, quote=True)
+    return html.escape(out[:max_len], quote=True)
 
 
 def _rollback_silent() -> None:
@@ -141,11 +100,6 @@ def _rollback_silent() -> None:
 
 
 def _render_safe(template: str, *, status: int = 200, **ctx):
-    """
-    Render blindado:
-    - si falta template => JSON u HTML mínimo
-    - nunca rompe la app
-    """
     ctx.setdefault("meta_title", SEO_DEFAULTS["meta_title"])
     ctx.setdefault("meta_description", SEO_DEFAULTS["meta_description"])
     ctx.setdefault("og_image", SEO_DEFAULTS["og_image"])
@@ -162,9 +116,7 @@ def _render_safe(template: str, *, status: int = 200, **ctx):
         return jsonify(ok=True, template_missing=template, data=safe_ctx), status
 
     title = _safe_text(ctx.get("meta_title") or SEO_DEFAULTS["meta_title"], 120)
-    desc = _safe_text(
-        ctx.get("meta_description") or SEO_DEFAULTS["meta_description"], 240
-    )
+    desc = _safe_text(ctx.get("meta_description") or SEO_DEFAULTS["meta_description"], 240)
     templ = _safe_text(template, 120)
 
     html_doc = f"""<!doctype html>
@@ -196,28 +148,12 @@ def _render_safe(template: str, *, status: int = 200, **ctx):
     return html_doc, status, {"Content-Type": "text/html; charset=utf-8"}
 
 
-# ============================================================
-# Model resolver (CRÍTICO: evita mapper/init issues)
-# ============================================================
-
-
 def _get_model(name: str):
-    """
-    Resuelve modelos desde el hub SIN forzar imports al import-time.
-    Evita tocar __dict__ crudo: usa getattr.
-    """
     try:
         import app.models as models  # type: ignore
-
-        m = getattr(models, name, None)
-        return m
+        return getattr(models, name, None)
     except Exception:
         return None
-
-
-# ============================================================
-# Product helpers (no tipamos Product para no atar a la clase)
-# ============================================================
 
 
 def _product_title(p: Any) -> str:
@@ -264,14 +200,14 @@ def _product_href(p: Any) -> str:
 
 def _is_active_product(p: Any) -> bool:
     try:
-        if hasattr(p, "is_active"):
-            return bool(getattr(p, "is_active"))
+        st = (getattr(p, "status", "") or "").lower().strip()
+        if st:
+            return st == "active"
     except Exception:
         pass
     try:
-        st = (getattr(p, "status", "") or "").lower()
-        if st:
-            return st == "active"
+        if hasattr(p, "is_active"):
+            return bool(getattr(p, "is_active"))
     except Exception:
         pass
     return True
@@ -300,7 +236,6 @@ def _price_value_of(p: Any) -> Optional[Any]:
 
 
 def _compare_at_of(p: Any) -> Optional[Any]:
-    # soporta varios nombres típicos
     for key in ("compare_at", "compare_at_price", "old_price", "price_old"):
         v = getattr(p, key, None)
         if v is not None and str(v).strip() != "":
@@ -309,7 +244,6 @@ def _compare_at_of(p: Any) -> Optional[Any]:
 
 
 def _discount_pct_of(p: Any, price_value: Any, compare_at: Any) -> Optional[int]:
-    # si el modelo lo trae, úsalo
     for key in ("discount_pct", "discount_percent", "discount"):
         v = getattr(p, key, None)
         if v is not None and str(v).strip() != "":
@@ -318,8 +252,6 @@ def _discount_pct_of(p: Any, price_value: Any, compare_at: Any) -> Optional[int]
                 return max(0, min(100, iv))
             except Exception:
                 pass
-
-    # si hay compare_at, calculalo
     try:
         if compare_at is None or price_value is None:
             return None
@@ -340,28 +272,16 @@ def _money_label(currency: str, price_value: Any) -> str:
         return f"{currency} {str(price_value)}"
 
 
-# ============================================================
-# Featured builder + cache signature (SQLite/Postgres safe)
-# ============================================================
-
-
 def _db_signature() -> str:
-    """
-    Firma best-effort para invalidar cache.
-    ✅ SQLite-safe (sin NOW()).
-    Si falla: "" (cache sólo por TTL).
-    """
     try:
         row = db.session.execute(text("SELECT COUNT(*) FROM products")).first()
         ct = int(row[0]) if row else 0
-
         mx = None
         try:
             row2 = db.session.execute(text("SELECT MAX(updated_at) FROM products")).first()
             mx = row2[0] if row2 else None
         except Exception:
             mx = None
-
         return f"{ct}|{mx}"
     except Exception:
         _rollback_silent()
@@ -370,16 +290,12 @@ def _db_signature() -> str:
 
 def _build_featured(limit: int = 8) -> List[Dict[str, Any]]:
     limit = _limit_clamp(limit, 1, 24, 8)
-
     ProductModel = _get_model("Product")
     if not ProductModel:
         return []
 
     try:
-        try:
-            q = ProductModel.query  # type: ignore[attr-defined]
-        except Exception:
-            return []
+        q = ProductModel.query  # type: ignore[attr-defined]
 
         try:
             if hasattr(ProductModel, "status"):
@@ -413,80 +329,43 @@ def _build_featured(limit: int = 8) -> List[Dict[str, Any]]:
 
             out.append(
                 {
-                    # media / navegación
                     "img": _product_image(p),
                     "title": _product_title(p),
                     "href": _product_href(p),
-
-                    # ✅ payload consistente para templates (price.html)
                     "price_value": price_value,
                     "currency": currency,
                     "compare_at": compare_at,
                     "discount_pct": discount_pct,
-
-                    # compat / debug / si querés mostrar simple
                     "price_label": _money_label(currency, price_value) if price_value is not None else "",
                 }
             )
         return out
 
     except Exception as e:
-        # no spamear ERROR en prod por cosas esperables; igual deja pista
         log.info("Featured dinámico falló: %s", e)
         _rollback_silent()
         return []
 
 
 def _static_featured() -> List[Dict[str, Any]]:
-    # ✅ también consistente
     return [
-        {
-            "img": "/static/img/products/hero-hoodie.png",
-            "title": "Hoodies Premium",
-            "href": "/shop",
-            "price_value": 1990,
-            "currency": "UYU",
-            "compare_at": None,
-            "discount_pct": None,
-            "price_label": "UYU 1990",
-        },
-        {
-            "img": "/static/img/products/hero-sneakers.png",
-            "title": "Zapatillas Urbanas",
-            "href": "/shop",
-            "price_value": 2590,
-            "currency": "UYU",
-            "compare_at": None,
-            "discount_pct": None,
-            "price_label": "UYU 2590",
-        },
-        {
-            "img": "/static/img/products/hero-headphones.png",
-            "title": "Audio Inalámbrico",
-            "href": "/shop",
-            "price_value": 1290,
-            "currency": "UYU",
-            "compare_at": None,
-            "discount_pct": None,
-            "price_label": "UYU 1290",
-        },
-        {
-            "img": "/static/img/products/hero-watch.png",
-            "title": "Smartwatch",
-            "href": "/shop",
-            "price_value": 1490,
-            "currency": "UYU",
-            "compare_at": None,
-            "discount_pct": None,
-            "price_label": "UYU 1490",
-        },
+        {"img": "/static/img/products/hero-hoodie.png", "title": "Hoodies Premium", "href": "/shop",
+         "price_value": 1990, "currency": "UYU", "compare_at": None, "discount_pct": None, "price_label": "UYU 1990"},
+        {"img": "/static/img/products/hero-sneakers.png", "title": "Zapatillas Urbanas", "href": "/shop",
+         "price_value": 2590, "currency": "UYU", "compare_at": None, "discount_pct": None, "price_label": "UYU 2590"},
+        {"img": "/static/img/products/hero-headphones.png", "title": "Audio Inalámbrico", "href": "/shop",
+         "price_value": 1290, "currency": "UYU", "compare_at": None, "discount_pct": None, "price_label": "UYU 1290"},
+        {"img": "/static/img/products/hero-watch.png", "title": "Smartwatch", "href": "/shop",
+         "price_value": 1490, "currency": "UYU", "compare_at": None, "discount_pct": None, "price_label": "UYU 1490"},
     ]
 
 
 def _cache_key_home() -> str:
-    # ✅ Mejora: key estable (permite futuro: idioma/moneda)
+    # Mejora 2: key estable y extensible (lang optional)
     cur = str(current_app.config.get("CURRENCY", "UYU") or "UYU").upper()
-    return f"home|cur={cur}"
+    lang = (request.headers.get("Accept-Language") or "").split(",")[0].strip().lower()
+    lang = lang[:8] if lang else "default"
+    return f"home|cur={cur}|lang={lang}"
 
 
 def _get_cached_featured(key: str) -> Optional[List[Dict[str, Any]]]:
@@ -494,7 +373,6 @@ def _get_cached_featured(key: str) -> Optional[List[Dict[str, Any]]]:
     ts = float(bucket.get("ts") or 0.0)
     if (time.time() - ts) > _HOME_CACHE_TTL:
         return None
-
     try:
         sig = _db_signature()
         old = bucket.get("sig") or ""
@@ -502,14 +380,12 @@ def _get_cached_featured(key: str) -> Optional[List[Dict[str, Any]]]:
             return None
     except Exception:
         pass
-
     featured = bucket.get("featured")
     return featured if isinstance(featured, list) and featured else None
 
 
 def _set_cached_featured(key: str, items: List[Dict[str, Any]]) -> None:
-    if key not in _HOME_CACHE:
-        _HOME_CACHE[key] = {}
+    _HOME_CACHE.setdefault(key, {})
     _HOME_CACHE[key]["ts"] = time.time()
     _HOME_CACHE[key]["featured"] = items
     try:
@@ -519,12 +395,6 @@ def _set_cached_featured(key: str, items: List[Dict[str, Any]]) -> None:
 
 
 def _get_or_build_featured(key: str, limit: int = 8) -> List[Dict[str, Any]]:
-    """
-    ✅ Anti-stampede real:
-    - si otro request está construyendo: esperamos (máx 1.8s) y usamos cache
-    - si no hay cache: fallback estático (nunca 500)
-    """
-    # 1) fast path sin lock
     cached = _get_cached_featured(key)
     if cached:
         return cached
@@ -533,8 +403,6 @@ def _get_or_build_featured(key: str, limit: int = 8) -> List[Dict[str, Any]]:
         cached2 = _get_cached_featured(key)
         if cached2:
             return cached2
-
-        # si hay build en vuelo, esperamos fuera del lock
         ev = _HOME_INFLIGHT.get(key)
         if ev is None:
             ev = threading.Event()
@@ -544,12 +412,9 @@ def _get_or_build_featured(key: str, limit: int = 8) -> List[Dict[str, Any]]:
             is_builder = False
 
     if not is_builder:
-        # esperar corto y reintentar cache
         ev.wait(timeout=1.8)
-        cached3 = _get_cached_featured(key)
-        return cached3 or _static_featured()
+        return _get_cached_featured(key) or _static_featured()
 
-    # builder real
     try:
         built = _build_featured(limit=limit) or _static_featured()
         with _HOME_LOCK:
@@ -560,11 +425,6 @@ def _get_or_build_featured(key: str, limit: int = 8) -> List[Dict[str, Any]]:
             ev2 = _HOME_INFLIGHT.pop(key, None)
             if ev2:
                 ev2.set()
-
-
-# ============================================================
-# Routes
-# ============================================================
 
 
 @main_bp.get("/")
@@ -578,30 +438,11 @@ def home():
         "canonical": _canonical(),
         "og_image_abs": _abs_url(SEO_DEFAULTS.get("og_image", "")),
     }
+
+    # Mejora 1: fallback inteligente de template
+    if _template_exists("home.html"):
+        return _render_safe("home.html", **ctx)
     return _render_safe("index.html", **ctx)
-
-
-@main_bp.get("/about")
-def about():
-    return _render_safe(
-        "about.html",
-        meta_title="Sobre Skyline Store",
-        meta_description="Conocé Skyline Store, una tienda online moderna y confiable.",
-    )
-
-
-@main_bp.get("/contact")
-def contact():
-    return _render_safe(
-        "contact.html",
-        meta_title="Contacto · Skyline Store",
-        meta_description="Contactanos para soporte, ventas o consultas.",
-    )
-
-
-# ============================================================
-# Health
-# ============================================================
 
 
 @main_bp.get("/healthz")
@@ -624,11 +465,6 @@ def healthz():
         return {"ok": False, "db": "error"}, 500
 
 
-# ============================================================
-# Robots + Sitemap
-# ============================================================
-
-
 @main_bp.get("/robots.txt")
 def robots_txt():
     if os.getenv("ROBOTS_DISALLOW_ALL", "0").strip().lower() in _TRUE:
@@ -642,14 +478,13 @@ def robots_txt():
 
 
 def _best_lastmod(p: Any) -> Optional[str]:
-    # ✅ Mejora: lastmod si existe updated_at/created_at (ISO)
     for key in ("updated_at", "created_at"):
         v = getattr(p, key, None)
         if not v:
             continue
         try:
-            # datetime -> isoformat
-            iso = v.isoformat()
+            # Mejora 3: ISO limpio
+            iso = v.replace(microsecond=0).isoformat()
             return iso
         except Exception:
             try:
@@ -662,7 +497,6 @@ def _best_lastmod(p: Any) -> Optional[str]:
 @main_bp.get("/sitemap.xml")
 def sitemap_xml():
     base = (request.url_root or "").rstrip("/")
-
     urls: List[Tuple[str, Optional[str]]] = []
 
     def add(path: str, lastmod: Optional[str] = None):
@@ -674,12 +508,11 @@ def sitemap_xml():
     add("/shop")
 
     limit = _limit_clamp(os.getenv("SITEMAP_LIMIT", "500"), 1, 2000, 500)
-
     ProductModel = _get_model("Product")
+
     if ProductModel:
         try:
             q = ProductModel.query  # type: ignore[attr-defined]
-
             try:
                 if hasattr(ProductModel, "status"):
                     q = q.filter(ProductModel.status == "active")  # type: ignore[attr-defined]
@@ -696,8 +529,7 @@ def sitemap_xml():
             except Exception:
                 pass
 
-            items = q.limit(limit).all()
-            for p in items:
+            for p in q.limit(limit).all():
                 slug = (getattr(p, "slug", "") or "").strip()
                 if not slug:
                     continue
@@ -706,7 +538,6 @@ def sitemap_xml():
                     add(url_for("shop.product_detail", slug=slug), lastmod=lastmod)
                 except Exception:
                     add(f"/shop?q={slug}", lastmod=None)
-
         except Exception:
             _rollback_silent()
 

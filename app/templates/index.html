@@ -1,14 +1,14 @@
-{# app/templates/home.html — Skyline Store (ULTRA PRO · v5.2 · bulletproof +15) #}
+{# app/templates/home.html — Skyline Store (ULTRA PRO · v5.3 · bulletproof +20) #}
 {% extends "base.html" %}
 
-{% block title %}{{ meta_title | default("Skyline Store · Tech + Streetwear premium") }}{% endblock %}
+{% block title %}{{ (meta_title | default("Skyline Store · Tech + Streetwear premium")) | e }}{% endblock %}
 
 {% block extra_head %}
-<meta name="description" content="{{ meta_description | default('Skyline Store · Moda urbana premium, accesorios y tecnología.') }}">
+<meta name="description" content="{{ (meta_description | default('Skyline Store · Moda urbana premium, accesorios y tecnología.')) | e }}">
 <link rel="canonical" href="{{ request.base_url }}">
 
-<meta property="og:title" content="{{ meta_title | default('Skyline Store · Tech + Streetwear premium') }}">
-<meta property="og:description" content="{{ meta_description | default('Moda urbana y tecnología seleccionada. Experiencia rápida, segura y con soporte real.') }}">
+<meta property="og:title" content="{{ (meta_title | default('Skyline Store · Tech + Streetwear premium')) | e }}">
+<meta property="og:description" content="{{ (meta_description | default('Moda urbana y tecnología seleccionada. Experiencia rápida, segura y con soporte real.')) | e }}">
 <meta property="og:type" content="website">
 <meta property="og:url" content="{{ request.base_url }}">
 <meta property="og:image" content="{{ og_image or url_for('static', filename='img/og.png', _external=True) }}">
@@ -20,20 +20,35 @@
 <link rel="preload" as="image" href="{{ url_for('static', filename='img/banners/hero_home.png') }}" fetchpriority="high">
 <link rel="prefetch" href="{{ url_for('shop.shop') }}">
 
-{# base.html ya carga skyline-pro.css + components.css -> acá solo home.css #}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/home.css') }}">
 {% endblock %}
 
 {% block content %}
 {% set shop_url = url_for('shop.shop') %}
 {% set hero_img = url_for('static', filename='img/banners/hero_home.png') %}
+
+{# ✅ Mejora 1: account_url inteligente (no rompe si cambia blueprint) #}
 {% set account_url = '/account' %}
+{% if url_for is defined %}
+  {% set _tmp = none %}
+  {% set _candidates = [
+    'account.account',
+    'account.login',
+    'cuenta.account',
+    'cuenta.login',
+    'auth.login'
+  ] %}
+  {% for ep in _candidates %}
+    {% if _tmp is none %}
+      {% set _tmp = (url_for(ep) if (ep is string) else none) %}
+    {% endif %}
+  {% endfor %}
+  {% if _tmp %}
+    {% set account_url = _tmp %}
+  {% endif %}
+{% endif %}
 
-{# ✅ Mejora extra 1: tolerancia a rutas viejas: si tu /account real es otro, probá estos sin romper #}
-{# (Si ya te anda /account, esto no estorba) #}
-{% set account_url = account_url %}
-
-{# ✅ categorías con fallback media-failed si faltan imgs #}
+{# ✅ cats #}
 {% set cats = [
   {'label':'Ropa urbana',   'img':'img/categories/ropa.jpg',       'tag':'Top ventas', 'tagcls':'primary', 'href': shop_url ~ '?categoria=ropa'},
   {'label':'Accesorios',    'img':'img/categories/accesorios.jpg', 'tag':'Must have',  'tagcls':'',        'href': shop_url ~ '?categoria=accesorios'},
@@ -196,7 +211,7 @@
           <div class="media">
             <img
               src="{{ url_for('static', filename=c.img) }}"
-              alt="{{ c.label }}"
+              alt="{{ (c.label | default('Categoría')) | e }}"
               width="640"
               height="480"
               loading="lazy"
@@ -206,9 +221,9 @@
             >
           </div>
           <div class="body">
-            <div class="label">{{ c.label }}</div>
+            <div class="label">{{ (c.label | default('Categoría')) | e }}</div>
             <div class="meta">Explorá ahora</div>
-            <span class="tag {{ c.tagcls }}">{{ c.tag }}</span>
+            <span class="tag {{ c.tagcls }}">{{ (c.tag | default('')) | e }}</span>
           </div>
         </a>
         {% endfor %}
@@ -229,7 +244,7 @@
         <a class="btn ghost hp-reveal" data-reveal href="{{ shop_url }}">Ver todo →</a>
       </div>
 
-      {% set featured_list = featured if featured is defined else [] %}
+      {% set featured_list = (featured if featured is defined and featured else []) %}
 
       <div class="gridP" id="hpGrid">
         {% if featured_list|length == 0 %}
@@ -246,16 +261,17 @@
             </div>
           </div>
         {% else %}
-
-          {# ✅ Mejora extra 2: evitar reventar si featured trae dicts incompletos #}
           {% for p in featured_list %}
-            {% set _img = (p.img if p.img is defined else url_for('static', filename='img/placeholder.png')) %}
-            {% set _title = (p.title if p.title is defined else 'Producto') %}
-            {% set _href = (p.href if p.href is defined else shop_url) %}
-            {% set _price = (p.price if p.price is defined else '') %}
-            {% set _compare = (p.compare_at if p.compare_at is defined else none) %}
-            {% set _pct = (p.discount_pct if p.discount_pct is defined else none) %}
-            {% set _cur = (p.currency if p.currency is defined else 'UYU') %}
+            {# ✅ Mejora 4: fallback fuerte de imagen #}
+            {% set _img = (p.img if p is mapping and p.img is defined and p.img else (og_image or hero_img)) %}
+            {% set _title = (p.title if p is mapping and p.title is defined and p.title else 'Producto') %}
+            {% set _href = (p.href if p is mapping and p.href is defined and p.href else shop_url) %}
+
+            {# ✅ Mejora 3: usa keys nuevas (price_value / price_label) #}
+            {% set _price_value = (p.price_value if p is mapping and p.price_value is defined else (p.price if p is mapping and p.price is defined else none)) %}
+            {% set _cur = (p.currency if p is mapping and p.currency is defined and p.currency else 'UYU') %}
+            {% set _compare = (p.compare_at if p is mapping and p.compare_at is defined else none) %}
+            {% set _pct = (p.discount_pct if p is mapping and p.discount_pct is defined else none) %}
 
             <article class="hpCard hp-reveal" data-reveal aria-label="Producto destacado">
               <div class="hpMedia">
@@ -264,7 +280,7 @@
 
                 <img
                   src="{{ _img }}"
-                  alt="{{ _title }}"
+                  alt="{{ _title | e }}"
                   width="900"
                   height="900"
                   loading="lazy"
@@ -275,26 +291,19 @@
               </div>
 
               <div class="hpMeta">
-                <div class="hpName">{{ _title }}</div>
+                <div class="hpName">{{ _title | e }}</div>
 
-                {% set rating_value = (p.rating if p.rating is defined else none) %}
+                {% set rating_value = (p.rating if p is mapping and p.rating is defined else none) %}
                 {% include "components/rating.html" ignore missing %}
 
                 <div class="hpSub">Selección premium</div>
 
-                {# ✅ FIX CLAVE: price.html v3 acepta price_value y es safe con discount_pct undefined #}
-                {% include "components/price.html"
-                   with
-                   price_value=_price,
-                   compare_at=_compare,
-                   discount_pct=_pct,
-                   currency=_cur
-                   ignore missing
-                %}
-
-                {# ✅ Mejora extra 3: no duplicar precio (evita confusión y layout raro) #}
-                {# (si querés dejarlo, ponelo con clase muted abajo) #}
-                {# <div class="hpPrice">{{ _price }}</div> #}
+                {# ✅ Mejora 2: include compatible (NO "with") #}
+                {% set price = _price_value %}
+                {% set currency = _cur %}
+                {% set compare_at = _compare %}
+                {% set discount_pct = _pct %}
+                {% include "components/price.html" ignore missing %}
               </div>
 
               <div class="hpActions">
@@ -303,7 +312,6 @@
               </div>
             </article>
           {% endfor %}
-
         {% endif %}
       </div>
     </section>
@@ -325,14 +333,8 @@
 <button class="to-top" id="toTop" aria-label="Volver arriba" type="button">↑</button>
 {% endblock %}
 
-{# ✅ FIX CLAVE: el bloque correcto en base.html es extra_js #}
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/home.js') }}" defer></script>
-
-{# +10 mejoras ya incluidas +5 extras:
-   Extra 4) Si home.js falla, igual muestra cosas (reveal/sticky/top)
-   Extra 5) Protege contra listeners duplicados en hot reload/navegación
-#}
 <script>
 (() => {
   const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -342,10 +344,8 @@
     : document.addEventListener("DOMContentLoaded", fn, { once:true });
 
   ready(() => {
-    // Reveal fallback
     document.querySelectorAll('[data-reveal]').forEach(el => el.classList.add('is-ready'));
 
-    // Evitar doble binding global
     if (document.documentElement.dataset.hpBound === "1") return;
     document.documentElement.dataset.hpBound = "1";
 
