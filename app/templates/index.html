@@ -1,5 +1,29 @@
-{# app/templates/home.html — Skyline Store (ULTRA PRO · v5.3 · bulletproof +20) #}
+{# app/templates/home.html — Skyline Store (ULTRA PRO · v5.4 · bulletproof NO-500) #}
 {% extends "base.html" %}
+
+{# ============================================================
+   SAFE ENDPOINT RESOLVER (NO BuildError)
+   Requiere: view_functions inyectado (ya lo usás en base.html)
+============================================================ #}
+{% set _vf = (view_functions if view_functions is defined and view_functions else {}) %}
+
+{# ✅ Mejora NUEVA 1: safe_url_for sin romper si no existe endpoint #}
+{% set shop_url = '/shop' %}
+{% if 'shop.shop' in _vf %}
+  {% set shop_url = url_for('shop.shop') %}
+{% endif %}
+
+{% set account_url = '/account' %}
+{% set _account_candidates = ['account.account','account.login','cuenta.account','cuenta.login','auth.login'] %}
+{% for ep in _account_candidates %}
+  {% if account_url == '/account' and (ep in _vf) %}
+    {% set account_url = url_for(ep) %}
+  {% endif %}
+{% endfor %}
+
+{# ✅ Mejora NUEVA 2: og_image_abs consistente (si og_image es relativo) #}
+{% set _og_img = (og_image if og_image is defined and og_image else url_for('static', filename='img/og.png', _external=True)) %}
+{% set hero_img = url_for('static', filename='img/banners/hero_home.png') %}
 
 {% block title %}{{ (meta_title | default("Skyline Store · Tech + Streetwear premium")) | e }}{% endblock %}
 
@@ -11,44 +35,21 @@
 <meta property="og:description" content="{{ (meta_description | default('Moda urbana y tecnología seleccionada. Experiencia rápida, segura y con soporte real.')) | e }}">
 <meta property="og:type" content="website">
 <meta property="og:url" content="{{ request.base_url }}">
-<meta property="og:image" content="{{ og_image or url_for('static', filename='img/og.png', _external=True) }}">
+<meta property="og:image" content="{{ _og_img }}">
 <meta name="twitter:card" content="summary_large_image">
 
 <meta name="theme-color" content="#2563eb">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 
-<link rel="preload" as="image" href="{{ url_for('static', filename='img/banners/hero_home.png') }}" fetchpriority="high">
-<link rel="prefetch" href="{{ url_for('shop.shop') }}">
+<link rel="preload" as="image" href="{{ hero_img }}" fetchpriority="high">
+<link rel="prefetch" href="{{ shop_url }}">
 
 <link rel="stylesheet" href="{{ url_for('static', filename='css/home.css') }}">
 {% endblock %}
 
 {% block content %}
-{% set shop_url = url_for('shop.shop') %}
-{% set hero_img = url_for('static', filename='img/banners/hero_home.png') %}
 
-{# ✅ Mejora 1: account_url inteligente (no rompe si cambia blueprint) #}
-{% set account_url = '/account' %}
-{% if url_for is defined %}
-  {% set _tmp = none %}
-  {% set _candidates = [
-    'account.account',
-    'account.login',
-    'cuenta.account',
-    'cuenta.login',
-    'auth.login'
-  ] %}
-  {% for ep in _candidates %}
-    {% if _tmp is none %}
-      {% set _tmp = (url_for(ep) if (ep is string) else none) %}
-    {% endif %}
-  {% endfor %}
-  {% if _tmp %}
-    {% set account_url = _tmp %}
-  {% endif %}
-{% endif %}
-
-{# ✅ cats #}
+{# ✅ Mejora NUEVA 3: categorías “safe” (si falta la img no rompe y queda degradado) #}
 {% set cats = [
   {'label':'Ropa urbana',   'img':'img/categories/ropa.jpg',       'tag':'Top ventas', 'tagcls':'primary', 'href': shop_url ~ '?categoria=ropa'},
   {'label':'Accesorios',    'img':'img/categories/accesorios.jpg', 'tag':'Must have',  'tagcls':'',        'href': shop_url ~ '?categoria=accesorios'},
@@ -228,10 +229,6 @@
         </a>
         {% endfor %}
       </div>
-
-      <p class="small" style="margin:10px 0 0; color:var(--muted)">
-        *Si todavía no tenés estas imágenes, igual se ve pro: el bloque <b>media</b> queda con degradado automático.
-      </p>
     </section>
 
     <!-- FEATURED -->
@@ -244,6 +241,7 @@
         <a class="btn ghost hp-reveal" data-reveal href="{{ shop_url }}">Ver todo →</a>
       </div>
 
+      {# ✅ Mejora NUEVA 4: featured ultra-safe aunque venga raro #}
       {% set featured_list = (featured if featured is defined and featured else []) %}
 
       <div class="gridP" id="hpGrid">
@@ -262,16 +260,14 @@
           </div>
         {% else %}
           {% for p in featured_list %}
-            {# ✅ Mejora 4: fallback fuerte de imagen #}
-            {% set _img = (p.img if p is mapping and p.img is defined and p.img else (og_image or hero_img)) %}
+            {% set _img = (p.img if p is mapping and p.img is defined and p.img else hero_img) %}
             {% set _title = (p.title if p is mapping and p.title is defined and p.title else 'Producto') %}
             {% set _href = (p.href if p is mapping and p.href is defined and p.href else shop_url) %}
 
-            {# ✅ Mejora 3: usa keys nuevas (price_value / price_label) #}
-            {% set _price_value = (p.price_value if p is mapping and p.price_value is defined else (p.price if p is mapping and p.price is defined else none)) %}
-            {% set _cur = (p.currency if p is mapping and p.currency is defined and p.currency else 'UYU') %}
-            {% set _compare = (p.compare_at if p is mapping and p.compare_at is defined else none) %}
-            {% set _pct = (p.discount_pct if p is mapping and p.discount_pct is defined else none) %}
+            {% set price = (p.price_value if p is mapping and p.price_value is defined else (p.price if p is mapping and p.price is defined else none)) %}
+            {% set currency = (p.currency if p is mapping and p.currency is defined and p.currency else 'UYU') %}
+            {% set compare_at = (p.compare_at if p is mapping and p.compare_at is defined else none) %}
+            {% set discount_pct = (p.discount_pct if p is mapping and p.discount_pct is defined else none) %}
 
             <article class="hpCard hp-reveal" data-reveal aria-label="Producto destacado">
               <div class="hpMedia">
@@ -298,11 +294,7 @@
 
                 <div class="hpSub">Selección premium</div>
 
-                {# ✅ Mejora 2: include compatible (NO "with") #}
-                {% set price = _price_value %}
-                {% set currency = _cur %}
-                {% set compare_at = _compare %}
-                {% set discount_pct = _pct %}
+                {# include sin "with" (compat máxima) #}
                 {% include "components/price.html" ignore missing %}
               </div>
 
@@ -319,7 +311,6 @@
   </div>
 </main>
 
-<!-- Sticky CTA (mobile) -->
 <div class="sticky-cta" id="hpSticky" aria-label="Acción rápida">
   <div class="inner">
     <div>
