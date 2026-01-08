@@ -2,370 +2,7 @@
 {% block title %}Crear cuenta | Skyline Store{% endblock %}
 
 {% block extra_head %}
-<style>
-/* =========================================================
-   SKYLINE STORE — REGISTER (ULTRA PRO)
-   + 10 mejoras extra:
-   1) Prefijo ss-reg (no pisa estilos globales)
-   2) Mobile-first + breakpoints reales (320-1440+)
-   3) Autofill styling (Chrome) y accesibilidad :focus-visible
-   4) Validación fuerte + mensajes inline (sin backend extra)
-   5) Confirm password con name="password2" (backend puede leerlo)
-   6) Toggle password con aria-pressed y etiquetas accesibles
-   7) Medidor de fuerza con texto (Débil/Ok/Fuerte) + color por clases
-   8) Affiliate section colapsable con transición suave
-   9) Anti doble submit + spinner text seguro
-   10) Reduce motion + better contrast + print safe
-========================================================= */
-
-.ss-reg{
-  --ink: var(--ink, #0b1220);
-  --muted: rgba(11,18,32,.62);
-  --soft: rgba(2,6,23,.04);
-  --stroke: var(--stroke, rgba(15,23,42,.12));
-  --shadow: var(--shadow2, 0 28px 70px rgba(2,6,23,.18));
-  --ease: var(--ease, cubic-bezier(.2,.8,.2,1));
-}
-
-/* ---------- Page layout ---------- */
-.ss-reg{
-  min-height: calc(100vh - 140px);
-  padding: clamp(18px, 3vw, 32px) 14px;
-  display:grid;
-  place-items:center;
-  background:
-    radial-gradient(820px 460px at 12% 0%, rgba(47,123,255,.10), transparent 60%),
-    radial-gradient(820px 460px at 88% 12%, rgba(255,181,71,.12), transparent 60%),
-    linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0));
-}
-
-.ss-reg__shell{
-  width:100%;
-  max-width: min(1200px, var(--max, 1200px));
-  display:grid;
-  grid-template-columns: 1.05fr .95fr;
-  gap: clamp(12px, 2vw, 20px);
-}
-
-@media(max-width: 980px){
-  .ss-reg__shell{ grid-template-columns: 1fr; }
-}
-
-.ss-reg__card{
-  background:#fff;
-  border:1px solid var(--stroke);
-  border-radius: 28px;
-  box-shadow: var(--shadow);
-  overflow:hidden;
-}
-
-/* ---------- LEFT ---------- */
-.ss-reg__left{
-  padding: clamp(18px, 3vw, 34px);
-  background:
-    radial-gradient(600px 360px at 18% 8%, rgba(47,123,255,.16), transparent 60%),
-    radial-gradient(600px 360px at 90% 12%, rgba(255,181,71,.18), transparent 60%),
-    linear-gradient(180deg, rgba(255,255,255,.97), rgba(255,255,255,.92));
-}
-
-.ss-reg__brand{
-  display:flex; gap:14px; align-items:center;
-}
-.ss-reg__logo{
-  width:48px; height:36px;
-  border-radius: 18px;
-  background: var(--grad, linear-gradient(135deg,#2f7bff,#06b6d4));
-  box-shadow: 0 16px 34px rgba(2,6,23,.22);
-}
-.ss-reg__brand b{
-  font-weight:1000;
-  letter-spacing:-.4px;
-  color: var(--ink);
-}
-.ss-reg__brand span{
-  display:block;
-  font-weight:800;
-  font-size:.92rem;
-  color: rgba(11,18,32,.55);
-  margin-top:2px;
-}
-
-.ss-reg__left h1{
-  margin: 18px 0 0;
-  font-size: clamp(1.8rem, 4.4vw, 3.1rem);
-  font-weight: 1000;
-  letter-spacing: -1px;
-  line-height: 1.05;
-  color: var(--ink);
-}
-.ss-reg__left p{
-  margin: 12px 0 0;
-  max-width: 60ch;
-  color: var(--muted);
-  font-weight: 780;
-  font-size: 1.04rem;
-  line-height: 1.55;
-}
-
-.ss-reg__trust{
-  margin-top: 16px;
-  display:flex;
-  flex-wrap:wrap;
-  gap:10px;
-}
-.ss-reg__trust span{
-  padding:10px 14px;
-  border-radius:999px;
-  background: var(--soft);
-  border:1px solid var(--stroke);
-  font-weight: 900;
-  font-size: .86rem;
-  color: rgba(11,18,32,.76);
-}
-
-/* ---------- RIGHT ---------- */
-.ss-reg__right{ padding: clamp(18px, 3vw, 34px); }
-
-/* Steps */
-.ss-reg__steps{
-  display:flex;
-  gap:10px;
-  margin-bottom: 14px;
-}
-.ss-reg__step{
-  flex:1;
-  padding:10px 10px;
-  border-radius: 14px;
-  background: var(--soft);
-  border:1px solid var(--stroke);
-  text-align:center;
-  font-weight: 950;
-  font-size: .85rem;
-  color: rgba(11,18,32,.66);
-}
-.ss-reg__step.is-active{
-  background: rgba(47,123,255,.12);
-  border-color: rgba(47,123,255,.35);
-  color: var(--ink);
-}
-
-/* Flash */
-.ss-reg__flash{
-  margin-top: 10px;
-  padding: 12px 14px;
-  border-radius: 16px;
-  border: 1px solid var(--stroke);
-  font-weight: 850;
-  background: var(--soft);
-}
-.ss-reg__flash.error{ background: rgba(255,0,0,.06); border-color: rgba(255,0,0,.16); }
-.ss-reg__flash.warning{ background: rgba(255,181,71,.12); border-color: rgba(255,181,71,.22); }
-.ss-reg__flash.success{ background: rgba(34,197,94,.12); border-color: rgba(34,197,94,.22); }
-.ss-reg__flash.info{ background: rgba(47,123,255,.10); border-color: rgba(47,123,255,.20); }
-
-/* Form */
-.ss-reg__form{ margin-top: 12px; display:grid; gap: 14px; }
-.ss-reg__grid2{
-  display:grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-@media(max-width: 560px){
-  .ss-reg__grid2{ grid-template-columns: 1fr; }
-}
-
-.ss-reg__field label{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  gap: 10px;
-  font-weight: 950;
-  font-size: .82rem;
-  color: rgba(11,18,32,.62);
-  margin-bottom: 6px;
-}
-.ss-reg__hint{
-  font-weight: 850;
-  color: rgba(11,18,32,.55);
-  font-size: .78rem;
-}
-
-.ss-reg__input{
-  width:100%;
-  padding: 15px 15px;
-  border-radius: 16px;
-  border: 1px solid var(--stroke);
-  font-weight: 780;
-  font-size: 1rem;
-  background: #fff;
-  color: rgba(11,18,32,.92);
-  transition: box-shadow .16s var(--ease), border-color .16s var(--ease), transform .16s var(--ease);
-}
-.ss-reg__input:focus{ outline:none; }
-.ss-reg__input:focus-visible{
-  border-color: rgba(47,123,255,.40);
-  box-shadow: 0 0 0 4px rgba(47,123,255,.14);
-}
-.ss-reg__input.is-error{
-  border-color: rgba(255,0,0,.35);
-  box-shadow: 0 0 0 4px rgba(255,0,0,.10);
-}
-
-/* Autofill (Chrome) */
-.ss-reg__input:-webkit-autofill{
-  -webkit-text-fill-color: rgba(11,18,32,.92);
-  transition: background-color 5000s ease-in-out 0s;
-  box-shadow: 0 0 0 1000px #fff inset;
-}
-
-/* Password */
-.ss-reg__pass-wrap{ position:relative; }
-.ss-reg__pass-toggle{
-  position:absolute;
-  right:10px;
-  top:50%;
-  transform: translateY(-50%);
-  border:1px solid var(--stroke);
-  background: rgba(255,255,255,.96);
-  border-radius: 12px;
-  padding: 7px 10px;
-  cursor:pointer;
-  font-weight: 950;
-  color: rgba(11,18,32,.80);
-}
-.ss-reg__pass-toggle:focus-visible{
-  outline: 3px solid rgba(59,130,246,.35);
-  outline-offset: 2px;
-}
-
-.ss-reg__meter{
-  height: 8px;
-  border-radius: 999px;
-  background: rgba(47,123,255,.10);
-  overflow:hidden;
-  border: 1px solid var(--stroke);
-  margin-top: 8px;
-}
-.ss-reg__meter span{
-  display:block;
-  height:100%;
-  width:0%;
-  background: var(--grad, linear-gradient(135deg,#2f7bff,#06b6d4));
-  transition: width .2s var(--ease);
-}
-.ss-reg__meter.is-weak span{ width: 28% !important; }
-.ss-reg__meter.is-ok span{ width: 62% !important; }
-.ss-reg__meter.is-strong span{ width: 100% !important; }
-
-.ss-reg__rules{
-  margin-top: 8px;
-  font-size: .82rem;
-  color: rgba(11,18,32,.55);
-  font-weight: 770;
-  display:grid;
-  gap: 4px;
-}
-.ss-reg__match{
-  font-size: .82rem;
-  color: rgba(11,18,32,.55);
-  font-weight: 850;
-}
-.ss-reg__match.ok{ color: rgba(16,185,129,.95); }
-.ss-reg__match.bad{ color: rgba(239,68,68,.95); }
-
-/* Affiliate */
-.ss-reg__aff{
-  margin-top: 4px;
-  border-radius: 20px;
-  border: 1px solid var(--stroke);
-  background: var(--soft);
-  overflow:hidden;
-}
-.ss-reg__aff-head{
-  padding: 14px;
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  gap: 12px;
-}
-.ss-reg__aff-head b{ font-weight: 1000; color: rgba(11,18,32,.90); }
-
-.ss-reg__switch{ display:flex; align-items:center; gap:10px; }
-.ss-reg__switch input{ display:none; }
-.ss-reg__toggle{
-  width:56px; height:30px;
-  border-radius:999px;
-  border:1px solid var(--stroke);
-  background:#fff;
-  position:relative;
-  cursor:pointer;
-}
-.ss-reg__toggle::after{
-  content:"";
-  width:24px;height:24px;
-  border-radius: 999px;
-  background: var(--grad, linear-gradient(135deg,#2f7bff,#06b6d4));
-  position:absolute;
-  top:50%;
-  left:3px;
-  transform: translateY(-50%);
-  transition: left .2s var(--ease);
-}
-.ss-reg__switch input:checked + .ss-reg__toggle::after{ left:29px; }
-
-.ss-reg__aff-body{
-  max-height: 0;
-  overflow:hidden;
-  padding: 0 14px;
-  border-top: 1px solid rgba(15,23,42,.08);
-  transition: max-height .28s var(--ease), padding .28s var(--ease);
-}
-.ss-reg__aff-body.is-open{
-  max-height: 220px;
-  padding: 14px;
-}
-
-/* Submit */
-.ss-reg__submit{
-  margin-top: 6px;
-  padding: 16px;
-  border-radius: 18px;
-  background: var(--grad, linear-gradient(135deg,#2f7bff,#06b6d4));
-  color:#fff;
-  border:0;
-  font-weight: 1000;
-  font-size: 1.05rem;
-  box-shadow: 0 20px 40px rgba(2,6,23,.22);
-  cursor:pointer;
-  transition: transform .18s var(--ease), box-shadow .18s var(--ease), opacity .18s var(--ease);
-}
-.ss-reg__submit:hover{ transform: translateY(-2px); box-shadow: 0 24px 52px rgba(2,6,23,.24); }
-.ss-reg__submit:active{ transform: translateY(0); }
-.ss-reg__submit:focus-visible{ outline: 3px solid rgba(59,130,246,.35); outline-offset: 2px; }
-.ss-reg__submit[disabled]{ opacity: .82; cursor:not-allowed; }
-
-/* Footer */
-.ss-reg__footer{
-  margin-top: 12px;
-  font-size: .84rem;
-  color: rgba(11,18,32,.55);
-  line-height: 1.45;
-  font-weight: 800;
-}
-.ss-reg__footer a{
-  font-weight: 950;
-  text-decoration:none;
-  border-bottom: 1px solid rgba(15,23,42,.20);
-  color: rgba(11,18,32,.82);
-}
-.ss-reg__footer a:hover{ border-bottom-color: rgba(47,123,255,.35); }
-
-/* Reduced motion */
-@media (prefers-reduced-motion: reduce){
-  .ss-reg *{ transition:none !important; }
-  .ss-reg__submit:hover{ transform:none !important; }
-}
-</style>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/register.css') }}">
 {% endblock %}
 
 {% block content %}
@@ -405,9 +42,11 @@
       </div>
 
       {% with messages = get_flashed_messages(with_categories=true) %}
-        {% for c,m in messages %}
-          <div class="ss-reg__flash {{ c }}">{{ m }}</div>
-        {% endfor %}
+        {% if messages %}
+          {% for c,m in messages %}
+            <div class="ss-reg__flash {{ c|e }}" role="alert" aria-live="polite" aria-atomic="true">{{ m }}</div>
+          {% endfor %}
+        {% endif %}
       {% endwith %}
 
       <form method="post"
@@ -416,7 +55,6 @@
             id="registerForm"
             novalidate>
 
-        {# CSRF compatible: csrf_token() (Flask-WTF) o csrf_token variable #}
         {% if csrf_token is defined %}
           {% if csrf_token is callable %}
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -425,10 +63,12 @@
           {% endif %}
         {% endif %}
 
-        {% if nonce is defined %}
-          <input type="hidden" name="nonce" value="{{ nonce }}">
-        {% endif %}
-        {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+        {# NONCE obligatorio para tu backend #}
+        <input type="hidden" name="nonce" value="{{ nonce|default('') }}">
+
+        {# next seguro #}
+        {% set nxt = next|default(request.args.get('next','')) %}
+        {% if nxt %}<input type="hidden" name="next" value="{{ nxt|e }}">{% endif %}
 
         <div class="ss-reg__grid2">
           <div class="ss-reg__field">
@@ -440,7 +80,9 @@
                    id="name"
                    type="text"
                    name="name"
+                   maxlength="120"
                    autocomplete="name"
+                   value="{{ request.form.get('name','') if request.method=='POST' else '' }}"
                    placeholder="Nombre (opcional)">
           </div>
 
@@ -454,8 +96,12 @@
                    type="email"
                    name="email"
                    required
+                   maxlength="254"
                    autocomplete="email"
                    inputmode="email"
+                   autocapitalize="none"
+                   spellcheck="false"
+                   value="{{ request.form.get('email','') if request.method=='POST' else '' }}"
                    placeholder="Correo electrónico">
           </div>
         </div>
@@ -474,12 +120,13 @@
                      name="password"
                      required
                      minlength="8"
+                     maxlength="128"
                      autocomplete="new-password"
                      placeholder="Contraseña">
               <button type="button"
                       class="ss-reg__pass-toggle"
                       id="togglePass"
-                      aria-label="Mostrar u ocultar contraseña"
+                      aria-label="Mostrar contraseña"
                       aria-pressed="false">👁</button>
             </div>
 
@@ -505,12 +152,13 @@
                      name="password2"
                      required
                      minlength="8"
+                     maxlength="128"
                      autocomplete="new-password"
                      placeholder="Confirmar contraseña">
               <button type="button"
                       class="ss-reg__pass-toggle"
                       id="togglePass2"
-                      aria-label="Mostrar u ocultar confirmación"
+                      aria-label="Mostrar confirmación"
                       aria-pressed="false">👁</button>
             </div>
 
@@ -524,7 +172,8 @@
             <b>Programa de Afiliados</b>
 
             <label class="ss-reg__switch" aria-label="Activar afiliados">
-              <input type="checkbox" name="want_affiliate" id="wantAffiliate">
+              <input type="checkbox" name="want_affiliate" id="wantAffiliate"
+                     {% if request.form.get('want_affiliate') %}checked{% endif %}>
               <span class="ss-reg__toggle" aria-hidden="true"></span>
             </label>
           </div>
@@ -537,7 +186,9 @@
                        id="affiliate_display_name"
                        type="text"
                        name="affiliate_display_name"
+                       maxlength="120"
                        autocomplete="nickname"
+                       value="{{ request.form.get('affiliate_display_name','') if request.method=='POST' else '' }}"
                        placeholder="Nombre público">
               </div>
 
@@ -547,6 +198,8 @@
                        id="affiliate_instagram"
                        type="text"
                        name="affiliate_instagram"
+                       maxlength="120"
+                       value="{{ request.form.get('affiliate_instagram','') if request.method=='POST' else '' }}"
                        placeholder="Instagram / TikTok / Web">
               </div>
             </div>
@@ -566,160 +219,5 @@
   </div>
 </section>
 
-<script>
-(function(){
-  const form = document.getElementById("registerForm");
-  const email = document.getElementById("email");
-  const pass = document.getElementById("password");
-  const pass2 = document.getElementById("password2");
-  const meterBox = document.getElementById("meterBox");
-  const meter = document.getElementById("meter");
-  const hint = document.getElementById("matchHint");
-  const toggle = document.getElementById("togglePass");
-  const toggle2 = document.getElementById("togglePass2");
-  const aff = document.getElementById("wantAffiliate");
-  const body = document.getElementById("affBody");
-  const btn = document.getElementById("submitBtn");
-
-  const rLen = document.getElementById("rLen");
-  const rMix = document.getElementById("rMix");
-  const rUp  = document.getElementById("rUp");
-  const rSym = document.getElementById("rSym");
-
-  function setOk(el, ok){
-    if(!el) return;
-    el.style.opacity = ok ? "1" : ".55";
-  }
-
-  function score(v){
-    let s = 0;
-    const hasLen = v.length >= 8;
-    const hasMix = /[a-zA-Z]/.test(v) && /[0-9]/.test(v);
-    const hasUp  = /[A-Z]/.test(v);
-    const hasSym = /[^a-zA-Z0-9]/.test(v);
-
-    if(hasLen) s += 35;
-    if(hasMix) s += 35;
-    if(hasUp)  s += 15;
-    if(hasSym) s += 15;
-
-    setOk(rLen, hasLen);
-    setOk(rMix, hasMix);
-    setOk(rUp,  hasUp);
-    setOk(rSym, hasSym);
-
-    return { s: Math.min(100, s), hasLen, hasMix };
-  }
-
-  function setMeter(val){
-    if(!meterBox || !meter) return;
-    meter.style.width = val + "%";
-    meterBox.classList.remove("is-weak","is-ok","is-strong");
-    if(val <= 35) meterBox.classList.add("is-weak");
-    else if(val <= 75) meterBox.classList.add("is-ok");
-    else meterBox.classList.add("is-strong");
-  }
-
-  function checkMatch(){
-    if(!pass || !pass2 || !hint) return true;
-    const ok = pass.value === pass2.value && pass2.value.length > 0;
-    const empty = pass2.value.length === 0;
-
-    hint.classList.remove("ok","bad");
-    if(empty){
-      hint.textContent = "• Debe coincidir";
-      pass2.classList.remove("is-error");
-      return false;
-    }
-    if(ok){
-      hint.textContent = "• Coincide ✅";
-      hint.classList.add("ok");
-      pass2.classList.remove("is-error");
-      return true;
-    }else{
-      hint.textContent = "• No coincide";
-      hint.classList.add("bad");
-      pass2.classList.add("is-error");
-      return false;
-    }
-  }
-
-  // Toggles
-  function toggleField(btnEl, inputEl){
-    if(!btnEl || !inputEl) return;
-    const show = inputEl.type === "password";
-    inputEl.type = show ? "text" : "password";
-    btnEl.setAttribute("aria-pressed", show ? "true" : "false");
-  }
-  if(toggle) toggle.addEventListener("click", ()=> toggleField(toggle, pass));
-  if(toggle2) toggle2.addEventListener("click", ()=> toggleField(toggle2, pass2));
-
-  // Affiliate collapse
-  function setAffiliate(open){
-    if(!body) return;
-    body.classList.toggle("is-open", !!open);
-  }
-  if(aff){
-    setAffiliate(aff.checked);
-    aff.addEventListener("change", ()=> setAffiliate(aff.checked));
-  }
-
-  // Live checks
-  if(pass){
-    pass.addEventListener("input", ()=>{
-      const r = score(pass.value);
-      setMeter(r.s);
-      checkMatch();
-    });
-  }
-  if(pass2){
-    pass2.addEventListener("input", ()=> checkMatch());
-  }
-
-  // Simple email highlight (UX)
-  if(email){
-    email.addEventListener("input", ()=>{
-      if(email.validity.valid || email.value.length === 0) email.classList.remove("is-error");
-      else email.classList.add("is-error");
-    });
-  }
-
-  // Submit: client-side guard (sin depender del backend)
-  if(form){
-    form.addEventListener("submit", (e)=>{
-      let ok = true;
-
-      // HTML validations
-      if(email && !email.checkValidity()){ email.classList.add("is-error"); ok = false; }
-      if(pass && pass.value.length < 8){ pass.classList.add("is-error"); ok = false; }
-
-      // Password match
-      if(!checkMatch()) ok = false;
-
-      // Must have letters+numbers (mínimo)
-      if(pass){
-        const r = score(pass.value);
-        if(!(r.hasLen && r.hasMix)){
-          pass.classList.add("is-error");
-          ok = false;
-        } else {
-          pass.classList.remove("is-error");
-        }
-      }
-
-      if(!ok){
-        e.preventDefault();
-        try{ window.scrollTo({ top: 0, behavior: "smooth" }); }catch(_){}
-        return;
-      }
-
-      // Anti doble submit
-      if(btn){
-        btn.disabled = true;
-        btn.textContent = "Creando cuenta…";
-      }
-    });
-  }
-})();
-</script>
+<script defer src="{{ url_for('static', filename='js/register.js') }}"></script>
 {% endblock %}
