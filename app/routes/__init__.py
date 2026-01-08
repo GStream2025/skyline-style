@@ -1,5 +1,5 @@
 """
-Skyline Store · Routes Package (BULLETPROOF FINAL / FULL AUTO · +15 mejoras)
+Skyline Store · Routes Package (BULLETPROOF FINAL / FULL AUTO · +20 mejoras)
 ============================================================================
 OBJETIVO: "No falta nada" + "no se rompe" + "no tocar más".
 
@@ -9,18 +9,19 @@ OBJETIVO: "No falta nada" + "no se rompe" + "no tocar más".
 ✅ Autodiscovery: si símbolo no existe, igual registra los blueprints del módulo
 ✅ Anti duplicados por name + origin (case-insensitive)
 ✅ Disable por ENV con wildcard real: ROUTES_DISABLE="admin*,printful,app.routes.debug_routes"
-✅ Prefix override por ENV: ROUTES_PREFIX_<bpname>=/algo
+✅ Prefix override por ENV: ROUTES_PREFIX_<bpname>=/algo (bpname normalizado)
 ✅ Require por ENV: ROUTES_REQUIRE="main,shop,auth,checkout,webhook"
 ✅ Strict mode:
    - ROUTES_STRICT=1 (solo en dev) -> explota si algo falla
    - ROUTES_STRICT_FORCE=1 -> explota siempre (debug fuerte)
 ✅ Report dict estable para /health + imports_failed para depurar rápido
 
-Estructura detectada (tu proyecto):
-- account_routes.py, address_routes.py, admin_routes.py, admin_payments_routes.py
-- affiliate_routes.py (+ affiliate.py existe), api_routes.py, auth_routes.py, cart_routes.py
-- checkout_routes.py, main_routes.py, marketing_routes.py, printful_routes.py
-- profile_routes.py, shop_routes.py, webhook_routes.py
+NUEVO (+5):
+✅ ENV-aware cache busting (si cambia ENV relevante, se rescan/importa de nuevo)
+✅ Fallback prefix: usa prefix definido dentro del bp si existe (best-effort)
+✅ Normalización fuerte de bpname para ROUTES_PREFIX_ (soporta guiones/espacios)
+✅ Report con timing_ms + counts + strict
+✅ REQUIRED check con listado "have" y "missing" (incluye scan)
 """
 
 from __future__ import annotations
@@ -29,8 +30,9 @@ import fnmatch
 import logging
 import os
 import pkgutil
+import time
 from importlib import import_module
-from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Set, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple
 
 if TYPE_CHECKING:
     from flask import Flask
@@ -42,8 +44,12 @@ _TRUE = {"1", "true", "yes", "y", "on"}
 # cache por proceso
 _MODULE_CACHE: Dict[str, Any] = {}
 _IMPORT_ERRORS: Dict[str, str] = {}
+
 _SCAN_CACHE: Optional[List[str]] = None
 _SCAN_CACHE_KEY: Optional[str] = None
+
+# NUEVO: ENV key (para invalidar caches si cambia config)
+_ENV_CACHE_KEY: Optional[str] = None
 
 
 # =============================================================================
@@ -97,7 +103,6 @@ def _split_csv_env(key: str) -> List[str]:
 
 
 def _disabled_patterns() -> List[str]:
-    # ✅ Mejora 1: wildcards reales via fnmatch
     return [x.lower() for x in _split_csv_env("ROUTES_DISABLE")]
 
 
@@ -106,8 +111,6 @@ def _required_names() -> Set[str]:
 
 
 def _priority_modules() -> List[str]:
-    # ✅ Mejora 2: inyectar módulos prioritarios por ENV sin tocar código
-    # ROUTES_PRIORITY="app.routes.extra_routes,app.routes.more_routes"
     return [x for x in _split_csv_env("ROUTES_PRIORITY") if x]
 
 
@@ -120,21 +123,16 @@ def _match_any(value: str, patterns: List[str]) -> bool:
         pat = (p or "").strip().lower()
         if not pat:
             continue
-        # wildcard real
         if "*" in pat or "?" in pat or "[" in pat:
             if fnmatch.fnmatch(v, pat):
                 return True
         else:
-            # exact match
             if v == pat:
                 return True
     return False
 
 
-def _is_disabled(
-    bp_name: str, sym_tail: str, mod_path: str, patterns: List[str]
-) -> bool:
-    # ✅ Mejora 3: match contra varias identidades (bp, símbolo, módulo, módulo.símbolo)
+def _is_disabled(bp_name: str, sym_tail: str, mod_path: str, patterns: List[str]) -> bool:
     return (
         _match_any(bp_name, patterns)
         or _match_any(sym_tail, patterns)
@@ -143,18 +141,79 @@ def _is_disabled(
     )
 
 
+def _bp_env_key(bp_name: str) -> str:
+    """
+    NUEVO: normaliza bp_name para poder usar:
+    - admin-panel -> ROUTES_PREFIX_ADMIN_PANEL
+    - "admin panel" -> ROUTES_PREFIX_ADMIN_PANEL
+    """
+    s = (bp_name or "").strip().upper()
+    # reemplazos seguros
+    s = s.replace("-", "_").replace(" ", "_")
+    # colapsar múltiple "_"
+    while "__" in s:
+        s = s.replace("__", "_")
+    return s or "BLUEPRINT"
+
+
 def _env_prefix_for(bp_name: str) -> Optional[str]:
-    # ✅ Mejora 4: prefijos por bpname (ROUTES_PREFIX_ADMIN=/panel)
-    key = f"ROUTES_PREFIX_{bp_name}".upper()
+    key = f"ROUTES_PREFIX_{_bp_env_key(bp_name)}"
     v = (os.getenv(key) or "").strip()
     if not v:
         return None
-    v = v.strip()
     if not v.startswith("/"):
         v = "/" + v
     if v != "/" and v.endswith("/"):
         v = v[:-1]
     return v
+
+
+# =============================================================================
+# Cache invalidation (NEW)
+# =============================================================================
+def _compute_env_cache_key() -> str:
+    """
+    NUEVO: Si cambia cualquiera de estas ENV, invalidamos scan/import cache.
+    """
+    keys = [
+        "ROUTES_DISABLE",
+        "ROUTES_REQUIRE",
+        "ROUTES_PRIORITY",
+        "ROUTES_SCAN_SUBPACKAGES",
+        "ROUTES_SCAN_ONLY",
+        "ROUTES_IMPORT_NO_CACHE",
+        "ROUTES_DEBUG",
+        "ROUTES_STRICT",
+        "ROUTES_STRICT_FORCE",
+    ]
+    # también prefijos por bp: no podemos enumerar todos, pero metemos todo el env con prefijo
+    prefix_items = []
+    for k, v in os.environ.items():
+        if k.startswith("ROUTES_PREFIX_"):
+            prefix_items.append(f"{k}={v}")
+    prefix_items.sort()
+
+    parts = [f"{k}={(os.getenv(k) or '').strip()}" for k in keys] + prefix_items
+    return "|".join(parts)
+
+
+def _maybe_bust_caches() -> None:
+    global _ENV_CACHE_KEY, _SCAN_CACHE, _SCAN_CACHE_KEY, _MODULE_CACHE, _IMPORT_ERRORS
+
+    new_key = _compute_env_cache_key()
+    if _ENV_CACHE_KEY == new_key:
+        return
+
+    _ENV_CACHE_KEY = new_key
+
+    # bust scan cache
+    _SCAN_CACHE = None
+    _SCAN_CACHE_KEY = None
+
+    # opcional: bust import cache si el user lo pide
+    if _env_bool("ROUTES_BUST_IMPORT_CACHE", False):
+        _MODULE_CACHE.clear()
+        _IMPORT_ERRORS.clear()
 
 
 # =============================================================================
@@ -166,7 +225,6 @@ def _short_exc(e: Exception) -> str:
 
 
 def _safe_import_module(path: str):
-    # ✅ Mejora 5: cache opcionalmente deshabilitable para debug (ROUTES_IMPORT_NO_CACHE=1)
     no_cache = _env_bool("ROUTES_IMPORT_NO_CACHE", False)
     if not no_cache and path in _MODULE_CACHE:
         return _MODULE_CACHE[path]
@@ -196,10 +254,8 @@ def _is_blueprint(obj: Any) -> bool:
         return False
     try:
         from flask.blueprints import Blueprint
-
         return isinstance(obj, Blueprint)
     except Exception:
-        # fallback estructural (último recurso)
         return hasattr(obj, "name") and hasattr(obj, "register")
 
 
@@ -207,7 +263,6 @@ def _find_blueprints_in_module(mod) -> List[Any]:
     if not mod:
         return []
     out: List[Any] = []
-    # ✅ Mejora 6: orden determinístico de discovery
     for k in sorted(dir(mod)):
         if k.startswith("_"):
             continue
@@ -215,7 +270,6 @@ def _find_blueprints_in_module(mod) -> List[Any]:
         if _is_blueprint(obj):
             out.append(obj)
 
-    # dedupe por bp.name dentro del módulo
     uniq: Dict[str, Any] = {}
     for bp in out:
         n = (getattr(bp, "name", "") or "").strip()
@@ -224,14 +278,7 @@ def _find_blueprints_in_module(mod) -> List[Any]:
     return list(uniq.values())
 
 
-def _import_symbol_or_all(
-    mod_path: str, symbol: Optional[str]
-) -> Tuple[List[Any], Optional[str]]:
-    """
-    Retorna (blueprints, err)
-    - si symbol existe y es bp -> [bp]
-    - si no, retorna todos los bps del módulo (autodiscovery)
-    """
+def _import_symbol_or_all(mod_path: str, symbol: Optional[str]) -> Tuple[List[Any], Optional[str]]:
     mod = _safe_import_module(mod_path)
     if not mod:
         return [], _IMPORT_ERRORS.get(mod_path)
@@ -251,8 +298,7 @@ def _import_symbol_or_all(
 def _scan_route_modules() -> List[str]:
     """
     Escanea app.routes y devuelve módulos: app.routes.xxx
-    ✅ Mejora 7: cache del scan por proceso
-    ✅ Mejora 8: soporte subpaquetes opcional (ROUTES_SCAN_SUBPACKAGES=1)
+    ✅ cache por proceso + invalidación por ENV
     """
     global _SCAN_CACHE, _SCAN_CACHE_KEY
 
@@ -273,13 +319,10 @@ def _scan_route_modules() -> List[str]:
                 continue
             mods.append(m.name)
 
-            # subpaquetes opcional
             if scan_sub and m.ispkg:
                 try:
                     subpkg = import_module(m.name)
-                    for sm in pkgutil.iter_modules(
-                        getattr(subpkg, "__path__", []), m.name + "."
-                    ):
+                    for sm in pkgutil.iter_modules(getattr(subpkg, "__path__", []), m.name + "."):
                         stail = sm.name.split(".")[-1]
                         if stail.startswith("_"):
                             continue
@@ -299,12 +342,10 @@ def _scan_route_modules() -> List[str]:
 # Register helpers
 # =============================================================================
 def _normalize_origin(origin: str) -> str:
-    # ✅ Mejora 9: origin key estable para dedupe case-insensitive
     return (origin or "").strip().lower()
 
 
 def _normalize_prefix(prefix: Optional[str]) -> Optional[str]:
-    # ✅ Mejora 10: saneo fuerte de prefix final
     if not prefix:
         return None
     p = prefix.strip()
@@ -315,6 +356,19 @@ def _normalize_prefix(prefix: Optional[str]) -> Optional[str]:
     if p != "/" and p.endswith("/"):
         p = p[:-1]
     return p
+
+
+def _bp_internal_prefix(bp: Any) -> Optional[str]:
+    """
+    NUEVO: best-effort: si el blueprint trae un prefix interno (poco común),
+    lo usamos como fallback, sin romper nada.
+    """
+    try:
+        # algunos proyectos guardan url_prefix custom
+        v = getattr(bp, "url_prefix", None) or getattr(bp, "_url_prefix", None)
+        return _normalize_prefix(v)
+    except Exception:
+        return None
 
 
 def _register_bp(
@@ -340,7 +394,7 @@ def _register_bp(
     mod_path = origin.rsplit(".", 1)[0].strip().lower()
     sym_tail = origin.split(".")[-1].strip().lower()
 
-    if _is_disabled(bp_name, sym_tail, mod_path, disabled_patterns):
+    if _is_disabled(bp_name.lower(), sym_tail, mod_path, disabled_patterns):
         report["disabled"].append(f"{bp_name} <- {origin}")
         return
 
@@ -355,7 +409,8 @@ def _register_bp(
         return
 
     env_pref = _env_prefix_for(bp_name)
-    final_prefix = _normalize_prefix(env_pref or url_prefix)
+    internal_pref = _bp_internal_prefix(bp)
+    final_prefix = _normalize_prefix(env_pref or url_prefix or internal_pref)
 
     try:
         if final_prefix:
@@ -367,8 +422,7 @@ def _register_bp(
         seen_origins.add(origin_key)
 
         report["registered"].append(
-            f"{bp_name} <- {origin}"
-            + (f" (prefix={final_prefix})" if final_prefix else "")
+            f"{bp_name} <- {origin}" + (f" (prefix={final_prefix})" if final_prefix else "")
         )
 
     except Exception as e:
@@ -388,9 +442,6 @@ def _register_bp(
 # Specs (ajustado a tu repo)
 # =============================================================================
 def _default_specs() -> List[Tuple[str, Optional[str], Optional[str]]]:
-    """
-    ✅ Mejora 11: specs EXACTOS a tu estructura real de app/routes
-    """
     return [
         # CORE
         ("app.routes.main_routes", "main_bp", None),
@@ -421,22 +472,27 @@ def _default_specs() -> List[Tuple[str, Optional[str], Optional[str]]]:
 # =============================================================================
 # Public API
 # =============================================================================
-def register_blueprints(app: "Flask") -> Dict[str, List[str]]:
+def register_blueprints(app: "Flask") -> Dict[str, Any]:
     """
     Registro final:
     1) specs prioritarios (orden recomendado)
     2) auto-scan: registra TODO blueprint restante
 
-    ✅ Mejora 12: modo scan-only (ROUTES_SCAN_ONLY=1) para debug
-    ✅ Mejora 13: report incluye imports_failed estable
+    Report: dict estable y ampliado (timing/counts/strict).
     """
+    t0 = time.perf_counter()
+
+    # NUEVO: bust caches si cambió ENV relevante
+    _maybe_bust_caches()
+
     seen_names: Set[str] = set()
     seen_origins: Set[str] = set()
     disabled_patterns = _disabled_patterns()
     required = _required_names()
     scan_only = _env_bool("ROUTES_SCAN_ONLY", False)
+    strict = _strict_mode(app)
 
-    report: Dict[str, List[str]] = {
+    report: Dict[str, Any] = {
         "registered": [],
         "missing": [],
         "invalid": [],
@@ -447,6 +503,10 @@ def register_blueprints(app: "Flask") -> Dict[str, List[str]]:
         "scan_registered": [],
         "scan_skipped": [],
         "imports_failed": [],
+        # NUEVO
+        "timing_ms": 0,
+        "counts": {},
+        "strict": strict,
     }
 
     # -----------------------------------------
@@ -454,7 +514,7 @@ def register_blueprints(app: "Flask") -> Dict[str, List[str]]:
     # -----------------------------------------
     specs = _default_specs()
 
-    # ✅ Mejora 14: prioridad extra por ENV
+    # prioridad extra por ENV (se inserta ANTES del scan)
     for m in _priority_modules():
         specs.append((m, None, None))
 
@@ -462,15 +522,12 @@ def register_blueprints(app: "Flask") -> Dict[str, List[str]]:
         for mod, symbol, pref in specs:
             bps, err = _import_symbol_or_all(mod, symbol)
             if not bps:
-                report["missing"].append(
-                    f"{mod}.{symbol or '*'}" + (f" :: {err}" if err else "")
-                )
+                report["missing"].append(f"{mod}.{symbol or '*'}" + (f" :: {err}" if err else ""))
                 if err:
                     report["imports_failed"].append(f"{mod} :: {err}")
                 continue
 
             for bp in bps:
-                # origin estable: si símbolo no existe, usamos bp.name
                 origin = f"{mod}.{(symbol or getattr(bp, 'name', 'blueprint'))}"
                 _register_bp(
                     app,
@@ -513,14 +570,16 @@ def register_blueprints(app: "Flask") -> Dict[str, List[str]]:
                 report["scan_registered"].append(origin)
 
     # -----------------------------------------
-    # REQUIRED CHECK (por bp.name)
+    # REQUIRED CHECK (por bp.name, incluye scan)
     # -----------------------------------------
     if required:
         have = {x.split(" <- ", 1)[0].strip().lower() for x in report["registered"]}
         miss = sorted(list(required - have))
         if miss:
             report["required_missing"] = miss
-            if _strict_mode(app):
+            # NUEVO: lista lo que hay (para debug rápido)
+            report["required_have"] = sorted(list(have))
+            if strict:
                 raise RuntimeError(f"ROUTES_REQUIRE faltantes: {', '.join(miss)}")
             log.warning("⚠️ ROUTES_REQUIRE faltantes: %s", ", ".join(miss))
 
@@ -529,11 +588,7 @@ def register_blueprints(app: "Flask") -> Dict[str, List[str]]:
     # -----------------------------------------
     try:
         reg_names = [x.split(" <- ", 1)[0] for x in report["registered"]]
-        log.info(
-            "✅ Blueprints registrados (%d): %s",
-            len(reg_names),
-            ", ".join(reg_names) if reg_names else "(ninguno)",
-        )
+        log.info("✅ Blueprints registrados (%d): %s", len(reg_names), ", ".join(reg_names) if reg_names else "(ninguno)")
 
         if report["scan_registered"]:
             log.info("🧭 Auto-scan registrados (%d)", len(report["scan_registered"]))
@@ -542,51 +597,43 @@ def register_blueprints(app: "Flask") -> Dict[str, List[str]]:
             log.info("⛔ Deshabilitados (ENV): %s", ", ".join(report["disabled"]))
 
         if report["failed_register"]:
-            log.warning(
-                "⚠️ Fallos al registrar (%d): %s",
-                len(report["failed_register"]),
-                " | ".join(report["failed_register"]),
-            )
+            log.warning("⚠️ Fallos al registrar (%d): %s", len(report["failed_register"]), " | ".join(report["failed_register"]))
 
-        if report["required_missing"]:
-            log.warning(
-                "⚠️ Required faltantes: %s", ", ".join(report["required_missing"])
-            )
+        if report.get("required_missing"):
+            log.warning("⚠️ Required faltantes: %s", ", ".join(report["required_missing"]))
 
-        # ✅ Mejora 15: debug dumps útiles
         if _routes_debug():
             if report["missing"]:
-                log.debug(
-                    "ℹ️ Missing (%d): %s",
-                    len(report["missing"]),
-                    " | ".join(report["missing"]),
-                )
+                log.debug("ℹ️ Missing (%d): %s", len(report["missing"]), " | ".join(report["missing"]))
             if report["invalid"]:
-                log.debug(
-                    "ℹ️ Invalid (%d): %s",
-                    len(report["invalid"]),
-                    " | ".join(report["invalid"]),
-                )
+                log.debug("ℹ️ Invalid (%d): %s", len(report["invalid"]), " | ".join(report["invalid"]))
             if report["duplicate"]:
-                log.debug(
-                    "ℹ️ Duplicados evitados (%d): %s",
-                    len(report["duplicate"]),
-                    " | ".join(report["duplicate"]),
-                )
+                log.debug("ℹ️ Duplicados evitados (%d): %s", len(report["duplicate"]), " | ".join(report["duplicate"]))
             if report["scan_skipped"]:
-                log.debug(
-                    "ℹ️ Scan skipped (%d): %s",
-                    len(report["scan_skipped"]),
-                    " | ".join(report["scan_skipped"]),
-                )
+                log.debug("ℹ️ Scan skipped (%d): %s", len(report["scan_skipped"]), " | ".join(report["scan_skipped"]))
             if report["imports_failed"]:
-                log.debug(
-                    "🧩 Imports fallidos (%d): %s",
-                    len(report["imports_failed"]),
-                    " | ".join(report["imports_failed"]),
-                )
+                # dedupe imports_failed
+                uniq = sorted(set(report["imports_failed"]))
+                report["imports_failed"] = uniq
+                log.debug("🧩 Imports fallidos (%d): %s", len(uniq), " | ".join(uniq))
     except Exception:
         pass
+
+    # NUEVO: timing + counts
+    dt_ms = int((time.perf_counter() - t0) * 1000)
+    report["timing_ms"] = dt_ms
+    report["counts"] = {
+        "registered": len(report["registered"]),
+        "scan_registered": len(report["scan_registered"]),
+        "disabled": len(report["disabled"]),
+        "failed_register": len(report["failed_register"]),
+        "missing": len(report["missing"]),
+        "invalid": len(report["invalid"]),
+        "duplicate": len(report["duplicate"]),
+        "scan_skipped": len(report["scan_skipped"]),
+        "imports_failed": len(report["imports_failed"]),
+        "required_missing": len(report.get("required_missing") or []),
+    }
 
     return report
 

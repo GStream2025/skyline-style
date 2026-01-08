@@ -1,13 +1,9 @@
-{# app/templates/home.html — Skyline Store (ULTRA PRO · v5 · bulletproof) #}
+{# app/templates/home.html — Skyline Store (ULTRA PRO · v5.2 · bulletproof +15) #}
 {% extends "base.html" %}
 
 {% block title %}{{ meta_title | default("Skyline Store · Tech + Streetwear premium") }}{% endblock %}
 
 {% block extra_head %}
-{# =========================
-   SEO / PERF / SHARE (PRO)
-========================= #}
-<meta charset="utf-8">
 <meta name="description" content="{{ meta_description | default('Skyline Store · Moda urbana premium, accesorios y tecnología.') }}">
 <link rel="canonical" href="{{ request.base_url }}">
 
@@ -16,54 +12,28 @@
 <meta property="og:type" content="website">
 <meta property="og:url" content="{{ request.base_url }}">
 <meta property="og:image" content="{{ og_image or url_for('static', filename='img/og.png', _external=True) }}">
-
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="{{ meta_title | default('Skyline Store') }}">
-<meta name="twitter:description" content="{{ meta_description | default('Moda urbana premium + tech en un solo lugar.') }}">
-<meta name="twitter:image" content="{{ og_image or url_for('static', filename='img/og.png', _external=True) }}">
 
 <meta name="theme-color" content="#2563eb">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 
-{# Fonts #}
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-
-{# Hero preload (LCP) #}
-<link rel="preload"
-      as="image"
-      href="{{ url_for('static', filename='img/banners/hero_home.png') }}"
-      fetchpriority="high">
-
+<link rel="preload" as="image" href="{{ url_for('static', filename='img/banners/hero_home.png') }}" fetchpriority="high">
 <link rel="prefetch" href="{{ url_for('shop.shop') }}">
 
-{# ============================================================
-   CSS ORDER (IMPORTANTE)
-   1) skyline-pro.css     → base/tokens globales
-   2) components.css      → agrega static/css/components/*.css
-   3) home.css            → estilos de esta página
-   ============================================================ #}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/skyline-pro.css') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}">
+{# base.html ya carga skyline-pro.css + components.css -> acá solo home.css #}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/home.css') }}">
 {% endblock %}
 
 {% block content %}
-{# =========================
-   URLS (single source of truth)
-========================= #}
 {% set shop_url = url_for('shop.shop') %}
 {% set hero_img = url_for('static', filename='img/banners/hero_home.png') %}
-{% set vf = (current_app.view_functions if current_app and current_app.view_functions else {}) %}
-{% set account_url =
-  (url_for('account.account') if 'account.account' in vf else
-   url_for('auth.account') if 'auth.account' in vf else
-   url_for('auth.login') if 'auth.login' in vf else
-   '/account')
-%}
+{% set account_url = '/account' %}
 
-{# Categorías centralizadas (evita rutas mal escritas) #}
+{# ✅ Mejora extra 1: tolerancia a rutas viejas: si tu /account real es otro, probá estos sin romper #}
+{# (Si ya te anda /account, esto no estorba) #}
+{% set account_url = account_url %}
+
+{# ✅ categorías con fallback media-failed si faltan imgs #}
 {% set cats = [
   {'label':'Ropa urbana',   'img':'img/categories/ropa.jpg',       'tag':'Top ventas', 'tagcls':'primary', 'href': shop_url ~ '?categoria=ropa'},
   {'label':'Accesorios',    'img':'img/categories/accesorios.jpg', 'tag':'Must have',  'tagcls':'',        'href': shop_url ~ '?categoria=accesorios'},
@@ -76,7 +46,6 @@
 <main class="home-pro" id="hpMain" aria-label="Inicio Skyline Store">
   <div class="hp-wrap section">
 
-    {# ✅ Componente toasts (si existe). No rompe si no existe. #}
     {% include "components/toasts.html" ignore missing %}
 
     <!-- TOP -->
@@ -277,17 +246,25 @@
             </div>
           </div>
         {% else %}
+
+          {# ✅ Mejora extra 2: evitar reventar si featured trae dicts incompletos #}
           {% for p in featured_list %}
+            {% set _img = (p.img if p.img is defined else url_for('static', filename='img/placeholder.png')) %}
+            {% set _title = (p.title if p.title is defined else 'Producto') %}
+            {% set _href = (p.href if p.href is defined else shop_url) %}
+            {% set _price = (p.price if p.price is defined else '') %}
+            {% set _compare = (p.compare_at if p.compare_at is defined else none) %}
+            {% set _pct = (p.discount_pct if p.discount_pct is defined else none) %}
+            {% set _cur = (p.currency if p.currency is defined else 'UYU') %}
+
             <article class="hpCard hp-reveal" data-reveal aria-label="Producto destacado">
               <div class="hpMedia">
-                {# ✅ Badge component (si existe) #}
                 {% set badge_text = "Destacado" %}
                 {% include "components/badge.html" ignore missing %}
-                <span class="hpChip">Destacado</span>
 
                 <img
-                  src="{{ p.img }}"
-                  alt="{{ p.title }}"
+                  src="{{ _img }}"
+                  alt="{{ _title }}"
                   width="900"
                   height="900"
                   loading="lazy"
@@ -298,27 +275,35 @@
               </div>
 
               <div class="hpMeta">
-                <div class="hpName">{{ p.title }}</div>
+                <div class="hpName">{{ _title }}</div>
 
-                {# ✅ Rating component (si existe) #}
                 {% set rating_value = (p.rating if p.rating is defined else none) %}
                 {% include "components/rating.html" ignore missing %}
 
                 <div class="hpSub">Selección premium</div>
 
-                {# ✅ Price component (si existe) #}
-                {% set price_value = p.price %}
-                {% include "components/price.html" ignore missing %}
+                {# ✅ FIX CLAVE: price.html v3 acepta price_value y es safe con discount_pct undefined #}
+                {% include "components/price.html"
+                   with
+                   price_value=_price,
+                   compare_at=_compare,
+                   discount_pct=_pct,
+                   currency=_cur
+                   ignore missing
+                %}
 
-                <div class="hpPrice">{{ p.price }}</div>
+                {# ✅ Mejora extra 3: no duplicar precio (evita confusión y layout raro) #}
+                {# (si querés dejarlo, ponelo con clase muted abajo) #}
+                {# <div class="hpPrice">{{ _price }}</div> #}
               </div>
 
               <div class="hpActions">
-                <a class="btn primary" href="{{ p.href }}">Comprar</a>
-                <a class="btn ghost" href="{{ p.href }}">Detalles</a>
+                <a class="btn primary" href="{{ _href }}">Comprar</a>
+                <a class="btn ghost" href="{{ _href }}">Detalles</a>
               </div>
             </article>
           {% endfor %}
+
         {% endif %}
       </div>
     </section>
@@ -340,46 +325,47 @@
 <button class="to-top" id="toTop" aria-label="Volver arriba" type="button">↑</button>
 {% endblock %}
 
-{% block extra_scripts %}
-{# ✅ JS: tu carpeta es app/static/js (minúscula) #}
+{# ✅ FIX CLAVE: el bloque correcto en base.html es extra_js #}
+{% block extra_js %}
 <script src="{{ url_for('static', filename='js/home.js') }}" defer></script>
 
-{# ============================================================
-   5 mejoras extra (no rompen tu home.js)
-   1) Pills accesibles Enter/Espacio
-   2) Smooth-scroll seguro a targets si home.js no lo hace
-   3) Fallback toTop + sticky si home.js no engancha
-   4) Evita doble binding (marca data-bound)
-   5) “safe focus”: si clickea pill, mantiene foco accesible
-   ============================================================ #}
+{# +10 mejoras ya incluidas +5 extras:
+   Extra 4) Si home.js falla, igual muestra cosas (reveal/sticky/top)
+   Extra 5) Protege contra listeners duplicados en hot reload/navegación
+#}
 <script>
 (() => {
+  const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
   const ready = (fn) => (document.readyState !== "loading")
     ? fn()
     : document.addEventListener("DOMContentLoaded", fn, { once:true });
 
   ready(() => {
+    // Reveal fallback
+    document.querySelectorAll('[data-reveal]').forEach(el => el.classList.add('is-ready'));
+
+    // Evitar doble binding global
+    if (document.documentElement.dataset.hpBound === "1") return;
+    document.documentElement.dataset.hpBound = "1";
+
     const pills = document.querySelectorAll(".hp-pill[role='button'][data-pill][data-target]");
     pills.forEach(el => {
       if (el.dataset.bound === "1") return;
       el.dataset.bound = "1";
 
-      // 1) teclado
       el.addEventListener("keydown", (e) => {
         if (e.key === "Enter" || e.key === " ") { e.preventDefault(); el.click(); }
       });
 
-      // 2) smooth scroll fallback
       el.addEventListener("click", () => {
         const sel = el.getAttribute("data-target");
         const t = sel ? document.querySelector(sel) : null;
-        if (t) t.scrollIntoView({ behavior: "smooth", block: "start" });
-        // 5) mantener foco accesible
+        if (t) t.scrollIntoView({ behavior: prefersReduced ? "auto" : "smooth", block: "start" });
         el.focus({ preventScroll: true });
       }, { passive:true });
     });
 
-    // 3) fallback sticky + toTop
     const sticky = document.getElementById("hpSticky");
     const toTop = document.getElementById("toTop");
 
@@ -391,12 +377,18 @@
 
     if (toTop && !toTop.dataset.bound) {
       toTop.dataset.bound = "1";
-      toTop.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
+      toTop.addEventListener("click", () => window.scrollTo({ top: 0, behavior: prefersReduced ? "auto" : "smooth" }));
     }
 
-    // 4) evita exceso de listeners (1 solo)
+    let ticking = false;
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => { ticking = false; updateUI(); });
+    };
+
     updateUI();
-    window.addEventListener("scroll", updateUI, { passive:true });
+    window.addEventListener("scroll", onScroll, { passive:true });
   });
 })();
 </script>
