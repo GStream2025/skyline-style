@@ -1,452 +1,123 @@
+{# app/templates/home.html — Skyline Store (ULTRA PRO · v5 · bulletproof) #}
 {% extends "base.html" %}
-{% block title %}Skyline Store · Tech + Streetwear premium{% endblock %}
+
+{% block title %}{{ meta_title | default("Skyline Store · Tech + Streetwear premium") }}{% endblock %}
 
 {% block extra_head %}
+{# =========================
+   SEO / PERF / SHARE (PRO)
+========================= #}
+<meta charset="utf-8">
 <meta name="description" content="{{ meta_description | default('Skyline Store · Moda urbana premium, accesorios y tecnología.') }}">
-<link rel="canonical" href="{{ request.url }}">
+<link rel="canonical" href="{{ request.base_url }}">
 
+<meta property="og:title" content="{{ meta_title | default('Skyline Store · Tech + Streetwear premium') }}">
+<meta property="og:description" content="{{ meta_description | default('Moda urbana y tecnología seleccionada. Experiencia rápida, segura y con soporte real.') }}">
+<meta property="og:type" content="website">
+<meta property="og:url" content="{{ request.base_url }}">
+<meta property="og:image" content="{{ og_image or url_for('static', filename='img/og.png', _external=True) }}">
+
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{{ meta_title | default('Skyline Store') }}">
+<meta name="twitter:description" content="{{ meta_description | default('Moda urbana premium + tech en un solo lugar.') }}">
+<meta name="twitter:image" content="{{ og_image or url_for('static', filename='img/og.png', _external=True) }}">
+
+<meta name="theme-color" content="#2563eb">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+{# Fonts #}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 
-<link rel="preload" as="image" href="{{ url_for('static', filename='img/banners/hero_home.png') }}">
+{# Hero preload (LCP) #}
+<link rel="preload"
+      as="image"
+      href="{{ url_for('static', filename='img/banners/hero_home.png') }}"
+      fetchpriority="high">
+
 <link rel="prefetch" href="{{ url_for('shop.shop') }}">
 
-<style>
-/* ======================================================================
-   HOME — SKYLINE PRO (v2 UPDATED)
-   ✅ NO duplica header search (home usa hint)
-   ✅ “Trust + conversion” boosters (sin verse cargado)
-   ✅ Featured usa component-card feel (clamps + hover + focus)
-   ✅ A11y pro: focus visible, aria-labels, reduce motion
-   ✅ Fixes: sticky CTA no tapa toasts, toTop no pelea con sticky
-====================================================================== */
-
-.home-pro{padding:22px 0 34px}
-.home-pro .sr-only{
-  position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;
-  overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0
-}
-
-/* Compat (solo en home): soporta clases previas */
-.home-pro .btn-primary{color:#fff;background:linear-gradient(135deg,var(--p),var(--p2));border:1px solid transparent}
-.home-pro .btn-soft{background:rgba(255,255,255,.86);border:1px solid var(--border);color:var(--ink)}
-@media(prefers-color-scheme:dark){.home-pro .btn-soft{background:rgba(255,255,255,.06)}}
-.home-pro .btn-ghost{background:transparent;border:1px solid var(--border);color:var(--ink)}
-
-/* Backdrop local (más pro) */
-.home-pro .hp-wrap{position:relative}
-.home-pro .hp-wrap::before{
-  content:"";
-  position:absolute;inset:-160px -80px auto -80px;height:560px;
-  background:
-    radial-gradient(980px 520px at 12% 25%, rgba(37,99,235,.18), transparent 62%),
-    radial-gradient(980px 520px at 88% 20%, rgba(6,182,212,.14), transparent 62%),
-    radial-gradient(980px 620px at 52% 96%, rgba(245,158,11,.12), transparent 62%);
-  filter: blur(10px);
-  opacity:.95;
-  pointer-events:none;
-}
-
-/* TOP STRIP */
-.hp-top{
-  display:flex;align-items:flex-start;justify-content:space-between;gap:18px;
-  margin:0 0 18px;
-}
-.hp-badges{display:flex;gap:10px;flex-wrap:wrap}
-.hp-badge{
-  display:inline-flex;align-items:center;gap:10px;
-  padding:9px 12px;border-radius:999px;
-  background: rgba(255,255,255,.82);
-  border:1px solid var(--border);
-  box-shadow: var(--sh1);
-  font-weight:950;letter-spacing:.12em;text-transform:uppercase;font-size:.70rem;
-  color:rgba(10,16,32,.70);
-  transition: transform var(--t), box-shadow var(--t), background var(--t);
-}
-@media(prefers-color-scheme:dark){
-  .hp-badge{background: rgba(255,255,255,.06); box-shadow:none; color: rgba(238,242,255,.75)}
-}
-.hp-badge:hover{transform:translateY(-2px);box-shadow:var(--sh2)}
-.hp-dot{
-  width:9px;height:9px;border-radius:999px;
-  background: linear-gradient(135deg, var(--p), var(--p2));
-  box-shadow:0 12px 24px rgba(37,99,235,.22);
-}
-.hp-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
-.hp-action{
-  display:inline-flex;align-items:center;gap:10px;
-  padding:10px 12px;border-radius:16px;
-  background: rgba(255,255,255,.78);
-  border:1px solid var(--border);
-  box-shadow: var(--sh1);
-  font-weight:950;color:rgba(10,16,32,.78);
-  transition: transform var(--t), box-shadow var(--t), background var(--t);
-}
-@media(prefers-color-scheme:dark){
-  .hp-action{background: rgba(255,255,255,.06); box-shadow:none; color: rgba(238,242,255,.78)}
-}
-.hp-action:hover{transform:translateY(-2px);box-shadow:var(--sh2);background:rgba(255,255,255,.92)}
-@media(prefers-color-scheme:dark){.hp-action:hover{background:rgba(255,255,255,.08)}}
-.hp-action .mini{
-  width:8px;height:8px;border-radius:999px;
-  background: linear-gradient(135deg, var(--acc), var(--p2));
-  box-shadow:0 10px 18px rgba(245,158,11,.18);
-}
-
-/* Right hint */
-.hp-hint{
-  border-radius: 18px;
-  border: 1px solid var(--border);
-  background: rgba(255,255,255,.78);
-  box-shadow: var(--sh1);
-  padding: 12px 14px;
-  max-width: 420px;
-}
-@media(prefers-color-scheme:dark){.hp-hint{background: rgba(255,255,255,.06); box-shadow:none}}
-.hp-hint b{font-weight:1000}
-.hp-hint .k{
-  font-weight:1000;padding:2px 8px;border-radius:999px;
-  border:1px solid var(--border);
-  background:rgba(255,255,255,.72)
-}
-@media(prefers-color-scheme:dark){.hp-hint .k{background:rgba(255,255,255,.06)}}
-
-@media(max-width:1020px){
-  .hp-top{flex-direction:column;align-items:stretch}
-  .hp-hint{max-width:none}
-}
-
-/* HERO + TRUST GRID */
-.hp-heroGrid{
-  display:grid;gap:18px;
-  grid-template-columns: 1fr 420px;
-  align-items:stretch;
-}
-@media(max-width:980px){.hp-heroGrid{grid-template-columns:1fr}}
-
-/* HERO */
-.hp-heroMain{
-  position:relative;
-  border-radius: var(--r-xl);
-  overflow:hidden;
-  border:1px solid var(--border);
-  box-shadow: var(--sh2);
-  background: rgba(255,255,255,.74);
-  min-height: 460px;
-  isolation:isolate;
-}
-@media(prefers-color-scheme:dark){.hp-heroMain{background: rgba(9,12,24,.62); box-shadow:none}}
-.hp-heroMedia{position:absolute;inset:0;z-index:0}
-.hp-heroMedia img{
-  width:100%;height:100%;object-fit:cover;
-  transform: scale(1.06);
-  filter: saturate(1.05) contrast(1.06) brightness(.98);
-  transition: transform .9s var(--ease), filter .9s var(--ease);
-}
-.hp-heroShade{
-  position:absolute;inset:0;z-index:1;
-  background:
-    radial-gradient(900px 520px at 50% 12%, rgba(255,255,255,.18), transparent 60%),
-    linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.78));
-}
-@media(prefers-color-scheme:dark){
-  .hp-heroShade{
-    background:
-      radial-gradient(900px 520px at 50% 12%, rgba(255,255,255,.06), transparent 60%),
-      linear-gradient(180deg, rgba(0,0,0,.10), rgba(0,0,0,.48));
-  }
-}
-.hp-heroInner{
-  position:relative;z-index:2;
-  height:100%;
-  padding: clamp(18px, 2.8vw, 28px);
-  display:grid;gap:14px;
-  align-content:end;
-}
-.hp-kicker{
-  display:inline-flex;align-items:center;gap:10px;
-  padding:8px 12px;border-radius:999px;
-  background: rgba(255,255,255,.86);
-  border:1px solid rgba(10,16,32,.10);
-  box-shadow: var(--sh1);
-  font-weight:950;letter-spacing:.16em;text-transform:uppercase;font-size:.70rem;
-  color:rgba(10,16,32,.70);
-  width:fit-content;
-}
-@media(prefers-color-scheme:dark){.hp-kicker{background: rgba(255,255,255,.08); color: rgba(238,242,255,.78); box-shadow:none}}
-.hp-kicker .dot{
-  width:9px;height:9px;border-radius:999px;
-  background: linear-gradient(90deg, var(--good), var(--p2));
-  box-shadow: 0 14px 30px rgba(22,163,74,.18);
-}
-.hp-title{
-  margin:0;
-  font-size:clamp(2.25rem, 3.6vw, 3.4rem);
-  line-height:1.01;
-  letter-spacing:-.048em;
-  font-weight:1000;
-  color: var(--ink);
-  text-shadow: 0 18px 60px rgba(10,16,32,.12);
-}
-.hp-title .grad{
-  background:linear-gradient(135deg, var(--p), var(--p2));
-  -webkit-background-clip:text;background-clip:text;color:transparent;
-}
-.hp-sub{
-  max-width:62ch;margin:0;
-  font-size:1.05rem;
-  color: var(--muted);
-  font-weight:700;
-}
-.hp-ctas{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px}
-.hp-ctas .btn{border-radius:999px;padding:12px 14px;font-weight:1000}
-.hp-proof{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px}
-.hp-pill{
-  display:inline-flex;align-items:center;gap:8px;
-  padding:9px 11px;border-radius:999px;
-  background: rgba(255,255,255,.82);
-  border:1px solid rgba(10,16,32,.10);
-  box-shadow: var(--sh1);
-  font-weight:950;font-size:.86rem;color:rgba(10,16,32,.74);
-}
-@media(prefers-color-scheme:dark){
-  .hp-pill{background: rgba(255,255,255,.06); box-shadow:none; color: rgba(238,242,255,.78); border-color: rgba(148,163,184,.18)}
-}
-.hp-pill .p{width:8px;height:8px;border-radius:999px;background:linear-gradient(135deg,var(--p),var(--p2))}
-
-/* TRUST */
-.hp-trust{
-  border-radius: var(--r-xl);
-  border:1px solid var(--border);
-  background: rgba(255,255,255,.82);
-  box-shadow: var(--sh1);
-  overflow:hidden;
-}
-@media(prefers-color-scheme:dark){.hp-trust{background: rgba(9,12,24,.62); box-shadow:none}}
-.hp-trust .inner{padding:18px}
-.hp-trust .row{display:flex;align-items:center;justify-content:space-between;gap:12px}
-.hp-secure{
-  display:inline-flex;align-items:center;gap:8px;
-  padding:7px 10px;border-radius:999px;
-  background:rgba(22,163,74,.12);
-  border:1px solid rgba(22,163,74,.20);
-  color:rgba(22,163,74,.95);
-  font-weight:950;font-size:.78rem;
-}
-.hp-trust .title{font-weight:1000;font-size:1.1rem;margin:0}
-.hp-trust .muted{color:var(--muted);font-weight:700;margin:6px 0 12px}
-.hp-trust .ctaRow{display:flex;gap:10px;flex-wrap:wrap}
-.hp-trust .ctaRow .btn{flex:1;border-radius:14px;padding:11px 12px;font-weight:1000}
-.hp-trust .miniList{margin-top:14px;padding:12px;border-radius:18px;border:1px solid var(--border);background:rgba(255,255,255,.70)}
-@media(prefers-color-scheme:dark){.hp-trust .miniList{background:rgba(255,255,255,.06)}}
-.hp-trust .miniList b{font-weight:1000}
-
-/* NEW: “mini trust icons row” (confianza rápida) */
-.hp-trustIcons{
-  display:grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap:10px;
-  margin-top:12px;
-}
-.hp-ti{
-  border-radius:16px;
-  border:1px solid var(--border);
-  background:rgba(255,255,255,.72);
-  padding:10px 10px;
-  box-shadow: var(--sh1);
-}
-@media(prefers-color-scheme:dark){
-  .hp-ti{background:rgba(255,255,255,.06); box-shadow:none}
-}
-.hp-ti b{display:block;font-weight:1000;font-size:.92rem}
-.hp-ti span{display:block;color:var(--muted);font-weight:700;font-size:.82rem}
-
-/* Categories grid */
-.hp-catsGrid{
-  display:grid;gap:12px;margin-top:12px;
-  grid-template-columns: repeat(2, 1fr);
-}
-@media(min-width:980px){.hp-catsGrid{grid-template-columns: repeat(4, 1fr);gap:14px}}
-.hp-cat{
-  display:flex;align-items:center;gap:10px;
-  padding:14px 14px;border-radius:18px;
-  border:1px solid var(--border);
-  background: rgba(255,255,255,.86);
-  box-shadow: var(--sh1);
-  transition: transform var(--t), box-shadow var(--t), border-color var(--t);
-}
-@media(prefers-color-scheme:dark){.hp-cat{background: rgba(255,255,255,.06); box-shadow:none}}
-.hp-cat:hover{transform:translateY(-4px);box-shadow:var(--sh2);border-color:rgba(37,99,235,.22)}
-.hp-ico{
-  width:40px;height:40px;border-radius:14px;
-  background: linear-gradient(135deg, rgba(37,99,235,.14), rgba(6,182,212,.10));
-  border:1px solid rgba(37,99,235,.14);
-  display:grid;place-items:center;font-weight:1000;
-}
-.hp-cat b{font-weight:1000}
-.hp-cat span{display:block;font-size:.9rem;color:var(--muted)}
-
-/* FEATURED header */
-.hp-head{
-  display:flex;align-items:flex-end;justify-content:space-between;gap:14px;
-  margin:24px 0 12px;
-}
-.hp-head .sub{color:var(--muted);font-weight:800}
-
-/* NEW: “section banner” (micro marca) */
-.hp-banner{
-  margin-top:18px;
-  border-radius: var(--r-xl);
-  border:1px solid var(--border);
-  background:
-    radial-gradient(900px 520px at 20% 20%, rgba(37,99,235,.14), transparent 60%),
-    radial-gradient(900px 520px at 88% 18%, rgba(6,182,212,.12), transparent 62%),
-    linear-gradient(135deg, rgba(255,255,255,.86), rgba(255,255,255,.70));
-  box-shadow: var(--sh1);
-  padding: 14px 14px;
-  display:flex;align-items:center;justify-content:space-between;gap:12px;
-}
-@media(prefers-color-scheme:dark){
-  .hp-banner{
-    background:
-      radial-gradient(900px 520px at 20% 20%, rgba(37,99,235,.18), transparent 60%),
-      radial-gradient(900px 520px at 88% 18%, rgba(6,182,212,.16), transparent 62%),
-      linear-gradient(135deg, rgba(9,12,24,.70), rgba(9,12,24,.56));
-    box-shadow:none;
-  }
-}
-.hp-banner b{font-weight:1000}
-.hp-banner .small{margin:0}
-.hp-banner .btn{border-radius:999px}
-
-/* Products grid */
-.hpGrid{margin-top:12px}
-
-/* Product card pro */
-.hpCard{
-  border-radius: calc(var(--r-lg) + 2px);
-  border: 1px solid rgba(10,16,32,.10);
-  background: linear-gradient(180deg, rgba(255,255,255,.96), rgba(255,255,255,.86));
-  box-shadow: var(--sh1);
-  overflow:hidden;
-  transition: transform var(--t), box-shadow var(--t), border-color var(--t), filter var(--t);
-}
-@media(prefers-color-scheme:dark){
-  .hpCard{
-    border-color: rgba(148,163,184,.18);
-    background: linear-gradient(180deg, rgba(12,16,34,.88), rgba(12,16,34,.78));
-    box-shadow:none;
-  }
-}
-.hpCard:hover{transform:translateY(-8px);box-shadow:var(--sh2);border-color:rgba(37,99,235,.22);filter:saturate(1.05)}
-.hpMedia{position:relative;aspect-ratio: 1/1;overflow:hidden;background:rgba(255,255,255,.55)}
-@media(prefers-color-scheme:dark){.hpMedia{background:rgba(255,255,255,.04)}}
-.hpMedia img{width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity var(--t), transform .65s var(--ease)}
-.hpCard:hover .hpMedia img{transform:scale(1.08);opacity:1}
-.hpChip{
-  position:absolute;left:10px;top:10px;
-  padding:8px 10px;border-radius:999px;
-  background: rgba(255,255,255,.78);
-  border:1px solid var(--border);
-  font-weight:1000;font-size:.8rem;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-}
-@media(prefers-color-scheme:dark){.hpChip{background: rgba(9,12,24,.62)}}
-.hpMeta{padding:12px 12px 14px;display:grid;gap:8px}
-.hpName{
-  font-weight:1000;line-height:1.15;
-  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden
-}
-.hpSub{font-size:.88rem;color:var(--muted);font-weight:700}
-.hpPrice{font-weight:1000;font-size:1.08rem;color:var(--ink)}
-.hpActions{display:flex;gap:10px;padding:0 12px 14px}
-.hpActions .btn{flex:1;border-radius:14px;padding:11px 12px;font-weight:1000}
-
-/* Skeletons */
-.hp-skel{
-  position:relative;overflow:hidden;
-  border-radius: 18px;border:1px solid rgba(10,16,32,.10);
-  background: rgba(255,255,255,.78);
-  box-shadow: var(--sh1);
-  height: 420px;
-}
-@media(prefers-color-scheme:dark){.hp-skel{background: rgba(255,255,255,.06); box-shadow:none}}
-.hp-skel::before{
-  content:"";position:absolute;inset:0;
-  background: linear-gradient(90deg, rgba(255,255,255,.0), rgba(255,255,255,.55), rgba(255,255,255,.0));
-  transform: translateX(-60%);
-  animation: hpShimmer 1.15s infinite;
-  opacity:.9;
-}
-@keyframes hpShimmer{to{transform: translateX(60%)}}
-
-/* Reveal */
-.hp-reveal{opacity:0;transform:translateY(10px);transition: opacity .55s var(--ease), transform .55s var(--ease)}
-.hp-reveal.is-in{opacity:1;transform:translateY(0)}
-
-/* ToTop */
-.to-top{
-  position:fixed;right:18px;bottom:18px;
-  width:46px;height:46px;border-radius:16px;
-  border:1px solid rgba(10,16,32,.12);
-  background:rgba(255,255,255,.78);
-  box-shadow:var(--sh2);
-  cursor:pointer;display:none;font-weight:1000;
-  transition: transform var(--t), box-shadow var(--t), background var(--t);
-  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-  z-index:80;
-}
-@media(prefers-color-scheme:dark){.to-top{background: rgba(9,12,24,.62); box-shadow:none}}
-.to-top:hover{transform:translateY(-2px)}
-
-/* Sticky CTA: deja espacio para TOASTS y no tapa el ToTop */
-#hpSticky{z-index:70}
-@media(max-width:720px){
-  #hpSticky.is-on{display:flex}
-}
-
-/* Focus visible (scoped) */
-.home-pro a:focus-visible,
-.home-pro button:focus-visible{
-  outline:none;
-  box-shadow: 0 0 0 7px rgba(37,99,235,.18);
-  border-radius: 16px;
-}
-
-/* Reduce motion */
-@media(prefers-reduced-motion:reduce){
-  .hp-badge,.hp-action,.hpCard,.hp-reveal,.to-top,
-  .hp-heroMedia img,.hp-skel::before{transition:none!important;animation:none!important}
-}
-</style>
+{# ============================================================
+   CSS ORDER (IMPORTANTE)
+   1) skyline-pro.css     → base/tokens globales
+   2) components.css      → agrega static/css/components/*.css
+   3) home.css            → estilos de esta página
+   ============================================================ #}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/skyline-pro.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/home.css') }}">
 {% endblock %}
 
 {% block content %}
-<section class="home-pro">
+{# =========================
+   URLS (single source of truth)
+========================= #}
+{% set shop_url = url_for('shop.shop') %}
+{% set hero_img = url_for('static', filename='img/banners/hero_home.png') %}
+{% set vf = (current_app.view_functions if current_app and current_app.view_functions else {}) %}
+{% set account_url =
+  (url_for('account.account') if 'account.account' in vf else
+   url_for('auth.account') if 'auth.account' in vf else
+   url_for('auth.login') if 'auth.login' in vf else
+   '/account')
+%}
+
+{# Categorías centralizadas (evita rutas mal escritas) #}
+{% set cats = [
+  {'label':'Ropa urbana',   'img':'img/categories/ropa.jpg',       'tag':'Top ventas', 'tagcls':'primary', 'href': shop_url ~ '?categoria=ropa'},
+  {'label':'Accesorios',    'img':'img/categories/accesorios.jpg', 'tag':'Must have',  'tagcls':'',        'href': shop_url ~ '?categoria=accesorios'},
+  {'label':'Tecnología',    'img':'img/categories/tech.jpg',       'tag':'Nuevo',      'tagcls':'',        'href': shop_url ~ '?categoria=tecnologia'},
+  {'label':'Ofertas',       'img':'img/categories/ofertas.jpg',    'tag':'Flash',      'tagcls':'primary', 'href': shop_url ~ '?q=oferta'},
+] %}
+
+<a class="sr-only" href="#hpMain">Saltar al contenido</a>
+
+<main class="home-pro" id="hpMain" aria-label="Inicio Skyline Store">
   <div class="hp-wrap section">
+
+    {# ✅ Componente toasts (si existe). No rompe si no existe. #}
+    {% include "components/toasts.html" ignore missing %}
 
     <!-- TOP -->
     <section class="hp-top" aria-label="Beneficios y accesos">
       <div>
         <div class="hp-badges" aria-label="Beneficios">
-          <span class="hp-badge"><span class="hp-dot"></span> Envío rápido</span>
-          <span class="hp-badge"><span class="hp-dot"></span> Pago seguro</span>
-          <span class="hp-badge"><span class="hp-dot"></span> Soporte real</span>
-          <span class="hp-badge"><span class="hp-dot"></span> Compra protegida</span>
+          <span class="hp-badge"><span class="hp-dot" aria-hidden="true"></span> Envío rápido</span>
+          <span class="hp-badge"><span class="hp-dot" aria-hidden="true"></span> Pago seguro</span>
+          <span class="hp-badge"><span class="hp-dot" aria-hidden="true"></span> Soporte real</span>
+          <span class="hp-badge"><span class="hp-dot" aria-hidden="true"></span> Compra protegida</span>
         </div>
 
-        <div class="hp-actions" aria-label="Accesos rápidos">
-          <a class="hp-action" href="{{ url_for('shop.shop') }}?sort=new"><span class="mini"></span> Novedades</a>
-          <a class="hp-action" href="{{ url_for('shop.shop') }}?q=oferta"><span class="mini"></span> Ofertas</a>
-          <a class="hp-action" href="{{ url_for('shop.shop') }}"><span class="mini"></span> Ver todo</a>
-        </div>
+        <nav class="hp-actions" aria-label="Accesos rápidos">
+          <a class="hp-action" href="{{ shop_url }}?sort=new"><span class="mini" aria-hidden="true"></span> Novedades</a>
+          <a class="hp-action" href="{{ shop_url }}?q=oferta"><span class="mini" aria-hidden="true"></span> Ofertas</a>
+          <a class="hp-action" href="{{ shop_url }}"><span class="mini" aria-hidden="true"></span> Ver todo</a>
+        </nav>
       </div>
 
-      <div class="hp-hint" aria-label="Consejo de búsqueda">
-        <b>Tip:</b> usá <span class="k">/</span> para enfocarte en el buscador del header y encontrar productos en 1 segundo.
-        <div style="margin-top:8px" class="small">La búsqueda principal está arriba (más pro, sin duplicados).</div>
+      <aside class="hp-hint" aria-label="Consejo de búsqueda">
+        <b>Tip:</b> usá <span class="k" aria-label="barra">/</span> para enfocarte en el buscador del header y encontrar productos en 1 segundo.
+        <div class="small" style="margin-top:8px">La búsqueda principal está arriba (sin duplicados).</div>
+      </aside>
+    </section>
+
+    <noscript>
+      <section class="hp-banner" style="margin-top:12px" aria-label="Aviso">
+        <div>
+          <b>Tip:</b> Activá JavaScript para animaciones, sticky CTA y reveal.
+          <p class="small">La tienda igual funciona perfecta.</p>
+        </div>
+      </section>
+    </noscript>
+
+    <!-- MINI SLIDER -->
+    <section class="hp-miniSlider hp-reveal" data-reveal aria-label="Ofertas rápidas">
+      <div class="hp-miniTrack" id="hpMiniTrack" role="list" aria-label="Atajos rápidos">
+        <a class="hp-miniItem" role="listitem" href="{{ shop_url }}?q=oferta">🔥 Ofertas reales hoy</a>
+        <a class="hp-miniItem" role="listitem" href="{{ shop_url }}?sort=new">🆕 Novedades premium</a>
+        <a class="hp-miniItem" role="listitem" href="{{ shop_url }}?categoria=tecnologia">⌚ Tech trending</a>
+        <a class="hp-miniItem" role="listitem" href="{{ shop_url }}">🚚 Envío rápido + soporte</a>
       </div>
     </section>
 
@@ -454,59 +125,67 @@
     <section class="hp-heroGrid" aria-label="Hero principal y confianza">
 
       <!-- HERO -->
-      <div class="hp-heroMain hp-reveal" data-reveal>
+      <header class="hp-heroMain hp-reveal" data-reveal aria-label="Presentación principal">
         <div class="hp-heroMedia" aria-hidden="true">
           <img
             id="hpHeroImg"
-            src="{{ url_for('static', filename='img/banners/hero_home.png') }}"
+            src="{{ hero_img }}"
             alt=""
+            width="1600"
+            height="900"
             loading="eager"
             decoding="async"
+            fetchpriority="high"
+            referrerpolicy="no-referrer"
+            onerror="this.onerror=null; this.style.display='none'; this.parentElement.classList.add('media-failed');"
           >
         </div>
+
         <div class="hp-heroShade" aria-hidden="true"></div>
 
         <div class="hp-heroInner">
-          <span class="hp-kicker"><span class="dot"></span> TEMPORADA 2026</span>
-          <h1 class="hp-title">Streetwear <span class="grad">premium</span> + Tech</h1>
-          <p class="hp-sub">Moda urbana y tecnología seleccionada. Experiencia tipo marketplace: rápida, segura y con soporte real.</p>
+          <span class="hp-kicker"><span class="dot" aria-hidden="true"></span> TEMPORADA 2026</span>
 
-          <div class="hp-ctas">
-            <a href="{{ url_for('shop.shop') }}" class="btn primary">Comprar ahora</a>
-            <a href="{{ url_for('shop.shop') }}?q=oferta" class="btn ghost">Ver ofertas</a>
-            <a href="{{ url_for('shop.shop') }}?sort=new" class="btn ghost">Novedades</a>
+          <h1 class="hp-title">Streetwear <span class="grad">premium</span> + Tech</h1>
+
+          <p class="hp-sub">
+            Moda urbana y tecnología seleccionada. Experiencia tipo marketplace: rápida, segura y con soporte real.
+          </p>
+
+          <div class="hp-ctas" aria-label="Acciones principales">
+            <a href="{{ shop_url }}" class="btn primary" aria-label="Comprar ahora">Comprar ahora</a>
+            <a href="{{ shop_url }}?q=oferta" class="btn ghost" aria-label="Ver ofertas">Ver ofertas</a>
+            <a href="{{ shop_url }}?sort=new" class="btn ghost" aria-label="Ver novedades">Novedades</a>
           </div>
 
-          <div class="hp-proof" aria-label="Confianza rápida">
-            <span class="hp-pill"><span class="p"></span> Checkout optimizado</span>
-            <span class="hp-pill"><span class="p"></span> Envíos rápidos</span>
-            <span class="hp-pill"><span class="p"></span> Atención real</span>
+          <div class="hp-proof" aria-label="Ventajas rápidas">
+            <span class="hp-pill" data-pill data-target="#hpGrid" role="button" tabindex="0"><span class="p" aria-hidden="true"></span> Checkout optimizado</span>
+            <span class="hp-pill" data-pill data-target="#hpGrid" role="button" tabindex="0"><span class="p" aria-hidden="true"></span> Envíos rápidos</span>
+            <span class="hp-pill" data-pill data-target="#hpGrid" role="button" tabindex="0"><span class="p" aria-hidden="true"></span> Atención real</span>
           </div>
         </div>
-      </div>
+      </header>
 
       <!-- TRUST -->
       <aside class="hp-trust hp-reveal" data-reveal aria-label="Seguridad y cuenta">
         <div class="inner">
           <div class="row">
             <p class="title">Compra segura</p>
-            <span class="hp-secure">● Verificado</span>
+            <span class="hp-secure" aria-label="Estado verificado">● Verificado</span>
           </div>
+
           <p class="muted">Accedé a pedidos, favoritos y cupones. Tu cuenta está protegida.</p>
 
-          <div class="ctaRow">
-            <a class="btn primary" href="/account">Ingresar</a>
-            <a class="btn ghost" href="/account">Crear cuenta</a>
+          <div class="ctaRow" aria-label="Acciones de cuenta">
+            <a class="btn primary" href="{{ account_url }}">Ingresar</a>
+            <a class="btn ghost" href="{{ account_url }}">Crear cuenta</a>
           </div>
 
           <div class="miniList">
             <b>Incluye</b>
-            <div class="small" style="margin-top:6px">
-              Seguimiento de pedidos · cupones · drops exclusivos · soporte
-            </div>
+            <div class="small" style="margin-top:6px">Seguimiento de pedidos · cupones · drops exclusivos · soporte</div>
           </div>
 
-          <!-- NEW: confianza visual rápida -->
           <div class="hp-trustIcons" aria-label="Garantías rápidas">
             <div class="hp-ti"><b>🔒 Seguro</b><span>Pagos protegidos</span></div>
             <div class="hp-ti"><b>🚚 Envío</b><span>Con seguimiento</span></div>
@@ -521,16 +200,15 @@
           </div>
         </div>
       </aside>
-
     </section>
 
-    <!-- NEW: micro banner de marca (convierte mucho) -->
+    <!-- Banner -->
     <section class="hp-banner hp-reveal" data-reveal aria-label="Mensaje de marca">
       <div>
         <b>Skyline Store</b>
         <p class="small">Drops premium · ofertas reales · experiencia rápida y segura</p>
       </div>
-      <a class="btn primary" href="{{ url_for('shop.shop') }}?q=oferta">Ver ofertas</a>
+      <a class="btn primary" href="{{ shop_url }}?q=oferta" aria-label="Ver ofertas">Ver ofertas</a>
     </section>
 
     <!-- CATEGORIES -->
@@ -540,27 +218,36 @@
           <h2 class="hp-reveal" data-reveal>Categorías</h2>
           <div class="sub hp-reveal" data-reveal>Encontrá rápido lo que buscás</div>
         </div>
-        <a class="btn ghost hp-reveal" data-reveal href="{{ url_for('shop.shop') }}">Ver todo →</a>
+        <a class="btn ghost hp-reveal" data-reveal href="{{ shop_url }}">Ver todo →</a>
       </div>
 
-      <div class="hp-catsGrid">
-        <a class="hp-cat hp-reveal" data-reveal href="{{ url_for('shop.shop') }}?categoria=ropa">
-          <span class="hp-ico">👕</span>
-          <div><b>Ropa urbana</b><span>Lo más vendido</span></div>
+      <div class="hp-catsGrid hp-catsGrid--media" aria-label="Grilla de categorías">
+        {% for c in cats %}
+        <a class="hp-catCard hp-reveal" data-reveal href="{{ c.href }}">
+          <div class="media">
+            <img
+              src="{{ url_for('static', filename=c.img) }}"
+              alt="{{ c.label }}"
+              width="640"
+              height="480"
+              loading="lazy"
+              decoding="async"
+              referrerpolicy="no-referrer"
+              onerror="this.onerror=null; this.classList.add('img-failed'); this.parentElement.classList.add('media-failed');"
+            >
+          </div>
+          <div class="body">
+            <div class="label">{{ c.label }}</div>
+            <div class="meta">Explorá ahora</div>
+            <span class="tag {{ c.tagcls }}">{{ c.tag }}</span>
+          </div>
         </a>
-        <a class="hp-cat hp-reveal" data-reveal href="{{ url_for('shop.shop') }}?categoria=accesorios">
-          <span class="hp-ico">🧢</span>
-          <div><b>Accesorios</b><span>Street essentials</span></div>
-        </a>
-        <a class="hp-cat hp-reveal" data-reveal href="{{ url_for('shop.shop') }}?categoria=tecnologia">
-          <span class="hp-ico">⌚</span>
-          <div><b>Tecnología</b><span>Gadgets premium</span></div>
-        </a>
-        <a class="hp-cat hp-reveal" data-reveal href="{{ url_for('shop.shop') }}?q=oferta">
-          <span class="hp-ico">🔥</span>
-          <div><b>Ofertas</b><span>Descuentos reales</span></div>
-        </a>
+        {% endfor %}
       </div>
+
+      <p class="small" style="margin:10px 0 0; color:var(--muted)">
+        *Si todavía no tenés estas imágenes, igual se ve pro: el bloque <b>media</b> queda con degradado automático.
+      </p>
     </section>
 
     <!-- FEATURED -->
@@ -570,36 +257,59 @@
           <h2 class="hp-reveal" data-reveal>Destacados</h2>
           <div class="sub hp-reveal" data-reveal>Selección premium curada para vos</div>
         </div>
-        <a class="btn ghost hp-reveal" data-reveal href="{{ url_for('shop.shop') }}">Ver todo →</a>
+        <a class="btn ghost hp-reveal" data-reveal href="{{ shop_url }}">Ver todo →</a>
       </div>
 
       {% set featured_list = featured if featured is defined else [] %}
 
       <div class="gridP" id="hpGrid">
         {% if featured_list|length == 0 %}
-          <div class="hp-skel"></div>
-          <div class="hp-skel"></div>
-          <div class="hp-skel"></div>
-          <div class="hp-skel"></div>
+          <div class="hp-skel" aria-hidden="true"></div>
+          <div class="hp-skel" aria-hidden="true"></div>
+          <div class="hp-skel" aria-hidden="true"></div>
+          <div class="hp-skel" aria-hidden="true"></div>
 
           <div class="card" style="grid-column:1 / -1; padding:18px">
             <h3 style="margin:0 0 6px">Todavía no hay productos destacados</h3>
             <p style="margin:0">Cargalos desde Admin → Productos y van a aparecer acá automáticamente.</p>
             <div style="margin-top:12px">
-              <a class="btn primary" href="{{ url_for('shop.shop') }}">Ir a la tienda</a>
+              <a class="btn primary" href="{{ shop_url }}">Ir a la tienda</a>
             </div>
           </div>
         {% else %}
           {% for p in featured_list %}
             <article class="hpCard hp-reveal" data-reveal aria-label="Producto destacado">
               <div class="hpMedia">
+                {# ✅ Badge component (si existe) #}
+                {% set badge_text = "Destacado" %}
+                {% include "components/badge.html" ignore missing %}
                 <span class="hpChip">Destacado</span>
-                <img src="{{ p.img }}" alt="{{ p.title }}" loading="lazy" decoding="async" onload="this.style.opacity=1">
+
+                <img
+                  src="{{ p.img }}"
+                  alt="{{ p.title }}"
+                  width="900"
+                  height="900"
+                  loading="lazy"
+                  decoding="async"
+                  referrerpolicy="no-referrer"
+                  onerror="this.onerror=null; this.classList.add('img-failed'); this.parentElement.classList.add('media-failed');"
+                >
               </div>
 
               <div class="hpMeta">
                 <div class="hpName">{{ p.title }}</div>
+
+                {# ✅ Rating component (si existe) #}
+                {% set rating_value = (p.rating if p.rating is defined else none) %}
+                {% include "components/rating.html" ignore missing %}
+
                 <div class="hpSub">Selección premium</div>
+
+                {# ✅ Price component (si existe) #}
+                {% set price_value = p.price %}
+                {% include "components/price.html" ignore missing %}
+
                 <div class="hpPrice">{{ p.price }}</div>
               </div>
 
@@ -614,7 +324,7 @@
     </section>
 
   </div>
-</section>
+</main>
 
 <!-- Sticky CTA (mobile) -->
 <div class="sticky-cta" id="hpSticky" aria-label="Acción rápida">
@@ -623,79 +333,71 @@
       <b>Skyline Store</b>
       <p class="small">Explorá ofertas y drops premium</p>
     </div>
-    <a class="cta-btn" href="{{ url_for('shop.shop') }}">Comprar</a>
+    <a class="cta-btn" href="{{ shop_url }}" aria-label="Ir a comprar">Comprar</a>
   </div>
 </div>
 
-<button class="to-top" id="toTop" aria-label="Volver arriba">↑</button>
+<button class="to-top" id="toTop" aria-label="Volver arriba" type="button">↑</button>
+{% endblock %}
 
+{% block extra_scripts %}
+{# ✅ JS: tu carpeta es app/static/js (minúscula) #}
+<script src="{{ url_for('static', filename='js/home.js') }}" defer></script>
+
+{# ============================================================
+   5 mejoras extra (no rompen tu home.js)
+   1) Pills accesibles Enter/Espacio
+   2) Smooth-scroll seguro a targets si home.js no lo hace
+   3) Fallback toTop + sticky si home.js no engancha
+   4) Evita doble binding (marca data-bound)
+   5) “safe focus”: si clickea pill, mantiene foco accesible
+   ============================================================ #}
 <script>
 (() => {
-  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const ready = (fn) => (document.readyState !== "loading")
+    ? fn()
+    : document.addEventListener("DOMContentLoaded", fn, { once:true });
 
-  // Reveal
-  const items = [...document.querySelectorAll('[data-reveal]')];
-  if (!reduce && 'IntersectionObserver' in window && items.length) {
-    const io = new IntersectionObserver((entries) => {
-      entries.forEach(e => {
-        if (e.isIntersecting) {
-          e.target.classList.add('is-in');
-          io.unobserve(e.target);
-        }
+  ready(() => {
+    const pills = document.querySelectorAll(".hp-pill[role='button'][data-pill][data-target]");
+    pills.forEach(el => {
+      if (el.dataset.bound === "1") return;
+      el.dataset.bound = "1";
+
+      // 1) teclado
+      el.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); el.click(); }
       });
-    }, { threshold: 0.10, rootMargin: '0px 0px -8% 0px' });
-    items.forEach(el => io.observe(el));
-  } else {
-    items.forEach(el => el.classList.add('is-in'));
-  }
 
-  // ToTop + Sticky
-  const btn = document.getElementById("toTop");
-  const sticky = document.getElementById("hpSticky");
-  const onScroll = () => {
-    const y = window.scrollY || 0;
-    if (btn) btn.style.display = (y > 520) ? "inline-flex" : "none";
-    if (sticky) sticky.classList.toggle("is-on", y > 420);
-  };
-  window.addEventListener("scroll", onScroll, { passive: true });
-  onScroll();
-  btn && btn.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
-
-  // Shortcut "/" -> header search
-  document.addEventListener('keydown', (e) => {
-    if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
-    const tag = (document.activeElement && document.activeElement.tagName) || '';
-    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-
-    const topSearch = document.querySelector('.topbar input[name="q"], .topbar input[type="search"], .topbar input');
-    if (topSearch) {
-      e.preventDefault();
-      topSearch.focus({ preventScroll: true });
-    }
-  });
-
-  // Parallax sutil hero
-  const hero = document.querySelector('.hp-heroMain');
-  const heroImg = document.getElementById('hpHeroImg');
-  if (!reduce && hero && heroImg) {
-    let rx = 0, ry = 0, sx = 0, sy = 0;
-    const tick = () => {
-      sx += (rx - sx) * 0.08;
-      sy += (ry - sy) * 0.08;
-      heroImg.style.transform = `scale(1.06) translate3d(${sx}px, ${sy}px, 0)`;
-      requestAnimationFrame(tick);
-    };
-    requestAnimationFrame(tick);
-
-    hero.addEventListener('mousemove', (e) => {
-      const r = hero.getBoundingClientRect();
-      const px = (e.clientX - r.left) / r.width - 0.5;
-      const py = (e.clientY - r.top) / r.height - 0.5;
-      rx = px * 10;
-      ry = py * 8;
+      // 2) smooth scroll fallback
+      el.addEventListener("click", () => {
+        const sel = el.getAttribute("data-target");
+        const t = sel ? document.querySelector(sel) : null;
+        if (t) t.scrollIntoView({ behavior: "smooth", block: "start" });
+        // 5) mantener foco accesible
+        el.focus({ preventScroll: true });
+      }, { passive:true });
     });
-    hero.addEventListener('mouseleave', () => { rx = 0; ry = 0; });
-  }
+
+    // 3) fallback sticky + toTop
+    const sticky = document.getElementById("hpSticky");
+    const toTop = document.getElementById("toTop");
+
+    const updateUI = () => {
+      const y = window.scrollY || 0;
+      if (toTop) toTop.style.display = (y > 600) ? "grid" : "none";
+      if (sticky) sticky.classList.toggle("is-on", y > 420);
+    };
+
+    if (toTop && !toTop.dataset.bound) {
+      toTop.dataset.bound = "1";
+      toTop.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
+    }
+
+    // 4) evita exceso de listeners (1 solo)
+    updateUI();
+    window.addEventListener("scroll", updateUI, { passive:true });
+  });
 })();
 </script>
 {% endblock %}
