@@ -2,19 +2,34 @@
 {% block title %}Mi cuenta | Skyline Store{% endblock %}
 
 {% block extra_head %}
-  {# CSS externo (preload + fallback) #}
+  {# 1) Preload CSS + fallback real #}
   <link rel="preload" as="style" href="{{ url_for('static', filename='css/account.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/account.css') }}">
+
+  {# 2) SEO básico (no rompe si ya tenés defaults) #}
+  <meta name="robots" content="index,follow">
+  <meta name="description" content="Ingresá o creá tu cuenta en Skyline Store para ver pedidos, guardar favoritos y acceder a beneficios exclusivos.">
 {% endblock %}
 
 {% block content %}
-{% set nxt = next|default('') %}
+{# 3) next sanitizado básico: evitamos javascript: y vacíos raros (hardening) #}
+{% set raw_next = next|default(request.args.get('next','')) %}
+{% set nxt = (raw_next|string).strip() %}
+{% if nxt and (nxt.startswith('http://') or nxt.startswith('https://') or nxt.startswith('javascript:')) %}
+  {% set nxt = '' %}
+{% endif %}
 
-{# Flags de producción (no rompe si no usás social login) #}
-{% set enable_google = (config.get('ENABLE_GOOGLE_OAUTH', '0')|string|lower) in ['1','true','yes','y','on'] %}
-{% set enable_apple  = (config.get('ENABLE_APPLE_OAUTH',  '0')|string|lower) in ['1','true','yes','y','on'] %}
+{# 4) Feature flags sin romper (config puede no estar disponible en template) #}
+{% set cfg = config if config is defined else {} %}
+{% set enable_google = (cfg.get('ENABLE_GOOGLE_OAUTH', '0')|string|lower) in ['1','true','yes','y','on'] %}
+{% set enable_apple  = (cfg.get('ENABLE_APPLE_OAUTH',  '0')|string|lower) in ['1','true','yes','y','on'] %}
 
-<section class="ss-account" aria-label="Acceso a tu cuenta"
+{# 5) No-break: sólo linkeamos social si existe la ruta #}
+{% set has_google = enable_google and ('auth.google' in current_app.view_functions) %}
+{% set has_apple  = enable_apple  and ('auth.apple'  in current_app.view_functions) %}
+
+<section class="ss-account"
+  aria-label="Acceso a tu cuenta"
   data-next="{{ nxt|e }}"
   data-login-url="{{ url_for('auth.login', next=nxt) }}"
   data-register-url="{{ url_for('auth.register', next=nxt) }}"
@@ -92,10 +107,21 @@
           <div class="card-title">Continuar</div>
           <div class="card-sub">Iniciá sesión o creá tu cuenta</div>
         </div>
-        <span class="secure-pill" title="Conexión segura">
+        <span class="secure-pill" title="Conexión segura" aria-label="Conexión segura">
           <span class="dot" aria-hidden="true"></span> Seguro
         </span>
       </header>
+
+      {# 6) Flash messages acá también (si venís redirigido) #}
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="ss-account__flashwrap" role="status" aria-live="polite" aria-atomic="true">
+            {% for c,m in messages %}
+              <div class="ss-account__flash {{ c|e }}">{{ m }}</div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
 
       <!-- Tabs -->
       <div class="tabs" role="tablist" aria-label="Acciones">
@@ -112,7 +138,7 @@
       <!-- Panel: Login -->
       <div class="panel" id="panel-login" role="tabpanel" aria-labelledby="tab-login">
         <div class="actions">
-          <a class="btn primary" href="{{ url_for('auth.login', next=nxt) }}">
+          <a class="btn primary" href="{{ url_for('auth.login', next=nxt) }}" rel="nofollow">
             <span class="btn-ic" aria-hidden="true">
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
                 <path d="M10 17l5-5-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -125,19 +151,19 @@
           </a>
         </div>
 
-        {% if enable_google or enable_apple %}
+        {% if has_google or has_apple %}
           <div class="divider" aria-hidden="true"><span>o</span></div>
 
           <div class="social" aria-label="Inicio rápido">
-            {% if enable_google %}
-              <a class="btn ghost" href="{{ url_for('auth.google', next=nxt) }}">
+            {% if has_google %}
+              <a class="btn ghost" href="{{ url_for('auth.google', next=nxt) }}" rel="nofollow">
                 <span class="btn-ic" aria-hidden="true">G</span>
                 Continuar con Google
                 <span class="btn-meta">1 click</span>
               </a>
             {% endif %}
-            {% if enable_apple %}
-              <a class="btn ghost" href="{{ url_for('auth.apple', next=nxt) }}">
+            {% if has_apple %}
+              <a class="btn ghost" href="{{ url_for('auth.apple', next=nxt) }}" rel="nofollow">
                 <span class="btn-ic" aria-hidden="true"></span>
                 Continuar con Apple
                 <span class="btn-meta">1 click</span>
@@ -162,7 +188,7 @@
       <!-- Panel: Register -->
       <div class="panel is-hidden" id="panel-register" role="tabpanel" aria-labelledby="tab-register">
         <div class="actions">
-          <a class="btn primary" href="{{ url_for('auth.register', next=nxt) }}">
+          <a class="btn primary" href="{{ url_for('auth.register', next=nxt) }}" rel="nofollow">
             <span class="btn-ic" aria-hidden="true">
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
                 <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
@@ -196,7 +222,7 @@
     </section>
   </div>
 
-  <!-- Mobile sticky helper -->
+  <!-- 7) Sticky solo si viewport chico (JS maneja aria-hidden) -->
   <div class="ss-account__sticky" id="accSticky" aria-hidden="true">
     <div class="inner">
       <div class="t">
@@ -206,8 +232,17 @@
       <a class="go" id="accStickyBtn" href="{{ url_for('auth.login', next=nxt) }}">Entrar →</a>
     </div>
   </div>
+
+  {# 8) No-JS fallback (si JS no carga, igual podés navegar) #}
+  <noscript>
+    <div class="ss-account__noscript">
+      Activá JavaScript para ver los tabs. Igual podés
+      <a href="{{ url_for('auth.login', next=nxt) }}">iniciar sesión</a> o
+      <a href="{{ url_for('auth.register', next=nxt) }}">crear cuenta</a>.
+    </div>
+  </noscript>
 </section>
 
-{# JS externo #}
-<script defer src="{{ url_for('static', filename='js/account.js') }}"></script>
+{# 9) JS externo defer + versionado (cache-bust) #}
+<script defer src="{{ url_for('static', filename='js/account.js', v='1') }}"></script>
 {% endblock %}
