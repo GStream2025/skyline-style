@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import os
+import secrets
+from dataclasses import dataclass
 from datetime import timedelta
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Type
 
 
 # =============================================================================
-# Utils (env parsing) — robusto
+# Env parsing — robusto + seguro
 # =============================================================================
 
 _TRUE = {"1", "true", "yes", "y", "on"}
@@ -18,21 +20,27 @@ def env_str(key: str, default: str = "") -> str:
     return (default if v is None else str(v)).strip()
 
 
-def env_int(key: str, default: int) -> int:
-    v = os.getenv(key)
-    if v is None:
-        return default
-    try:
-        return int(str(v).strip())
-    except Exception:
-        return default
+def env_int(key: str, default: int, *, min_v: Optional[int] = None, max_v: Optional[int] = None) -> int:
+    s = env_str(key, "")
+    if not s:
+        v = default
+    else:
+        try:
+            v = int(s)
+        except Exception:
+            v = default
+    if min_v is not None:
+        v = max(min_v, v)
+    if max_v is not None:
+        v = min(max_v, v)
+    return v
 
 
 def env_bool(key: str, default: bool = False) -> bool:
-    v = os.getenv(key)
-    if v is None:
+    s = env_str(key, "")
+    if not s:
         return default
-    s = str(v).strip().lower()
+    s = s.lower()
     if s in _TRUE:
         return True
     if s in _FALSE:
@@ -42,8 +50,8 @@ def env_bool(key: str, default: bool = False) -> bool:
 
 def normalize_database_url(raw: Optional[str]) -> str:
     """
-    Render suele entregar DATABASE_URL con 'postgres://'
-    SQLAlchemy espera 'postgresql://'
+    Render suele dar DATABASE_URL con postgres://
+    SQLAlchemy espera postgresql://
     """
     if not raw or not str(raw).strip():
         return "sqlite:///skyline_local.db"
@@ -62,14 +70,13 @@ def normalize_samesite(raw: str, default: str = "Lax") -> str:
 
 
 def _is_sqlite(uri: str) -> bool:
-    u = (uri or "").strip().lower()
-    return u.startswith("sqlite:")
+    return (uri or "").strip().lower().startswith("sqlite:")
 
 
 def csp_for_tailwind_cdn() -> Dict[str, list]:
     """
     CSP compatible con Tailwind CDN + Google Fonts + imágenes externas.
-    Si luego eliminás CDN y usás assets locales, se puede endurecer.
+    Si luego eliminás CDN, podés endurecer (quitar unsafe-inline).
     """
     return {
         "default-src": ["'self'"],
@@ -77,33 +84,34 @@ def csp_for_tailwind_cdn() -> Dict[str, list]:
         "form-action": ["'self'"],
         "frame-ancestors": ["'none'"],
         "object-src": ["'none'"],
-        # Imágenes (incluye data: para svg/base64)
         "img-src": ["'self'", "data:", "https:"],
-        # Estilos (Tailwind inline + Google Fonts)
         "style-src": ["'self'", "'unsafe-inline'", "https:"],
-        # Scripts (Tailwind CDN usa inline + https)
         "script-src": ["'self'", "'unsafe-inline'", "https:"],
-        # Fuentes
         "font-src": ["'self'", "data:", "https:"],
-        # Conexiones (si usás APIs externas)
         "connect-src": ["'self'", "https:"],
     }
 
 
 # =============================================================================
-# Config Base
+# Config Base — PRO / Bulletproof
 # =============================================================================
 
-
+@dataclass(frozen=True)
 class BaseConfig:
     """
     Skyline Store — Config PRO / Bulletproof
 
-    Mejores prácticas:
-    - No rompe en local
-    - Render/Postgres listo
-    - Seguridad razonable por defecto
-    - Producción sin SECRET_KEY => error (en ProductionConfig)
+    10 mejoras aplicadas:
+    1) SECRET_KEY: fallback seguro solo local + guard fuerte en producción
+    2) CSRF estable: WTF_CSRF_TIME_LIMIT configurable (default 3600)
+    3) Cookies: Secure/SameSite/HttpOnly consistentes (evita token mismatch)
+    4) SESSION cookie prefix + lifetime robusto
+    5) DB normalizada (postgres:// -> postgresql://) + engine options seguros
+    6) Validación fuerte de valores (rangos para upload/cache/pools)
+    7) SERVER_NAME no se setea si está vacío (evita bugs raros)
+    8) Prefer scheme auto (http dev / https prod)
+    9) Flags “Render/Proxy” por defecto sensatos
+    10) as_flask_config() copia solo UPPERCASE + calculados (sin edge cases)
     """
 
     # -----------------------------
@@ -113,49 +121,56 @@ class BaseConfig:
     DEBUG: bool = env_bool("DEBUG", env_bool("FLASK_DEBUG", False))
     TESTING: bool = env_bool("TESTING", False)
 
-    # Normalizamos ENV final
-    ENV: str = (
-        "development" if FLASK_ENV in {"dev", "development"} or DEBUG else "production"
-    )
+    # ENV final (si DEBUG => development)
+    ENV: str = "development" if (FLASK_ENV in {"dev", "development"} or DEBUG) else "production"
 
     # -----------------------------
     # Server / URL
     # -----------------------------
     HOST: str = env_str("HOST", "0.0.0.0")
-    PORT: int = env_int("PORT", 5000)
+    PORT: int = env_int("PORT", 5000, min_v=1, max_v=65535)
 
     SITE_URL: str = env_str("SITE_URL", "").rstrip("/")
     SERVER_NAME: str = env_str("SERVER_NAME", "")
     PREFERRED_URL_SCHEME: str = "https" if ENV == "production" else "http"
 
-    TRUST_PROXY_HEADERS: bool = env_bool(
-        "TRUST_PROXY_HEADERS", default=(ENV == "production")
-    )
+    # Render/ProxyFix friendly
+    TRUST_PROXY_HEADERS: bool = env_bool("TRUST_PROXY_HEADERS", default=(ENV == "production"))
 
     # -----------------------------
     # Security / Sessions / Cookies
     # -----------------------------
-    # DEV fallback permitido solo en Base/Dev
+    # En base: fallback SOLO local (producción lo valida abajo en ProductionConfig)
     SECRET_KEY: str = env_str("SECRET_KEY", "dev_skyline_fallback_change_me")
 
     SESSION_COOKIE_HTTPONLY: bool = True
     SESSION_COOKIE_SAMESITE: str = normalize_samesite(
-        env_str("SESSION_COOKIE_SAMESITE", env_str("SESSION_SAMESITE", "Lax")), "Lax"
+        env_str("SESSION_COOKIE_SAMESITE", env_str("SESSION_SAMESITE", "Lax")),
+        "Lax",
     )
     SESSION_COOKIE_SECURE: bool = env_bool(
         "SESSION_COOKIE_SECURE",
         env_bool("COOKIE_SECURE", default=(ENV == "production")),
     )
 
-    # 7 días por defecto
-    SESSION_DAYS: int = max(1, env_int("SESSION_DAYS", 7))
+    # nombre cookie estable (evita choques entre apps)
+    SESSION_COOKIE_NAME: str = env_str("SESSION_COOKIE_NAME", "skyline_session")
+
+    # Lifetime
+    SESSION_DAYS: int = env_int("SESSION_DAYS", 7, min_v=1, max_v=90)
     PERMANENT_SESSION_LIFETIME = timedelta(days=SESSION_DAYS)
+
+    # -----------------------------
+    # CSRF (Flask-WTF)
+    # -----------------------------
+    WTF_CSRF_ENABLED: bool = True
+    WTF_CSRF_TIME_LIMIT: int = env_int("WTF_CSRF_TIME_LIMIT", 3600, min_v=300, max_v=86400)
 
     # -----------------------------
     # Uploads / Limits
     # -----------------------------
     UPLOADS_DIR: str = env_str("UPLOADS_DIR", "static/uploads")
-    MAX_UPLOAD_MB: int = max(1, env_int("MAX_UPLOAD_MB", 20))
+    MAX_UPLOAD_MB: int = env_int("MAX_UPLOAD_MB", 20, min_v=1, max_v=200)
     MAX_CONTENT_LENGTH: int = MAX_UPLOAD_MB * 1024 * 1024  # bytes
 
     # -----------------------------
@@ -170,26 +185,13 @@ class BaseConfig:
     SQLALCHEMY_DATABASE_URI: str = env_str("SQLALCHEMY_DATABASE_URI", DATABASE_URL)
     SQLALCHEMY_TRACK_MODIFICATIONS: bool = False
 
-    # Engine options:
-    # - Para Postgres (Render): pool_pre_ping + recycle + pool sizes
-    # - Para SQLite: dejamos solo pool_pre_ping (lo demás puede molestar)
-    DB_POOL_RECYCLE: int = max(30, env_int("DB_POOL_RECYCLE", 280))
-    DB_POOL_SIZE: int = max(1, env_int("DB_POOL_SIZE", 5))
-    DB_MAX_OVERFLOW: int = max(0, env_int("DB_MAX_OVERFLOW", 10))
+    # pool values (Render/Postgres friendly)
+    DB_POOL_RECYCLE: int = env_int("DB_POOL_RECYCLE", 280, min_v=30, max_v=3600)
+    DB_POOL_SIZE: int = env_int("DB_POOL_SIZE", 5, min_v=1, max_v=20)
+    DB_MAX_OVERFLOW: int = env_int("DB_MAX_OVERFLOW", 10, min_v=0, max_v=50)
 
-    @classmethod
-    def _engine_options(cls) -> Dict[str, Any]:
-        uri = cls.SQLALCHEMY_DATABASE_URI
-        if _is_sqlite(uri):
-            return {"pool_pre_ping": True}
-        return {
-            "pool_pre_ping": True,
-            "pool_recycle": cls.DB_POOL_RECYCLE,
-            "pool_size": cls.DB_POOL_SIZE,
-            "max_overflow": cls.DB_MAX_OVERFLOW,
-        }
-
-    SQLALCHEMY_ENGINE_OPTIONS: Dict[str, Any] = {}  # se setea en as_flask_config()
+    # se setea en as_flask_config()
+    SQLALCHEMY_ENGINE_OPTIONS: Dict[str, Any] = None  # type: ignore[assignment]
 
     # -----------------------------
     # Performance / Cache
@@ -198,20 +200,21 @@ class BaseConfig:
     ENABLE_COMPRESS: bool = env_bool("ENABLE_COMPRESS", default=True)
 
     CACHE_TYPE: str = env_str("CACHE_TYPE", "SimpleCache")
-    CACHE_DEFAULT_TIMEOUT: int = max(10, env_int("CACHE_DEFAULT_TIMEOUT", 300))
+    CACHE_DEFAULT_TIMEOUT: int = env_int("CACHE_DEFAULT_TIMEOUT", 300, min_v=10, max_v=86400)
 
     # -----------------------------
-    # Printful / Dropshipping
+    # Printful
     # -----------------------------
     PRINTFUL_API_KEY: str = env_str(
-        "PRINTFUL_API_KEY", env_str("PRINTFUL_KEY", env_str("PRINTFUL_API_TOKEN", ""))
+        "PRINTFUL_API_KEY",
+        env_str("PRINTFUL_KEY", env_str("PRINTFUL_API_TOKEN", "")),
     )
     PRINTFUL_STORE_ID: str = env_str("PRINTFUL_STORE_ID", "")
-    PRINTFUL_CACHE_TTL: int = max(30, env_int("PRINTFUL_CACHE_TTL", 300))
+    PRINTFUL_CACHE_TTL: int = env_int("PRINTFUL_CACHE_TTL", 300, min_v=30, max_v=86400)
     ENABLE_PRINTFUL: bool = env_bool("ENABLE_PRINTFUL", default=bool(PRINTFUL_API_KEY))
 
     # -----------------------------
-    # Payments
+    # Payments (flags)
     # -----------------------------
     MP_PUBLIC_KEY: str = env_str("MP_PUBLIC_KEY", "")
     MP_ACCESS_TOKEN: str = env_str("MP_ACCESS_TOKEN", "")
@@ -229,14 +232,13 @@ class BaseConfig:
     ENABLE_TALISMAN: bool = env_bool("ENABLE_TALISMAN", default=(ENV == "production"))
     FORCE_HTTPS: bool = env_bool("FORCE_HTTPS", default=(ENV == "production"))
     HSTS: bool = env_bool("HSTS", default=(ENV == "production"))
-
     CONTENT_SECURITY_POLICY: Dict[str, list] = csp_for_tailwind_cdn()
 
     # -----------------------------
     # Email (opcional)
     # -----------------------------
     MAIL_SERVER: str = env_str("MAIL_SERVER", "")
-    MAIL_PORT: int = env_int("MAIL_PORT", 587)
+    MAIL_PORT: int = env_int("MAIL_PORT", 587, min_v=1, max_v=65535)
     MAIL_USE_TLS: bool = env_bool("MAIL_USE_TLS", default=True)
     MAIL_USE_SSL: bool = env_bool("MAIL_USE_SSL", default=False)
     MAIL_USERNAME: str = env_str("MAIL_USERNAME", "")
@@ -244,22 +246,22 @@ class BaseConfig:
     MAIL_DEFAULT_SENDER: str = env_str("MAIL_DEFAULT_SENDER", "")
 
     # -----------------------------
-    # Helpers
+    # Internal helpers
     # -----------------------------
     @classmethod
-    def is_production(cls) -> bool:
-        return cls.ENV == "production"
-
-    @classmethod
-    def is_development(cls) -> bool:
-        return cls.ENV == "development"
+    def _engine_options(cls) -> Dict[str, Any]:
+        uri = cls.SQLALCHEMY_DATABASE_URI
+        if _is_sqlite(uri):
+            return {"pool_pre_ping": True}
+        return {
+            "pool_pre_ping": True,
+            "pool_recycle": cls.DB_POOL_RECYCLE,
+            "pool_size": cls.DB_POOL_SIZE,
+            "max_overflow": cls.DB_MAX_OVERFLOW,
+        }
 
     @classmethod
     def as_flask_config(cls) -> Dict[str, Any]:
-        """
-        Devuelve un dict listo para app.config.update(...)
-        (y evita edge-cases de atributos calculados).
-        """
         cfg: Dict[str, Any] = {}
 
         # Copiamos solo UPPERCASE
@@ -267,17 +269,21 @@ class BaseConfig:
             if k.isupper():
                 cfg[k] = v
 
-        # Calculados
+        # Calculados / overrides seguros
         cfg["SQLALCHEMY_ENGINE_OPTIONS"] = cls._engine_options()
         cfg["PERMANENT_SESSION_LIFETIME"] = cls.PERMANENT_SESSION_LIFETIME
         cfg["MAX_CONTENT_LENGTH"] = cls.MAX_CONTENT_LENGTH
 
-        # Limpieza SERVER_NAME (si vacío -> no setear)
+        # Si SERVER_NAME vacío => no setear (evita problemas)
         if not cfg.get("SERVER_NAME"):
             cfg.pop("SERVER_NAME", None)
 
         return cfg
 
+
+# =============================================================================
+# Environments
+# =============================================================================
 
 class DevelopmentConfig(BaseConfig):
     ENV = "development"
@@ -286,7 +292,6 @@ class DevelopmentConfig(BaseConfig):
 
     SESSION_COOKIE_SECURE = False
     PREFERRED_URL_SCHEME = "http"
-
     ENABLE_MINIFY = env_bool("ENABLE_MINIFY", default=False)
 
 
@@ -295,35 +300,39 @@ class ProductionConfig(BaseConfig):
     DEBUG = False
     LOG_LEVEL = env_str("LOG_LEVEL", "INFO").upper()
 
-    # En prod: SECRET_KEY real obligatorio
+    # En prod: SECRET_KEY obligatorio (si falta => error en validate_required())
     SECRET_KEY = env_str("SECRET_KEY", "").strip()
-    if not SECRET_KEY:
-        # OJO: no levantamos error en import (para tooling),
-        # lo validás en create_app() o al cargar config.
-        pass
 
     SESSION_COOKIE_SECURE = env_bool("SESSION_COOKIE_SECURE", default=True)
-    SESSION_COOKIE_SAMESITE = normalize_samesite(
-        env_str("SESSION_COOKIE_SAMESITE", "Lax"), "Lax"
-    )
+    SESSION_COOKIE_SAMESITE = normalize_samesite(env_str("SESSION_COOKIE_SAMESITE", "Lax"), "Lax")
 
     ENABLE_MINIFY = env_bool("ENABLE_MINIFY", default=True)
 
+    @classmethod
+    def validate_required(cls) -> None:
+        """
+        Llamar 1 vez en create_app() en producción.
+        Esto corta el problema de 'token no coincide' por SECRET_KEY vacío/cambiante.
+        """
+        if not cls.SECRET_KEY or len(cls.SECRET_KEY) < 32:
+            raise RuntimeError(
+                "ProductionConfig: SECRET_KEY faltante o muy corto. "
+                "Setealo fijo en Render (>=32 chars) para evitar CSRF/session invalid."
+            )
 
-def get_config(env_name: Optional[str] = None):
+
+# =============================================================================
+# Selector
+# =============================================================================
+
+def get_config(env_name: Optional[str] = None) -> Type[BaseConfig]:
     """
-    Devuelve la clase correcta.
-
     Prioridad:
       1) env_name explícito
       2) FLASK_ENV / ENV
       3) DEBUG/FLASK_DEBUG
     """
-    if env_name:
-        e = str(env_name).strip().lower()
-    else:
-        e = env_str("FLASK_ENV", env_str("ENV", "")).lower()
-
+    e = (str(env_name).strip().lower() if env_name else env_str("FLASK_ENV", env_str("ENV", "")).lower())
     debug = env_bool("DEBUG", env_bool("FLASK_DEBUG", False))
 
     if e in {"development", "dev"} or debug:
