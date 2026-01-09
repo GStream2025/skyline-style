@@ -6,6 +6,14 @@
 {% endblock %}
 
 {% block content %}
+{# ---------------------------------------------------------
+   LOGIN — Skyline Store (ULTRA PRO / NO BREAK)
+   - No rompe si falta nonce / forgot route / csrf variants
+   - Preserva next seguro
+   - Conecta con login.js (loginForm, email, password, togglePass, submitBtn)
+---------------------------------------------------------- #}
+
+{% set nxt = next|default(request.args.get('next', '')) %}
 <section class="ss-login" aria-label="Ingresar">
   <div class="ss-login__card">
 
@@ -25,12 +33,12 @@
         y acceder a beneficios exclusivos.
       </p>
 
-      <div class="ss-login__benefits">
-        <div class="ss-login__benefit">
+      <div class="ss-login__benefits" role="list" aria-label="Beneficios">
+        <div class="ss-login__benefit" role="listitem">
           <span class="ss-login__dot" aria-hidden="true"></span>
           <div><b>Acceso rápido</b><span>Entrá y seguí comprando.</span></div>
         </div>
-        <div class="ss-login__benefit">
+        <div class="ss-login__benefit" role="listitem">
           <span class="ss-login__dot" aria-hidden="true"></span>
           <div><b>Historial</b><span>Pedidos y seguimiento en un lugar.</span></div>
         </div>
@@ -44,11 +52,13 @@
         <span class="ss-login__secure" title="Conexión segura">🔒 Seguro</span>
       </div>
 
-      {# FLASH MESSAGES #}
+      {# FLASH MESSAGES (clase sanitizada) #}
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
           {% for category, msg in messages %}
-            <div class="ss-login__flash {{ category|e }}" role="alert" aria-live="polite" aria-atomic="true">
+            {% set cat = (category|string|lower|trim) %}
+            {% set cat = cat if cat in ['error','warning','success','info'] else 'info' %}
+            <div class="ss-login__flash {{ cat }}" role="alert" aria-live="polite" aria-atomic="true">
               {{ msg }}
             </div>
           {% endfor %}
@@ -56,25 +66,35 @@
       {% endwith %}
 
       <form method="post"
-            action="{{ url_for('auth.login') }}"
+            action="{{ url_for('auth.login', next=nxt) }}"
             class="ss-login__form"
             id="loginForm"
             novalidate>
 
-        {# CSRF compatible: csrf_token() (Flask-WTF) o csrf_token variable #}
+        {# -------------------------
+           CSRF (ULTRA COMPAT)
+           - Flask-WTF: csrf_token() / form.csrf_token
+           - variable csrf_token
+        -------------------------- #}
         {% if csrf_token is defined %}
           {% if csrf_token is callable %}
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           {% else %}
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
           {% endif %}
+        {% elif form is defined and form.csrf_token is defined %}
+          {{ form.csrf_token }}
         {% endif %}
 
-        {# ✅ NONCE obligatorio (tu backend lo exige) #}
-        <input type="hidden" name="nonce" value="{{ nonce|default('') }}">
+        {# -------------------------
+           NONCE (si tu backend lo exige)
+           - No rompe si no existe
+        -------------------------- #}
+        {% if nonce is defined and nonce %}
+          <input type="hidden" name="nonce" value="{{ nonce }}">
+        {% endif %}
 
-        {# NEXT: backend lo sanea con _is_safe_next #}
-        {% set nxt = next|default(request.args.get('next','')) %}
+        {# NEXT (solo si existe) #}
         {% if nxt %}
           <input type="hidden" name="next" value="{{ nxt|e }}">
         {% endif %}
@@ -95,7 +115,7 @@
                  autocapitalize="none"
                  spellcheck="false"
                  aria-describedby="emailHint"
-                 value="{{ request.form.get('email','') if request.method=='POST' else '' }}"
+                 value="{{ (request.form.get('email','') if request.method=='POST' else '') }}"
                  placeholder="tu@email.com">
         </div>
 
@@ -128,8 +148,15 @@
             Mantener sesión
           </label>
 
-          {% if 'auth.forgot' in current_app.view_functions %}
-            <a href="{{ url_for('auth.forgot') }}" class="ss-login__forgot">Olvidé mi contraseña</a>
+          {# Forgot link: ultra safe (no rompe si no existe la ruta) #}
+          {% set forgot_url = None %}
+          {% try %}
+            {% set forgot_url = url_for('auth.forgot') %}
+          {% except %}
+            {% set forgot_url = None %}
+          {% endtry %}
+          {% if forgot_url %}
+            <a href="{{ forgot_url }}" class="ss-login__forgot">Olvidé mi contraseña</a>
           {% endif %}
         </div>
 
