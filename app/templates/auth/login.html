@@ -3,17 +3,75 @@
 
 {% block extra_head %}
   <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
+  <meta name="robots" content="{{ 'index,follow' if ENV == 'production' else 'noindex,nofollow' }}">
 {% endblock %}
 
 {% block content %}
 {# ---------------------------------------------------------
-   LOGIN — Skyline Store (ULTRA PRO / NO BREAK)
-   - No rompe si falta nonce / forgot route / csrf variants
-   - Preserva next seguro
-   - Conecta con login.js (loginForm, email, password, togglePass, submitBtn)
+   LOGIN — Skyline Store (ULTRA PRO / NO BREAK · FINAL)
+   ✅ 10 mejoras:
+   1) endpoints safe (sin try/except inválido en Jinja)
+   2) CSRF único (no duplica) + compat Flask-WTF/CSRFProtect
+   3) next sanitizado (evita open-redirect básico)
+   4) autocomplete/aria mejorados
+   5) form action safe fallback
+   6) honeypot anti-bot (opcional, no rompe)
+   7) submit disable/aria-busy (mejor UX)
+   8) mensajes flash sanitizados por categoría
+   9) remember preservado
+   10) values POST safe sin depender de request.method string
 ---------------------------------------------------------- #}
 
-{% set nxt = next|default(request.args.get('next', '')) %}
+{% set _vf = (view_functions if view_functions is defined and view_functions else {}) %}
+
+{# ---------- safe endpoints ---------- #}
+{% set login_ep = 'auth.login' %}
+{% if login_ep not in _vf %}
+  {% set login_ep = None %}
+{% endif %}
+
+{% set register_ep = 'auth.register' %}
+{% if register_ep not in _vf %}
+  {% set register_ep = None %}
+{% endif %}
+
+{% set shop_ep = 'shop.shop' %}
+{% if shop_ep not in _vf %}
+  {% set shop_ep = None %}
+{% endif %}
+
+{% set forgot_ep = 'auth.forgot' %}
+{% if forgot_ep not in _vf %}
+  {% set forgot_ep = None %}
+{% endif %}
+
+{# ---------- next safe (evita redirección externa) ---------- #}
+{% set _raw_next = (next if next is defined and next else request.args.get('next', '')) %}
+{% set nxt = _raw_next %}
+{% if nxt and ('://' in nxt or nxt.startswith('//')) %}
+  {% set nxt = '' %}
+{% endif %}
+
+{% set login_action = '/account' %}
+{% if login_ep %}
+  {% set login_action = url_for(login_ep, next=nxt) %}
+{% endif %}
+
+{% set register_url = '/account' %}
+{% if register_ep %}
+  {% set register_url = url_for(register_ep, next=nxt) %}
+{% endif %}
+
+{% set shop_url = '/shop' %}
+{% if shop_ep %}
+  {% set shop_url = url_for(shop_ep) %}
+{% endif %}
+
+{% set forgot_url = '' %}
+{% if forgot_ep %}
+  {% set forgot_url = url_for(forgot_ep) %}
+{% endif %}
+
 <section class="ss-login" aria-label="Ingresar">
   <div class="ss-login__card">
 
@@ -49,55 +107,66 @@
     <div class="ss-login__right" aria-label="Formulario de ingreso">
       <div class="ss-login__head">
         <h2>Ingresar</h2>
-        <span class="ss-login__secure" title="Conexión segura">🔒 Seguro</span>
+        <span class="ss-login__secure" title="Conexión segura" aria-label="Conexión segura">🔒 Seguro</span>
       </div>
 
       {# FLASH MESSAGES (clase sanitizada) #}
-      {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-          {% for category, msg in messages %}
-            {% set cat = (category|string|lower|trim) %}
-            {% set cat = cat if cat in ['error','warning','success','info'] else 'info' %}
-            <div class="ss-login__flash {{ cat }}" role="alert" aria-live="polite" aria-atomic="true">
-              {{ msg }}
-            </div>
-          {% endfor %}
-        {% endif %}
-      {% endwith %}
+      {% set _msgs = get_flashed_messages(with_categories=true) %}
+      {% if _msgs %}
+        {% for category, msg in _msgs %}
+          {% set cat = (category|string|lower|trim) %}
+          {% set cat = cat if cat in ['error','warning','success','info'] else 'info' %}
+          <div class="ss-login__flash {{ cat }}" role="alert" aria-live="polite" aria-atomic="true">
+            {{ msg }}
+          </div>
+        {% endfor %}
+      {% endif %}
 
       <form method="post"
-            action="{{ url_for('auth.login', next=nxt) }}"
+            action="{{ login_action }}"
             class="ss-login__form"
             id="loginForm"
-            novalidate>
+            novalidate
+            autocomplete="on">
 
         {# -------------------------
-           CSRF (ULTRA COMPAT)
-           - Flask-WTF: csrf_token() / form.csrf_token
-           - variable csrf_token
+           CSRF (UNICO / NO DUPLICA)
+           Prioridad:
+           1) form.hidden_tag (si es FlaskForm)
+           2) form.csrf_token
+           3) csrf_token() global
+           4) csrf_token string
         -------------------------- #}
-        {% if csrf_token is defined %}
+        {% if form is defined and form.hidden_tag is defined %}
+          {{ form.hidden_tag() }}
+        {% elif form is defined and form.csrf_token is defined %}
+          {{ form.csrf_token }}
+        {% elif csrf_token is defined %}
           {% if csrf_token is callable %}
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           {% else %}
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
           {% endif %}
-        {% elif form is defined and form.csrf_token is defined %}
-          {{ form.csrf_token }}
         {% endif %}
 
-        {# -------------------------
-           NONCE (si tu backend lo exige)
-           - No rompe si no existe
-        -------------------------- #}
+        {# NONCE opcional (si tu backend lo exige) #}
         {% if nonce is defined and nonce %}
           <input type="hidden" name="nonce" value="{{ nonce }}">
         {% endif %}
 
-        {# NEXT (solo si existe) #}
+        {# NEXT #}
         {% if nxt %}
           <input type="hidden" name="next" value="{{ nxt|e }}">
         {% endif %}
+
+        {# Honeypot anti-bot (no rompe backend si lo ignora) #}
+        <div style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden" aria-hidden="true">
+          <label>Website</label>
+          <input type="text" name="website" tabindex="-1" autocomplete="off">
+        </div>
+
+        {% set posted_email = request.form.get('email','') %}
+        {% set posted_remember = request.form.get('remember','') %}
 
         <div class="ss-login__field">
           <label for="email">
@@ -115,7 +184,7 @@
                  autocapitalize="none"
                  spellcheck="false"
                  aria-describedby="emailHint"
-                 value="{{ (request.form.get('email','') if request.method=='POST' else '') }}"
+                 value="{{ posted_email }}"
                  placeholder="tu@email.com">
         </div>
 
@@ -131,6 +200,7 @@
                    type="password"
                    name="password"
                    required
+                   minlength="6"
                    autocomplete="current-password"
                    aria-describedby="passHint"
                    placeholder="Tu contraseña">
@@ -144,17 +214,10 @@
 
         <div class="ss-login__row" aria-label="Opciones">
           <label class="ss-login__check">
-            <input type="checkbox" name="remember" value="1">
+            <input type="checkbox" name="remember" value="1" {% if posted_remember %}checked{% endif %}>
             Mantener sesión
           </label>
 
-          {# Forgot link: ultra safe (no rompe si no existe la ruta) #}
-          {% set forgot_url = None %}
-          {% try %}
-            {% set forgot_url = url_for('auth.forgot') %}
-          {% except %}
-            {% set forgot_url = None %}
-          {% endtry %}
           {% if forgot_url %}
             <a href="{{ forgot_url }}" class="ss-login__forgot">Olvidé mi contraseña</a>
           {% endif %}
@@ -163,8 +226,8 @@
         <button type="submit" class="ss-login__submit" id="submitBtn">Entrar</button>
 
         <div class="ss-login__links" aria-label="Links">
-          <a href="{{ url_for('auth.register', next=nxt) }}">Crear cuenta</a>
-          <a href="{{ url_for('shop.shop') }}">Seguir como invitado</a>
+          <a href="{{ register_url }}">Crear cuenta</a>
+          <a href="{{ shop_url }}">Seguir como invitado</a>
         </div>
       </form>
     </div>
@@ -173,4 +236,20 @@
 </section>
 
 <script defer src="{{ url_for('static', filename='js/login.js') }}"></script>
+
+{# UX micro: submit disable (no rompe si login.js ya lo hace) #}
+<script>
+(() => {
+  const f = document.getElementById("loginForm");
+  const b = document.getElementById("submitBtn");
+  if (!f || !b) return;
+  if (f.dataset.bound === "1") return;
+  f.dataset.bound = "1";
+  f.addEventListener("submit", () => {
+    b.disabled = true;
+    b.setAttribute("aria-busy", "true");
+    b.textContent = "Ingresando...";
+  }, { passive: true });
+})();
+</script>
 {% endblock %}

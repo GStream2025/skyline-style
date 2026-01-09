@@ -5,18 +5,15 @@ import logging
 import os
 import secrets
 import time
-from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from datetime import datetime, timezone, timedelta
+from typing import Any, Callable, Dict, List, Tuple, Optional
 
 from flask import Flask, jsonify, render_template, request, session
 from werkzeug.exceptions import HTTPException
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from app.models import db, init_models
-
-# Config PRO (tu archivo app/config.py)
 from app.config import get_config, ProductionConfig
-
 
 # ✅ compat (no rompe si no existe)
 try:
@@ -28,6 +25,21 @@ except Exception:
 # =============================================================================
 # Helpers
 # =============================================================================
+
+_TRUE = {"1", "true", "yes", "y", "on"}
+_FALSE = {"0", "false", "no", "n", "off"}
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    v = (os.getenv(name) or "").strip().lower()
+    if not v:
+        return default
+    if v in _TRUE:
+        return True
+    if v in _FALSE:
+        return False
+    return default
+
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
@@ -85,7 +97,7 @@ def safe_init(app: Flask, label: str, fn: Callable[[], Any]) -> Any:
         app.logger.info("✅ %s inicializado", label)
         return out
     except Exception as e:
-        app.logger.warning(⚠️ %s omitido: %s", label, e, exc_info=bool(app.debug))
+        app.logger.warning("⚠️ %s omitido: %s", label, e, exc_info=bool(app.debug))
         return None
 
 
@@ -121,13 +133,14 @@ def current_user_from_session() -> Any:
 
 
 # =============================================================================
-# CSRF (Flask-WTF) — evita el error “token no coincide”
+# CSRF (Flask-WTF)
 # =============================================================================
 
 def init_csrf(app: Flask) -> None:
     """
-    Usa Flask-WTF CSRFProtect (estable).
-    NO pisamos csrf_token() en templates.
+    CSRFProtect estable para Render.
+    - No pisa csrf_token()
+    - Permite exenciones por prefijo (webhooks/api)
     """
     from flask_wtf import CSRFProtect
     from flask_wtf.csrf import CSRFError
@@ -135,7 +148,7 @@ def init_csrf(app: Flask) -> None:
     csrf = CSRFProtect()
     csrf.init_app(app)
 
-    # Excepciones por prefijo (webhooks/APIs) — no deben requerir CSRF
+    # Exenciones por prefijo (webhooks/APIs) — no deben requerir CSRF
     exempt_prefixes = {
         "/webhook",
         "/webhooks",
@@ -151,21 +164,26 @@ def init_csrf(app: Flask) -> None:
     def _csrf_exempt_by_prefix():
         if request.method in {"GET", "HEAD", "OPTIONS"}:
             return None
+
         p = (request.path or "")
         for pref in exempt_prefixes:
             if p.startswith(pref):
-                # Flask-WTF: marcar endpoint exento
+                # ✅ forma correcta: eximir view function si existe
                 try:
-                    csrf.exempt(request.endpoint)  # type: ignore[arg-type]
+                    if request.endpoint and request.endpoint in app.view_functions:
+                        csrf.exempt(app.view_functions[request.endpoint])
                 except Exception:
                     pass
                 break
         return None
 
     @app.errorhandler(CSRFError)
-    def _handle_csrf_error(e: CSRFError):
-        # Mensaje claro como tu screenshot
-        return resp_error(400, "csrf_failed", "Solicitud inválida. El formulario expiró o el token no coincide. Recargá la página e intentá nuevamente.")
+    def _handle_csrf_error(_e: CSRFError):
+        return resp_error(
+            400,
+            "csrf_failed",
+            "Solicitud inválida. El formulario expiró o el token no coincide. Recargá la página e intentá nuevamente.",
+        )
 
 
 # =============================================================================
@@ -180,7 +198,6 @@ def init_compress(app: Flask) -> None:
 def init_talisman(app: Flask) -> None:
     from flask_talisman import Talisman
 
-    # OJO: si luego querés CSP duro, lo definís desde config.py
     force_https = bool(app.config.get("FORCE_HTTPS", app.config.get("ENV") == "production"))
     csp = app.config.get("CONTENT_SECURITY_POLICY", None)
 
@@ -216,19 +233,51 @@ def create_app() -> Flask:
     # Cargar config PRO
     app.config.from_mapping(cfg.as_flask_config())
 
-    # Validación fuerte en prod (corta el “token mismatch” por SECRET_KEY mal)
-    if cfg is ProductionConfig:
+    # ✅ Detección robusta de entorno
+    env = (app.config.get("ENV") or os.getenv("FLASK_ENV") or "production").lower()
+    is_prod = env == "production"
+
+    # ✅ Fix clásico: SECRET_KEY vacío/rota en producción = CSRF roto
+    if is_prod and not (app.config.get("SECRET_KEY") or "").strip():
+        raise RuntimeError("SECRET_KEY requerido en producción (si no, CSRF y sesiones fallan).")
+
+    # ✅ Validación fuerte en prod (si tu config lo implementa)
+    if isinstance(cfg, ProductionConfig) or (cfg.__class__ is ProductionConfig):
         ProductionConfig.validate_required()
 
-    # ProxyFix (Render/Cloudflare)
+    # ✅ Render/Cloudflare: confiar headers del proxy
     if bool(app.config.get("TRUST_PROXY_HEADERS", True)):
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
+
+    # =============================================================================
+    # ✅ Config de cookies/sesión “Render-proof”
+    # =============================================================================
+    # Mejora #1: cookies correctas para HTTPS detrás de proxy
+    if is_prod:
+        app.config.setdefault("SESSION_COOKIE_SECURE", True)
+        # En producción con HTTPS, para evitar problemas de cookies:
+        app.config.setdefault("SESSION_COOKIE_SAMESITE", "None")
+    else:
+        app.config.setdefault("SESSION_COOKIE_SECURE", False)
+        app.config.setdefault("SESSION_COOKIE_SAMESITE", "Lax")
+
+    app.config.setdefault("SESSION_COOKIE_HTTPONLY", True)
+
+    # Mejora #2: lifetime estable (evita expiraciones raras)
+    app.config.setdefault("PERMANENT_SESSION_LIFETIME", timedelta(days=7))
+
+    # Mejora #3: CSRF sin expiración por tiempo (tu problema de screenshot)
+    app.config.setdefault("WTF_CSRF_TIME_LIMIT", None)
+    # Mejora #4: Render proxy no siempre “ve” SSL estricto
+    app.config.setdefault("WTF_CSRF_SSL_STRICT", False)
+    # Mejora #5: URLs absolutas correctas
+    app.config.setdefault("PREFERRED_URL_SCHEME", "https" if is_prod else "http")
 
     setup_logging(app)
 
     app.logger.info(
         "🚀 create_app ENV=%s DEBUG=%s DB=%s SECURE=%s SAMESITE=%s CSRF_TTL=%s",
-        app.config.get("ENV"),
+        env,
         bool(app.debug),
         app.config.get("SQLALCHEMY_DATABASE_URI"),
         app.config.get("SESSION_COOKIE_SECURE"),
@@ -236,13 +285,13 @@ def create_app() -> Flask:
         app.config.get("WTF_CSRF_TIME_LIMIT"),
     )
 
-    # Inicializar DB (si tu models hub ya lo hace, esto no rompe)
+    # Inicializar DB
     safe_init(app, "db.init_app", lambda: db.init_app(app))
 
-    # CSRF real (Flask-WTF) — CLAVE para no tener más “Solicitud inválida”
+    # CSRF real (CLAVE)
     critical_init(app, "CSRFProtect", lambda: init_csrf(app))
 
-    # Extensiones opcionales (no rompen deploy)
+    # Extensiones opcionales
     safe_init(app, "Flask-Compress", lambda: init_compress(app) if app.config.get("ENABLE_COMPRESS", True) else None)
     safe_init(app, "Flask-Talisman", lambda: init_talisman(app) if app.config.get("ENABLE_TALISMAN", False) else None)
     safe_init(app, "Flask-Migrate", lambda: init_migrate(app))
@@ -250,7 +299,6 @@ def create_app() -> Flask:
 
     # Models hub (crítico)
     def _models_hub():
-        # init_models ya hace ping DB, carga modelos, etc (según tu implementación)
         return init_models(app, create_admin=True, log_loaded_models=True, ping_db=True)
 
     critical_init(app, "Models hub", _models_hub)
@@ -258,6 +306,8 @@ def create_app() -> Flask:
     # =============================================================================
     # Request hooks (request-id + headers + admin no-cache)
     # =============================================================================
+
+    # Mejora #6: request id consistente también por header (debug real)
     @app.before_request
     def _before_request():
         rid = request.headers.get("X-Request-Id") or secrets.token_urlsafe(8)
@@ -266,13 +316,19 @@ def create_app() -> Flask:
         except Exception:
             pass
 
-        # Admin no-cache opcional
-        if os.getenv("ADMIN_NO_CACHE", "1").strip().lower() in {"1", "true", "yes", "y", "on"}:
-            if (request.path or "").startswith("/admin"):
-                try:
-                    request._admin_no_cache = True  # type: ignore[attr-defined]
-                except Exception:
-                    pass
+        # Mejora #7: No-cache admin
+        if _env_bool("ADMIN_NO_CACHE", True) and (request.path or "").startswith("/admin"):
+            try:
+                request._admin_no_cache = True  # type: ignore[attr-defined]
+            except Exception:
+                pass
+
+        # Mejora #8: asegurar session permanente si lo querés en todo el sitio
+        if _env_bool("SESSION_PERMANENT_DEFAULT", True):
+            try:
+                session.permanent = True
+            except Exception:
+                pass
 
     @app.after_request
     def _after_request(resp):
@@ -298,9 +354,14 @@ def create_app() -> Flask:
         resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
         resp.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
 
-        # HSTS si HTTPS forzado en prod (si Talisman no lo setea)
-        if app.config.get("ENV") == "production" and bool(app.config.get("FORCE_HTTPS", True)):
+        # Mejora #9: HSTS si prod y HTTPS
+        if is_prod and bool(app.config.get("FORCE_HTTPS", True)):
             resp.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+
+        # Mejora #10: marca de app/version (si definís RELEASE)
+        rel = (os.getenv("RELEASE") or "").strip()
+        if rel:
+            resp.headers.setdefault("X-App-Release", rel)
 
         return resp
 
@@ -309,8 +370,6 @@ def create_app() -> Flask:
     # =============================================================================
     @app.context_processor
     def inject_globals() -> Dict[str, Any]:
-        # Si usás Flask-Login, current_user ya existe como proxy.
-        # Si no, dejamos fallback de sesión.
         try:
             from flask_login import current_user as fl_current_user  # type: ignore
             cu = fl_current_user if getattr(fl_current_user, "is_authenticated", False) else current_user_from_session()
@@ -320,17 +379,14 @@ def create_app() -> Flask:
         return {
             "APP_NAME": app.config.get("APP_NAME", "Skyline Store"),
             "APP_URL": app.config.get("APP_URL", ""),
-            "ENV": app.config.get("ENV"),
+            "ENV": env,
             "now_utc": utcnow(),
             "request_id": getattr(request, "_request_id", None),
             "current_user": cu,
             "is_logged_in": bool(getattr(cu, "id", None)),
             "is_admin": bool(getattr(cu, "is_admin", False)) if cu else bool(session.get("is_admin")),
-            # ✅ FIX para tus templates:
-            # permite: {% if 'auth.forgot' in current_app.view_functions %}
             "current_app": app,
             "view_functions": app.view_functions,
-            # ✅ mejor: {%- if has_endpoint('auth.forgot') -%}
             "has_endpoint": lambda ep: has_endpoint(app, ep),
         }
 
@@ -345,8 +401,7 @@ def create_app() -> Flask:
         registered[:] = sorted(app.blueprints.keys())
         return True
 
-    # Si querés estrictísimo, poné ROUTES_STRICT=1
-    if os.getenv("ROUTES_STRICT", "0").strip().lower() in {"1", "true", "yes", "y", "on"}:
+    if _env_bool("ROUTES_STRICT", False):
         critical_init(app, "Register Blueprints", _register_all_routes)
     else:
         safe_init(app, "Register Blueprints", _register_all_routes)
@@ -355,7 +410,7 @@ def create_app() -> Flask:
     # Health
     # =============================================================================
     def _db_check() -> Tuple[bool, str]:
-        if os.getenv("HEALTH_DB_CHECK", "0").strip().lower() not in {"1", "true", "yes", "y", "on"}:
+        if not _env_bool("HEALTH_DB_CHECK", False):
             return True, "skipped"
         try:
             from sqlalchemy import text
@@ -369,7 +424,7 @@ def create_app() -> Flask:
         ok_db, db_msg = _db_check()
         return {
             "status": "ok" if ok_db else "degraded",
-            "env": app.config.get("ENV"),
+            "env": env,
             "debug": bool(app.debug),
             "blueprints": registered,
             "db": db_msg,

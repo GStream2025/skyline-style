@@ -6,6 +6,22 @@
 {% endblock %}
 
 {% block content %}
+{# ---------------------------------------------------------
+   REGISTER — Skyline Store (FINAL / NO BREAK)
+   ✅ Jinja válido (sin try/except)
+   ✅ Flash class sanitizada
+   ✅ CSRF ultra-compat (csrf_token() / form.csrf_token / variable csrf_token)
+   ✅ Nonce opcional (no rompe si falta)
+   ✅ next preservado
+   ✅ Links Terms/Privacy seguros (solo si existen endpoints)
+   ✅ Accesible + autofill + UX pro
+---------------------------------------------------------- #}
+
+{% set nxt = next|default(request.args.get('next','')) %}
+{% set post_name = (request.form.get('name','') if request.method=='POST' else '') %}
+{% set post_email = (request.form.get('email','') if request.method=='POST' else '') %}
+{% set want_aff = (request.form.get('want_affiliate') if request.method=='POST' else '') %}
+
 <section class="ss-reg" aria-label="Crear cuenta">
   <div class="ss-reg__shell">
 
@@ -36,15 +52,20 @@
     <!-- RIGHT -->
     <div class="ss-reg__card ss-reg__right" aria-label="Formulario de registro">
       <div class="ss-reg__steps" aria-label="Progreso">
-        <div class="ss-reg__step is-active">Cuenta</div>
+        <div class="ss-reg__step is-active" aria-current="step">Cuenta</div>
         <div class="ss-reg__step">Verificación</div>
         <div class="ss-reg__step">Listo</div>
       </div>
 
+      {# FLASH MESSAGES (clase sanitizada) #}
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
-          {% for c,m in messages %}
-            <div class="ss-reg__flash {{ c|e }}" role="alert" aria-live="polite" aria-atomic="true">{{ m }}</div>
+          {% for category, msg in messages %}
+            {% set cat = (category|string|lower|trim) %}
+            {% set cat = cat if cat in ['error','warning','success','info'] else 'info' %}
+            <div class="ss-reg__flash {{ cat }}" role="alert" aria-live="polite" aria-atomic="true">
+              {{ msg }}
+            </div>
           {% endfor %}
         {% endif %}
       {% endwith %}
@@ -55,26 +76,32 @@
             id="registerForm"
             novalidate>
 
+        {# CSRF (prioridad: csrf_token() -> form.csrf_token -> variable csrf_token) #}
         {% if csrf_token is defined %}
           {% if csrf_token is callable %}
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           {% else %}
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
           {% endif %}
+        {% elif form is defined and form.csrf_token is defined %}
+          {{ form.csrf_token }}
         {% endif %}
 
-        {# NONCE obligatorio para tu backend #}
-        <input type="hidden" name="nonce" value="{{ nonce|default('') }}">
+        {# NONCE opcional: si el backend lo exige, mandalo; si no existe no rompe #}
+        {% if nonce is defined and nonce %}
+          <input type="hidden" name="nonce" value="{{ nonce }}">
+        {% endif %}
 
         {# next seguro #}
-        {% set nxt = next|default(request.args.get('next','')) %}
-        {% if nxt %}<input type="hidden" name="next" value="{{ nxt|e }}">{% endif %}
+        {% if nxt %}
+          <input type="hidden" name="next" value="{{ nxt|e }}">
+        {% endif %}
 
         <div class="ss-reg__grid2">
           <div class="ss-reg__field">
             <label for="name">
               <span>Nombre</span>
-              <span class="ss-reg__hint">Opcional</span>
+              <span class="ss-reg__hint" id="nameHint">Opcional</span>
             </label>
             <input class="ss-reg__input"
                    id="name"
@@ -82,14 +109,15 @@
                    name="name"
                    maxlength="120"
                    autocomplete="name"
-                   value="{{ request.form.get('name','') if request.method=='POST' else '' }}"
+                   aria-describedby="nameHint"
+                   value="{{ post_name }}"
                    placeholder="Nombre (opcional)">
           </div>
 
           <div class="ss-reg__field">
             <label for="email">
               <span>Email</span>
-              <span class="ss-reg__hint">Requerido</span>
+              <span class="ss-reg__hint" id="emailHint">Requerido</span>
             </label>
             <input class="ss-reg__input"
                    id="email"
@@ -101,7 +129,8 @@
                    inputmode="email"
                    autocapitalize="none"
                    spellcheck="false"
-                   value="{{ request.form.get('email','') if request.method=='POST' else '' }}"
+                   aria-describedby="emailHint"
+                   value="{{ post_email }}"
                    placeholder="Correo electrónico">
           </div>
         </div>
@@ -110,7 +139,7 @@
           <div class="ss-reg__field">
             <label for="password">
               <span>Contraseña</span>
-              <span class="ss-reg__hint">8+ caracteres</span>
+              <span class="ss-reg__hint" id="passHint">8+ caracteres</span>
             </label>
 
             <div class="ss-reg__pass-wrap">
@@ -122,6 +151,7 @@
                      minlength="8"
                      maxlength="128"
                      autocomplete="new-password"
+                     aria-describedby="passHint"
                      placeholder="Contraseña">
               <button type="button"
                       class="ss-reg__pass-toggle"
@@ -131,7 +161,7 @@
             </div>
 
             <div class="ss-reg__meter" id="meterBox" aria-hidden="true"><span id="meter"></span></div>
-            <div class="ss-reg__rules" id="passRules">
+            <div class="ss-reg__rules" id="passRules" aria-live="polite">
               <span id="rLen">• 8+ caracteres</span>
               <span id="rMix">• Letras y números</span>
               <span id="rUp">• Mayúscula recomendada</span>
@@ -142,7 +172,7 @@
           <div class="ss-reg__field">
             <label for="password2">
               <span>Confirmar</span>
-              <span class="ss-reg__hint">Debe coincidir</span>
+              <span class="ss-reg__hint" id="pass2Hint">Debe coincidir</span>
             </label>
 
             <div class="ss-reg__pass-wrap">
@@ -154,6 +184,7 @@
                      minlength="8"
                      maxlength="128"
                      autocomplete="new-password"
+                     aria-describedby="pass2Hint"
                      placeholder="Confirmar contraseña">
               <button type="button"
                       class="ss-reg__pass-toggle"
@@ -162,7 +193,7 @@
                       aria-pressed="false">👁</button>
             </div>
 
-            <div class="ss-reg__match" id="matchHint">• Debe coincidir</div>
+            <div class="ss-reg__match" id="matchHint" aria-live="polite">• Debe coincidir</div>
           </div>
         </div>
 
@@ -171,17 +202,28 @@
           <div class="ss-reg__aff-head">
             <b>Programa de Afiliados</b>
 
-            <label class="ss-reg__switch" aria-label="Activar afiliados">
-              <input type="checkbox" name="want_affiliate" id="wantAffiliate"
-                     {% if request.form.get('want_affiliate') %}checked{% endif %}>
+            <label class="ss-reg__switch" for="wantAffiliate">
+              <span class="sr-only">Activar afiliados</span>
+              <input type="checkbox"
+                     name="want_affiliate"
+                     id="wantAffiliate"
+                     value="1"
+                     {% if want_aff %}checked{% endif %}
+                     aria-controls="affBody"
+                     aria-expanded="{% if want_aff %}true{% else %}false{% endif %}">
               <span class="ss-reg__toggle" aria-hidden="true"></span>
             </label>
           </div>
 
-          <div class="ss-reg__aff-body" id="affBody">
+          <div class="ss-reg__aff-body"
+               id="affBody"
+               {% if not want_aff %}hidden{% endif %}>
             <div class="ss-reg__grid2" style="padding:0; gap:12px;">
               <div class="ss-reg__field">
-                <label for="affiliate_display_name"><span>Nombre público</span><span class="ss-reg__hint">Recomendado</span></label>
+                <label for="affiliate_display_name">
+                  <span>Nombre público</span>
+                  <span class="ss-reg__hint">Recomendado</span>
+                </label>
                 <input class="ss-reg__input"
                        id="affiliate_display_name"
                        type="text"
@@ -193,7 +235,10 @@
               </div>
 
               <div class="ss-reg__field">
-                <label for="affiliate_instagram"><span>Red / Web</span><span class="ss-reg__hint">Opcional</span></label>
+                <label for="affiliate_instagram">
+                  <span>Red / Web</span>
+                  <span class="ss-reg__hint">Opcional</span>
+                </label>
                 <input class="ss-reg__input"
                        id="affiliate_instagram"
                        type="text"
@@ -204,13 +249,41 @@
               </div>
             </div>
           </div>
+
+          <noscript>
+            <div class="ss-reg__hint" style="margin-top:10px;">
+              Tip: para completar afiliados necesitás JavaScript activado.
+            </div>
+          </noscript>
         </div>
 
-        <button class="ss-reg__submit" id="submitBtn" type="submit">Crear cuenta</button>
+        <button class="ss-reg__submit" id="submitBtn" type="submit">
+          Crear cuenta
+        </button>
+
+        {# Footer links seguros (solo si existen endpoints) #}
+        {% set terms_url = None %}
+        {% set privacy_url = None %}
+        {% if view_functions is defined and ('main.about' in view_functions) %}
+          {% set terms_url = url_for('main.about') %}
+        {% endif %}
+        {% if view_functions is defined and ('main.contact' in view_functions) %}
+          {% set privacy_url = url_for('main.contact') %}
+        {% endif %}
 
         <div class="ss-reg__footer">
-          Al crear tu cuenta aceptás los <a href="{{ url_for('main.about') }}">Términos</a> y la
-          <a href="{{ url_for('main.contact') }}">Política de privacidad</a>.
+          Al crear tu cuenta aceptás
+          {% if terms_url %}
+            los <a href="{{ terms_url }}">Términos</a>
+          {% else %}
+            los Términos
+          {% endif %}
+          y la
+          {% if privacy_url %}
+            <a href="{{ privacy_url }}">Política de privacidad</a>
+          {% else %}
+            Política de privacidad
+          {% endif %}.
           Nunca compartimos tus datos.
         </div>
       </form>

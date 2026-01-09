@@ -1,386 +1,152 @@
-{# app/templates/home.html — Skyline Store (ULTRA PRO · v5.4 · bulletproof NO-500) #}
+{# app/templates/home.html — Skyline Store (ULTRA PRO · v6 FINAL · NO-500) #}
 {% extends "base.html" %}
 
 {# ============================================================
-   SAFE ENDPOINT RESOLVER (NO BuildError)
-   Requiere: view_functions inyectado (ya lo usás en base.html)
+   SAFE ENDPOINT RESOLVER
 ============================================================ #}
 {% set _vf = (view_functions if view_functions is defined and view_functions else {}) %}
 
-{# ✅ Mejora NUEVA 1: safe_url_for sin romper si no existe endpoint #}
 {% set shop_url = '/shop' %}
 {% if 'shop.shop' in _vf %}
   {% set shop_url = url_for('shop.shop') %}
 {% endif %}
 
 {% set account_url = '/account' %}
-{% set _account_candidates = ['account.account','account.login','cuenta.account','cuenta.login','auth.login'] %}
-{% for ep in _account_candidates %}
-  {% if account_url == '/account' and (ep in _vf) %}
+{% for ep in ['account.account','account.login','auth.login'] %}
+  {% if account_url == '/account' and ep in _vf %}
     {% set account_url = url_for(ep) %}
   {% endif %}
 {% endfor %}
 
-{# ✅ Mejora NUEVA 2: og_image_abs consistente (si og_image es relativo) #}
-{% set _og_img = (og_image if og_image is defined and og_image else url_for('static', filename='img/og.png', _external=True)) %}
 {% set hero_img = url_for('static', filename='img/banners/hero_home.png') %}
+{% set og_img = (og_image if og_image is defined and og_image else url_for('static', filename='img/og.png', _external=True)) %}
 
-{% block title %}{{ (meta_title | default("Skyline Store · Tech + Streetwear premium")) | e }}{% endblock %}
+{% block title %}{{ meta_title | default("Skyline Store · Tech + Streetwear premium", true) }}{% endblock %}
 
 {% block extra_head %}
-<meta name="description" content="{{ (meta_description | default('Skyline Store · Moda urbana premium, accesorios y tecnología.')) | e }}">
+<meta name="description" content="{{ meta_description | default('Moda urbana premium, accesorios y tecnología.', true) }}">
+<meta name="robots" content="{{ 'index,follow' if ENV == 'production' else 'noindex,nofollow' }}">
 <link rel="canonical" href="{{ request.base_url }}">
 
-<meta property="og:title" content="{{ (meta_title | default('Skyline Store · Tech + Streetwear premium')) | e }}">
-<meta property="og:description" content="{{ (meta_description | default('Moda urbana y tecnología seleccionada. Experiencia rápida, segura y con soporte real.')) | e }}">
+<meta property="og:title" content="{{ meta_title | default('Skyline Store · Tech + Streetwear premium', true) }}">
+<meta property="og:description" content="{{ meta_description | default('Comprá fácil, rápido y seguro.', true) }}">
 <meta property="og:type" content="website">
 <meta property="og:url" content="{{ request.base_url }}">
-<meta property="og:image" content="{{ _og_img }}">
+<meta property="og:image" content="{{ og_img }}">
 <meta name="twitter:card" content="summary_large_image">
 
-<meta name="theme-color" content="#2563eb">
-<meta http-equiv="X-UA-Compatible" content="IE=edge">
-
+<link rel="preconnect" href="{{ url_for('static', filename='') }}">
 <link rel="preload" as="image" href="{{ hero_img }}" fetchpriority="high">
-<link rel="prefetch" href="{{ shop_url }}">
 
 <link rel="stylesheet" href="{{ url_for('static', filename='css/home.css') }}">
 {% endblock %}
 
 {% block content %}
+<main class="home-pro" id="hpMain" role="main">
 
-{# ✅ Mejora NUEVA 3: categorías “safe” (si falta la img no rompe y queda degradado) #}
-{% set cats = [
-  {'label':'Ropa urbana',   'img':'img/categories/ropa.jpg',       'tag':'Top ventas', 'tagcls':'primary', 'href': shop_url ~ '?categoria=ropa'},
-  {'label':'Accesorios',    'img':'img/categories/accesorios.jpg', 'tag':'Must have',  'tagcls':'',        'href': shop_url ~ '?categoria=accesorios'},
-  {'label':'Tecnología',    'img':'img/categories/tech.jpg',       'tag':'Nuevo',      'tagcls':'',        'href': shop_url ~ '?categoria=tecnologia'},
-  {'label':'Ofertas',       'img':'img/categories/ofertas.jpg',    'tag':'Flash',      'tagcls':'primary', 'href': shop_url ~ '?q=oferta'},
-] %}
+<section class="hp-heroGrid" role="region" aria-labelledby="hpTitle">
+  <header class="hp-heroMain">
+    <div class="hp-heroMedia">
+      <img src="{{ hero_img }}"
+           alt=""
+           width="1600"
+           height="900"
+           loading="eager"
+           decoding="async"
+           fetchpriority="high"
+           onerror="this.style.display='none'">
+    </div>
 
-<a class="sr-only" href="#hpMain">Saltar al contenido</a>
+    <div class="hp-heroInner">
+      <h1 id="hpTitle" class="hp-title">
+        Streetwear <span class="grad">premium</span> + Tech
+      </h1>
 
-<main class="home-pro" id="hpMain" aria-label="Inicio Skyline Store">
-  <div class="hp-wrap section">
+      <p class="hp-sub">
+        Moda urbana y tecnología seleccionada. Compra rápida, segura y con soporte real.
+      </p>
 
-    {% include "components/toasts.html" ignore missing %}
-
-    <!-- TOP -->
-    <section class="hp-top" aria-label="Beneficios y accesos">
-      <div>
-        <div class="hp-badges" aria-label="Beneficios">
-          <span class="hp-badge"><span class="hp-dot" aria-hidden="true"></span> Envío rápido</span>
-          <span class="hp-badge"><span class="hp-dot" aria-hidden="true"></span> Pago seguro</span>
-          <span class="hp-badge"><span class="hp-dot" aria-hidden="true"></span> Soporte real</span>
-          <span class="hp-badge"><span class="hp-dot" aria-hidden="true"></span> Compra protegida</span>
-        </div>
-
-        <nav class="hp-actions" aria-label="Accesos rápidos">
-          <a class="hp-action" href="{{ shop_url }}?sort=new"><span class="mini" aria-hidden="true"></span> Novedades</a>
-          <a class="hp-action" href="{{ shop_url }}?q=oferta"><span class="mini" aria-hidden="true"></span> Ofertas</a>
-          <a class="hp-action" href="{{ shop_url }}"><span class="mini" aria-hidden="true"></span> Ver todo</a>
-        </nav>
+      <div class="hp-ctas">
+        <a href="{{ shop_url }}" class="btn primary" aria-current="page">Comprar ahora</a>
+        <a href="{{ shop_url }}?q=oferta" class="btn ghost">Ver ofertas</a>
       </div>
+    </div>
+  </header>
 
-      <aside class="hp-hint" aria-label="Consejo de búsqueda">
-        <b>Tip:</b> usá <span class="k" aria-label="barra">/</span> para enfocarte en el buscador del header y encontrar productos en 1 segundo.
-        <div class="small" style="margin-top:8px">La búsqueda principal está arriba (sin duplicados).</div>
-      </aside>
-    </section>
+  <aside class="hp-trust" role="region" aria-label="Confianza">
+    <p><b>Compra segura</b></p>
+    <p class="small">Pagos protegidos · Envíos con seguimiento · Soporte real</p>
 
-    <noscript>
-      <section class="hp-banner" style="margin-top:12px" aria-label="Aviso">
-        <div>
-          <b>Tip:</b> Activá JavaScript para animaciones, sticky CTA y reveal.
-          <p class="small">La tienda igual funciona perfecta.</p>
-        </div>
-      </section>
-    </noscript>
+    <a class="btn primary" href="{{ account_url }}">Ingresar / Crear cuenta</a>
+  </aside>
+</section>
 
-    <!-- MINI SLIDER -->
-    <section class="hp-miniSlider hp-reveal" data-reveal aria-label="Ofertas rápidas">
-      <div class="hp-miniTrack" id="hpMiniTrack" role="list" aria-label="Atajos rápidos">
-        <a class="hp-miniItem" role="listitem" href="{{ shop_url }}?q=oferta">🔥 Ofertas reales hoy</a>
-        <a class="hp-miniItem" role="listitem" href="{{ shop_url }}?sort=new">🆕 Novedades premium</a>
-        <a class="hp-miniItem" role="listitem" href="{{ shop_url }}?categoria=tecnologia">⌚ Tech trending</a>
-        <a class="hp-miniItem" role="listitem" href="{{ shop_url }}">🚚 Envío rápido + soporte</a>
-      </div>
-    </section>
+<section class="hp-cats" role="region" aria-labelledby="hpCats">
+  <h2 id="hpCats">Categorías</h2>
 
-    <!-- HERO + TRUST -->
-    <section class="hp-heroGrid" aria-label="Hero principal y confianza">
+  {% set cats = [
+    {'label':'Ropa urbana','img':'img/categories/ropa.jpg','href': shop_url ~ '?categoria=ropa'},
+    {'label':'Accesorios','img':'img/categories/accesorios.jpg','href': shop_url ~ '?categoria=accesorios'},
+    {'label':'Tecnología','img':'img/categories/tech.jpg','href': shop_url ~ '?categoria=tecnologia'},
+    {'label':'Ofertas','img':'img/categories/ofertas.jpg','href': shop_url ~ '?q=oferta'},
+  ] %}
 
-      <!-- HERO -->
-      <header class="hp-heroMain hp-reveal" data-reveal aria-label="Presentación principal">
-        <div class="hp-heroMedia" aria-hidden="true">
-          <img
-            id="hpHeroImg"
-            src="{{ hero_img }}"
-            alt=""
-            width="1600"
-            height="900"
-            loading="eager"
-            decoding="async"
-            fetchpriority="high"
-            referrerpolicy="no-referrer"
-            onerror="this.onerror=null; this.style.display='none'; this.parentElement.classList.add('media-failed');"
-          >
-        </div>
-
-        <div class="hp-heroShade" aria-hidden="true"></div>
-
-        <div class="hp-heroInner">
-          <span class="hp-kicker"><span class="dot" aria-hidden="true"></span> TEMPORADA 2026</span>
-
-          <h1 class="hp-title">Streetwear <span class="grad">premium</span> + Tech</h1>
-
-          <p class="hp-sub">
-            Moda urbana y tecnología seleccionada. Experiencia tipo marketplace: rápida, segura y con soporte real.
-          </p>
-
-          <div class="hp-ctas" aria-label="Acciones principales">
-            <a href="{{ shop_url }}" class="btn primary" aria-label="Comprar ahora">Comprar ahora</a>
-            <a href="{{ shop_url }}?q=oferta" class="btn ghost" aria-label="Ver ofertas">Ver ofertas</a>
-            <a href="{{ shop_url }}?sort=new" class="btn ghost" aria-label="Ver novedades">Novedades</a>
-          </div>
-
-          <div class="hp-proof" aria-label="Ventajas rápidas">
-            <span class="hp-pill" data-pill data-target="#hpGrid" role="button" tabindex="0"><span class="p" aria-hidden="true"></span> Checkout optimizado</span>
-            <span class="hp-pill" data-pill data-target="#hpGrid" role="button" tabindex="0"><span class="p" aria-hidden="true"></span> Envíos rápidos</span>
-            <span class="hp-pill" data-pill data-target="#hpGrid" role="button" tabindex="0"><span class="p" aria-hidden="true"></span> Atención real</span>
-          </div>
-        </div>
-      </header>
-
-      <!-- TRUST -->
-      <aside class="hp-trust hp-reveal" data-reveal aria-label="Seguridad y cuenta">
-        <div class="inner">
-          <div class="row">
-            <p class="title">Compra segura</p>
-            <span class="hp-secure" aria-label="Estado verificado">● Verificado</span>
-          </div>
-
-          <p class="muted">Accedé a pedidos, favoritos y cupones. Tu cuenta está protegida.</p>
-
-          <div class="ctaRow" aria-label="Acciones de cuenta">
-            <a class="btn primary" href="{{ account_url }}">Ingresar</a>
-            <a class="btn ghost" href="{{ account_url }}">Crear cuenta</a>
-          </div>
-
-          <div class="miniList">
-            <b>Incluye</b>
-            <div class="small" style="margin-top:6px">Seguimiento de pedidos · cupones · drops exclusivos · soporte</div>
-          </div>
-
-          <div class="hp-trustIcons" aria-label="Garantías rápidas">
-            <div class="hp-ti"><b>🔒 Seguro</b><span>Pagos protegidos</span></div>
-            <div class="hp-ti"><b>🚚 Envío</b><span>Con seguimiento</span></div>
-            <div class="hp-ti"><b>💬 Soporte</b><span>Atención real</span></div>
-          </div>
-
-          <hr>
-
-          <div class="small">
-            <b>Pago:</b> MercadoPago / Transferencia / (próximamente más) <br>
-            <b>Envíos:</b> rápidos y con seguimiento
-          </div>
-        </div>
-      </aside>
-    </section>
-
-    <!-- Banner -->
-    <section class="hp-banner hp-reveal" data-reveal aria-label="Mensaje de marca">
-      <div>
-        <b>Skyline Store</b>
-        <p class="small">Drops premium · ofertas reales · experiencia rápida y segura</p>
-      </div>
-      <a class="btn primary" href="{{ shop_url }}?q=oferta" aria-label="Ver ofertas">Ver ofertas</a>
-    </section>
-
-    <!-- CATEGORIES -->
-    <section aria-label="Categorías" style="margin-top:16px">
-      <div class="hp-head">
-        <div>
-          <h2 class="hp-reveal" data-reveal>Categorías</h2>
-          <div class="sub hp-reveal" data-reveal>Encontrá rápido lo que buscás</div>
-        </div>
-        <a class="btn ghost hp-reveal" data-reveal href="{{ shop_url }}">Ver todo →</a>
-      </div>
-
-      <div class="hp-catsGrid hp-catsGrid--media" aria-label="Grilla de categorías">
-        {% for c in cats %}
-        <a class="hp-catCard hp-reveal" data-reveal href="{{ c.href }}">
-          <div class="media">
-            <img
-              src="{{ url_for('static', filename=c.img) }}"
-              alt="{{ (c.label | default('Categoría')) | e }}"
-              width="640"
-              height="480"
-              loading="lazy"
-              decoding="async"
-              referrerpolicy="no-referrer"
-              onerror="this.onerror=null; this.classList.add('img-failed'); this.parentElement.classList.add('media-failed');"
-            >
-          </div>
-          <div class="body">
-            <div class="label">{{ (c.label | default('Categoría')) | e }}</div>
-            <div class="meta">Explorá ahora</div>
-            <span class="tag {{ c.tagcls }}">{{ (c.tag | default('')) | e }}</span>
-          </div>
-        </a>
-        {% endfor %}
-      </div>
-    </section>
-
-    <!-- FEATURED -->
-    <section class="hpGrid" aria-label="Productos destacados">
-      <div class="hp-head">
-        <div>
-          <h2 class="hp-reveal" data-reveal>Destacados</h2>
-          <div class="sub hp-reveal" data-reveal>Selección premium curada para vos</div>
-        </div>
-        <a class="btn ghost hp-reveal" data-reveal href="{{ shop_url }}">Ver todo →</a>
-      </div>
-
-      {# ✅ Mejora NUEVA 4: featured ultra-safe aunque venga raro #}
-      {% set featured_list = (featured if featured is defined and featured else []) %}
-
-      <div class="gridP" id="hpGrid">
-        {% if featured_list|length == 0 %}
-          <div class="hp-skel" aria-hidden="true"></div>
-          <div class="hp-skel" aria-hidden="true"></div>
-          <div class="hp-skel" aria-hidden="true"></div>
-          <div class="hp-skel" aria-hidden="true"></div>
-
-          <div class="card" style="grid-column:1 / -1; padding:18px">
-            <h3 style="margin:0 0 6px">Todavía no hay productos destacados</h3>
-            <p style="margin:0">Cargalos desde Admin → Productos y van a aparecer acá automáticamente.</p>
-            <div style="margin-top:12px">
-              <a class="btn primary" href="{{ shop_url }}">Ir a la tienda</a>
-            </div>
-          </div>
-        {% else %}
-          {% for p in featured_list %}
-            {% set _img = (p.img if p is mapping and p.img is defined and p.img else hero_img) %}
-            {% set _title = (p.title if p is mapping and p.title is defined and p.title else 'Producto') %}
-            {% set _href = (p.href if p is mapping and p.href is defined and p.href else shop_url) %}
-
-            {% set price = (p.price_value if p is mapping and p.price_value is defined else (p.price if p is mapping and p.price is defined else none)) %}
-            {% set currency = (p.currency if p is mapping and p.currency is defined and p.currency else 'UYU') %}
-            {% set compare_at = (p.compare_at if p is mapping and p.compare_at is defined else none) %}
-            {% set discount_pct = (p.discount_pct if p is mapping and p.discount_pct is defined else none) %}
-
-            <article class="hpCard hp-reveal" data-reveal aria-label="Producto destacado">
-              <div class="hpMedia">
-                {% set badge_text = "Destacado" %}
-                {% include "components/badge.html" ignore missing %}
-
-                <img
-                  src="{{ _img }}"
-                  alt="{{ _title | e }}"
-                  width="900"
-                  height="900"
-                  loading="lazy"
-                  decoding="async"
-                  referrerpolicy="no-referrer"
-                  onerror="this.onerror=null; this.classList.add('img-failed'); this.parentElement.classList.add('media-failed');"
-                >
-              </div>
-
-              <div class="hpMeta">
-                <div class="hpName">{{ _title | e }}</div>
-
-                {% set rating_value = (p.rating if p is mapping and p.rating is defined else none) %}
-                {% include "components/rating.html" ignore missing %}
-
-                <div class="hpSub">Selección premium</div>
-
-                {# include sin "with" (compat máxima) #}
-                {% include "components/price.html" ignore missing %}
-              </div>
-
-              <div class="hpActions">
-                <a class="btn primary" href="{{ _href }}">Comprar</a>
-                <a class="btn ghost" href="{{ _href }}">Detalles</a>
-              </div>
-            </article>
-          {% endfor %}
-        {% endif %}
-      </div>
-    </section>
-
+  <div class="hp-catsGrid">
+    {% for c in cats %}
+      <a class="hp-catCard" href="{{ c.href }}">
+        <img src="{{ url_for('static', filename=c.img) }}"
+             alt="{{ c.label }}"
+             loading="lazy"
+             decoding="async"
+             onerror="this.style.display='none'">
+        <span>{{ c.label }}</span>
+      </a>
+    {% endfor %}
   </div>
+</section>
+
+<section class="hp-featured" role="region" aria-labelledby="hpFeat">
+  <h2 id="hpFeat">Destacados</h2>
+
+  {% set featured_list = (featured if featured is defined and featured else []) %}
+
+  <div class="gridP">
+    {% if featured_list|length == 0 %}
+      <div class="card" aria-hidden="true">
+        <p>No hay productos destacados aún.</p>
+        <a class="btn primary" href="{{ shop_url }}">Ir a la tienda</a>
+      </div>
+    {% else %}
+      {% for p in featured_list %}
+        <article class="hpCard">
+          <img src="{{ p.img | default(hero_img, true) }}"
+               alt="{{ p.title | default('Producto', true) }}"
+               loading="lazy"
+               decoding="async">
+          <div class="hpMeta">
+            <b>{{ p.title | default('Producto', true) }}</b>
+            {% include "components/price.html" ignore missing %}
+          </div>
+          <a class="btn primary" href="{{ p.href | default(shop_url, true) }}">Comprar</a>
+        </article>
+      {% endfor %}
+    {% endif %}
+  </div>
+</section>
+
 </main>
 
-<div class="sticky-cta" id="hpSticky" aria-label="Acción rápida">
-  <div class="inner">
-    <div>
-      <b>Skyline Store</b>
-      <p class="small">Explorá ofertas y drops premium</p>
-    </div>
-    <a class="cta-btn" href="{{ shop_url }}" aria-label="Ir a comprar">Comprar</a>
+<div class="sticky-cta" id="hpSticky" aria-live="polite">
+  <div>
+    <b>Skyline Store</b>
+    <span>Explorá ofertas premium</span>
   </div>
+  <a href="{{ shop_url }}" class="cta-btn">Comprar</a>
 </div>
 
-<button class="to-top" id="toTop" aria-label="Volver arriba" type="button">↑</button>
+<button id="toTop" type="button" class="to-top" aria-label="Volver arriba">↑</button>
 {% endblock %}
 
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/home.js') }}" defer></script>
-<script>
-(() => {
-  const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-  const ready = (fn) => (document.readyState !== "loading")
-    ? fn()
-    : document.addEventListener("DOMContentLoaded", fn, { once:true });
-
-  ready(() => {
-    document.querySelectorAll('[data-reveal]').forEach(el => el.classList.add('is-ready'));
-
-    if (document.documentElement.dataset.hpBound === "1") return;
-    document.documentElement.dataset.hpBound = "1";
-
-    const pills = document.querySelectorAll(".hp-pill[role='button'][data-pill][data-target]");
-    pills.forEach(el => {
-      if (el.dataset.bound === "1") return;
-      el.dataset.bound = "1";
-
-      el.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); el.click(); }
-      });
-
-      el.addEventListener("click", () => {
-        const sel = el.getAttribute("data-target");
-        const t = sel ? document.querySelector(sel) : null;
-        if (t) t.scrollIntoView({ behavior: prefersReduced ? "auto" : "smooth", block: "start" });
-        el.focus({ preventScroll: true });
-      }, { passive:true });
-    });
-
-    const sticky = document.getElementById("hpSticky");
-    const toTop = document.getElementById("toTop");
-
-    const updateUI = () => {
-      const y = window.scrollY || 0;
-      if (toTop) toTop.style.display = (y > 600) ? "grid" : "none";
-      if (sticky) sticky.classList.toggle("is-on", y > 420);
-    };
-
-    if (toTop && !toTop.dataset.bound) {
-      toTop.dataset.bound = "1";
-      toTop.addEventListener("click", () => window.scrollTo({ top: 0, behavior: prefersReduced ? "auto" : "smooth" }));
-    }
-
-    let ticking = false;
-    const onScroll = () => {
-      if (ticking) return;
-      ticking = true;
-      requestAnimationFrame(() => { ticking = false; updateUI(); });
-    };
-
-    updateUI();
-    window.addEventListener("scroll", onScroll, { passive:true });
-  });
-})();
-</script>
 {% endblock %}
