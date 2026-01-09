@@ -4,46 +4,53 @@
 {% block extra_head %}
   <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
   <meta name="robots" content="{{ 'index,follow' if ENV == 'production' else 'noindex,nofollow' }}">
+
+  {# +5 mejoras diseño: micro-estilos safe (no rompe tu CSS) #}
+  <style>
+    .ss-login__head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+    .ss-login__head h2{margin:0;font-size:1.35rem;letter-spacing:-.02em}
+    .ss-login__head small{display:block;opacity:.75;margin-top:2px}
+    .ss-login__secure{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;border:1px solid rgba(0,0,0,.12);font-size:.9rem}
+    .ss-login__divider{display:flex;align-items:center;gap:12px;margin:14px 0;opacity:.85}
+    .ss-login__divider:before,.ss-login__divider:after{content:"";flex:1;height:1px;background:rgba(0,0,0,.12)}
+    .ss-login__divider span{font-size:.85rem}
+    .ss-login__input:focus{outline:0;box-shadow:0 0 0 4px rgba(0,0,0,.08)}
+    .ss-login__flash{border-radius:14px;padding:10px 12px;border:1px solid rgba(0,0,0,.10)}
+    .ss-login__flash.error{border-color:rgba(220,38,38,.25)}
+    .ss-login__flash.success{border-color:rgba(34,197,94,.25)}
+    .ss-login__submit[aria-busy="true"]{opacity:.85;cursor:progress}
+    .ss-login__spinner{width:16px;height:16px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;display:inline-block;vertical-align:-3px;animation:sspin .9s linear infinite}
+    @keyframes sspin{to{transform:rotate(360deg)}}
+    @media (max-width: 520px){
+      .ss-login__head h2{font-size:1.25rem}
+      .ss-login__divider{margin:12px 0}
+    }
+  </style>
 {% endblock %}
 
 {% block content %}
 {# ---------------------------------------------------------
    LOGIN — Skyline Store (ULTRA PRO / NO BREAK · FINAL)
-   ✅ 10 mejoras:
-   1) endpoints safe (sin try/except inválido en Jinja)
-   2) CSRF único (no duplica) + compat Flask-WTF/CSRFProtect
-   3) next sanitizado (evita open-redirect básico)
-   4) autocomplete/aria mejorados
-   5) form action safe fallback
-   6) honeypot anti-bot (opcional, no rompe)
-   7) submit disable/aria-busy (mejor UX)
-   8) mensajes flash sanitizados por categoría
-   9) remember preservado
-   10) values POST safe sin depender de request.method string
+   ✅ Endpoints safe
+   ✅ CSRF único (compat Flask-WTF/CSRFProtect)
+   ✅ next sanitizado (anti open-redirect)
+   ✅ UX + accesibilidad
 ---------------------------------------------------------- #}
 
 {% set _vf = (view_functions if view_functions is defined and view_functions else {}) %}
 
 {# ---------- safe endpoints ---------- #}
 {% set login_ep = 'auth.login' %}
-{% if login_ep not in _vf %}
-  {% set login_ep = None %}
-{% endif %}
+{% if login_ep not in _vf %}{% set login_ep = None %}{% endif %}
 
 {% set register_ep = 'auth.register' %}
-{% if register_ep not in _vf %}
-  {% set register_ep = None %}
-{% endif %}
+{% if register_ep not in _vf %}{% set register_ep = None %}{% endif %}
 
 {% set shop_ep = 'shop.shop' %}
-{% if shop_ep not in _vf %}
-  {% set shop_ep = None %}
-{% endif %}
+{% if shop_ep not in _vf %}{% set shop_ep = None %}{% endif %}
 
 {% set forgot_ep = 'auth.forgot' %}
-{% if forgot_ep not in _vf %}
-  {% set forgot_ep = None %}
-{% endif %}
+{% if forgot_ep not in _vf %}{% set forgot_ep = None %}{% endif %}
 
 {# ---------- next safe (evita redirección externa) ---------- #}
 {% set _raw_next = (next if next is defined and next else request.args.get('next', '')) %}
@@ -106,11 +113,16 @@
     <!-- RIGHT -->
     <div class="ss-login__right" aria-label="Formulario de ingreso">
       <div class="ss-login__head">
-        <h2>Ingresar</h2>
-        <span class="ss-login__secure" title="Conexión segura" aria-label="Conexión segura">🔒 Seguro</span>
+        <div>
+          <h2>Ingresar</h2>
+          <small>Accedé a tu cuenta para comprar más rápido.</small>
+        </div>
+        <span class="ss-login__secure" title="Conexión segura" aria-label="Conexión segura">
+          🔒 <span>Seguro</span>
+        </span>
       </div>
 
-      {# FLASH MESSAGES (clase sanitizada) #}
+      {# FLASH MESSAGES #}
       {% set _msgs = get_flashed_messages(with_categories=true) %}
       {% if _msgs %}
         {% for category, msg in _msgs %}
@@ -131,11 +143,6 @@
 
         {# -------------------------
            CSRF (UNICO / NO DUPLICA)
-           Prioridad:
-           1) form.hidden_tag (si es FlaskForm)
-           2) form.csrf_token
-           3) csrf_token() global
-           4) csrf_token string
         -------------------------- #}
         {% if form is defined and form.hidden_tag is defined %}
           {{ form.hidden_tag() }}
@@ -149,7 +156,7 @@
           {% endif %}
         {% endif %}
 
-        {# NONCE opcional (si tu backend lo exige) #}
+        {# NONCE opcional #}
         {% if nonce is defined and nonce %}
           <input type="hidden" name="nonce" value="{{ nonce }}">
         {% endif %}
@@ -159,7 +166,7 @@
           <input type="hidden" name="next" value="{{ nxt|e }}">
         {% endif %}
 
-        {# Honeypot anti-bot (no rompe backend si lo ignora) #}
+        {# Honeypot anti-bot #}
         <div style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden" aria-hidden="true">
           <label>Website</label>
           <input type="text" name="website" tabindex="-1" autocomplete="off">
@@ -223,7 +230,13 @@
           {% endif %}
         </div>
 
-        <button type="submit" class="ss-login__submit" id="submitBtn">Entrar</button>
+        <button type="submit" class="ss-login__submit" id="submitBtn">
+          Entrar
+        </button>
+
+        <div class="ss-login__divider" aria-hidden="true">
+          <span>o</span>
+        </div>
 
         <div class="ss-login__links" aria-label="Links">
           <a href="{{ register_url }}">Crear cuenta</a>
@@ -237,7 +250,7 @@
 
 <script defer src="{{ url_for('static', filename='js/login.js') }}"></script>
 
-{# UX micro: submit disable (no rompe si login.js ya lo hace) #}
+{# UX micro: submit disable + loader accesible #}
 <script>
 (() => {
   const f = document.getElementById("loginForm");
@@ -245,10 +258,12 @@
   if (!f || !b) return;
   if (f.dataset.bound === "1") return;
   f.dataset.bound = "1";
+
   f.addEventListener("submit", () => {
+    if (b.disabled) return;
     b.disabled = true;
     b.setAttribute("aria-busy", "true");
-    b.textContent = "Ingresando...";
+    b.innerHTML = '<span class="ss-login__spinner" aria-hidden="true"></span> Ingresando...';
   }, { passive: true });
 })();
 </script>
