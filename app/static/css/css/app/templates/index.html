@@ -1,0 +1,152 @@
+{# app/templates/home.html — Skyline Store (ULTRA PRO · v6 FINAL · NO-500) #}
+{% extends "base.html" %}
+
+{# ============================================================
+   SAFE ENDPOINT RESOLVER
+============================================================ #}
+{% set _vf = (view_functions if view_functions is defined and view_functions else {}) %}
+
+{% set shop_url = '/shop' %}
+{% if 'shop.shop' in _vf %}
+  {% set shop_url = url_for('shop.shop') %}
+{% endif %}
+
+{% set account_url = '/account' %}
+{% for ep in ['account.account','account.login','auth.login'] %}
+  {% if account_url == '/account' and ep in _vf %}
+    {% set account_url = url_for(ep) %}
+  {% endif %}
+{% endfor %}
+
+{% set hero_img = url_for('static', filename='img/banners/hero_home.png') %}
+{% set og_img = (og_image if og_image is defined and og_image else url_for('static', filename='img/og.png', _external=True)) %}
+
+{% block title %}{{ meta_title | default("Skyline Store · Tech + Streetwear premium", true) }}{% endblock %}
+
+{% block extra_head %}
+<meta name="description" content="{{ meta_description | default('Moda urbana premium, accesorios y tecnología.', true) }}">
+<meta name="robots" content="{{ 'index,follow' if ENV == 'production' else 'noindex,nofollow' }}">
+<link rel="canonical" href="{{ request.base_url }}">
+
+<meta property="og:title" content="{{ meta_title | default('Skyline Store · Tech + Streetwear premium', true) }}">
+<meta property="og:description" content="{{ meta_description | default('Comprá fácil, rápido y seguro.', true) }}">
+<meta property="og:type" content="website">
+<meta property="og:url" content="{{ request.base_url }}">
+<meta property="og:image" content="{{ og_img }}">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="preconnect" href="{{ url_for('static', filename='') }}">
+<link rel="preload" as="image" href="{{ hero_img }}" fetchpriority="high">
+
+<link rel="stylesheet" href="{{ url_for('static', filename='css/home.css') }}">
+{% endblock %}
+
+{% block content %}
+<main class="home-pro" id="hpMain" role="main">
+
+<section class="hp-heroGrid" role="region" aria-labelledby="hpTitle">
+  <header class="hp-heroMain">
+    <div class="hp-heroMedia">
+      <img src="{{ hero_img }}"
+           alt=""
+           width="1600"
+           height="900"
+           loading="eager"
+           decoding="async"
+           fetchpriority="high"
+           onerror="this.style.display='none'">
+    </div>
+
+    <div class="hp-heroInner">
+      <h1 id="hpTitle" class="hp-title">
+        Streetwear <span class="grad">premium</span> + Tech
+      </h1>
+
+      <p class="hp-sub">
+        Moda urbana y tecnología seleccionada. Compra rápida, segura y con soporte real.
+      </p>
+
+      <div class="hp-ctas">
+        <a href="{{ shop_url }}" class="btn primary" aria-current="page">Comprar ahora</a>
+        <a href="{{ shop_url }}?q=oferta" class="btn ghost">Ver ofertas</a>
+      </div>
+    </div>
+  </header>
+
+  <aside class="hp-trust" role="region" aria-label="Confianza">
+    <p><b>Compra segura</b></p>
+    <p class="small">Pagos protegidos · Envíos con seguimiento · Soporte real</p>
+
+    <a class="btn primary" href="{{ account_url }}">Ingresar / Crear cuenta</a>
+  </aside>
+</section>
+
+<section class="hp-cats" role="region" aria-labelledby="hpCats">
+  <h2 id="hpCats">Categorías</h2>
+
+  {% set cats = [
+    {'label':'Ropa urbana','img':'img/categories/ropa.jpg','href': shop_url ~ '?categoria=ropa'},
+    {'label':'Accesorios','img':'img/categories/accesorios.jpg','href': shop_url ~ '?categoria=accesorios'},
+    {'label':'Tecnología','img':'img/categories/tech.jpg','href': shop_url ~ '?categoria=tecnologia'},
+    {'label':'Ofertas','img':'img/categories/ofertas.jpg','href': shop_url ~ '?q=oferta'},
+  ] %}
+
+  <div class="hp-catsGrid">
+    {% for c in cats %}
+      <a class="hp-catCard" href="{{ c.href }}">
+        <img src="{{ url_for('static', filename=c.img) }}"
+             alt="{{ c.label }}"
+             loading="lazy"
+             decoding="async"
+             onerror="this.style.display='none'">
+        <span>{{ c.label }}</span>
+      </a>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="hp-featured" role="region" aria-labelledby="hpFeat">
+  <h2 id="hpFeat">Destacados</h2>
+
+  {% set featured_list = (featured if featured is defined and featured else []) %}
+
+  <div class="gridP">
+    {% if featured_list|length == 0 %}
+      <div class="card" aria-hidden="true">
+        <p>No hay productos destacados aún.</p>
+        <a class="btn primary" href="{{ shop_url }}">Ir a la tienda</a>
+      </div>
+    {% else %}
+      {% for p in featured_list %}
+        <article class="hpCard">
+          <img src="{{ p.img | default(hero_img, true) }}"
+               alt="{{ p.title | default('Producto', true) }}"
+               loading="lazy"
+               decoding="async">
+          <div class="hpMeta">
+            <b>{{ p.title | default('Producto', true) }}</b>
+            {% include "components/price.html" ignore missing %}
+          </div>
+          <a class="btn primary" href="{{ p.href | default(shop_url, true) }}">Comprar</a>
+        </article>
+      {% endfor %}
+    {% endif %}
+  </div>
+</section>
+
+</main>
+
+<div class="sticky-cta" id="hpSticky" aria-live="polite">
+  <div>
+    <b>Skyline Store</b>
+    <span>Explorá ofertas premium</span>
+  </div>
+  <a href="{{ shop_url }}" class="cta-btn">Comprar</a>
+</div>
+
+<button id="toTop" type="button" class="to-top" aria-label="Volver arriba">↑</button>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/home.js') }}" defer></script>
+{% endblock %}

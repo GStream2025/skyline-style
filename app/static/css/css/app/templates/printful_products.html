@@ -1,0 +1,76 @@
+{# app/templates/printful_products.html — Vista interna Printful (ULTRA) #}
+{% extends "admin/base_admin.html" %}
+{% block title %}Printful · Productos{% endblock %}
+
+{% block content %}
+  <h1 style="margin:.2rem 0 0;font-weight:1000;letter-spacing:-.5px">Printful · Productos</h1>
+  <p class="muted" style="margin:.45rem 0 1rem">
+    Vista interna para revisar lo que trae Printful. Importar crea un borrador editable en tu catálogo.
+  </p>
+
+  <form method="get" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px">
+    <input name="q" value="{{ q }}" placeholder="Buscar por nombre / id" style="flex:1;min-width:220px">
+    <select name="category" style="min-width:180px">
+      <option value="" {% if not category %}selected{% endif %}>Todas</option>
+      <option value="all" {% if category=="all" %}selected{% endif %}>All</option>
+      <option value="buzos" {% if category=="buzos" %}selected{% endif %}>Buzos</option>
+      <option value="remeras" {% if category=="remeras" %}selected{% endif %}>Remeras</option>
+      <option value="gorros" {% if category=="gorros" %}selected{% endif %}>Gorros</option>
+      <option value="accesorios" {% if category=="accesorios" %}selected{% endif %}>Accesorios</option>
+      <option value="otros" {% if category=="otros" %}selected{% endif %}>Otros</option>
+    </select>
+    <select name="sort" style="min-width:180px">
+      <option value="id" {% if sort=="id" %}selected{% endif %}>ID ↑</option>
+      <option value="id_desc" {% if sort=="id_desc" %}selected{% endif %}>ID ↓</option>
+      <option value="name" {% if sort=="name" %}selected{% endif %}>Nombre A→Z</option>
+      <option value="name_desc" {% if sort=="name_desc" %}selected{% endif %}>Nombre Z→A</option>
+    </select>
+
+    <button class="btn" type="submit">Buscar</button>
+    <a class="btn2" href="/printful/productos">Reset</a>
+  </form>
+
+  {% if productos and productos|length %}
+    <div style="display:grid;grid-template-columns:1fr;gap:12px">
+      {% for p in productos %}
+        <article style="display:flex;gap:12px;align-items:center;padding:12px;border-radius:16px;border:1px solid rgba(148,163,184,.16);background:rgba(255,255,255,.05)">
+          <div style="width:72px;height:72px;border-radius:14px;overflow:hidden;border:1px solid rgba(148,163,184,.16);background:rgba(255,255,255,.06);display:grid;place-items:center">
+            {% if p.thumbnail %}
+              <img src="{{ p.thumbnail }}" alt="{{ p.name }}" style="width:100%;height:100%;object-fit:cover">
+            {% else %}
+              <span class="muted" style="font-size:.85rem">sin img</span>
+            {% endif %}
+          </div>
+
+          <div style="flex:1">
+            <div style="font-weight:950">{{ p.name }}</div>
+            <div class="muted" style="font-size:.92rem">ID: {{ p.id }} · {{ p.category_label }}</div>
+          </div>
+
+          <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end">
+            <a class="btn2" href="/shop?q={{ p.name|urlencode }}">Buscar en tienda</a>
+            <a class="btn" href="/admin/printful/import/{{ p.id }}">Importar → Borrador</a>
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:14px">
+      <div class="muted">
+        Página <b style="color:#e5e7eb">{{ page }}</b>{% if total_pages %} / {{ total_pages }}{% endif %}
+        {% if total_count is not none %} · Total: <b style="color:#e5e7eb">{{ total_count }}</b>{% endif %}
+      </div>
+
+      <div style="display:flex;gap:10px">
+        {% if has_prev %}
+          <a class="btn2" href="?page={{ prev_page }}&limit={{ limit }}&q={{ q|urlencode }}&category={{ category|urlencode }}&sort={{ sort|urlencode }}">← Anterior</a>
+        {% endif %}
+        {% if has_next %}
+          <a class="btn" href="?page={{ next_page }}&limit={{ limit }}&q={{ q|urlencode }}&category={{ category|urlencode }}&sort={{ sort|urlencode }}">Siguiente →</a>
+        {% endif %}
+      </div>
+    </div>
+  {% else %}
+    <div class="msg info">No hay productos para mostrar con esos filtros.</div>
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,371 @@
+{% extends "base.html" %}
+
+{% block title %}Sobre Skyline Style{% endblock %}
+
+{% block extra_head %}
+<style>
+    /* ===========================
+       SOBRE SKYLINE STYLE
+       =========================== */
+
+    .about-shell {
+        position: relative;
+        overflow: hidden;
+        background:
+            radial-gradient(circle at top left, rgba(56,189,248,0.25), transparent 55%),
+            radial-gradient(circle at bottom right, rgba(79,70,229,0.24), transparent 60%),
+            #020617;
+    }
+
+    .about-shell::before {
+        content: "";
+        position: absolute;
+        inset: -40%;
+        opacity: 0.22;
+        background-image:
+            linear-gradient(rgba(15,23,42,0.4) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(15,23,42,0.4) 1px, transparent 1px);
+        background-size: 38px 38px;
+        mask-image: radial-gradient(circle at center, black, transparent 70%);
+        pointer-events: none;
+    }
+
+    .about-content {
+        position: relative;
+        z-index: 1;
+    }
+
+    .about-pill {
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        box-shadow:
+            0 22px 50px rgba(15,23,42,0.9),
+            0 0 0 1px rgba(148,163,184,0.35);
+    }
+
+    .about-card {
+        border-radius: 1.8rem;
+        border: 1px solid rgba(148,163,184,0.35);
+        background:
+            radial-gradient(circle at top left, rgba(56,189,248,0.24), transparent 55%),
+            rgba(15,23,42,0.97);
+        box-shadow:
+            0 26px 60px rgba(15,23,42,0.95),
+            0 0 0 1px rgba(15,23,42,1);
+        transition:
+            transform .35s ease,
+            box-shadow .35s ease,
+            border-color .25s ease,
+            background .25s ease;
+    }
+
+    .about-card:hover {
+        transform: translateY(-6px);
+        border-color: rgba(56,189,248,0.9);
+        box-shadow:
+            0 32px 80px rgba(15,23,42,0.98),
+            0 0 0 1px rgba(59,130,246,0.95);
+        background:
+            radial-gradient(circle at top left, rgba(56,189,248,0.34), transparent 55%),
+            rgba(15,23,42,0.98);
+    }
+
+    .about-mini-card {
+        border-radius: 1.4rem;
+        border: 1px solid rgba(148,163,184,0.45);
+        background: rgba(15,23,42,0.92);
+        box-shadow:
+            0 20px 45px rgba(15,23,42,0.88),
+            0 0 0 1px rgba(15,23,42,1);
+    }
+
+    .about-tag {
+        font-size: 0.72rem;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: #93c5fd;
+    }
+
+    .about-gradient-text {
+        background: linear-gradient(120deg, #fbbf24, #22d3ee);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+    }
+
+    .about-quote-band {
+        border-radius: 1.6rem;
+        border: 1px solid rgba(56,189,248,0.55);
+        background:
+            linear-gradient(135deg, rgba(15,23,42,0.95), rgba(15,23,42,0.98)),
+            radial-gradient(circle at top left, rgba(56,189,248,0.35), transparent 55%);
+        box-shadow:
+            0 26px 70px rgba(15,23,42,0.95),
+            0 0 0 1px rgba(15,23,42,1);
+    }
+
+    .about-cta-btn {
+        border-radius: 999px;
+        background: linear-gradient(135deg, #38bdf8, #6366f1);
+        color: #020617;
+        box-shadow:
+            0 20px 55px rgba(56,189,248,0.8),
+            0 0 40px rgba(56,189,248,0.7);
+        transition:
+            transform .2s ease,
+            box-shadow .2s ease,
+            filter .2s ease;
+    }
+
+    .about-cta-btn:hover {
+        transform: translateY(-2px);
+        box-shadow:
+            0 26px 75px rgba(56,189,248,0.95),
+            0 0 55px rgba(129,140,248,0.9);
+        filter: brightness(1.05);
+    }
+
+    /* Animación base para GSAP (estado inicial) */
+    .about-animate {
+        opacity: 0;
+        transform: translateY(26px);
+    }
+
+    @media (max-width: 640px) {
+        .about-main-grid {
+            gap: 1.75rem;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .about-card,
+        .about-mini-card,
+        .about-quote-band,
+        .about-cta-btn {
+            transition: none !important;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="about-shell">
+    <div class="about-content max-w-6xl mx-auto px-4 pt-16 pb-20 md:pt-20 md:pb-24" id="about">
+
+        <!-- Badge arriba -->
+        <div class="flex justify-center mb-6 about-animate" data-about="pill">
+            <div class="about-pill inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-900/70 border border-sky-400/60 text-[11px] uppercase tracking-[0.18em] text-sky-100">
+                <span class="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                Proyecto en crecimiento · Hecho con gratitud
+            </div>
+        </div>
+
+        <!-- Hero texto + imagen -->
+        <div class="grid md:grid-cols-[1.15fr_minmax(0,1fr)] gap-8 lg:gap-12 items-center about-main-grid">
+
+            <!-- Texto principal -->
+            <div class="space-y-4 md:space-y-6 about-animate" data-about="hero-text">
+                <h1 class="text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight text-slate-50">
+                    El sueño detrás de
+                    <span class="about-gradient-text">Skyline Style</span>
+                </h1>
+                <p class="text-sm md:text-base text-slate-200 max-w-xl">
+                    Esto empezó como una idea sencilla: crear algo nuestro, con cariño y dedicación,
+                    y convertirlo de a poco en una marca que te acompañe en tu día a día, en la calle
+                    y en cada contenido que subís.
+                </p>
+
+                <!-- Mini métricas / sellos -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs md:text-sm mt-2">
+                    <div class="about-mini-card px-4 py-3">
+                        <p class="font-semibold text-sky-100">Hecho desde Uruguay</p>
+                        <p class="mt-1 text-slate-300">Diseñado con acento uruguayo y mirada global.</p>
+                    </div>
+                    <div class="about-mini-card px-4 py-3">
+                        <p class="font-semibold text-sky-100">Drops limitados</p>
+                        <p class="mt-1 text-slate-300">Series pensadas para que cada prenda tenga historia.</p>
+                    </div>
+                    <div class="about-mini-card px-4 py-3">
+                        <p class="font-semibold text-sky-100">Sueños que viajan</p>
+                        <p class="mt-1 text-slate-300">Cada pedido es un sueño cumplido que cruza fronteras.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Imagen equipo -->
+            <div class="about-animate" data-about="hero-image">
+                <article class="about-card overflow-hidden">
+                    <div class="relative">
+                        <img src="{{ url_for('static', filename='img/skyline_team.jpg') }}"
+                             class="w-full h-[260px] sm:h-[300px] md:h-[360px] lg:h-[380px] object-cover"
+                             alt="Equipo Skyline Style">
+                        <div class="absolute inset-0 bg-gradient-to-t from-slate-950/45 via-transparent to-transparent pointer-events-none"></div>
+                        <div class="absolute bottom-3 right-4 px-3 py-1.5 rounded-full bg-slate-950/80 border border-sky-400/60 text-[11px] text-sky-100 flex items-center gap-1.5">
+                            <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+                            +120 prendas testeadas en calle y contenido
+                        </div>
+                    </div>
+                </article>
+            </div>
+        </div>
+
+        <!-- Bloques de historia -->
+        <div class="mt-14 grid lg:grid-cols-2 gap-6 about-animate" data-about="story-grid">
+            <!-- Bloque 1 -->
+            <article class="about-card p-5 md:p-6 space-y-3">
+                <p class="about-tag">ORIGEN</p>
+                <h2 class="text-lg md:text-2xl font-semibold text-slate-50">
+                    Un simple sueño que se está haciendo real
+                </h2>
+                <p class="text-sm md:text-base text-slate-200">
+                    Skyline Style nace de esas charlas donde uno se imagina:
+                    “¿y si algún día tenemos nuestra propia marca?”. No venimos de grandes empresas ni
+                    de fábricas enormes: venimos de la calle, del día a día y de las ganas de crear algo distinto.
+                </p>
+                <p class="text-sm md:text-base text-slate-300">
+                    Cada diseño, prenda y detalle los pensamos como algo más que ropa:
+                    son pequeñas piezas de un sueño que se va construyendo junto a quienes se sienten parte de la marca.
+                </p>
+            </article>
+
+            <!-- Bloque 2 -->
+            <article class="about-card p-5 md:p-6 space-y-3">
+                <p class="about-tag">GRATITUD</p>
+                <h2 class="text-lg md:text-2xl font-semibold text-slate-50">
+                    Hacer las cosas con la mayor gratitud posible
+                </h2>
+                <p class="text-sm md:text-base text-slate-200">
+                    Agradecemos a cada persona que se toma un minuto para mirar lo que hacemos,
+                    seguir la marca, comprar una prenda o simplemente compartir Skyline Style.
+                </p>
+                <p class="text-sm md:text-base text-slate-300">
+                    Por eso cuidamos los materiales, los detalles del diseño y escuchamos el feedback en cada drop.
+                    Cada historia, foto o stream usando Skyline nos recuerda por qué empezamos.
+                </p>
+            </article>
+
+            <!-- Bloque 3 -->
+            <article class="about-card p-5 md:p-6 space-y-3">
+                <p class="about-tag">CRECIMIENTO</p>
+                <h2 class="text-lg md:text-2xl font-semibold text-slate-50">
+                    Crecer de a poco, pero con intención
+                </h2>
+                <p class="text-sm md:text-base text-slate-200">
+                    No buscamos hacer miles de prendas iguales. Preferimos drops pensados,
+                    cantidades limitadas y diseños con historia propia, para que cada pieza tenga su valor.
+                </p>
+                <p class="text-sm md:text-base text-slate-300">
+                    Queremos avanzar paso a paso, sin perder la esencia ni la cercanía,
+                    trayendo colecciones nuevas, ideas frescas y productos que realmente te sorprendan.
+                </p>
+            </article>
+
+            <!-- Bloque 4 -->
+            <article class="about-card p-5 md:p-6 space-y-3">
+                <p class="about-tag">URUGUAY + MUNDO</p>
+                <h2 class="text-lg md:text-2xl font-semibold text-slate-50">
+                    Desde Uruguay, con ayuda del mundo
+                </h2>
+                <p class="text-sm md:text-base text-slate-200">
+                    Somos uruguayos, con los pies en nuestro país y la cabeza soñando en grande.
+                    Para hacer realidad este proyecto sumamos aliados en el exterior que nos permiten
+                    producir y enviar cada prenda de forma segura y profesional.
+                </p>
+                <p class="text-sm md:text-base text-slate-300">
+                    Así, cada compra se convierte en una prenda real que viaja desde nuestros socios
+                    hasta donde estés. Cada paquete armado es un pequeño sueño preparado para llegar a tus manos.
+                </p>
+            </article>
+        </div>
+
+        <!-- Banda de frase -->
+        <div class="mt-12 about-animate" data-about="quote">
+            <div class="about-quote-band px-5 py-5 md:px-8 md:py-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div class="max-w-xl">
+                    <p class="text-xs md:text-sm text-sky-300 uppercase tracking-[0.18em] mb-1">
+                        LO QUE QUEREMOS TRANSMITIR
+                    </p>
+                    <p class="text-sm md:text-base text-slate-50">
+                        Skyline Style es para quienes quieren algo más que una prenda:
+                        quieren una historia, una actitud y una marca que crezca junto con ellos.
+                    </p>
+                </div>
+                <p class="text-xs md:text-sm text-slate-300 md:text-right">
+                    Si llegaste hasta acá, ya sos parte de cómo se escribe este proyecto.
+                </p>
+            </div>
+        </div>
+
+        <!-- CTA final -->
+        <div class="mt-12 text-center about-animate" data-about="cta">
+            <a href="{{ url_for('main.shop') }}"
+               class="about-cta-btn inline-flex items-center gap-2 px-8 py-3 text-sm md:text-base font-medium">
+                Ver colección completa
+                <span aria-hidden="true">→</span>
+            </a>
+        </div>
+
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const prefersReducedMotion = window.matchMedia &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (prefersReducedMotion || typeof gsap === "undefined") {
+        return;
+    }
+
+    gsap.to('[data-about="pill"]', {
+        opacity: 1,
+        y: 0,
+        duration: 0.7,
+        ease: 'power3.out'
+    });
+
+    gsap.to('[data-about="hero-text"]', {
+        opacity: 1,
+        y: 0,
+        duration: 0.8,
+        delay: 0.1,
+        ease: 'power3.out'
+    });
+
+    gsap.to('[data-about="hero-image"]', {
+        opacity: 1,
+        y: 0,
+        duration: 0.9,
+        delay: 0.2,
+        ease: 'power3.out'
+    });
+
+    gsap.to('[data-about="story-grid"]', {
+        opacity: 1,
+        y: 0,
+        duration: 0.9,
+        delay: 0.3,
+        ease: 'power3.out'
+    });
+
+    gsap.to('[data-about="quote"]', {
+        opacity: 1,
+        y: 0,
+        duration: 0.8,
+        delay: 0.4,
+        ease: 'power3.out'
+    });
+
+    gsap.to('[data-about="cta"]', {
+        opacity: 1,
+        y: 0,
+        duration: 0.8,
+        delay: 0.5,
+        ease: 'power3.out'
+    });
+});
+</script>
+{% endblock %}

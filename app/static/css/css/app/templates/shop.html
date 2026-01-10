@@ -1,4 +1,4 @@
-{# app/templates/shop.html — Skyline Store (SHOP · ULTRA PRO FINAL v4 · NO BREAK / FAIL-SAFE) #}
+{# app/templates/shop.html — Skyline Store (SHOP · ULTRA PRO FINAL v3 · NO BREAK) #}
 {% extends "base.html" %}
 {% block title %}Tienda | Skyline Store{% endblock %}
 
@@ -6,18 +6,19 @@
 <meta name="description" content="{{ meta_description | default('Explorá tecnología y streetwear premium en Skyline Store.') }}">
 <link rel="canonical" href="{{ request.url }}">
 
-{# OpenGraph básico (no depende de og.png) #}
+{# OpenGraph básico (evita OG 404 si no tenés og.png, podés cambiarlo luego) #}
 <meta property="og:title" content="Tienda | Skyline Store">
 <meta property="og:description" content="{{ meta_description | default('Explorá tecnología y streetwear premium en Skyline Store.') }}">
 <meta property="og:type" content="website">
 
 <style>
 /* ==========================================================
-   SKYLINE STORE · SHOP — ULTRA PRO MARKETPLACE (FINAL v4)
+   SKYLINE STORE · SHOP — ULTRA PRO MARKETPLACE (FINAL v3)
+   +40 mejoras reales (UI/UX/a11y/perf/robustez)
    ✅ NO usa globals() (evita 500)
-   ✅ No hace url_for “riesgoso” en loops (reduce posibilidad de BuildError)
-   ✅ 100% scoped (.shop-page)
-   ✅ A11y, perf, reduced motion, focus-visible
+   ✅ 100% scoped (.shop-page) — no rompe otras páginas
+   ✅ Jerarquía premium + microinteractions + accesible
+   ✅ Sticky controls mobile-safe + reduced motion + focus-visible
 ========================================================== */
 
 .shop-page{
@@ -62,6 +63,9 @@
   --soft: rgba(37,99,235,.10);
   --softStroke: rgba(37,99,235,.22);
 
+  --ok: rgba(34,197,94,.14);
+  --warn: rgba(245,158,11,.16);
+
   color-scheme: light dark;
 }
 
@@ -93,6 +97,7 @@
   }
 }
 
+/* Page background */
 .shop-page{
   background:
     radial-gradient(circle at 0% 0%, rgba(37,99,235,.12), transparent 40%),
@@ -102,6 +107,7 @@
   min-height: calc(100vh - 60px);
 }
 
+/* Container */
 .shop-page .shop-wrap{
   max-width: var(--grid);
   margin: 0 auto;
@@ -111,6 +117,7 @@
   .shop-page .shop-wrap{ padding-left: 1.25rem; padding-right: 1.25rem; }
 }
 
+/* Utility */
 .shop-page .sr-only{
   position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;
   overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;
@@ -135,9 +142,11 @@
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
+
 @media(min-width:900px){
   .shop-page .shop-header{ padding: 1.35rem; }
 }
+
 .shop-page .shop-header::before{
   content:"";
   position:absolute; inset:-2px;
@@ -148,6 +157,7 @@
     radial-gradient(520px 260px at 88% 20%, rgba(255,255,255,.22), transparent 72%);
   mix-blend-mode: overlay;
 }
+
 .shop-page .shop-header::after{
   content:"";
   position:absolute; inset:0;
@@ -156,6 +166,7 @@
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)' opacity='.8'/%3E%3C/svg%3E");
 }
 
+/* Layout headline */
 .shop-page .topline{
   position:relative;
   display:grid;
@@ -170,6 +181,7 @@
   }
 }
 
+/* Kicker */
 .shop-page .shop-kicker{
   display:inline-flex;
   align-items:center;
@@ -195,6 +207,7 @@
   box-shadow: 0 0 0 6px rgba(37,99,235,.14);
 }
 
+/* Title/subtitle */
 .shop-page .shop-h1{
   margin:.85rem 0 0;
   font-size: clamp(2.05rem, 4.2vw, 3.15rem);
@@ -218,6 +231,7 @@
   font-size: 1.06rem;
 }
 
+/* Benefit pills */
 .shop-page .shop-badges{
   position:relative;
   display:flex;
@@ -241,6 +255,7 @@
 }
 .shop-page .shop-badge b{ color: var(--ink); font-weight: 1000; }
 
+/* Summary card */
 .shop-page .summary{
   position:relative;
   border-radius: calc(var(--r-2xl) - .10rem);
@@ -268,6 +283,7 @@
 }
 .shop-page .summary > *{ position:relative; }
 
+/* Count pill */
 .shop-page .count{
   display:inline-flex;
   align-items:center;
@@ -287,13 +303,13 @@
 }
 .shop-page .count b{ color: var(--ink); font-weight: 1000; }
 
+/* CTAs */
 .shop-page .summary .ctaRow{
   margin-top: .85rem;
   display:flex;
   gap:.55rem;
   flex-wrap:wrap;
 }
-
 .shop-page .btn{
   display:inline-flex;
   align-items:center;
@@ -325,8 +341,8 @@
   box-shadow: var(--btnShadow);
 }
 .shop-page .btn-soft{
-  background: rgba(37,99,235,.10);
-  border-color: rgba(37,99,235,.22);
+  background: var(--soft);
+  border-color: var(--softStroke);
 }
 
 /* ---------- Sticky controls ---------- */
@@ -355,6 +371,7 @@
   .shop-page .controls{ top: 8px; padding: .85rem; }
 }
 
+/* Search row */
 .shop-page .searchRow{
   display:flex;
   gap:.55rem;
@@ -362,6 +379,7 @@
   align-items:center;
 }
 
+/* Search */
 .shop-page .shop-search{
   flex: 1;
   min-width: 240px;
@@ -402,6 +420,7 @@
   .shop-page .shop-search input::placeholder{ color: rgba(238,242,255,.45); }
 }
 
+/* Select + reset */
 .shop-page .shop-select,
 .shop-page .shop-reset{
   padding:.84rem 1.05rem;
@@ -425,6 +444,7 @@
   border-color: rgba(37,99,235,.24);
 }
 
+/* ---------- Filters ---------- */
 .shop-page .filters-wrap{ display:flex; flex-wrap:wrap; gap:.55rem; align-items:center; }
 .shop-page .filters-scroll{
   display:flex; gap:.55rem;
@@ -472,6 +492,7 @@
   box-shadow: 0 16px 30px rgba(2,6,23,.14);
 }
 
+/* ---------- Section title ---------- */
 .shop-page .shop-section{ margin-top: 1.35rem; margin-bottom: 2.2rem; }
 .shop-page .section-title{
   display:flex;
@@ -489,11 +510,13 @@
 }
 .shop-page .section-title span{ font-size:.86rem; color: var(--muted); font-weight: 900; }
 
+/* ---------- Grid ---------- */
 .shop-page .shop-grid{ display:grid; gap: 1.1rem; }
 @media(min-width:640px){ .shop-page .shop-grid{ grid-template-columns: repeat(2, 1fr); } }
 @media(min-width:980px){ .shop-page .shop-grid{ grid-template-columns: repeat(3, 1fr); gap: 1.35rem; } }
 @media(min-width:1260px){ .shop-page .shop-grid{ grid-template-columns: repeat(4, 1fr); } }
 
+/* ---------- Card ---------- */
 .shop-page .shop-card{
   position:relative;
   display:flex;
@@ -522,13 +545,13 @@
 .shop-page .shop-card:hover{
   transform: translateY(-9px);
   box-shadow: var(--shadow2), var(--glow);
-  border-color:
-  : rgba(37,99,235,.22);
+  border-color: rgba(37,99,235,.22);
   filter: saturate(1.05);
 }
 .shop-page .shop-card:hover::before{ opacity:1; }
 .shop-page .shop-card:focus-visible{ box-shadow: var(--ring), var(--shadow2); }
 
+/* Media */
 .shop-page .media{
   position:relative;
   aspect-ratio: 1 / 1;
@@ -581,6 +604,7 @@
   .shop-page .fallback{ background: rgba(9,12,24,.75); }
 }
 
+/* Badges on card */
 .shop-page .badge-left{
   position:absolute; top:.75rem; left:.75rem;
   padding:.40rem .68rem;
@@ -607,6 +631,7 @@
   box-shadow: 0 14px 26px rgba(2,6,23,.14);
 }
 
+/* Body */
 .shop-page .body{
   padding: 1.0rem 1.05rem 1.05rem;
   display:flex;
@@ -635,6 +660,7 @@
   overflow:hidden;
 }
 
+/* Price row */
 .shop-page .meta{
   display:flex;
   align-items:center;
@@ -656,6 +682,7 @@
   font-weight: 900;
 }
 
+/* CTA footer (visual only) */
 .shop-page .card-cta{
   margin-top:.7rem;
   display:flex;
@@ -668,12 +695,14 @@
 }
 .shop-page .card-cta .btn:hover{ transform: translateY(-1px); }
 
+/* Highlight */
 .shop-page mark.hl{
   background: rgba(245,158,11,.26);
   padding: 0 .08em;
   border-radius: .35em;
 }
 
+/* Empty state */
 .shop-page .empty{
   margin-top: 1.5rem;
   padding: 1.2rem 1.25rem;
@@ -693,6 +722,7 @@
 .shop-page .empty strong{ color: var(--ink); font-weight:1000; }
 .shop-page .empty .btn{ margin-top:.7rem; }
 
+/* Sticky CTA */
 .shop-page .sticky-cta{
   position:fixed;
   left: 16px;
@@ -740,6 +770,7 @@
 .shop-page .cta-btn:hover{ transform: translateY(-2px); filter:saturate(1.08); }
 .shop-page .cta-btn:focus-visible{ box-shadow: var(--ring), 0 18px 40px rgba(2,6,23,.14); }
 
+/* Reduced motion */
 @media (prefers-reduced-motion: reduce){
   .shop-page *{ transition:none!important; animation:none!important; scroll-behavior:auto!important; }
   .shop-page .cta-btn:hover,.shop-page .shop-card:hover{ transform:none!important; }
@@ -749,16 +780,10 @@
 {% endblock %}
 
 {% block content %}
-{# Pre-cálculos FAIL-SAFE para evitar BuildError si cambia un endpoint #}
-{% set SHOP_URL = url_for('shop.shop') %}
-{% set CART_URL = '/cart' %}
-
-{# Producto: por defecto hardcode (no rompe si endpoint cambia). Si tu ruta real es otra, ajustá acá UNA vez. #}
-{% set PRODUCT_PREFIX = '/product/' %}
-
 <section class="shop-page" aria-label="Tienda">
   <div class="shop-wrap">
 
+    <!-- HEADER -->
     <header class="shop-header">
       <div class="topline">
         <div>
@@ -780,33 +805,29 @@
           </div>
 
           <div class="ctaRow">
-            <a class="btn btn-primary" href="{{ CART_URL }}">Ir al carrito</a>
-            <a class="btn btn-soft" href="{{ SHOP_URL }}">Ver todo</a>
+            <a class="btn btn-primary" href="/cart">Ir al carrito</a>
+            <a class="btn btn-soft" href="{{ url_for('shop.shop') }}">Ver todo</a>
           </div>
 
           <p class="small" style="margin:.7rem 0 0">Tip: buscá por <b>hoodie</b>, <b>auriculares</b>, <b>smartwatch</b>.</p>
         </aside>
       </div>
 
+      <!-- CONTROLS -->
       <div class="controls" aria-label="Controles de tienda">
         <div class="searchRow">
-          <form id="shopForm" class="shop-search" action="{{ SHOP_URL }}" method="get" role="search" aria-label="Buscar productos">
+
+          <form id="shopForm" class="shop-search" action="{{ url_for('shop.shop') }}" method="get" role="search" aria-label="Buscar productos">
             <span class="ico" aria-hidden="true">🔎</span>
             <label class="sr-only" for="q">Buscar</label>
-            <input
-              id="q"
-              name="q"
-              type="search"
-              value="{{ request.args.get('q','') }}"
-              placeholder="Buscar… ej: hoodie, auriculares, smartwatch"
-              autocomplete="off"
-              spellcheck="false"
-              enterkeyhint="search"
-            >
+            <input id="q" name="q" value="{{ request.args.get('q','') }}" placeholder="Buscar… ej: hoodie, auriculares, smartwatch" autocomplete="off">
 
-            {# Persistencia de filtros si vienen por querystring #}
-            {% if request.args.get('sort') %}<input type="hidden" name="sort" value="{{ request.args.get('sort') }}">{% endif %}
-            {% if request.args.get('categoria') %}<input type="hidden" name="categoria" value="{{ request.args.get('categoria') }}">{% endif %}
+            {% if request.args.get('sort') %}
+              <input type="hidden" name="sort" value="{{ request.args.get('sort') }}">
+            {% endif %}
+            {% if request.args.get('categoria') %}
+              <input type="hidden" name="categoria" value="{{ request.args.get('categoria') }}">
+            {% endif %}
           </form>
 
           <select class="shop-select" id="sort" name="sort" form="shopForm" aria-label="Ordenar">
@@ -820,15 +841,16 @@
           <button class="shop-reset" id="resetBtn" type="button" aria-label="Resetear filtros">↺ Reset</button>
         </div>
 
+        <!-- Filters -->
         <div class="filters-wrap" aria-label="Filtros rápidos">
           <div class="filters-scroll" id="filters">
             <button class="pill" type="button" data-cat="" aria-pressed="true">Todo</button>
 
             {% if categories is defined and categories %}
               {% for c in categories %}
-                {% set c_slug = (c.slug if c.slug is defined else c)|string %}
-                {% set c_name = (c.name if c.name is defined else c)|string %}
-                <button class="pill" type="button" data-cat="{{ c_slug|lower|e }}" aria-pressed="false">{{ c_name|e }}</button>
+                {% set c_slug = c.slug if c.slug is defined else c %}
+                {% set c_name = c.name if c.name is defined else c %}
+                <button class="pill" type="button" data-cat="{{ c_slug }}" aria-pressed="false">{{ c_name }}</button>
               {% endfor %}
             {% else %}
               <button class="pill" type="button" data-cat="ropa" aria-pressed="false">Ropa</button>
@@ -840,52 +862,39 @@
       </div>
     </header>
 
+    <!-- GRID -->
     <section class="shop-section" aria-label="Listado de productos">
       <div class="section-title">
         <h2>Productos</h2>
         <span id="activeFilterText">Mostrando: Todo</span>
       </div>
 
-      {% set items = products if products is defined and products else [] %}
+      {% set items = products if products is defined else [] %}
 
       <div class="shop-grid" id="grid">
         {% for p in items %}
-          {% set title = (p.title if p.title is defined else (p.name if p.name is defined else 'Producto'))|string %}
-          {% set img = (p.img if p.img is defined else (p.image if p.image is defined else ''))|string %}
-          {% set cat = (p.category if p.category is defined else (p.category_slug if p.category_slug is defined else ''))|string %}
-          {% set price = (p.price if p.price is defined else (p.price_display if p.price_display is defined else ''))|string %}
-
-          {# FAIL-SAFE href:
-             - si viene p.href lo usa
-             - sino, si hay slug: /product/<slug> (evita url_for dentro del loop)
-             - sino: SHOP_URL
-          #}
-          {% set href = (p.href if p.href is defined and p.href else '')|string %}
-          {% if not href and (p.slug is defined and p.slug) %}
-            {% set href = PRODUCT_PREFIX ~ (p.slug|string) %}
-          {% endif %}
-          {% if not href %}{% set href = SHOP_URL %}{% endif %}
-
-          {# data-price: intenta numérico para sort client-side #}
-          {% set price_value = '' %}
-          {% if p.price_value is defined and p.price_value is not none %}
-            {% set price_value = p.price_value %}
-          {% elif p.price is defined and p.price is not none %}
-            {% set price_value = p.price %}
+          {% set title = p.title if p.title is defined else (p.name if p.name is defined else 'Producto') %}
+          {% set img = p.img if p.img is defined else (p.image if p.image is defined else '') %}
+          {% set cat = p.category if p.category is defined else (p.category_slug if p.category_slug is defined else '') %}
+          {% set price = p.price if p.price is defined else (p.price_display if p.price_display is defined else '') %}
+          {% set href = '#' %}
+          {% if p.href is defined and p.href %}
+            {% set href = p.href %}
+          {% elif p.slug is defined and p.slug %}
+            {% set href = url_for('shop.product', slug=p.slug) %}
           {% endif %}
 
-          <a class="shop-card"
-             href="{{ href|e }}"
-             data-title="{{ title|lower|e }}"
-             data-cat="{{ cat|lower|e }}"
-             data-price="{{ price_value|string|e }}"
-             aria-label="{{ title|e }}">
+          <a class="shop-card" href="{{ href }}"
+             data-title="{{ title|lower }}"
+             data-cat="{{ cat|lower }}"
+             data-price="{{ p.price_value if p.price_value is defined else '' }}"
+             aria-label="{{ title }}">
 
             <div class="media">
               <div class="skel" aria-hidden="true"></div>
 
               {% if img %}
-                <img src="{{ img|e }}" alt="{{ title|e }}" loading="lazy" decoding="async">
+                <img src="{{ img }}" alt="{{ title }}" loading="lazy" decoding="async">
               {% else %}
                 <div class="fallback" style="display:grid">Sin imagen</div>
               {% endif %}
@@ -894,16 +903,19 @@
                 <span class="badge-right">OFERTA</span>
               {% endif %}
               {% if cat %}
-                <span class="badge-left">{{ cat|e }}</span>
+                <span class="badge-left">{{ cat }}</span>
               {% endif %}
             </div>
 
             <div class="body">
-              {% if cat %}<div class="cat">{{ cat|e }}</div>{% endif %}
-              <div class="name" data-name>{{ title|e }}</div>
+              {% if cat %}
+                <div class="cat">{{ cat }}</div>
+              {% endif %}
+
+              <div class="name" data-name>{{ title }}</div>
 
               <div class="meta">
-                <div class="shop-price" data-price-text>{{ price|e }}</div>
+                <div class="shop-price" data-price-text>{{ price }}</div>
                 <div class="mini">Premium</div>
               </div>
 
@@ -921,19 +933,20 @@
           <strong>No hay productos para mostrar.</strong><br>
           Probá con otra búsqueda o cargá productos desde Admin.
           <div>
-            <a class="btn btn-primary" href="{{ SHOP_URL }}">Volver a tienda</a>
+            <a class="btn btn-primary" href="{{ url_for('shop.shop') }}">Volver a tienda</a>
           </div>
         </div>
       {% endif %}
     </section>
 
+    <!-- Sticky CTA -->
     <div class="sticky-cta" id="stickyCta" aria-hidden="true">
       <div class="inner">
         <div>
           <b>Carrito listo</b>
           <div class="small" id="stickyText">Continuá tu compra</div>
         </div>
-        <a class="cta-btn" href="{{ CART_URL }}">Ver carrito →</a>
+        <a class="cta-btn" href="/cart">Ver carrito →</a>
       </div>
     </div>
 
@@ -945,11 +958,10 @@
   const root = document.querySelector('.shop-page');
   if (!root) return;
 
-  const grid = document.getElementById('grid');
-  if (!grid) return;
-
+  const form = document.getElementById('shopForm');
   const q = document.getElementById('q');
-  const cards = Array.from(grid.querySelectorAll('.shop-card'));
+  const grid = document.getElementById('grid');
+  const cards = Array.from(grid?.querySelectorAll('.shop-card') || []);
   const countNum = document.getElementById('countNum');
   const activeFilterText = document.getElementById('activeFilterText');
   const filters = document.getElementById('filters');
@@ -960,7 +972,7 @@
 
   const state = {
     cat: "",
-    query: (q?.value || "").trim().toLowerCase(),
+    query: (q?.value || "").trim().toLowerCase()
   };
 
   // Fade-in images + remove skeleton
@@ -985,23 +997,23 @@
   });
 
   // Highlight matches (safe)
-  const escapeHtml = (s) => String(s ?? "").replace(/[&<>"']/g, m => ({
+  const escapeHtml = (s) => (s || "").replace(/[&<>"']/g, m => ({
     "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
   }[m]));
   const highlight = (el, needle) => {
+    const txt = el?.textContent || "";
     if (!el) return;
-    const txt = el.textContent || "";
     if (!needle) { el.innerHTML = escapeHtml(txt); return; }
-    const safeTxt = escapeHtml(txt);
-    const n = String(needle).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    el.innerHTML = safeTxt.replace(new RegExp(`(${n})`, "ig"), "<mark class='hl'>$1</mark>");
+    const safe = escapeHtml(txt);
+    const n = needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    el.innerHTML = safe.replace(new RegExp(`(${n})`, "ig"), "<mark class='hl'>$1</mark>");
   };
 
   const apply = () => {
     const needle = state.query;
     let visible = 0;
 
-    for (const card of cards) {
+    cards.forEach(card => {
       const title = (card.getAttribute('data-title') || "");
       const cat = (card.getAttribute('data-cat') || "");
       const nameEl = card.querySelector('[data-name]');
@@ -1013,7 +1025,7 @@
 
       card.style.display = show ? "" : "none";
       if (show) visible++;
-    }
+    });
 
     if (countNum) countNum.textContent = String(visible);
     if (activeFilterText) activeFilterText.textContent = `Mostrando: ${state.cat ? state.cat : "Todo"}`;
@@ -1023,8 +1035,8 @@
   if (q) {
     let t;
     q.addEventListener('input', () => {
-      window.clearTimeout(t);
-      t = window.setTimeout(() => {
+      clearTimeout(t);
+      t = setTimeout(() => {
         state.query = (q.value || "").trim().toLowerCase();
         apply();
       }, 90);
@@ -1045,7 +1057,7 @@
     });
   }
 
-  // Reset
+  // Reset (client-side + opcional limpiar querystring)
   if (resetBtn) {
     resetBtn.addEventListener('click', () => {
       state.cat = "";
@@ -1061,7 +1073,7 @@
       if (sort) sort.value = "";
       apply();
 
-      // Limpia querystring sin recargar
+      // Si querés resetear también la URL (sin recargar):
       try {
         const u = new URL(window.location.href);
         u.search = "";
@@ -1070,23 +1082,23 @@
     });
   }
 
-  // Sort client-side (solo reordena visibles)
-  if (sort) {
+  // Sort (client-side fallback). Si querés backend: form.submit()
+  if (sort && grid) {
     sort.addEventListener('change', () => {
       const v = sort.value;
+      const list = cards.filter(c => c.style.display !== "none");
 
-      const num = (el) => {
-        const raw = el.getAttribute('data-price') || "";
+      const num = (x) => {
+        const raw = x.getAttribute('data-price') || "";
         const n = parseFloat(String(raw).replace(/[^0-9.,]/g,'').replace(',','.'));
         return Number.isFinite(n) ? n : 0;
       };
 
-      const visibles = cards.filter(c => c.style.display !== "none");
-      if (v === "price_asc") visibles.sort((a,b) => num(a) - num(b));
-      else if (v === "price_desc") visibles.sort((a,b) => num(b) - num(a));
+      if (v === "price_asc") list.sort((a,b) => num(a) - num(b));
+      else if (v === "price_desc") list.sort((a,b) => num(b) - num(a));
+      else list.sort(() => 0);
 
-      // append en nuevo orden; los ocultos quedan donde estaban pero no molestan
-      for (const el of visibles) grid.appendChild(el);
+      list.forEach(el => grid.appendChild(el));
     });
   }
 
@@ -1103,7 +1115,7 @@
     }
   };
 
-  fetch('/cart/json', { credentials: 'same-origin' })
+  fetch('/cart/json')
     .then(r => r.ok ? r.json() : null)
     .then(d => showSticky(d?.items_count || 0))
     .catch(() => {});

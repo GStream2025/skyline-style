@@ -1,0 +1,44 @@
+:root{
+  /* Radius */
+  --r-xs: 8px;
+  --r-sm: 12px;
+  --r-md: 16px;
+  --r-lg: 20px;
+  --r-xl: 26px;
+
+  /* Shadows */
+  --sh-xs: 0 2px 6px rgba(15,23,42,.08);
+  --sh-sm: 0 6px 18px rgba(15,23,42,.10);
+  --sh-md: 0 12px 32px rgba(15,23,42,.14);
+  --sh-lg: 0 20px 48px rgba(15,23,42,.18);
+
+  /* Motion */
+  --ease: cubic-bezier(.22,.9,.3,1);
+  --t-fast: 120ms var(--ease);
+  --t-mid: 220ms var(--ease);
+  --t-slow: 360ms var(--ease);
+
+  /* Colors (fallback si skyline-pro no define) */
+  --bg: var(--sky-bg, #f6f8fb);
+  --card: var(--sky-card, rgba(255,255,255,.86));
+  --text: var(--sky-text, #0b1220);
+  --muted: var(--sky-muted, rgba(11,18,32,.65));
+  --border: var(--sky-border, rgba(11,18,32,.12));
+
+  /* Brand */
+  --primary: var(--sky-primary, #2563eb);
+  --success: #10b981;
+  --danger:  #ef4444;
+  --warning: #f59e0b;
+  --info:    #06b6d4;
+}
+
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg: #070a12;
+    --card: rgba(16,22,36,.70);
+    --text: #eaf0ff;
+    --muted: rgba(234,240,255,.65);
+    --border: rgba(234,240,255,.14);
+  }
+}

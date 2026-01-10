@@ -1,0 +1,298 @@
+{# app/templates/base.html — Skyline Store (ULTRA PRO ENTERPRISE · v4.2 FINAL)
+   FIXES +4 mejoras nuevas (NO 500):
+   N1) url_for NO se llama si endpoint no existe (usa view_functions)
+   N2) CSRF sin "is callable" (Jinja-safe). Nunca intenta ejecutar functions.
+   N3) current_user usa is_authenticated (bulletproof)
+   N4) Cart badge fallback endpoints + fail-silent (sin consola roja)
+#}
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+  <title>{% block title %}{{ meta_title or APP_NAME or "Skyline Store" }}{% endblock %}</title>
+  <meta name="description" content="{{ meta_description or 'Skyline Store — marketplace premium de tecnología y streetwear.' }}">
+  <meta name="robots" content="{{ meta_robots or 'index,follow' }}">
+
+  {% set _canonical = (request.base_url if request is defined and request.base_url else '/') %}
+  <link rel="canonical" href="{{ _canonical }}">
+
+  {% set _og_img = (og_image if og_image is defined and og_image else url_for('static', filename='img/og.png', _external=True)) %}
+  <meta property="og:title" content="{{ meta_title or APP_NAME or 'Skyline Store' }}">
+  <meta property="og:description" content="{{ meta_description or 'Marketplace premium de tecnología y streetwear.' }}">
+  <meta property="og:image" content="{{ _og_img }}">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="es_UY">
+  <meta property="og:url" content="{{ _canonical }}">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <meta http-equiv="X-Content-Type-Options" content="nosniff">
+  <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
+
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; object-src 'none'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self' 'unsafe-inline'; connect-src 'self' https:;">
+
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#2563eb">
+
+  {# ✅ CSRF: Jinja-safe (NO callable).
+     Si csrf_token no existe → vacío.
+     Si existe → lo convertimos a string (si era función, no la ejecutamos acá).
+     RECOMENDADO: inyectar csrf_token ya como string desde Flask-WTF (lo normal).
+  #}
+  {% set _csrf_value = (csrf_token|string if csrf_token is defined and csrf_token else '') %}
+  <meta name="csrf-token" content="{{ _csrf_value }}">
+
+  <link rel="icon" href="{{ url_for('static', filename='img/favicon.png') }}">
+  <link rel="preload" as="image" href="{{ _og_img }}">
+
+  {% if hero_image is defined and hero_image %}
+    <link rel="preload" as="image" href="{{ hero_image }}">
+  {% endif %}
+
+  <link rel="dns-prefetch" href="https://fonts.googleapis.com">
+  <link rel="dns-prefetch" href="https://fonts.gstatic.com">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+  <link rel="preload" as="style" href="{{ url_for('static', filename='css/skyline-pro.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/skyline-pro.css') }}">
+
+  <link rel="preload" as="style" href="{{ url_for('static', filename='css/components.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}">
+
+  {% block extra_css %}{% endblock %}
+
+  <style>
+    html{background:#f7f9ff}
+    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+    .skip{position:absolute;left:12px;top:12px;z-index:9999;padding:10px 12px;border-radius:14px;background:#fff;border:1px solid rgba(8,16,34,.12);box-shadow:0 18px 50px rgba(8,16,34,.14);transform:translateY(-140%);transition:transform .18s ease}
+    .skip:focus{transform:translateY(0)}
+  </style>
+
+  {% block extra_head %}{% endblock %}
+</head>
+
+<body>
+<a class="skip" href="#main">Saltar al contenido</a>
+
+{# ✅ URLS DINÁMICAS (N1): usa view_functions → nunca llama url_for si no existe endpoint #}
+{% set _vf = (view_functions if view_functions is defined and view_functions else {}) %}
+
+{% set _home_href = '/' %}
+{% if 'main.home' in _vf %}{% set _home_href = url_for('main.home') %}
+{% elif 'main.index' in _vf %}{% set _home_href = url_for('main.index') %}
+{% endif %}
+
+{% set _shop_href = '/shop' %}
+{% if 'shop.shop' in _vf %}{% set _shop_href = url_for('shop.shop') %}{% endif %}
+
+{% set _cart_href = '/cart' %}
+{% if 'cart.view' in _vf %}{% set _cart_href = url_for('cart.view') %}
+{% elif 'cart.cart' in _vf %}{% set _cart_href = url_for('cart.cart') %}
+{% elif 'cart.index' in _vf %}{% set _cart_href = url_for('cart.index') %}
+{% endif %}
+
+{% set _account_href = '/account' %}
+{% for ep in ['account.account','account.login','cuenta.account','cuenta.login','auth.login'] %}
+  {% if _account_href == '/account' and (ep in _vf) %}
+    {% set _account_href = url_for(ep) %}
+  {% endif %}
+{% endfor %}
+
+{# ✅ user safe (N3) #}
+{% set _user_ok = (current_user is defined and current_user and (current_user.is_authenticated if current_user.is_authenticated is defined else false)) %}
+
+<header class="topbar" role="banner">
+  <div class="topbar-inner">
+    <a href="{{ _home_href }}" class="brand" aria-label="Ir a inicio">
+      <span class="brand-dot" aria-hidden="true"></span>
+      <div class="brand-txt">
+        <strong class="brand-name">{{ APP_NAME or "Skyline Store" }}</strong>
+        <span class="brand-sub">Tech + Streetwear premium</span>
+      </div>
+    </a>
+
+    <nav class="nav" aria-label="Navegación principal">
+      <a href="{{ _home_href }}"
+         {% if request is defined and request.path == "/" %}class="active" aria-current="page"{% endif %}>Inicio</a>
+
+      <a href="{{ _shop_href }}"
+         {% if request is defined and request.path.startswith("/shop") and not request.args.get('ofertas') %}class="active" aria-current="page"{% endif %}>Tienda</a>
+
+      <a href="{{ _shop_href }}?ofertas=1"
+         {% if request is defined and request.args.get('ofertas') %}class="active" aria-current="page"{% endif %}>Ofertas</a>
+    </nav>
+
+    <form class="searchbar" action="{{ _shop_href }}" method="get" role="search" aria-label="Buscar productos">
+      <span class="sicon" aria-hidden="true">⌕</span>
+      <label class="sr-only" for="q">Buscar</label>
+      <input
+        id="q"
+        type="search"
+        name="q"
+        placeholder="Buscar productos…"
+        value="{{ request.args.get('q','') if request is defined else '' }}"
+        autocomplete="off"
+        inputmode="search"
+      >
+      <button class="sbtn" type="submit">Buscar</button>
+    </form>
+
+    <div class="top-actions" aria-label="Acciones rápidas">
+      <a href="{{ _cart_href }}" class="icon-btn" aria-label="Carrito" style="position:relative">
+        <span aria-hidden="true">🛒</span>
+        <span class="cart-badge"
+              data-cart-badge
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+              style="display:none">0</span>
+      </a>
+
+      <a href="{{ _account_href }}" class="account-chip" aria-label="Mi cuenta">
+        <span class="avatar" aria-hidden="true"></span>
+        <span class="account-txt">
+          <span class="t1">
+            {% if _user_ok %}
+              Hola, {{ (current_user.name if current_user.name is defined and current_user.name else "👋") }}
+            {% else %}
+              Mi cuenta
+            {% endif %}
+          </span>
+          <span class="t2">
+            {% if _user_ok %}
+              Panel / Salir
+            {% else %}
+              Entrar / Crear
+            {% endif %}
+          </span>
+        </span>
+      </a>
+    </div>
+  </div>
+</header>
+
+{% include "components/toasts.html" ignore missing %}
+
+<main id="main" class="container" role="main">
+  {% block top_content %}{% endblock %}
+  {% block content %}{% endblock %}
+  {% block bottom_content %}{% endblock %}
+</main>
+
+<footer class="footer" role="contentinfo">
+  <div class="container grid grid-4">
+    <div>
+      <strong>{{ APP_NAME or "Skyline Store" }}</strong>
+      <p class="small">Marketplace premium de tecnología y streetwear.</p>
+    </div>
+
+    <div>
+      <strong>Explorar</strong><br>
+      <a href="{{ _shop_href }}">Tienda</a><br>
+      <a href="{{ _shop_href }}?ofertas=1">Ofertas</a>
+    </div>
+
+    <div>
+      <strong>Cuenta</strong><br>
+      <a href="{{ _account_href }}">Mi cuenta</a><br>
+      <a href="{{ _cart_href }}">Carrito</a>
+    </div>
+
+    <div>
+      <strong>Legal</strong><br>
+      <a href="/terms">Términos</a><br>
+      <a href="/privacy">Privacidad</a>
+    </div>
+  </div>
+
+  {% set _year = (now_utc.year if now_utc is defined and now_utc else 2026) %}
+  <p class="small">© {{ _year }} {{ APP_NAME or "Skyline Store" }}</p>
+</footer>
+
+<script>
+(() => {
+  const $ = (sel, root=document) => root.querySelector(sel);
+  const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+  const token = $('meta[name="csrf-token"]')?.content || "";
+
+  // CSRF hidden for non-GET forms
+  if (token) {
+    $$('form').forEach(f => {
+      const m = (f.method || 'GET').toUpperCase();
+      if (m !== 'GET' && !f.querySelector('[name=csrf_token]')) {
+        const i = document.createElement('input');
+        i.type = 'hidden';
+        i.name = 'csrf_token';
+        i.value = token;
+        f.appendChild(i);
+      }
+    });
+  }
+
+  // Search trim
+  const q = $('.searchbar input[name="q"]');
+  if (q) {
+    q.addEventListener('change', () => q.value = (q.value||'').trim());
+    const form = q.closest('form');
+    if (form) form.addEventListener('submit', () => q.value = (q.value||'').trim());
+  }
+
+  // Shortcut "/" focus search
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
+    const el = document.activeElement;
+    const tag = (el && el.tagName) ? el.tagName.toUpperCase() : '';
+    const isTyping = (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el?.isContentEditable);
+    if (isTyping) return;
+    if (!q) return;
+    e.preventDefault();
+    q.focus({ preventScroll: true });
+  });
+
+  // Cart badge (N4): try multiple endpoints, fail silent
+  const badge = $('[data-cart-badge]');
+  if (badge) {
+    const endpoints = ['/cart/json', '/_cart/json'];
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 3500);
+
+    const tryFetch = async () => {
+      for (const url of endpoints) {
+        try {
+          const r = await fetch(url, {
+            headers: { 'Accept': 'application/json' },
+            credentials: 'same-origin',
+            cache: 'no-store',
+            signal: ctrl.signal
+          });
+          if (!r || !r.ok) continue;
+          const txt = await r.text().catch(() => '');
+          if (!txt) return {};
+          try { return JSON.parse(txt); } catch { return {}; }
+        } catch (_) {}
+      }
+      return null;
+    };
+
+    tryFetch()
+      .then(d => {
+        if (!d) { badge.style.display = 'none'; return; }
+        const c = Number(d?.items_count || d?.count || 0);
+        badge.textContent = String(c);
+        badge.style.display = c ? 'flex' : 'none';
+        badge.setAttribute('aria-label', c ? `${c} items en carrito` : 'Carrito vacío');
+      })
+      .catch(() => {})
+      .finally(() => clearTimeout(t));
+  }
+})();
+</script>
+
+{% block extra_js %}{% endblock %}
+</body>
+</html>

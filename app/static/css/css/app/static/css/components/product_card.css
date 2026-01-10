@@ -1,0 +1,68 @@
+.cardP{
+  border-radius: var(--r-xl);
+  background: var(--card);
+  border:1px solid var(--border);
+  overflow:hidden;
+  box-shadow: var(--sh-sm);
+  transition:
+    transform var(--t-mid),
+    box-shadow var(--t-mid),
+    border-color var(--t-mid);
+}
+
+.cardP:hover{
+  transform: translateY(-3px);
+  box-shadow: var(--sh-lg);
+  border-color: rgba(37,99,235,.25);
+}
+
+.mediaP{
+  position:relative;
+  aspect-ratio: 4 / 3;
+  overflow:hidden;
+  background: rgba(0,0,0,.04);
+}
+
+.mediaP img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  opacity:0;
+  transform: scale(1.04);
+  transition: opacity var(--t-slow), transform var(--t-slow);
+}
+
+.mediaP img[loading]{
+  opacity:1;
+}
+
+.cardP:hover img{
+  transform: scale(1.08);
+}
+
+.metaP{
+  padding:14px;
+  display:flex;
+  flex-direction:column;
+  gap:.4rem;
+}
+
+.titleP{
+  font-weight:900;
+  letter-spacing:-.25px;
+}
+
+.subP{
+  font-size:.9rem;
+  color:var(--muted);
+}
+
+.actionsP{
+  padding:12px 14px 14px;
+  display:flex;
+  gap:.6rem;
+}
+
+.actionsP .btn{
+  width:100%;
+}

@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+{% block title %}Mi cuenta · Skyline Store{% endblock %}
+
+{% block content %}
+{% set name = user_name|default('Skyline Guest') %}
+{% set orders = orders_count|default(0) %}
+{% set favs = favorites_count|default(0) %}
+{% set points = skyline_points|default(0) %}
+{% set next_pts = next_level_points|default(500) %}
+{% set pct = ((points / next_pts) * 100)|round(0) if next_pts else 0 %}
+{% if pct > 100 %}{% set pct = 100 %}{% endif %}
+
+<section class="ss-page ss-profile">
+  <div class="container ss-profile__wrap">
+
+    <!-- HERO -->
+    <header class="ss-hero ss-hero--profile" aria-label="Resumen de cuenta">
+      <div class="ss-hero__inner">
+
+        <div class="ss-hero__left">
+          <div class="ss-kicker">
+            <span class="ss-kicker__dot" aria-hidden="true"></span>
+            <span>MI CUENTA</span>
+          </div>
+
+          <h1 class="ss-title">
+            Hola, <span class="ss-title__name">{{ name }}</span>
+          </h1>
+
+          <p class="ss-subtitle">
+            Tu panel premium tipo marketplace. Estado de pedidos, puntos, accesos rápidos y actividad.
+          </p>
+
+          <div class="ss-chiprow" aria-label="Indicadores rápidos">
+            <span class="ss-chip">Pedidos: <b>{{ orders }}</b></span>
+            <span class="ss-chip">Favoritos: <b>{{ favs }}</b></span>
+            <span class="ss-chip">Nivel: <b>Standard</b></span>
+            <span class="ss-chip ss-chip--soft">Soporte: <b>24/7</b></span>
+          </div>
+
+          <div class="ss-btnrow" aria-label="Acciones principales">
+            <a class="ss-btn ss-btn--primary" href="{{ url_for('shop.shop') }}">🛒 Ir a la tienda</a>
+            <a class="ss-btn ss-btn--soft" href="/#destacados">🔥 Destacados</a>
+            <a class="ss-btn ss-btn--warn" href="{{ url_for('shop.shop') }}?ofertas=1">⚡ Ofertas</a>
+            <a class="ss-btn ss-btn--ghost" href="{{ url_for('shop.shop') }}?sort=new">🆕 Novedades</a>
+          </div>
+
+          <div class="ss-inline-info" aria-label="Ayuda rápida">
+            <div class="ss-inline-info__item">
+              <span class="ss-mini-dot" aria-hidden="true"></span>
+              <span>Compras protegidas</span>
+            </div>
+            <div class="ss-inline-info__item">
+              <span class="ss-mini-dot" aria-hidden="true"></span>
+              <span>Seguimiento de pedidos</span>
+            </div>
+            <div class="ss-inline-info__item">
+              <span class="ss-mini-dot" aria-hidden="true"></span>
+              <span>Pagos seguros</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- POINTS CARD -->
+        <aside class="ss-card ss-card--points" aria-label="Puntos Skyline">
+          <div class="ss-card__head">
+            <div class="ss-card__eyebrow">Puntos Skyline</div>
+
+            <div class="ss-points">
+              <div class="ss-points__value">{{ points }}</div>
+              <div class="ss-points__unit">pts</div>
+            </div>
+          </div>
+
+          <div class="ss-progress" role="progressbar"
+               aria-valuemin="0" aria-valuemax="{{ next_pts }}" aria-valuenow="{{ points }}">
+            <div class="ss-progress__bar" style="width: {{ pct }}%"></div>
+          </div>
+
+          <div class="ss-card__hint">
+            <b>{{ points }}</b> / {{ next_pts }} pts para el próximo nivel
+          </div>
+
+          <div class="ss-divider" aria-hidden="true"></div>
+
+          <div class="ss-points-actions" aria-label="Acciones de puntos">
+            <a class="ss-mini-btn" href="{{ url_for('shop.shop') }}">Ganar puntos</a>
+            <a class="ss-mini-btn ss-mini-btn--primary" href="{{ url_for('shop.shop') }}?ofertas=1">Canjear ofertas</a>
+          </div>
+        </aside>
+
+      </div>
+    </header>
+
+    <!-- METRICS -->
+    <section class="ss-metrics" aria-label="Métricas">
+      <div class="ss-metric">
+        <div class="ss-metric__k">Pedidos</div>
+        <div class="ss-metric__v">{{ orders }}</div>
+        <div class="ss-metric__d">Compras realizadas</div>
+      </div>
+      <div class="ss-metric">
+        <div class="ss-metric__k">Favoritos</div>
+        <div class="ss-metric__v">{{ favs }}</div>
+        <div class="ss-metric__d">Guardados</div>
+      </div>
+      <div class="ss-metric">
+        <div class="ss-metric__k">Puntos</div>
+        <div class="ss-metric__v">{{ points }}</div>
+        <div class="ss-metric__d">Beneficios</div>
+      </div>
+      <div class="ss-metric">
+        <div class="ss-metric__k">Nivel</div>
+        <div class="ss-metric__v">Standard</div>
+        <div class="ss-metric__d">Perks & accesos</div>
+      </div>
+    </section>
+
+    <!-- PANELS -->
+    <section class="ss-grid2" aria-label="Paneles de actividad">
+      <!-- QUICK ACTIONS -->
+      <div class="ss-card">
+        <div class="ss-card__title">Acciones rápidas</div>
+        <div class="ss-card__subtitle">Atajos para moverte como en un marketplace grande</div>
+
+        <div class="ss-list">
+          <a class="ss-row" href="{{ url_for('shop.shop') }}">
+            <div>
+              <div class="ss-row__title">Comprar ahora</div>
+              <div class="ss-row__desc">Abrir catálogo completo</div>
+            </div>
+            <span class="ss-pill ss-pill--ok">Ir</span>
+          </a>
+
+          <a class="ss-row" href="{{ url_for('shop.shop') }}?ofertas=1">
+            <div>
+              <div class="ss-row__title">Ofertas</div>
+              <div class="ss-row__desc">Promos por tiempo limitado</div>
+            </div>
+            <span class="ss-pill ss-pill--wait">Ver</span>
+          </a>
+
+          <a class="ss-row" href="/#destacados">
+            <div>
+              <div class="ss-row__title">Destacados</div>
+              <div class="ss-row__desc">Selección premium</div>
+            </div>
+            <span class="ss-pill ss-pill--info">Abrir</span>
+          </a>
+
+          <a class="ss-row" href="{{ url_for('shop.shop') }}?sort=new">
+            <div>
+              <div class="ss-row__title">Novedades</div>
+              <div class="ss-row__desc">Lo último agregado</div>
+            </div>
+            <span class="ss-pill ss-pill--info">Nuevo</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- ORDERS DEMO -->
+      <div class="ss-card">
+        <div class="ss-card__title">Últimos pedidos</div>
+        <div class="ss-card__subtitle">Demo (se reemplaza por tus pedidos reales)</div>
+
+        <div class="ss-list">
+          <div class="ss-row ss-row--static">
+            <div>
+              <div class="ss-row__title">SKY-1041</div>
+              <div class="ss-row__desc">Seguimiento activo</div>
+            </div>
+            <span class="ss-pill ss-pill--ok">En camino</span>
+          </div>
+
+          <div class="ss-row ss-row--static">
+            <div>
+              <div class="ss-row__title">SKY-1029</div>
+              <div class="ss-row__desc">Preparando paquete</div>
+            </div>
+            <span class="ss-pill ss-pill--wait">Procesando</span>
+          </div>
+
+          <div class="ss-row ss-row--static">
+            <div>
+              <div class="ss-row__title">SKY-1014</div>
+              <div class="ss-row__desc">Pedido completado</div>
+            </div>
+            <span class="ss-pill ss-pill--info">Entregado</span>
+          </div>
+        </div>
+
+        <div class="ss-notice" role="status">
+          Modo demo activo. Cuando conectes backend real, esto se llena solo.
+        </div>
+      </div>
+    </section>
+
+  </div>
+</section>
+{% endblock %}

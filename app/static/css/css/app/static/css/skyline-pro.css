@@ -1,0 +1,762 @@
+/* ======================================================================
+   SKYLINE STORE — ULTRA PREMIUM UI (v4 · GLOBAL FINAL)
+   Clean · premium · modern · consistent
+   ✅ safe global reset (no rompe shop/account)
+   ✅ tokens + dark auto + components + utilities
+====================================================================== */
+
+/* -----------------------------
+   0) RESET (safe)
+----------------------------- */
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;padding:0}
+img{max-width:100%;display:block}
+a{color:inherit;text-decoration:none}
+button,input,select,textarea{font:inherit}
+:focus{outline:none}
+
+/* -----------------------------
+   1) TOKENS (Light)
+----------------------------- */
+:root{
+  color-scheme: light;
+
+  /* backgrounds */
+  --bg: #f6f8ff;
+  --bg2:#f3f6ff;
+
+  /* surfaces */
+  --surface:#ffffff;
+  --glass: rgba(255,255,255,.72);
+  --glass2: rgba(255,255,255,.86);
+
+  /* text */
+  --ink:#0a1020;
+  --muted: rgba(10,16,32,.68);
+  --muted2: rgba(10,16,32,.50);
+
+  /* borders */
+  --border: rgba(10,16,32,.10);
+  --border2: rgba(10,16,32,.14);
+
+  /* brand */
+  --p:#2563eb;
+  --p2:#06b6d4;
+  --acc:#f59e0b;
+  --good:#16a34a;
+  --bad:#dc2626;
+
+  /* radius */
+  --r-sm:12px;
+  --r:16px;
+  --r-lg:22px;
+  --r-xl:30px;
+
+  /* shadows */
+  --sh0: 0 1px 0 rgba(255,255,255,.75);
+  --sh1: 0 12px 30px rgba(10,16,32,.08);
+  --sh2: 0 22px 60px rgba(10,16,32,.12);
+  --sh3: 0 36px 100px rgba(10,16,32,.16);
+
+  /* motion */
+  --ease: cubic-bezier(.2,.9,.2,1);
+  --t-fast: .14s var(--ease);
+  --t: .22s var(--ease);
+  --t-slow: .42s var(--ease);
+
+  --focus: 0 0 0 7px rgba(37,99,235,.18);
+}
+
+/* -----------------------------
+   2) TOKENS (Dark auto)
+----------------------------- */
+@media (prefers-color-scheme: dark){
+  :root{
+    color-scheme: dark;
+
+    --bg:#070b14;
+    --bg2:#0b1020;
+
+    --surface: rgba(10,14,28,.92);
+    --glass: rgba(9,12,24,.62);
+    --glass2: rgba(9,12,24,.78);
+
+    --ink:#eef2ff;
+    --muted: rgba(238,242,255,.70);
+    --muted2: rgba(238,242,255,.55);
+
+    --border: rgba(148,163,184,.18);
+    --border2: rgba(148,163,184,.24);
+
+    --sh1: 0 12px 30px rgba(0,0,0,.38);
+    --sh2: 0 26px 80px rgba(0,0,0,.52);
+    --sh3: 0 38px 120px rgba(0,0,0,.65);
+
+    --focus: 0 0 0 7px rgba(6,182,212,.18);
+  }
+}
+
+/* -----------------------------
+   3) BODY + BACKDROP
+----------------------------- */
+html{scroll-behavior:smooth}
+body{
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  color: var(--ink);
+  background:
+    radial-gradient(900px 520px at 12% -10%, rgba(37,99,235,.16), transparent 55%),
+    radial-gradient(900px 520px at 88% -2%, rgba(6,182,212,.14), transparent 55%),
+    radial-gradient(900px 520px at 50% 120%, rgba(245,158,11,.12), transparent 55%),
+    linear-gradient(180deg, rgba(255,255,255,.72), rgba(246,248,255,.35)),
+    var(--bg);
+  line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+  overflow-x:hidden;
+}
+::selection{background:rgba(37,99,235,.18)}
+
+/* -----------------------------
+   4) TYPO
+----------------------------- */
+h1,h2,h3,h4,h5{margin:0;color:var(--ink);letter-spacing:-.03em}
+h1{font-weight:1000;font-size:clamp(2.05rem,3.2vw,3.05rem);line-height:1.03}
+h2{font-weight:1000;font-size:clamp(1.35rem,2.2vw,1.9rem);line-height:1.12}
+h3{font-weight:950;font-size:1.15rem}
+p{margin:.45rem 0;color:var(--muted)}
+.small{font-size:.9rem;color:var(--muted)}
+.kicker{
+  display:inline-flex;align-items:center;gap:10px;
+  font-size:.74rem;letter-spacing:.14em;text-transform:uppercase;
+  font-weight:950;color:var(--muted2);
+}
+.kicker .d{
+  width:9px;height:9px;border-radius:999px;
+  background:linear-gradient(135deg,var(--p),var(--p2));
+  box-shadow:0 10px 18px rgba(10,16,32,.12);
+}
+
+ul{margin:.4rem 0;padding-left:1.1rem;color:var(--muted)}
+hr{border:0;border-top:1px solid var(--border);margin:18px 0}
+
+/* -----------------------------
+   5) HELPERS
+----------------------------- */
+.container{max-width:1240px;margin:0 auto;padding:22px 20px}
+.section{max-width:1240px;margin:0 auto;padding:22px 20px}
+@media(min-width:980px){
+  .container,.section{padding:28px 28px}
+}
+.sr-only{
+  position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;
+  overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;
+}
+
+/* Scrollbars subtle */
+@media (pointer:fine){
+  *::-webkit-scrollbar{height:10px;width:10px}
+  *::-webkit-scrollbar-thumb{background:rgba(10,16,32,.18);border-radius:999px}
+  @media (prefers-color-scheme: dark){
+    *::-webkit-scrollbar-thumb{background:rgba(148,163,184,.22)}
+  }
+}
+
+/* -----------------------------
+   6) TOPBAR (global)
+----------------------------- */
+.topbar{
+  position:sticky;top:0;z-index:60;
+  background: var(--glass);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+}
+.topbar-inner{
+  max-width:1240px;margin:0 auto;
+  padding:12px 20px;
+  display:flex;align-items:center;justify-content:space-between;gap:14px;
+}
+@media(min-width:980px){.topbar-inner{padding:12px 28px}}
+.brand{
+  display:flex;align-items:center;gap:10px;
+  font-weight:1000;white-space:nowrap;
+}
+.brand-dot{
+  width:12px;height:12px;border-radius:999px;
+  background:conic-gradient(from 210deg,var(--p),var(--p2),var(--acc));
+  box-shadow:0 18px 60px rgba(37,99,235,.40);
+}
+.nav{display:flex;gap:6px;align-items:center}
+.nav a{
+  padding:10px 12px;border-radius:12px;
+  color:var(--muted);
+  transition: transform var(--t), box-shadow var(--t), background var(--t), color var(--t), border-color var(--t);
+}
+.nav a:hover{background:rgba(255,255,255,.76);box-shadow:var(--sh1);transform:translateY(-1px)}
+@media (prefers-color-scheme: dark){
+  .nav a:hover{background:rgba(255,255,255,.06)}
+}
+.nav a.active{
+  background: rgba(37,99,235,.10);
+  color: var(--p);
+  border:1px solid rgba(37,99,235,.18);
+}
+@media(max-width:760px){.nav{display:none}}
+
+/* -----------------------------
+   7) COMPONENTS
+----------------------------- */
+
+/* Buttons (compatible con tu account/shop) */
+.btn{
+  position:relative;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  padding:12px 14px;
+  border-radius:16px;
+  border:1px solid transparent;
+  cursor:pointer;
+  user-select:none;
+  transition: transform var(--t), box-shadow var(--t), filter var(--t), background var(--t), border-color var(--t);
+}
+.btn:hover{transform:translateY(-1px);filter:saturate(1.03)}
+.btn:active{transform:translateY(0)}
+.btn:focus-visible{box-shadow:var(--focus)}
+.btn.primary{
+  color:#fff;
+  background: linear-gradient(135deg,var(--p),var(--p2));
+  box-shadow: 0 18px 55px rgba(37,99,235,.24);
+}
+.btn.ghost{
+  background: rgba(255,255,255,.86);
+  border-color: var(--border);
+  color: var(--ink);
+  box-shadow: var(--sh1);
+}
+@media (prefers-color-scheme: dark){
+  .btn.ghost{background: rgba(255,255,255,.06); box-shadow:none}
+}
+
+/* Inputs */
+.input, .search{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 12px;
+  border-radius:18px;
+  border:1px solid var(--border);
+  background: rgba(255,255,255,.86);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.7), 0 14px 34px rgba(10,16,32,.07);
+}
+@media (prefers-color-scheme: dark){
+  .input,.search{background: rgba(255,255,255,.06); box-shadow:none}
+}
+.input:focus-within, .search:focus-within{box-shadow:var(--focus)}
+.input input, .search input{
+  flex:1;border:0;background:transparent;outline:none;
+  padding:6px 4px;color:var(--ink);font-weight:700;
+}
+.input input::placeholder, .search input::placeholder{color:rgba(10,16,32,.45)}
+@media (prefers-color-scheme: dark){
+  .input input::placeholder, .search input::placeholder{color:rgba(238,242,255,.45)}
+}
+
+/* Pills / chips */
+.pill, .chip{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:10px 12px;
+  border-radius:999px;
+  background: rgba(255,255,255,.82);
+  border:1px solid var(--border);
+  box-shadow:0 12px 26px rgba(10,16,32,.06);
+  font-weight:950;
+  font-size:.78rem;
+  color:rgba(10,16,32,.78);
+  transition: transform var(--t), box-shadow var(--t), border-color var(--t), background var(--t);
+}
+@media (prefers-color-scheme: dark){
+  .pill,.chip{background: rgba(255,255,255,.06); box-shadow:none; color: rgba(238,242,255,.78)}
+}
+.pill:hover, .chip:hover{transform:translateY(-1px);border-color:rgba(37,99,235,.22)}
+.pill[aria-pressed="true"]{
+  background: linear-gradient(135deg,var(--p),var(--p2));
+  color:#fff;border-color:transparent;
+  box-shadow: 0 16px 38px rgba(2,6,23,.14);
+}
+
+/* Cards */
+.card, .panel, .surface{
+  background: rgba(255,255,255,.86);
+  border:1px solid var(--border);
+  border-radius: var(--r-xl);
+  box-shadow: var(--sh1);
+}
+@media (prefers-color-scheme: dark){
+  .card,.panel,.surface{background: rgba(9,12,24,.68); box-shadow:none}
+}
+
+/* Product grid/card helpers (no pisa tu shop-card) */
+.gridP{display:grid;gap:14px}
+@media(min-width:640px){.gridP{grid-template-columns:repeat(2,1fr)}}
+@media(min-width:980px){.gridP{grid-template-columns:repeat(3,1fr);gap:18px}}
+@media(min-width:1260px){.gridP{grid-template-columns:repeat(4,1fr)}}
+
+.cardP{
+  border-radius: calc(var(--r-lg) + 2px);
+  border: 1px solid rgba(10,16,32,.10);
+  background: linear-gradient(180deg, rgba(255,255,255,.96), rgba(255,255,255,.86));
+  box-shadow: var(--sh1);
+  overflow:hidden;
+  transition: transform var(--t), box-shadow var(--t), border-color var(--t), filter var(--t);
+}
+@media (prefers-color-scheme: dark){
+  .cardP{
+    border-color: rgba(148,163,184,.18);
+    background: linear-gradient(180deg, rgba(12,16,34,.88), rgba(12,16,34,.78));
+    box-shadow:none;
+  }
+}
+.cardP:hover{transform:translateY(-8px);box-shadow:var(--sh2);border-color:rgba(37,99,235,.22);filter:saturate(1.05)}
+.cardP:focus-within{box-shadow:var(--focus), var(--sh2)}
+
+.mediaP{position:relative;aspect-ratio:1/1;overflow:hidden;background:rgba(255,255,255,.55)}
+@media (prefers-color-scheme: dark){.mediaP{background:rgba(255,255,255,.04)}}
+.mediaP img{width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity var(--t), transform .65s var(--ease)}
+.cardP:hover .mediaP img{transform:scale(1.08);opacity:1}
+
+/* Skeleton */
+.skel{
+  position:absolute;inset:0;
+  background: linear-gradient(90deg,
+    rgba(255,255,255,.10),
+    rgba(255,255,255,.42),
+    rgba(255,255,255,.10)
+  );
+  transform: translateX(-100%);
+  animation: shimmer 1.05s infinite;
+  opacity:.65;
+}
+@keyframes shimmer{
+  0%{transform:translateX(-100%)}
+  100%{transform:translateX(100%)}
+}
+
+/* Sticky bottom CTA reusable */
+.sticky-cta{
+  position:fixed;
+  left: 14px; right: 14px;
+  bottom: calc(14px + env(safe-area-inset-bottom));
+  z-index:60;
+  display:none;
+  justify-content:center;
+  pointer-events:none;
+}
+.sticky-cta.is-on{display:flex}
+.sticky-cta .inner{
+  pointer-events:auto;
+  width:min(760px,100%);
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:12px 12px;
+  border-radius:999px;
+  border:1px solid var(--border);
+  background: rgba(255,255,255,.72);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: var(--sh2);
+}
+@media (prefers-color-scheme: dark){
+  .sticky-cta .inner{background: rgba(9,12,24,.62); box-shadow:none}
+}
+.sticky-cta .inner b{font-weight:1000;color:var(--ink)}
+.sticky-cta .inner .small{margin:0;color:var(--muted)}
+.sticky-cta .cta-btn{ /* compat con shop */
+  display:inline-flex;align-items:center;justify-content:center;
+  border-radius:999px;padding:.74rem 1.05rem;font-weight:1000;
+  background: linear-gradient(135deg,var(--p),var(--p2));
+  color:#fff;border:1px solid transparent;
+}
+
+/* -----------------------------
+   8) ACCESSIBILITY + MOTION
+----------------------------- */
+@media (prefers-reduced-motion: reduce){
+  html{scroll-behavior:auto}
+  *{transition:none!important;animation:none!important}
+}
+
+/* Utility: hidden */
+.is-hidden{display:none!important}
+
+.hero{
+  position:relative;
+  border-radius: var(--r-xl);
+  border: 1px solid var(--border);
+  background:
+    radial-gradient(1100px 520px at 18% 18%, rgba(37,99,235,.18), transparent 60%),
+    radial-gradient(900px 520px at 84% 22%, rgba(6,182,212,.14), transparent 62%),
+    radial-gradient(900px 620px at 50% 110%, rgba(245,158,11,.12), transparent 62%),
+    linear-gradient(135deg, rgba(255,255,255,.92), rgba(255,255,255,.74));
+  box-shadow: var(--sh2);
+  overflow:hidden;
+  padding: clamp(18px, 2.8vw, 28px);
+}
+@media (prefers-color-scheme: dark){
+  .hero{
+    background:
+      radial-gradient(1100px 520px at 18% 18%, rgba(37,99,235,.22), transparent 60%),
+      radial-gradient(900px 520px at 84% 22%, rgba(6,182,212,.18), transparent 62%),
+      radial-gradient(900px 620px at 50% 110%, rgba(245,158,11,.14), transparent 62%),
+      linear-gradient(135deg, rgba(9,12,24,.78), rgba(9,12,24,.62));
+    box-shadow: none;
+  }
+}
+.hero::after{
+  content:"";
+  position:absolute; inset:0;
+  opacity:.06;
+  pointer-events:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)' opacity='.8'/%3E%3C/svg%3E");
+}
+.hero .cta-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
+/* ===========================
+   SKYLINE PRO PATCH (HOME/HEADER/PRODUCT UI)
+   Pégalo al FINAL de tu CSS
+=========================== */
+
+/* 1) Layout base más premium */
+:root{
+  --max: 1240px;
+  --pad: 20px;
+  --pad-lg: 28px;
+
+  /* tipografía: mejor contraste visual */
+  --ls-title: -0.035em;
+}
+
+.container,.section{max-width:var(--max)}
+@media(min-width:980px){
+  .container,.section{padding:28px var(--pad-lg)}
+}
+
+/* 2) TOPBAR PRO: buscador domina + acciones claras */
+.topbar-inner{
+  display:grid;
+  grid-template-columns: auto 1fr auto;
+  align-items:center;
+  gap:12px;
+}
+
+.topbar .nav{gap:6px}
+.topbar .nav a{font-weight:900}
+
+/* Buscador “real” tipo marketplace */
+.topbar .search{
+  width:100%;
+  max-width: 720px;
+  margin: 0 auto;
+  border-radius: 999px;
+  padding: 10px 14px;
+}
+.topbar .search input{font-weight:800}
+.topbar .search .btn{border-radius:999px;padding:10px 14px}
+
+/* Acciones derecha */
+.topbar-actions{
+  display:flex;align-items:center;gap:10px;
+}
+.topbar-actions .btn{border-radius:999px;padding:10px 12px}
+
+/* Mobile: 2 filas (logo/acciones arriba, buscador abajo) */
+@media(max-width:760px){
+  .topbar-inner{
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto;
+  }
+  .topbar-inner .brand{grid-column:1/2;grid-row:1}
+  .topbar-inner .topbar-actions{grid-column:2/3;grid-row:1}
+  .topbar-inner .search{grid-column:1/3;grid-row:2;max-width:none}
+}
+
+/* 3) HERO: más “tienda internacional” (menos pastel) */
+.hero{
+  border-radius: 28px;
+  overflow:hidden;
+  background:
+    radial-gradient(900px 520px at 12% 10%, rgba(37,99,235,.22), transparent 58%),
+    radial-gradient(900px 520px at 88% 10%, rgba(6,182,212,.16), transparent 58%),
+    linear-gradient(180deg, rgba(255,255,255,.92), rgba(255,255,255,.76));
+}
+@media (prefers-color-scheme: dark){
+  .hero{
+    background:
+      radial-gradient(900px 520px at 12% 10%, rgba(37,99,235,.22), transparent 58%),
+      radial-gradient(900px 520px at 88% 10%, rgba(6,182,212,.18), transparent 58%),
+      linear-gradient(180deg, rgba(10,14,28,.88), rgba(10,14,28,.66));
+  }
+}
+
+/* Títulos con presencia */
+.hero h1{
+  letter-spacing: var(--ls-title);
+  font-weight: 1000;
+}
+.hero p{max-width: 58ch}
+
+/* CTA del hero: 1 dominante, 1 secundario */
+.hero .cta-row .btn.primary{padding:13px 16px;border-radius:999px}
+.hero .cta-row .btn.ghost{padding:13px 16px;border-radius:999px}
+
+/* 4) Sección beneficios (pills) alineada pro */
+.benefits-row{
+  display:flex;flex-wrap:wrap;gap:10px;
+  margin: 14px 0 6px;
+}
+.benefits-row .pill{padding:10px 14px}
+
+/* 5) Grid de categorías como marketplace */
+.cat-grid{
+  display:grid;gap:12px;
+  grid-template-columns: repeat(2, 1fr);
+}
+@media(min-width:980px){
+  .cat-grid{grid-template-columns: repeat(5, 1fr);gap:14px}
+}
+.cat-item{
+  padding:14px 14px;
+  border-radius: 18px;
+  border:1px solid var(--border);
+  background: rgba(255,255,255,.86);
+  box-shadow: var(--sh1);
+  display:flex;align-items:center;gap:10px;
+  transition: transform var(--t), box-shadow var(--t), border-color var(--t);
+}
+@media (prefers-color-scheme: dark){
+  .cat-item{background: rgba(9,12,24,.66); box-shadow:none}
+}
+.cat-item:hover{transform:translateY(-4px);box-shadow:var(--sh2);border-color:rgba(37,99,235,.22)}
+.cat-ico{
+  width:38px;height:38px;border-radius:14px;
+  background: linear-gradient(135deg, rgba(37,99,235,.18), rgba(6,182,212,.14));
+  display:grid;place-items:center;
+  border:1px solid rgba(37,99,235,.14);
+}
+.cat-item b{font-weight:1000}
+.cat-item span{font-size:.9rem;color:var(--muted)}
+
+/* 6) Cards producto: precio manda + CTA claro */
+.cardP .meta{
+  padding: 12px 12px 14px;
+  display:grid;gap:8px;
+}
+.cardP .title{
+  font-weight:950;line-height:1.15;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+}
+.cardP .price{
+  font-weight:1000;
+  font-size: 1.05rem;
+  color: var(--ink);
+}
+.cardP .sub{
+  font-size:.88rem;color:var(--muted);
+}
+.cardP .actions{
+  display:flex;gap:10px;margin-top:6px;
+}
+.cardP .actions .btn{flex:1;border-radius:14px;padding:11px 12px;font-weight:950}
+.cardP .actions .btn.primary{box-shadow:none}
+.cardP .actions .btn.ghost{box-shadow:none}
+
+/* 7) “Ver todo” y títulos de sección */
+.section-title{
+  display:flex;align-items:flex-end;justify-content:space-between;gap:10px;
+  margin: 18px 0 10px;
+}
+.section-title h2{letter-spacing:var(--ls-title)}
+.section-title a{
+  font-weight:950;color:var(--p);
+  padding:10px 12px;border-radius:12px;
+}
+.section-title a:hover{background:rgba(37,99,235,.10)}
+/* ======================================================================
+   SKYLINE — UI UNIFICATION (FINAL)
+   - Unifica botones: .btn.primary / .btn.ghost / .btn.subtle
+   - Compat: .btn-primary / .btn-soft / .btn-ghost (no rompe legacy)
+   - Unifica card producto: .cardP + .mediaP + .metaP + .actionsP
+====================================================================== */
+
+/* 1) Botones: sistema único */
+.btn{font-weight:1000}
+.btn.primary{
+  color:#fff;
+  background: linear-gradient(135deg,var(--p),var(--p2));
+  border:1px solid transparent;
+  box-shadow: 0 18px 55px rgba(37,99,235,.22);
+}
+.btn.ghost{
+  background: rgba(255,255,255,.86);
+  border-color: var(--border);
+  color: var(--ink);
+  box-shadow: var(--sh1);
+}
+.btn.subtle{
+  background: transparent;
+  border-color: var(--border);
+  color: var(--ink);
+  box-shadow: none;
+}
+@media (prefers-color-scheme: dark){
+  .btn.ghost{background: rgba(255,255,255,.06); box-shadow:none}
+  .btn.subtle{color: var(--ink)}
+}
+
+/* 2) Compat legacy (para no romper lo viejo) */
+.btn-primary{ /* -> .btn.primary */
+  color:#fff!important;
+  background: linear-gradient(135deg,var(--p),var(--p2))!important;
+  border-color: transparent!important;
+}
+.btn-soft{ /* -> .btn.ghost */
+  background: rgba(255,255,255,.86)!important;
+  border:1px solid var(--border)!important;
+  color: var(--ink)!important;
+}
+.btn-ghost{ /* -> .btn.subtle */
+  background: transparent!important;
+  border:1px solid var(--border)!important;
+  color: var(--ink)!important;
+}
+@media (prefers-color-scheme: dark){
+  .btn-soft{background: rgba(255,255,255,.06)!important}
+}
+
+/* 3) Card producto UNICA (home + shop) */
+.cardP{
+  border-radius: calc(var(--r-lg) + 2px);
+  border: 1px solid rgba(10,16,32,.10);
+  background: linear-gradient(180deg, rgba(255,255,255,.96), rgba(255,255,255,.86));
+  box-shadow: var(--sh1);
+  overflow:hidden;
+  transition: transform var(--t), box-shadow var(--t), border-color var(--t), filter var(--t);
+}
+@media (prefers-color-scheme: dark){
+  .cardP{
+    border-color: rgba(148,163,184,.18);
+    background: linear-gradient(180deg, rgba(12,16,34,.88), rgba(12,16,34,.78));
+    box-shadow:none;
+  }
+}
+.cardP:hover{transform:translateY(-8px);box-shadow:var(--sh2);border-color:rgba(37,99,235,.22);filter:saturate(1.05)}
+.cardP:focus-within{box-shadow:var(--focus), var(--sh2)}
+
+.mediaP{position:relative;aspect-ratio:1/1;overflow:hidden;background:rgba(255,255,255,.55)}
+@media (prefers-color-scheme: dark){.mediaP{background:rgba(255,255,255,.04)}}
+.mediaP img{width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity var(--t), transform .65s var(--ease)}
+.cardP:hover .mediaP img{transform:scale(1.08);opacity:1}
+
+.badgeP{
+  position:absolute;left:10px;top:10px;
+  padding:8px 10px;border-radius:999px;
+  background: rgba(255,255,255,.78);
+  border:1px solid var(--border);
+  font-weight:1000;font-size:.8rem;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+@media (prefers-color-scheme: dark){.badgeP{background: rgba(9,12,24,.62)}}
+
+.metaP{padding:12px 12px 14px;display:grid;gap:8px}
+.titleP{
+  font-weight:1000;line-height:1.15;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+}
+.subP{font-size:.88rem;color:var(--muted);font-weight:700}
+.priceP{font-weight:1000;font-size:1.08rem;color:var(--ink)}
+
+.actionsP{display:flex;gap:10px;padding:0 12px 14px}
+.actionsP .btn{flex:1;border-radius:14px;padding:11px 12px;font-weight:1000}
+
+/* 4) Grid productos estándar */
+.gridP{display:grid;gap:14px}
+@media(min-width:640px){.gridP{grid-template-columns:repeat(2,1fr)}}
+@media(min-width:980px){.gridP{grid-template-columns:repeat(3,1fr);gap:18px}}
+@media(min-width:1260px){.gridP{grid-template-columns:repeat(4,1fr)}}
+/* ======================================================================
+   PRODUCT CARD — CSS EXT (FINAL)
+   Pegá esto al FINAL de tu CSS global.
+   (No rompe nada: solo agrega clases nuevas usadas por el componente)
+====================================================================== */
+
+/* make image visible even without hover */
+.mediaP img{opacity:1}
+
+/* stretched link (whole card clickable) */
+.stretchedP{
+  position:absolute;inset:0;
+  z-index:1;
+  border-radius:inherit;
+}
+/* keep badge/chips above stretched link */
+.badgeP, .chipsP{position:absolute;z-index:2}
+.actionsP{position:relative;z-index:3} /* buttons above stretched link */
+
+/* chips */
+.chipsP{
+  right:10px;top:10px;
+  display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;
+  max-width: 70%;
+}
+.chipP{
+  padding:7px 10px;border-radius:999px;
+  background: rgba(255,255,255,.78);
+  border:1px solid var(--border);
+  font-weight:1000;font-size:.78rem;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+@media (prefers-color-scheme: dark){
+  .chipP{background: rgba(9,12,24,.62)}
+}
+.chipP.ok{border-color: rgba(22,163,74,.22)}
+.chipP.bad{border-color: rgba(220,38,38,.22)}
+
+/* rating */
+.ratingP{
+  display:flex;align-items:center;gap:6px;
+  font-weight:900;
+  color: var(--muted);
+  font-size:.9rem;
+}
+.ratingP .star{transform: translateY(-.5px)}
+.ratingP .val{font-weight:1000;color:var(--ink)}
+.ratingP .rev{color:var(--muted)}
+
+/* price row */
+.priceRowP{
+  display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;
+}
+.curP{
+  font-weight:900;
+  font-size:.82rem;
+  color: var(--muted);
+}
+.compareP{
+  margin-left:auto;
+  font-weight:900;
+  font-size:.95rem;
+  color: rgba(10,16,32,.42);
+  text-decoration: line-through;
+}
+@media (prefers-color-scheme: dark){
+  .compareP{color: rgba(238,242,255,.42)}
+}
+
+/* disabled button look */
+.btn.disabled{
+  opacity:.65;
+  cursor:not-allowed;
+  transform:none!important;
+  filter:none!important;
+}
+
+
