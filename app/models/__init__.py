@@ -1,9 +1,10 @@
-﻿# app/models/__init__.py — Skyline Store (BULLETPROOF · FINAL · +23 mejoras)
+﻿# app/models/__init__.py — Skyline Store (BULLETPROOF · FINAL · NO BREAK)
 from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Dict, Optional, Set
+import threading
+from typing import Any, Dict, Optional, Set, Callable
 
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
@@ -13,7 +14,7 @@ db = SQLAlchemy()
 log = logging.getLogger("models")
 
 # =============================================================================
-# ✅ Mejora 1: helper SQLAlchemy text export (health checks / raw sql)
+# ✅ Mejora 1: helper sqlalchemy.text export (health checks / raw sql)
 # =============================================================================
 try:
     from sqlalchemy import text as _sa_text  # type: ignore
@@ -22,7 +23,6 @@ try:
         return _sa_text(sql)
 
 except Exception:  # pragma: no cover
-
     def text(sql: str):
         raise RuntimeError("sqlalchemy.text no disponible")
 
@@ -51,7 +51,7 @@ def _env_str(name: str, default: str = "") -> str:
 
 
 def _app_env(app: Flask) -> str:
-    env = (app.config.get("ENV") or os.getenv("ENV") or "").lower().strip()
+    env = (app.config.get("ENV") or os.getenv("ENV") or os.getenv("FLASK_ENV") or "").lower().strip()
     if env in {"prod", "production"}:
         return "production"
     if env in {"dev", "development"}:
@@ -66,6 +66,51 @@ def _is_production(app: Flask) -> bool:
     return _app_env(app) == "production"
 
 
+# =============================================================================
+# ✅ Mejora 3 EXTRA: normalización DB (postgres:// → postgresql://)
+# y fallback fuerte desde ENV (Render-proof)
+# =============================================================================
+def _normalize_db_url(raw: str) -> str:
+    u = (raw or "").strip()
+    if u.startswith("postgres://"):
+        u = u.replace("postgres://", "postgresql://", 1)
+    return u
+
+
+def _ensure_db_uri(app: Flask) -> str:
+    """
+    Garantiza que app.config tenga SQLALCHEMY_DATABASE_URI.
+    Prioridad:
+      1) app.config['SQLALCHEMY_DATABASE_URI']
+      2) ENV SQLALCHEMY_DATABASE_URI
+      3) ENV DATABASE_URL
+      4) fallback sqlite SOLO en development
+    """
+    uri = (app.config.get("SQLALCHEMY_DATABASE_URI") or "").strip()
+    if uri:
+        uri = _normalize_db_url(uri)
+        app.config["SQLALCHEMY_DATABASE_URI"] = uri
+        return uri
+
+    env_uri = _normalize_db_url(os.getenv("SQLALCHEMY_DATABASE_URI") or "")
+    if env_uri:
+        app.config["SQLALCHEMY_DATABASE_URI"] = env_uri
+        return env_uri
+
+    db_url = _normalize_db_url(os.getenv("DATABASE_URL") or "")
+    if db_url:
+        app.config["SQLALCHEMY_DATABASE_URI"] = db_url
+        return db_url
+
+    # Fallback local (solo dev)
+    if not _is_production(app):
+        fallback = "sqlite:///skyline_local.db"
+        app.config["SQLALCHEMY_DATABASE_URI"] = fallback
+        return fallback
+
+    return ""
+
+
 def _db_uri(app: Flask) -> str:
     return (app.config.get("SQLALCHEMY_DATABASE_URI") or "").strip()
 
@@ -77,25 +122,33 @@ def _db_tables_not_ready_error(e: Exception) -> bool:
         or "does not exist" in msg
         or "undefined table" in msg
         or ("relation" in msg and "does not exist" in msg)
+        or "invalid catalog name" in msg
+        or "database does not exist" in msg
     )
 
 
 # =============================================================================
-# ✅ Mejora 3: cache de modelos por proceso + guard de estado
+# ✅ Mejora 4 EXTRA: locks para evitar condiciones de carrera (gunicorn threads)
+# =============================================================================
+_INIT_LOCK = threading.RLock()
+
+
+# =============================================================================
+# ✅ Mejora 5: cache de modelos por proceso + guard de estado
 # =============================================================================
 _LOADED_MODELS: Optional[Dict[str, Any]] = None
 _MODELS_INIT_ONCE_OK: bool = False
 
 
 # =============================================================================
-# ✅ Mejora 4: alias compat (tu Render error anterior)
+# ✅ Mejora 6: alias compat
 # =============================================================================
 def create_admin_if_missing(app: Flask) -> Dict[str, Any]:
     return create_admin_owner_guard(app)
 
 
 # =============================================================================
-# ✅ Mejora 5: import helpers con logs claros
+# ✅ Mejora 7: import helpers con logs claros
 # =============================================================================
 def _import_required(module: str, name: str) -> Any:
     try:
@@ -111,13 +164,12 @@ def _import_optional(module: str, name: str) -> Optional[Any]:
         mod = __import__(module, fromlist=[name])
         return getattr(mod, name)
     except Exception as e:
-        # opcional: debug (no ensucia logs en prod)
         log.debug("Optional model skipped: %s.%s (%s)", module, name, e)
         return None
 
 
 # =============================================================================
-# ✅ Mejora 6: carga de modelos con orden garantizado + incluye ledger/payout
+# ✅ Mejora 8: carga de modelos con orden garantizado
 # =============================================================================
 def _load_models(app: Flask, *, force: bool = False) -> Dict[str, Any]:
     global _LOADED_MODELS
@@ -140,27 +192,23 @@ def _load_models(app: Flask, *, force: bool = False) -> Dict[str, Any]:
     models["Order"] = _import_required("app.models.order", "Order")
     models["OrderItem"] = _import_required("app.models.order", "OrderItem")
 
-    # OPCIONALES
+    # Opcionales
     models["Offer"] = _import_optional("app.models.offer", "Offer")
     models["Media"] = _import_optional("app.models.media", "Media")
     models["Event"] = _import_optional("app.models.event", "Event")
     models["Campaign"] = _import_optional("app.models.campaign", "Campaign")
     models["CampaignSend"] = _import_optional("app.models.campaign", "CampaignSend")
 
-    # ✅ NUEVO: Commission ledger / payouts (conecta tu módulo de comisiones)
-    models["CommissionLedgerEntry"] = _import_optional(
-        "app.models.commission_ledger", "CommissionLedgerEntry"
-    )
-    models["CommissionPayout"] = _import_optional(
-        "app.models.commission_ledger", "CommissionPayout"
-    )
+    # Comisión / ledger (opc)
+    models["CommissionLedgerEntry"] = _import_optional("app.models.commission_ledger", "CommissionLedgerEntry")
+    models["CommissionPayout"] = _import_optional("app.models.commission_ledger", "CommissionPayout")
 
     _LOADED_MODELS = {k: v for k, v in models.items() if v is not None}
     return _LOADED_MODELS
 
 
 # =============================================================================
-# ✅ Mejora 7: proxy seguro (evita circular imports / rompe menos en wsgi)
+# ✅ Mejora 9: proxy seguro (evita circular imports)
 # =============================================================================
 class _ModelProxy:
     __slots__ = ("_name",)
@@ -204,11 +252,16 @@ CommissionPayout = _ModelProxy("CommissionPayout")
 
 
 # =============================================================================
-# ✅ Mejora 8: init_models con hardening real
-# - NO crea tablas
-# - valida DB uri
-# - evita doble init en el mismo proceso
-# - permite recargar modelos
+# ✅ Mejora 10 EXTRA: ping DB más robusto + logs claros
+# =============================================================================
+def _ping_db(app: Flask) -> None:
+    with app.app_context():
+        # IMPORTANTE: SELECT 1 no depende de tablas/migrations
+        db.session.execute(text("SELECT 1"))
+
+
+# =============================================================================
+# ✅ Mejora 11: init_models con hardening real (NO BREAK)
 # =============================================================================
 def init_models(
     app: Flask,
@@ -222,72 +275,72 @@ def init_models(
     Debe llamarse dentro de create_app() SIEMPRE.
 
     - Inicializa SQLAlchemy si hace falta
+    - Garantiza SQLALCHEMY_DATABASE_URI (Render-proof)
     - Carga modelos core y opcionales
-    - (opcional) ping DB para detectar URI mala temprano
-    - (opcional) bootstrap admin sólo si SEED=1 y no SKIP_ADMIN_BOOTSTRAP=1
+    - (opcional) ping DB para detectar credenciales/URI malas temprano
+    - (opcional) bootstrap admin si SEED=1 y no SKIP_ADMIN_BOOTSTRAP=1
     """
     global _MODELS_INIT_ONCE_OK
 
-    # ✅ Mejora 9: no re-inicializar SQLAlchemy si ya existe
-    if "sqlalchemy" not in app.extensions:
-        db.init_app(app)
+    with _INIT_LOCK:
+        # ✅ Asegurar DB URI ANTES de tocar db.init_app()
+        uri = _ensure_db_uri(app)
 
-    loaded = _load_models(app, force=force_reload_models)
+        if not uri:
+            raise RuntimeError(
+                "❌ SQLALCHEMY_DATABASE_URI no configurado. "
+                "Seteá SQLALCHEMY_DATABASE_URI o DATABASE_URL en Render."
+            )
 
-    # ✅ Mejora 10: required set completo y mensaje claro
-    required: Set[str] = {"User", "Category", "Product", "Order", "OrderItem"}
-    missing = required - set(loaded.keys())
-    if missing:
-        raise RuntimeError(f"❌ Faltan modelos core: {', '.join(sorted(missing))}")
+        # ✅ no re-inicializar SQLAlchemy si ya existe
+        if "sqlalchemy" not in app.extensions:
+            db.init_app(app)
 
-    # ✅ Mejora 11: valida DB URI
-    if not _db_uri(app):
-        raise RuntimeError("❌ SQLALCHEMY_DATABASE_URI no configurado")
+        loaded = _load_models(app, force=force_reload_models)
 
-    # ✅ Mejora 12: ping DB (opcional) para fallar rápido
-    if ping_db:
-        with app.app_context():
+        # Required core set
+        required: Set[str] = {"User", "Category", "Product", "Order", "OrderItem"}
+        missing = required - set(loaded.keys())
+        if missing:
+            raise RuntimeError(f"❌ Faltan modelos core: {', '.join(sorted(missing))}")
+
+        # Ping DB (opcional)
+        if ping_db:
             try:
-                db.session.execute(text("SELECT 1"))
+                _ping_db(app)
             except Exception as e:
-                # No hacemos crash si estás en primera corrida sin tablas (SELECT 1 no depende de tablas)
                 log.exception("❌ DB ping failed (URI/credenciales/conexión): %s", e)
-                raise RuntimeError(
-                    "❌ No se pudo conectar a la DB (ping failed)"
-                ) from e
+                raise RuntimeError("❌ No se pudo conectar a la DB (ping failed)") from e
 
-    if log_loaded_models:
-        log.info("📦 Modelos cargados: %s", ", ".join(sorted(loaded.keys())))
+        if log_loaded_models:
+            log.info("📦 Modelos cargados: %s", ", ".join(sorted(loaded.keys())))
 
-    result: Dict[str, Any] = {
-        "ok": True,
-        "env": _app_env(app),
-        "models": sorted(loaded.keys()),
-    }
+        result: Dict[str, Any] = {
+            "ok": True,
+            "env": _app_env(app),
+            "db": "configured",
+            "models": sorted(loaded.keys()),
+        }
 
-    seed = _env_flag("SEED", False)
-    skip_admin = _env_flag("SKIP_ADMIN_BOOTSTRAP", False)
+        seed = _env_flag("SEED", False)
+        skip_admin = _env_flag("SKIP_ADMIN_BOOTSTRAP", False)
 
-    # ✅ Mejora 13: evita re-correr bootstrap admin dos veces en el mismo proceso
-    if create_admin and seed and not skip_admin and not _MODELS_INIT_ONCE_OK:
-        result["admin"] = create_admin_owner_guard(app)
-        _MODELS_INIT_ONCE_OK = True
-    else:
-        reason = (
-            "SEED=0 o SKIP_ADMIN_BOOTSTRAP=1"
-            if (not seed or skip_admin)
-            else "already initialized"
-        )
-        result["admin"] = {"skipped": True, "reason": reason}
+        # Evita re-correr bootstrap admin dos veces
+        if create_admin and seed and not skip_admin and not _MODELS_INIT_ONCE_OK:
+            result["admin"] = create_admin_owner_guard(app)
+            _MODELS_INIT_ONCE_OK = True
+        else:
+            reason = "SEED=0 o SKIP_ADMIN_BOOTSTRAP=1" if (not seed or skip_admin) else "already initialized"
+            result["admin"] = {"skipped": True, "reason": reason}
 
-    return result
+        return result
 
 
 # =============================================================================
-# ✅ Mejora 14: util email simple y segura (sin dependencias)
+# ✅ Mejora 12: util email simple y segura
 # =============================================================================
 def _looks_like_email(email: str) -> bool:
-    e = email.strip().lower()
+    e = (email or "").strip().lower()
     if not e or "@" not in e:
         return False
     local, _, domain = e.partition("@")
@@ -299,7 +352,7 @@ def _looks_like_email(email: str) -> bool:
 
 
 # =============================================================================
-# ✅ Mejora 15: admin bootstrap "owner guard" ultra seguro (no rompe nunca)
+# ✅ Mejora 13: admin bootstrap ultra seguro (no rompe nunca)
 # =============================================================================
 def create_admin_owner_guard(app: Flask) -> Dict[str, Any]:
     loaded = _LOADED_MODELS or {}
@@ -314,11 +367,9 @@ def create_admin_owner_guard(app: Flask) -> Dict[str, Any]:
     if _env_flag("SKIP_ADMIN_BOOTSTRAP", False):
         return {"skipped": True, "reason": "SKIP_ADMIN_BOOTSTRAP=1"}
 
-    # ✅ Mejora 16: validación email mejorada
     if not _looks_like_email(email):
         return {"ok": False, "msg": "ADMIN_EMAIL inválido"}
 
-    # ✅ Mejora 17: prod exige password fuerte; dev avisa pero no bloquea (salvo crear)
     if _is_production(app) and len(password) < 12:
         return {"ok": False, "msg": "ADMIN_PASSWORD inseguro en producción (mín 12)"}
 
@@ -335,14 +386,9 @@ def create_admin_owner_guard(app: Flask) -> Dict[str, Any]:
             log.exception("❌ Error inesperado consultando admin")
             return {"ok": False, "msg": "unexpected db error querying admin"}
 
-        # ✅ Mejora 18: si existe, refuerza flags sin romper
         if existing:
             changed = False
-            for attr, value in [
-                ("is_admin", True),
-                ("is_active", True),
-                ("email_verified", True),
-            ]:
+            for attr, value in (("is_admin", True), ("is_active", True), ("email_verified", True)):
                 if hasattr(existing, attr):
                     try:
                         cur = getattr(existing, attr)
@@ -352,7 +398,6 @@ def create_admin_owner_guard(app: Flask) -> Dict[str, Any]:
                     except Exception:
                         pass
 
-            # ✅ Mejora 19: commit sólo si cambia (y rollback seguro)
             if changed:
                 try:
                     db.session.commit()
@@ -362,21 +407,17 @@ def create_admin_owner_guard(app: Flask) -> Dict[str, Any]:
 
             return {"ok": True, "created": False, "email": email}
 
-        # ✅ Mejora 20: creación requiere password mínimo SIEMPRE
+        # creación requiere password mínimo siempre
         if not password or len(password) < 8:
-            return {
-                "ok": False,
-                "msg": "ADMIN_PASSWORD inválido (mín 8) para crear admin",
-            }
+            return {"ok": False, "msg": "ADMIN_PASSWORD inválido (mín 8) para crear admin"}
 
-        # ✅ Mejora 21: creación robusta con set_password si existe
         try:
             u = UserModel(name=name, email=email)
 
             if hasattr(u, "set_password") and callable(getattr(u, "set_password")):
                 u.set_password(password)
             else:
-                # fallback seguro (evita crash)
+                # fallback (evitar crash si no existe hashing)
                 if hasattr(u, "password_hash"):
                     setattr(u, "password_hash", password)
 
@@ -397,7 +438,7 @@ def create_admin_owner_guard(app: Flask) -> Dict[str, Any]:
 
 
 # =============================================================================
-# ✅ Mejora 22: exports coherentes (incluye comisión)
+# ✅ Mejora 14: exports coherentes
 # =============================================================================
 __all__ = [
     "db",
