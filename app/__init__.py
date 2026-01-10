@@ -12,8 +12,8 @@ from flask import Flask, jsonify, render_template, request, session
 from werkzeug.exceptions import HTTPException
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-from app.models import db, init_models
 from app.config import get_config, ProductionConfig
+from app.models import db, init_models
 
 
 # ✅ compat (no rompe si no existe)
@@ -83,7 +83,7 @@ def resp_error(status: int, code: str, message: str):
 
 def setup_logging(app: Flask) -> None:
     """Idempotente: no duplica handlers en gunicorn."""
-    lvl = (_env_str("LOG_LEVEL", "")).upper()
+    lvl = (_env_str("LOG_LEVEL", "")).upper().strip()
     if lvl in {"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"}:
         level = getattr(logging, lvl)
     else:
@@ -142,7 +142,7 @@ def current_user_from_session() -> Any:
 
 
 def _is_prod(app: Flask) -> bool:
-    env = (app.config.get("ENV") or _env_str("ENV") or _env_str("FLASK_ENV") or "production").lower()
+    env = (app.config.get("ENV") or _env_str("ENV") or _env_str("FLASK_ENV") or "production").lower().strip()
     return env == "production"
 
 
@@ -236,7 +236,6 @@ def init_talisman(app: Flask) -> None:
     force_https = bool(app.config.get("FORCE_HTTPS", _is_prod(app)))
     csp = app.config.get("CONTENT_SECURITY_POLICY", None)
 
-    # No romper si CSP no es dict
     Talisman(
         app,
         force_https=force_https,
@@ -263,7 +262,8 @@ def init_limiter(app: Flask) -> None:
 # =============================================================================
 
 def create_app() -> Flask:
-    cfg_cls: Type = get_config()  # ✅ es CLASE, no instancia
+    cfg_cls: Type = get_config()  # ✅ CLASE, no instancia
+
     app = Flask(
         __name__,
         template_folder="templates",
@@ -271,7 +271,7 @@ def create_app() -> Flask:
         instance_relative_config=True,
     )
 
-    # 1) Cargar config primero
+    # 1) Config primero (CRÍTICO)
     app.config.from_mapping(cfg_cls.as_flask_config())
 
     # 2) Logging idempotente
@@ -282,16 +282,14 @@ def create_app() -> Flask:
     if cfg_cls is ProductionConfig:
         ProductionConfig.validate_required()
 
-    # 4) ProxyFix (Render / Cloudflare / reverse proxy)
+    # 4) ProxyFix (Render / reverse proxy)
     if bool(app.config.get("TRUST_PROXY_HEADERS", True)):
-        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
+        # Render típico: 1 hop; x_prefix ayuda en subpath deploys
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
 
     # =============================================================================
     # Cookies/sesión “Render-proof”
     # =============================================================================
-    # IMPORTANTE:
-    # - Para login/register estándar, SameSite=Lax es lo más estable.
-    # - NO forzar None salvo que uses iframes / cross-site POST.
     if _is_prod(app):
         app.config.setdefault("SESSION_COOKIE_SECURE", True)
         app.config.setdefault("SESSION_COOKIE_SAMESITE", "Lax")
@@ -309,11 +307,8 @@ def create_app() -> Flask:
         days = 7
     app.config.setdefault("PERMANENT_SESSION_LIFETIME", timedelta(days=max(1, min(days, 90))))
 
-    # CSRF: si querés más TTL, setealo en env; si viene None, se respeta
-    # SSL strict: por defecto False (proxy), vos podés forzarlo en env
+    # CSRF & scheme defaults
     app.config.setdefault("WTF_CSRF_SSL_STRICT", _env_bool("WTF_CSRF_SSL_STRICT", default=False))
-
-    # Esquema para urls absolutas
     app.config.setdefault("PREFERRED_URL_SCHEME", "https" if _is_prod(app) else "http")
 
     app.logger.info(
@@ -327,21 +322,32 @@ def create_app() -> Flask:
     )
 
     # =============================================================================
-    # Init extensiones
+    # Init extensiones (orden importante)
     # =============================================================================
-    safe_init(app, "db.init_app", lambda: db.init_app(app))
+    # ✅ CSRF primero (no depende de DB)
     critical_init(app, "CSRFProtect", lambda: init_csrf(app))
 
-    safe_init(app, "Flask-Compress", lambda: init_compress(app) if app.config.get("ENABLE_COMPRESS", True) else None)
-    safe_init(app, "Flask-Talisman", lambda: init_talisman(app) if app.config.get("ENABLE_TALISMAN", False) else None)
-    safe_init(app, "Flask-Migrate", lambda: init_migrate(app))
-    safe_init(app, "Flask-Limiter", lambda: init_limiter(app))
+    safe_init(
+        app,
+        "Flask-Compress",
+        lambda: init_compress(app) if app.config.get("ENABLE_COMPRESS", True) else None,
+    )
+    safe_init(
+        app,
+        "Flask-Talisman",
+        lambda: init_talisman(app) if app.config.get("ENABLE_TALISMAN", False) else None,
+    )
 
-    # Models hub (crítico)
+    # ✅ MODELS HUB (CRÍTICO)
+    # - Este es el ÚNICO lugar que inicializa SQLAlchemy (db.init_app) para evitar estados raros.
     def _models_hub():
         return init_models(app, create_admin=True, log_loaded_models=True, ping_db=True)
 
     critical_init(app, "Models hub", _models_hub)
+
+    # ✅ Migrate / Limiter DESPUÉS de DB lista
+    safe_init(app, "Flask-Migrate", lambda: init_migrate(app))
+    safe_init(app, "Flask-Limiter", lambda: init_limiter(app))
 
     # =============================================================================
     # Hooks: request-id + admin no-cache + headers
@@ -441,17 +447,25 @@ def create_app() -> Flask:
         safe_init(app, "Register Blueprints", _register_all_routes)
 
     # =============================================================================
-    # Health
+    # Health / Ready (NO BREAK aunque DB no esté lista)
     # =============================================================================
     def _db_check() -> Tuple[bool, str]:
         if not _env_bool("HEALTH_DB_CHECK", False):
             return True, "skipped"
+
+        # Si por algún motivo SQLAlchemy no quedó registrado, no rompemos el health.
+        try:
+            if "sqlalchemy" not in app.extensions:
+                return False, "sqlalchemy_not_registered"
+        except Exception:
+            return False, "sqlalchemy_not_registered"
+
         try:
             from sqlalchemy import text
             db.session.execute(text("SELECT 1"))
             return True, "ok"
         except Exception as e:
-            return False, str(e)
+            return False, (str(e) or "db_error")[:240]
 
     @app.get("/health")
     def health():

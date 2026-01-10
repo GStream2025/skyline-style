@@ -1,3 +1,4 @@
+# app/config.py — Skyline Store (ULTRA PRO MAX · FINAL · Render-proof · NO BREAK)
 from __future__ import annotations
 
 import os
@@ -34,7 +35,13 @@ def env_int(key: str, default: int, *, min_v: Optional[int] = None, max_v: Optio
     return v
 
 
-def env_opt_int(key: str, default: Optional[int], *, min_v: Optional[int] = None, max_v: Optional[int] = None) -> Optional[int]:
+def env_opt_int(
+    key: str,
+    default: Optional[int],
+    *,
+    min_v: Optional[int] = None,
+    max_v: Optional[int] = None,
+) -> Optional[int]:
     """
     Permite valores vacíos -> None (útil para WTF_CSRF_TIME_LIMIT=None).
     """
@@ -64,6 +71,10 @@ def env_bool(key: str, default: bool = False) -> bool:
     return default
 
 
+# =============================================================================
+# Normalizers
+# =============================================================================
+
 def normalize_database_url(raw: Optional[str]) -> str:
     """
     Render suele dar DATABASE_URL con postgres://
@@ -78,11 +89,31 @@ def normalize_database_url(raw: Optional[str]) -> str:
     return url
 
 
+def normalize_db_any(raw: Optional[str]) -> str:
+    """
+    Normaliza tanto DATABASE_URL como SQLALCHEMY_DATABASE_URI.
+    Si viene vacío, devuelve "" (NO aplica fallback acá).
+    """
+    if not raw:
+        return ""
+    u = str(raw).strip()
+    if not u:
+        return ""
+    if u.startswith("postgres://"):
+        u = u.replace("postgres://", "postgresql://", 1)
+    return u
+
+
 def normalize_samesite(raw: str, default: str = "Lax") -> str:
     s = (raw or default).strip()
     if s not in {"Lax", "Strict", "None"}:
         return default
     return s
+
+
+def normalize_scheme(raw: str, default: str = "http") -> str:
+    s = (raw or default).strip().lower()
+    return "https" if s == "https" else "http"
 
 
 def _is_sqlite(uri: str) -> bool:
@@ -113,26 +144,16 @@ def csp_for_tailwind_cdn() -> Dict[str, list]:
 
 
 # =============================================================================
-# Config Base — PRO / Bulletproof (SIN dataclass → 0 crashes por defaults mutables)
+# Config Base — PRO / Bulletproof
 # =============================================================================
 
 class BaseConfig:
     """
     Skyline Store — Config PRO / Bulletproof (NO BREAK / Render-safe)
 
-    Mejoras (importantes, reales):
-    1) NO dataclass → elimina el crash Py3.11 por defaults mutables
-    2) SECRET_KEY: fallback SOLO dev + validación fuerte en prod
-    3) CSRF TTL soporta None (sin expiración) si seteás vacío
-    4) Cookies consistentes (Secure/SameSite/HttpOnly) → reduce CSRF mismatch
-    5) Cookie name estable → evita choques entre apps en mismo dominio
-    6) DB normalizada (postgres:// → postgresql://) + pool tuning Render-friendly
-    7) MAX_CONTENT_LENGTH calculado por MB real
-    8) SERVER_NAME nunca se setea si está vacío → evita bugs de rutas/redirects
-    9) CSP generado SIEMPRE nuevo (no se “contamina” por mutación)
-    10) as_flask_config(): solo UPPERCASE + calculados + limpieza de claves vacías
-    11) PREFERRED_URL_SCHEME estable (https prod / http dev)
-    12) TRACK_MODIFICATIONS apagado (perf) y ENGINE_OPTIONS centralizado
+    FIX CRÍTICO:
+    - as_flask_config() incluye heredados (BaseConfig) + overrides (Production/Dev)
+      usando MRO. Esto evita DB=None, CSRF_TTL=None, etc. en Render.
     """
 
     # -----------------------------
@@ -149,8 +170,6 @@ class BaseConfig:
     # App identity / URL
     # -----------------------------
     APP_NAME: str = env_str("APP_NAME", "Skyline Store")
-
-    # Preferí APP_URL; fallback SITE_URL (y normalizamos sin slash final)
     APP_URL: str = env_str("APP_URL", env_str("SITE_URL", "")).rstrip("/")
     SITE_URL: str = APP_URL
 
@@ -158,33 +177,22 @@ class BaseConfig:
     PORT: int = env_int("PORT", 5000, min_v=1, max_v=65535)
 
     SERVER_NAME: str = env_str("SERVER_NAME", "")
+    PREFERRED_URL_SCHEME: str = normalize_scheme(env_str("PREFERRED_URL_SCHEME", ("https" if IS_PROD else "http")))
 
-    # IMPORTANT: esquema por defecto coherente con entorno
-    PREFERRED_URL_SCHEME: str = env_str("PREFERRED_URL_SCHEME", ("https" if IS_PROD else "http")).lower()
-
-    # Render/ProxyFix friendly
     TRUST_PROXY_HEADERS: bool = env_bool("TRUST_PROXY_HEADERS", default=IS_PROD)
 
     # -----------------------------
     # Security / Sessions / Cookies
     # -----------------------------
-    # Fallback solo dev; ProductionConfig lo exige real
     SECRET_KEY: str = env_str("SECRET_KEY", "dev_skyline_fallback_change_me")
 
     SESSION_COOKIE_NAME: str = env_str("SESSION_COOKIE_NAME", "skyline_session")
     SESSION_COOKIE_HTTPONLY: bool = env_bool("SESSION_COOKIE_HTTPONLY", True)
-
-    # Leer compat: SESSION_COOKIE_SAMESITE o SESSION_SAMESITE
     SESSION_COOKIE_SAMESITE: str = normalize_samesite(
         env_str("SESSION_COOKIE_SAMESITE", env_str("SESSION_SAMESITE", "Lax")),
         "Lax",
     )
-
-    # En prod debe ser True para HTTPS
-    SESSION_COOKIE_SECURE: bool = env_bool(
-        "SESSION_COOKIE_SECURE",
-        env_bool("COOKIE_SECURE", default=IS_PROD),
-    )
+    SESSION_COOKIE_SECURE: bool = env_bool("SESSION_COOKIE_SECURE", env_bool("COOKIE_SECURE", default=IS_PROD))
 
     SESSION_DAYS: int = env_int("SESSION_DAYS", 7, min_v=1, max_v=90)
     PERMANENT_SESSION_LIFETIME = timedelta(days=SESSION_DAYS)
@@ -194,14 +202,13 @@ class BaseConfig:
     # -----------------------------
     WTF_CSRF_ENABLED: bool = env_bool("WTF_CSRF_ENABLED", True)
 
-    # Si WTF_CSRF_TIME_LIMIT está vacío => None (sin expiración)
-    # Si tiene número => clamp seguro
+    # vacío => None (sin expiración)
     WTF_CSRF_TIME_LIMIT: Optional[int] = env_opt_int("WTF_CSRF_TIME_LIMIT", 3600, min_v=300, max_v=86400)
 
-    # Render/proxy a veces rompe SSL strict; default más tolerante (tu create_app también lo setea)
+    # Default tolerante (Render detrás de proxy); tu create_app también lo setea
     WTF_CSRF_SSL_STRICT: bool = env_bool("WTF_CSRF_SSL_STRICT", default=False)
 
-    # Si no se setea, Flask-WTF usa SECRET_KEY (perfecto si es estable)
+    # si vacío, Flask-WTF usa SECRET_KEY (ideal si es estable)
     WTF_CSRF_SECRET_KEY: str = env_str("WTF_CSRF_SECRET_KEY", "")
 
     # -----------------------------
@@ -220,7 +227,7 @@ class BaseConfig:
     # Database / SQLAlchemy
     # -----------------------------
     DATABASE_URL: str = normalize_database_url(os.getenv("DATABASE_URL"))
-    SQLALCHEMY_DATABASE_URI: str = env_str("SQLALCHEMY_DATABASE_URI", DATABASE_URL)
+    SQLALCHEMY_DATABASE_URI: str = normalize_db_any(env_str("SQLALCHEMY_DATABASE_URI", DATABASE_URL))
     SQLALCHEMY_TRACK_MODIFICATIONS: bool = False
 
     DB_POOL_RECYCLE: int = env_int("DB_POOL_RECYCLE", 280, min_v=30, max_v=3600)
@@ -245,7 +252,7 @@ class BaseConfig:
     ENABLE_PRINTFUL: bool = env_bool("ENABLE_PRINTFUL", default=bool(PRINTFUL_API_KEY))
 
     # -----------------------------
-    # Payments (flags)
+    # Payments
     # -----------------------------
     MP_PUBLIC_KEY: str = env_str("MP_PUBLIC_KEY", "")
     MP_ACCESS_TOKEN: str = env_str("MP_ACCESS_TOKEN", "")
@@ -263,7 +270,6 @@ class BaseConfig:
     ENABLE_TALISMAN: bool = env_bool("ENABLE_TALISMAN", default=IS_PROD)
     FORCE_HTTPS: bool = env_bool("FORCE_HTTPS", default=IS_PROD)
     HSTS: bool = env_bool("HSTS", default=IS_PROD)
-    # CONTENT_SECURITY_POLICY lo generamos en as_flask_config() (siempre nuevo)
 
     # -----------------------------
     # Email (opcional)
@@ -283,7 +289,6 @@ class BaseConfig:
     def _engine_options(cls) -> Dict[str, Any]:
         uri = cls.SQLALCHEMY_DATABASE_URI
         if _is_sqlite(uri):
-            # SQLite: no pool tuning agresivo
             return {"pool_pre_ping": True}
         return {
             "pool_pre_ping": True,
@@ -294,35 +299,38 @@ class BaseConfig:
 
     @classmethod
     def as_flask_config(cls) -> Dict[str, Any]:
+        """
+        ✅ FIX CRÍTICO: incluye heredados + overrides usando MRO.
+        Si usás cls.__dict__ solo, perdés BaseConfig en ProductionConfig/DevelopmentConfig.
+        """
         cfg: Dict[str, Any] = {}
 
-        # Copiar solo UPPERCASE
-        for k, v in cls.__dict__.items():
-            if k.isupper():
-                cfg[k] = v
+        # BaseConfig -> Subclase (subclase pisa)
+        for base in reversed(cls.mro()):
+            for k, v in getattr(base, "__dict__", {}).items():
+                if k.isupper():
+                    cfg[k] = v
 
-        # Calculados / overrides
+        # Calculados
         cfg["SQLALCHEMY_ENGINE_OPTIONS"] = cls._engine_options()
         cfg["PERMANENT_SESSION_LIFETIME"] = cls.PERMANENT_SESSION_LIFETIME
         cfg["MAX_CONTENT_LENGTH"] = cls.MAX_CONTENT_LENGTH
 
-        # CSP SIEMPRE nuevo
+        # CSP siempre nuevo
         cfg["CONTENT_SECURITY_POLICY"] = csp_for_tailwind_cdn()
 
-        # SERVER_NAME vacío => no setear
-        if not cfg.get("SERVER_NAME"):
+        # Limpieza / normalizaciones
+        if not str(cfg.get("SERVER_NAME") or "").strip():
             cfg.pop("SERVER_NAME", None)
 
-        # Si WTF_CSRF_SECRET_KEY vacío, que Flask-WTF use SECRET_KEY
         if not str(cfg.get("WTF_CSRF_SECRET_KEY") or "").strip():
             cfg.pop("WTF_CSRF_SECRET_KEY", None)
 
-        # Normalizar SameSite por si vino basura
         cfg["SESSION_COOKIE_SAMESITE"] = normalize_samesite(str(cfg.get("SESSION_COOKIE_SAMESITE") or "Lax"), "Lax")
+        cfg["PREFERRED_URL_SCHEME"] = normalize_scheme(str(cfg.get("PREFERRED_URL_SCHEME") or ("https" if cls.IS_PROD else "http")))
 
-        # PREFERRED_URL_SCHEME: solo http/https
-        sch = str(cfg.get("PREFERRED_URL_SCHEME") or ("https" if cls.IS_PROD else "http")).lower().strip()
-        cfg["PREFERRED_URL_SCHEME"] = "https" if sch == "https" else "http"
+        # DB: normalizar de nuevo por si vino sobreescrito
+        cfg["SQLALCHEMY_DATABASE_URI"] = normalize_db_any(str(cfg.get("SQLALCHEMY_DATABASE_URI") or ""))
 
         return cfg
 
@@ -338,11 +346,9 @@ class DevelopmentConfig(BaseConfig):
     LOG_LEVEL = env_str("LOG_LEVEL", "DEBUG").upper()
 
     SESSION_COOKIE_SECURE = False
-    PREFERRED_URL_SCHEME = env_str("PREFERRED_URL_SCHEME", "http").lower()
+    PREFERRED_URL_SCHEME = normalize_scheme(env_str("PREFERRED_URL_SCHEME", "http"))
 
-    # Dev: no SSL strict
     WTF_CSRF_SSL_STRICT = env_bool("WTF_CSRF_SSL_STRICT", default=False)
-
     ENABLE_MINIFY = env_bool("ENABLE_MINIFY", default=False)
 
 
@@ -352,7 +358,6 @@ class ProductionConfig(BaseConfig):
     DEBUG = False
     LOG_LEVEL = env_str("LOG_LEVEL", "INFO").upper()
 
-    # En prod: obligatorio y estable
     SECRET_KEY = env_str("SECRET_KEY", "").strip()
 
     SESSION_COOKIE_SECURE = env_bool("SESSION_COOKIE_SECURE", default=True)
@@ -362,7 +367,6 @@ class ProductionConfig(BaseConfig):
 
     @classmethod
     def validate_required(cls) -> None:
-        # Esto corta el 90% de “CSRF token no coincide” por secrets rotos
         if not cls.SECRET_KEY or len(cls.SECRET_KEY) < 32:
             raise RuntimeError(
                 "ProductionConfig: SECRET_KEY faltante o muy corto (>=32). "

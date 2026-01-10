@@ -1,4 +1,4 @@
-﻿# app/models/user.py — Skyline Store (ULTRA PRO++ / NO BREAK / FAIL-SAFE)
+﻿# app/models/user.py — Skyline Store (ULTRA PRO++ / NO BREAK / FAIL-SAFE · FIXED)
 from __future__ import annotations
 
 import hmac
@@ -9,7 +9,8 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any, Callable
 
 from flask_login import UserMixin
-from sqlalchemy import Index, event, CheckConstraint, text
+from sqlalchemy import Index, event, CheckConstraint
+from sqlalchemy import text as sa_text
 from sqlalchemy.orm import validates
 
 from app.models import db
@@ -140,11 +141,11 @@ def _ensure_unique_token(
         tok = make_token()
         last = tok
         try:
-            # query mínima (solo id) y limit
             q = db.session.query(model_cls.id).filter(getattr(model_cls, field_name) == tok).limit(1)
             if q.first() is None:
                 return tok
         except Exception:
+            # si la DB no está lista o no hay app_context, no rompemos
             return tok
 
     return last
@@ -163,7 +164,7 @@ def _password_is_bad(pwd: str, email: Optional[str]) -> bool:
     em = _normalize_email(email or "")
     if em:
         user_part = em.split("@", 1)[0] if "@" in em else em
-        if em and em in low:
+        if em in low:
             return True
         if user_part and user_part in low:
             return True
@@ -188,6 +189,7 @@ class User(UserMixin, db.Model):
     ✅ Lockouts seguros (owner no se bloquea)
     ✅ Tokens únicos (DB-safe)
     ✅ Hooks idempotentes
+    ✅ Sin backref en orders (evita choques si Order ya define relación)
     """
 
     __tablename__ = "users"
@@ -244,11 +246,11 @@ class User(UserMixin, db.Model):
         passive_deletes=True,
     )
 
+    # ⚠️ Importante: NO definimos backref acá para evitar choque si Order ya define `user`
     orders = db.relationship(
         "Order",
         lazy="selectin",
         passive_deletes=True,
-        backref=db.backref("user", lazy="select"),
     )
 
     __table_args__ = (
@@ -359,7 +361,13 @@ class User(UserMixin, db.Model):
             self.role = "admin"
             return
         self.is_admin = bool(enabled)
-        self.role = "admin" if self.is_admin else ("customer" if (self.role or "").lower() == "admin" else (self.role or "customer"))
+        if self.is_admin:
+            self.role = "admin"
+        else:
+            if (self.role or "").lower() == "admin":
+                self.role = "customer"
+            else:
+                self.role = self.role or "customer"
 
     # --------------------------------------------------------
     # Password policy
@@ -370,7 +378,6 @@ class User(UserMixin, db.Model):
             raise ValueError("Contraseña insegura. Usá 8+ caracteres y evitá claves comunes o relacionadas a tu email.")
         self.password_hash = hash_password(pwd)
         self.password_changed_at = utcnow()
-        # owner lock
         self.reinforce_owner_flags()
 
     def check_password(self, raw_password: str) -> bool:
@@ -378,7 +385,7 @@ class User(UserMixin, db.Model):
             return False
         ok, new_hash = verify_and_maybe_rehash(raw_password or "", self.password_hash)
         if ok and new_hash:
-            # NO commit acá: lo hace el route con _commit_safe()
+            # NO commit acá: lo hace el route/servicio
             self.password_hash = new_hash
             self.password_changed_at = utcnow()
         return bool(ok)
@@ -693,7 +700,7 @@ def _addr_ensure_single_default(_mapper, conn, target: UserAddress):
     try:
         if target.is_default and target.user_id:
             conn.execute(
-                text(
+                sa_text(
                     "UPDATE user_addresses "
                     "SET is_default = 0 "
                     "WHERE user_id = :uid AND id != :id"

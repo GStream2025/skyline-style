@@ -1,4 +1,4 @@
-﻿# app/models/__init__.py — Skyline Store (BULLETPROOF · FINAL · NO BREAK · v3)
+﻿# app/models/__init__.py — Skyline Store (BULLETPROOF · FINAL · NO BREAK · v3.1)
 from __future__ import annotations
 
 import logging
@@ -11,6 +11,7 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.exc import OperationalError, ProgrammingError
 
 # ✅ ÚNICA instancia global (regla de oro: NO crear otra en ningún otro archivo)
+# En el resto del proyecto: `from app.models import db`
 db = SQLAlchemy()
 log = logging.getLogger("models")
 
@@ -135,7 +136,6 @@ _MODELS_INIT_ONCE_OK: bool = False
 
 # =============================================================================
 # ✅ 5) FIX CRÍTICO: asegurar que ESTA instancia db esté registrada en la app
-#    (evita el error: "app not registered with this SQLAlchemy instance")
 # =============================================================================
 def _ensure_db_registered(app: Flask) -> None:
     """
@@ -147,7 +147,15 @@ def _ensure_db_registered(app: Flask) -> None:
         return
 
     # Registrar nuestro db contra la app
-    db.init_app(app)
+    try:
+        db.init_app(app)
+    except Exception as e:
+        # Este error aparece si alguien intentó init_app sin URI seteada
+        msg = str(e) or "db.init_app failed"
+        raise RuntimeError(
+            "db.init_app(app) falló. Revisá que SQLALCHEMY_DATABASE_URI o DATABASE_URL estén configuradas "
+            f"antes de inicializar la DB. Detalle: {msg}"
+        ) from e
 
     # Verificación: si sigue siendo otra cosa, hay duplicados en el proyecto
     if app.extensions.get("sqlalchemy") is not db:
