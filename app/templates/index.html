@@ -1,10 +1,15 @@
-{# app/templates/home.html — Skyline Store (ULTRA PRO · v6 FINAL · NO-500) #}
+{# app/templates/index.html — Skyline Store (ULTRA PRO · v7 FINAL · NO-500) #}
 {% extends "base.html" %}
 
 {# ============================================================
-   SAFE ENDPOINT RESOLVER
+   SAFE RESOLVERS (NO-500 / Render-safe)
+   - No asume variables existentes
+   - Fallbacks si faltan endpoints
 ============================================================ #}
 {% set _vf = (view_functions if view_functions is defined and view_functions else {}) %}
+
+{% set _env = (ENV if ENV is defined and ENV else (config.ENV if config is defined and config else 'production')) %}
+{% set _env = _env|string|lower %}
 
 {% set shop_url = '/shop' %}
 {% if 'shop.shop' in _vf %}
@@ -18,6 +23,7 @@
   {% endif %}
 {% endfor %}
 
+{# Assets (existentes en tu repo) #}
 {% set hero_img = url_for('static', filename='img/banners/hero_home.png') %}
 {% set og_img = (og_image if og_image is defined and og_image else url_for('static', filename='img/og.png', _external=True)) %}
 
@@ -25,7 +31,7 @@
 
 {% block extra_head %}
 <meta name="description" content="{{ meta_description | default('Moda urbana premium, accesorios y tecnología.', true) }}">
-<meta name="robots" content="{{ 'index,follow' if ENV == 'production' else 'noindex,nofollow' }}">
+<meta name="robots" content="{{ 'index,follow' if _env == 'production' else 'noindex,nofollow' }}">
 <link rel="canonical" href="{{ request.base_url }}">
 
 <meta property="og:title" content="{{ meta_title | default('Skyline Store · Tech + Streetwear premium', true) }}">
@@ -35,116 +41,154 @@
 <meta property="og:image" content="{{ og_img }}">
 <meta name="twitter:card" content="summary_large_image">
 
-<link rel="preconnect" href="{{ url_for('static', filename='') }}">
 <link rel="preload" as="image" href="{{ hero_img }}" fetchpriority="high">
-
 <link rel="stylesheet" href="{{ url_for('static', filename='css/home.css') }}">
 {% endblock %}
 
 {% block content %}
 <main class="home-pro" id="hpMain" role="main">
 
-<section class="hp-heroGrid" role="region" aria-labelledby="hpTitle">
-  <header class="hp-heroMain">
-    <div class="hp-heroMedia">
-      <img src="{{ hero_img }}"
-           alt=""
-           width="1600"
-           height="900"
-           loading="eager"
-           decoding="async"
-           fetchpriority="high"
-           onerror="this.style.display='none'">
-    </div>
-
-    <div class="hp-heroInner">
-      <h1 id="hpTitle" class="hp-title">
-        Streetwear <span class="grad">premium</span> + Tech
-      </h1>
-
-      <p class="hp-sub">
-        Moda urbana y tecnología seleccionada. Compra rápida, segura y con soporte real.
-      </p>
-
-      <div class="hp-ctas">
-        <a href="{{ shop_url }}" class="btn primary" aria-current="page">Comprar ahora</a>
-        <a href="{{ shop_url }}?q=oferta" class="btn ghost">Ver ofertas</a>
+  {# =========================
+     HERO + CTA
+  ========================== #}
+  <section class="hp-heroGrid" role="region" aria-labelledby="hpTitle">
+    <header class="hp-heroMain">
+      <div class="hp-heroMedia">
+        <img
+          src="{{ hero_img }}"
+          alt=""
+          width="1600"
+          height="900"
+          loading="eager"
+          decoding="async"
+          fetchpriority="high"
+          onerror="this.style.display='none'">
       </div>
-    </div>
-  </header>
 
-  <aside class="hp-trust" role="region" aria-label="Confianza">
-    <p><b>Compra segura</b></p>
-    <p class="small">Pagos protegidos · Envíos con seguimiento · Soporte real</p>
+      <div class="hp-heroInner">
+        <h1 id="hpTitle" class="hp-title">
+          Streetwear <span class="grad">premium</span> + Tech
+        </h1>
 
-    <a class="btn primary" href="{{ account_url }}">Ingresar / Crear cuenta</a>
-  </aside>
-</section>
+        <p class="hp-sub">
+          Moda urbana y tecnología seleccionada. Compra rápida, segura y con soporte real.
+        </p>
 
-<section class="hp-cats" role="region" aria-labelledby="hpCats">
-  <h2 id="hpCats">Categorías</h2>
-
-  {% set cats = [
-    {'label':'Ropa urbana','img':'img/categories/ropa.jpg','href': shop_url ~ '?categoria=ropa'},
-    {'label':'Accesorios','img':'img/categories/accesorios.jpg','href': shop_url ~ '?categoria=accesorios'},
-    {'label':'Tecnología','img':'img/categories/tech.jpg','href': shop_url ~ '?categoria=tecnologia'},
-    {'label':'Ofertas','img':'img/categories/ofertas.jpg','href': shop_url ~ '?q=oferta'},
-  ] %}
-
-  <div class="hp-catsGrid">
-    {% for c in cats %}
-      <a class="hp-catCard" href="{{ c.href }}">
-        <img src="{{ url_for('static', filename=c.img) }}"
-             alt="{{ c.label }}"
-             loading="lazy"
-             decoding="async"
-             onerror="this.style.display='none'">
-        <span>{{ c.label }}</span>
-      </a>
-    {% endfor %}
-  </div>
-</section>
-
-<section class="hp-featured" role="region" aria-labelledby="hpFeat">
-  <h2 id="hpFeat">Destacados</h2>
-
-  {% set featured_list = (featured if featured is defined and featured else []) %}
-
-  <div class="gridP">
-    {% if featured_list|length == 0 %}
-      <div class="card" aria-hidden="true">
-        <p>No hay productos destacados aún.</p>
-        <a class="btn primary" href="{{ shop_url }}">Ir a la tienda</a>
+        <div class="hp-ctas">
+          <a href="{{ shop_url }}" class="btn primary">Comprar ahora</a>
+          <a href="{{ shop_url }}?q=oferta" class="btn ghost">Ver ofertas</a>
+        </div>
       </div>
-    {% else %}
-      {% for p in featured_list %}
-        <article class="hpCard">
-          <img src="{{ p.img | default(hero_img, true) }}"
-               alt="{{ p.title | default('Producto', true) }}"
+    </header>
+
+    {# =========================
+       TRUST (con tus imágenes)
+    ========================== #}
+    <aside class="hp-trust" role="region" aria-label="Confianza">
+      <p><b>Compra segura</b></p>
+      <p class="small">Pagos protegidos · Envíos con seguimiento · Soporte real</p>
+
+      <div class="hp-trustBadges" aria-label="Beneficios">
+        <figure class="hp-badge" title="Pago seguro">
+          <img src="{{ url_for('static', filename='img/banners/service_payment.png') }}"
+               alt="Pago seguro"
+               loading="lazy" decoding="async"
+               onerror="this.style.display='none'">
+        </figure>
+
+        <figure class="hp-badge" title="Envío seguro">
+          <img src="{{ url_for('static', filename='img/banners/service_shipping.png') }}"
+               alt="Envío con seguimiento"
+               loading="lazy" decoding="async"
+               onerror="this.style.display='none'">
+        </figure>
+
+        <figure class="hp-badge" title="Soporte real">
+          <img src="{{ url_for('static', filename='img/banners/service_support.png') }}"
+               alt="Soporte real"
+               loading="lazy" decoding="async"
+               onerror="this.style.display='none'">
+        </figure>
+      </div>
+
+      <a class="btn primary" href="{{ account_url }}">Ingresar / Crear cuenta</a>
+    </aside>
+  </section>
+
+  {# =========================
+     CATEGORÍAS (usa tus cat_*.png)
+  ========================== #}
+  <section class="hp-cats" role="region" aria-labelledby="hpCats">
+    <h2 id="hpCats">Categorías</h2>
+
+    {% set cats = [
+      {'label':'Ropa urbana','img':'img/banners/cat_women.png','href': shop_url ~ '?categoria=ropa'},
+      {'label':'Accesorios','img':'img/banners/cat_accessories.png','href': shop_url ~ '?categoria=accesorios'},
+      {'label':'Tecnología','img':'img/banners/cat_tech.png','href': shop_url ~ '?categoria=tecnologia'},
+      {'label':'Ofertas','img':'img/banners/promo_week.png','href': shop_url ~ '?q=oferta'}
+    ] %}
+
+    <div class="hp-catsGrid">
+      {% for c in cats %}
+        <a class="hp-catCard" href="{{ c.href }}" aria-label="{{ c.label }}">
+          <img src="{{ url_for('static', filename=c.img) }}"
+               alt="{{ c.label }}"
                loading="lazy"
-               decoding="async">
-          <div class="hpMeta">
-            <b>{{ p.title | default('Producto', true) }}</b>
-            {% include "components/price.html" ignore missing %}
-          </div>
-          <a class="btn primary" href="{{ p.href | default(shop_url, true) }}">Comprar</a>
-        </article>
+               decoding="async"
+               onerror="this.style.display='none'">
+          <span>{{ c.label }}</span>
+        </a>
       {% endfor %}
-    {% endif %}
+    </div>
+  </section>
+
+  {# =========================
+     DESTACADOS (safe)
+  ========================== #}
+  <section class="hp-featured" role="region" aria-labelledby="hpFeat">
+    <h2 id="hpFeat">Destacados</h2>
+
+    {% set featured_list = (featured if featured is defined and featured else []) %}
+
+    <div class="gridP">
+      {% if featured_list|length == 0 %}
+        <div class="card" aria-live="polite">
+          <p>No hay productos destacados aún.</p>
+          <a class="btn primary" href="{{ shop_url }}">Ir a la tienda</a>
+        </div>
+      {% else %}
+        {% for p in featured_list %}
+          <article class="hpCard">
+            <img src="{{ p.img | default(hero_img, true) }}"
+                 alt="{{ p.title | default('Producto', true) }}"
+                 loading="lazy"
+                 decoding="async"
+                 onerror="this.style.display='none'">
+            <div class="hpMeta">
+              <b>{{ p.title | default('Producto', true) }}</b>
+              {% include "components/price.html" ignore missing %}
+            </div>
+            <a class="btn primary" href="{{ p.href | default(shop_url, true) }}">Comprar</a>
+          </article>
+        {% endfor %}
+      {% endif %}
+    </div>
+  </section>
+
+  {# =========================
+     Sticky CTA + ToTop
+  ========================== #}
+  <div class="sticky-cta" id="hpSticky" aria-live="polite">
+    <div>
+      <b>Skyline Store</b>
+      <span>Explorá ofertas premium</span>
+    </div>
+    <a href="{{ shop_url }}" class="cta-btn">Comprar</a>
   </div>
-</section>
+
+  <button id="toTop" type="button" class="to-top" aria-label="Volver arriba">↑</button>
 
 </main>
-
-<div class="sticky-cta" id="hpSticky" aria-live="polite">
-  <div>
-    <b>Skyline Store</b>
-    <span>Explorá ofertas premium</span>
-  </div>
-  <a href="{{ shop_url }}" class="cta-btn">Comprar</a>
-</div>
-
-<button id="toTop" type="button" class="to-top" aria-label="Volver arriba">↑</button>
 {% endblock %}
 
 {% block extra_js %}
