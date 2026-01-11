@@ -1,4 +1,4 @@
-# app/routes/main_routes.py — Skyline Store (ULTRA PRO++ / NO BREAK / FAIL-SAFE v2)
+# app/routes/main_routes.py — Skyline Store (ULTRA PRO++ / NO BREAK / FAIL-SAFE v3)
 from __future__ import annotations
 
 import hashlib
@@ -133,6 +133,11 @@ def _is_safe_next(url: str) -> bool:
     return u.startswith("/")
 
 
+def _safe_next_from_args() -> str:
+    nxt = (request.args.get("next") or "").strip()
+    return nxt if _is_safe_next(nxt) else ""
+
+
 def _best_scheme() -> str:
     """
     Render/ProxyFix: X-Forwarded-Proto suele venir.
@@ -216,6 +221,9 @@ def _render(template: str, *, status: int = 200, **ctx: Any):
     # view_functions para templates “safe resolver”
     ctx.setdefault("view_functions", getattr(current_app, "view_functions", {}) or {})
 
+    # config para feature flags en templates (tu account.html lo usa)
+    ctx.setdefault("config", getattr(current_app, "config", {}) or {})
+
     return make_response(render_template(template, **ctx), status)
 
 
@@ -231,8 +239,8 @@ def _security_headers(resp):
     resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
     resp.headers.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
 
-    # Caching: rutas sensibles => no-store
-    if request.path.startswith(("/auth", "/admin", "/account", "/checkout")):
+    # No cachear pantallas sensibles
+    if request.path.startswith(("/auth", "/admin", "/account", "/checkout", "/cart")):
         resp.headers.setdefault("Cache-Control", "no-store")
 
     # Señal útil para debugging de proxies (no sensible)
@@ -253,13 +261,11 @@ def home():
     - Cache opcional con TTL
     - ETag + 304
     """
-    # cache key por idioma (evita mezclar contenido si mañana localizás)
     lang = (request.headers.get("Accept-Language") or "es").split(",")[0].strip().lower()
-    key = f"home:v2:lang={lang}"
+    key = f"home:v3:lang={lang}"
 
     cached = _cache_get(key)
     if cached:
-        # ETag estable por payload
         etag = _etag_for(f"{cached.get('meta_title','')}-{cached.get('meta_description','')}-{lang}")
         maybe = _maybe_304(request.headers.get("If-None-Match"), etag)
         if maybe is not None:
@@ -288,9 +294,33 @@ def home():
     return _resp_cache_public(resp, HOME_CACHE_TTL if ENABLE_HOME_CACHE else 0)
 
 
+@main_bp.get("/account")
+def account():
+    """
+    ✅ Página de cuenta (tabs login/register)
+    Renderiza templates/account.html
+    """
+    nxt = _safe_next_from_args()
+    return _render(
+        "account.html",
+        meta_title=f"Mi cuenta | {SEO_DEFAULTS.title}",
+        next=nxt,
+    )
+
+
+@main_bp.get("/cuenta")
+def cuenta_alias():
+    """
+    Alias por si en algún lado linkeaste /cuenta
+    """
+    nxt = _safe_next_from_args()
+    if nxt:
+        return redirect(url_for("main.account", next=nxt), code=302)
+    return redirect(url_for("main.account"), code=302)
+
+
 @main_bp.get("/about")
 def about():
-    # Existe templates/about.html en tu estructura
     return _render("about.html", meta_title=f"Sobre nosotros | {SEO_DEFAULTS.title}")
 
 
@@ -299,7 +329,7 @@ def health():
     """
     Healthcheck para Render / uptime.
     - DB ping si db + sql_text existen
-    - Nunca rompe (si falla DB => degraded 503)
+    - Nunca rompe
     """
     ok = True
     db_ok: Optional[bool] = None
@@ -314,7 +344,6 @@ def health():
             db_ok = False
             db_err = f"{type(e).__name__}: {str(e)[:260]}"
     else:
-        # si no hay db configurada en este entorno, no lo marcamos como falla
         db_ok = None
 
     data = {
@@ -325,14 +354,12 @@ def health():
     }
 
     resp = jsonify(data)
-    return _resp_no_store(resp), (200 if ok else 503)
+    resp = _resp_no_store(resp)
+    return resp, (200 if ok else 503)
 
 
 @main_bp.get("/robots.txt")
 def robots():
-    """
-    robots.txt simple con ENV-safe.
-    """
     env = (os.getenv("ENV") or os.getenv("FLASK_ENV") or "production").strip().lower()
     base = _absolute_url("main.home").rstrip("/")
 
@@ -340,7 +367,6 @@ def robots():
     if env == "production":
         lines += ["Allow: /"]
     else:
-        # en dev/staging, evitamos indexación accidental
         lines += ["Disallow: /"]
 
     lines += [f"Sitemap: {base}/sitemap.xml", ""]
@@ -361,11 +387,6 @@ def robots():
 
 @main_bp.get("/sitemap.xml")
 def sitemap():
-    """
-    Sitemap minimal (sumá URLs cuando quieras).
-    - Escapa XML para no romper
-    - Conditional GET con ETag
-    """
     def _xml_escape(s: str) -> str:
         return (
             (s or "")
@@ -376,13 +397,15 @@ def sitemap():
             .replace("'", "&apos;")
         )
 
+    vf = getattr(current_app, "view_functions", {}) or {}
+
     urls = [
         _absolute_url("main.home"),
         _absolute_url("main.about"),
+        _absolute_url("main.account"),
     ]
 
-    # si existe shop.shop:
-    if "shop.shop" in (getattr(current_app, "view_functions", {}) or {}):
+    if "shop.shop" in vf:
         try:
             urls.append(_absolute_url("shop.shop"))
         except Exception:
@@ -423,10 +446,6 @@ def sitemap():
 
 @main_bp.get("/go")
 def go():
-    """
-    Redirect seguro interno: /go?next=/shop
-    (evita open redirect).
-    """
     nxt = (request.args.get("next", "") or "").strip()
     if _is_safe_next(nxt):
         return redirect(nxt)
@@ -435,10 +454,6 @@ def go():
 
 @main_bp.get("/favicon.ico")
 def favicon():
-    """
-    Favicon opcional (si no existe, 204 sin romper).
-    """
-    # Si tenés uno: static/favicon.ico
     try:
         url = url_for("static", filename="favicon.ico")
         return redirect(url)
