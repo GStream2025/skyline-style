@@ -1,4 +1,4 @@
-﻿# app/__init__.py — Skyline Store (ULTRA PRO / NO BREAK / Render-safe) — FIXED
+﻿# app/__init__.py — Skyline Store (ULTRA PRO / NO BREAK / Render-safe) — vNEXT FINAL
 from __future__ import annotations
 
 import logging
@@ -6,7 +6,7 @@ import os
 import secrets
 import time
 from datetime import datetime, timezone, timedelta
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Type
+from typing import Any, Callable, Dict, List, Set, Tuple, Type
 
 from flask import Flask, jsonify, render_template, request, session
 from werkzeug.exceptions import HTTPException
@@ -53,8 +53,8 @@ def utcnow() -> datetime:
 
 def _env_name(app: Flask) -> str:
     """
-    Devuelve un nombre de entorno estable.
-    - Flask 3 ya no recomienda ENV/FLASK_ENV, así que tomamos lo que haya.
+    Nombre de entorno estable.
+    Flask 3 no recomienda ENV/FLASK_ENV, pero lo soportamos igual.
     """
     candidates = [
         app.config.get("ENV"),
@@ -96,6 +96,8 @@ def wants_json() -> bool:
 def resp_error(status: int, code: str, message: str):
     if wants_json():
         return jsonify({"ok": False, "error": code, "message": message, "status": status}), status
+
+    # templates de errores: intenta por status, luego fallback
     try:
         return render_template(f"errors/{status}.html", message=message), status
     except Exception:
@@ -148,7 +150,7 @@ def critical_init(app: Flask, label: str, fn: Callable[[], Any]) -> Any:
 def has_endpoint(app: Flask, endpoint: str) -> bool:
     """Helper para Jinja: evita romper templates si una ruta no existe."""
     try:
-        return endpoint in app.view_functions
+        return bool(endpoint) and (endpoint in app.view_functions)
     except Exception:
         return False
 
@@ -177,6 +179,34 @@ def _require_secret_key_prod(app: Flask) -> None:
         )
 
 
+def _ensure_secret_key_dev(app: Flask) -> None:
+    """
+    ✅ En dev/testing, si falta SECRET_KEY, generamos una por proceso
+    (evita errores raros con session/csrf local).
+    """
+    if _is_prod(app):
+        return
+    if not (app.config.get("SECRET_KEY") or "").strip():
+        app.config["SECRET_KEY"] = secrets.token_urlsafe(32)
+
+
+def _mask_db_url(uri: Any) -> str:
+    """✅ Mejora: no logs la password real."""
+    s = str(uri or "")
+    if not s:
+        return ""
+    # formato típico: scheme://user:pass@host/db
+    try:
+        if "://" in s and "@" in s and ":" in s.split("://", 1)[1].split("@", 1)[0]:
+            left, right = s.split("://", 1)
+            creds, rest = right.split("@", 1)
+            user = creds.split(":", 1)[0]
+            return f"{left}://{user}:***@{rest}"
+    except Exception:
+        pass
+    return s
+
+
 # =============================================================================
 # CSRF (Flask-WTF)
 # =============================================================================
@@ -184,7 +214,6 @@ def _require_secret_key_prod(app: Flask) -> None:
 def init_csrf(app: Flask) -> None:
     """
     CSRFProtect estable para Render.
-    ✅ No pisa csrf_token()
     ✅ Exime prefijos (webhooks) sin romper forms
     ✅ Manejo de CSRFError uniforme
     """
@@ -194,13 +223,13 @@ def init_csrf(app: Flask) -> None:
     csrf = CSRFProtect()
     csrf.init_app(app)
 
-    # Prefijos que normalmente NO deben requerir CSRF (webhooks externos)
     exempt_prefixes: Set[str] = {
         "/webhook",
         "/webhooks",
         "/api/webhook",
         "/api/webhooks",
     }
+
     extra = _env_str("CSRF_EXEMPT_PREFIXES", "")
     if extra:
         for pref in [x.strip() for x in extra.split(",") if x.strip()]:
@@ -217,7 +246,6 @@ def init_csrf(app: Flask) -> None:
         if not p:
             return None
 
-        # Solo eximir si matchea prefijos definidos
         for pref in exempt_prefixes:
             if p.startswith(pref):
                 ep = request.endpoint or ""
@@ -295,24 +323,29 @@ def create_app() -> Flask:
     # 1) Config primero (CRÍTICO)
     app.config.from_mapping(cfg_cls.as_flask_config())
 
+    # ✅ Mejora extra: evitá configs que rompen cookies en Render si quedaron seteadas
+    # (si vos querés usarlas explícitamente, poné ALLOW_COOKIE_DOMAIN=1)
+    if not _env_bool("ALLOW_COOKIE_DOMAIN", False):
+        app.config.pop("SESSION_COOKIE_DOMAIN", None)
+
     # 2) Logging idempotente
     setup_logging(app)
 
-    # 3) Guard fuerte en prod antes de tocar extensiones
+    # 3) Secret key guard (prod estricta, dev auto)
+    _ensure_secret_key_dev(app)
     _require_secret_key_prod(app)
-    if cfg_cls is ProductionConfig:
+
+    # ✅ Si cfg_cls es ProductionConfig o subclase, valida required
+    if isinstance(cfg_cls, type) and issubclass(cfg_cls, ProductionConfig):
         ProductionConfig.validate_required()
 
     # 4) ProxyFix (Render / reverse proxy)
-    #    (esto es CLAVE para que request.is_secure y cookies "Secure" no se rompan)
     if bool(app.config.get("TRUST_PROXY_HEADERS", True)):
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
 
     # =============================================================================
     # Cookies/sesión “Render-proof”
     # =============================================================================
-    # En Render hay HTTPS siempre. Si SESSION_COOKIE_SECURE queda en False, sesión puede “flotar”
-    # y el CSRF revienta.
     if _is_prod(app):
         app.config.setdefault("SESSION_COOKIE_SECURE", True)
         app.config.setdefault("SESSION_COOKIE_SAMESITE", "Lax")
@@ -330,7 +363,7 @@ def create_app() -> Flask:
         days = 7
     app.config.setdefault("PERMANENT_SESSION_LIFETIME", timedelta(days=max(1, min(days, 90))))
 
-    # CSRF defaults (IMPORTANTES)
+    # CSRF defaults
     app.config.setdefault("WTF_CSRF_SSL_STRICT", _env_bool("WTF_CSRF_SSL_STRICT", default=False))
     app.config.setdefault("WTF_CSRF_TIME_LIMIT", int(_env_str("WTF_CSRF_TIME_LIMIT", "3600") or "3600"))
 
@@ -341,7 +374,7 @@ def create_app() -> Flask:
         "🚀 create_app ENV=%s DEBUG=%s DB=%s SECURE=%s SAMESITE=%s CSRF_TTL=%s",
         _env_name(app),
         bool(app.debug),
-        app.config.get("SQLALCHEMY_DATABASE_URI"),
+        _mask_db_url(app.config.get("SQLALCHEMY_DATABASE_URI")),
         app.config.get("SESSION_COOKIE_SECURE"),
         app.config.get("SESSION_COOKIE_SAMESITE"),
         app.config.get("WTF_CSRF_TIME_LIMIT"),
@@ -374,11 +407,11 @@ def create_app() -> Flask:
     safe_init(app, "Flask-Limiter", lambda: init_limiter(app))
 
     # =============================================================================
-    # Hooks: request-id + admin no-cache + headers
+    # Hooks: request-id + admin no-cache + session permanent
     # =============================================================================
     @app.before_request
     def _before_request():
-        rid = request.headers.get("X-Request-Id") or secrets.token_urlsafe(8)
+        rid = request.headers.get("X-Request-Id") or secrets.token_urlsafe(10)
         try:
             request._request_id = rid  # type: ignore[attr-defined]
         except Exception:
@@ -430,15 +463,29 @@ def create_app() -> Flask:
         return resp
 
     # =============================================================================
-    # Template globals (NO pisa csrf_token())
+    # Template globals (CSRF definitivo: generate_csrf desde Python)
     # =============================================================================
     @app.context_processor
     def inject_globals() -> Dict[str, Any]:
+        # Flask-Login si está disponible
+        cu = None
         try:
             from flask_login import current_user as fl_current_user  # type: ignore
-            cu = fl_current_user if getattr(fl_current_user, "is_authenticated", False) else current_user_from_session()
+            if getattr(fl_current_user, "is_authenticated", False):
+                cu = fl_current_user
         except Exception:
+            cu = None
+
+        if cu is None:
             cu = current_user_from_session()
+
+        # ✅ CSRF definitivo: se genera acá (request-context) y se pasa como string
+        csrf_value = ""
+        try:
+            from flask_wtf.csrf import generate_csrf
+            csrf_value = str(generate_csrf() or "")
+        except Exception:
+            csrf_value = ""
 
         return {
             "APP_NAME": app.config.get("APP_NAME", "Skyline Store"),
@@ -447,11 +494,12 @@ def create_app() -> Flask:
             "now_utc": utcnow(),
             "request_id": getattr(request, "_request_id", None),
             "current_user": cu,
-            "is_logged_in": bool(getattr(cu, "id", None)),
+            "is_logged_in": bool(getattr(cu, "id", None)) if cu else False,
             "is_admin": bool(getattr(cu, "is_admin", False)) if cu else bool(session.get("is_admin")),
-            "current_app": app,
-            "view_functions": app.view_functions,
+            "view_functions": app.view_functions,  # para safe_url
             "has_endpoint": (lambda ep: has_endpoint(app, ep)),
+            # ✅ USAR EN base.html: <meta name="csrf-token" content="{{ csrf_token_value }}">
+            "csrf_token_value": csrf_value,
         }
 
     # =============================================================================
@@ -471,9 +519,10 @@ def create_app() -> Flask:
         safe_init(app, "Register Blueprints", _register_all_routes)
 
     # =============================================================================
-    # Health / Ready (NO BREAK aunque DB no esté lista)
+    # Health / Ready
     # =============================================================================
     def _db_check() -> Tuple[bool, str]:
+        # ✅ por defecto: no exige DB en health para que no mate deploy si DB tarda
         if not _env_bool("HEALTH_DB_CHECK", False):
             return True, "skipped"
 
@@ -520,7 +569,6 @@ def create_app() -> Flask:
 
     @app.errorhandler(Exception)
     def unhandled_error(e: Exception):
-        # No pises HTTPException (ya está arriba)
         if isinstance(e, HTTPException):
             return e
         app.logger.exception("🔥 Unhandled error: %s", e)
