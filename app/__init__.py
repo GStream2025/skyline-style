@@ -1,4 +1,4 @@
-﻿# app/__init__.py — Skyline Store (ULTRA PRO / NO BREAK / Render-safe)
+﻿# app/__init__.py — Skyline Store (ULTRA PRO / NO BREAK / Render-safe) — FIXED
 from __future__ import annotations
 
 import logging
@@ -14,7 +14,6 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 
 from app.config import get_config, ProductionConfig
 from app.models import db, init_models
-
 
 # ✅ compat (no rompe si no existe)
 try:
@@ -40,16 +39,41 @@ def _env_bool(name: str, default: bool = False) -> bool:
     v = _env_str(name, "")
     if not v:
         return default
-    v = v.lower()
-    if v in _TRUE:
+    vv = v.lower()
+    if vv in _TRUE:
         return True
-    if v in _FALSE:
+    if vv in _FALSE:
         return False
     return default
 
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _env_name(app: Flask) -> str:
+    """
+    Devuelve un nombre de entorno estable.
+    - Flask 3 ya no recomienda ENV/FLASK_ENV, así que tomamos lo que haya.
+    """
+    candidates = [
+        app.config.get("ENV"),
+        app.config.get("ENVIRONMENT"),
+        _env_str("ENV"),
+        _env_str("FLASK_ENV"),
+        _env_str("ENVIRONMENT"),
+    ]
+    for c in candidates:
+        if c:
+            return str(c).lower().strip()
+    return "production"
+
+
+def _is_prod(app: Flask) -> bool:
+    # Si DEBUG=True => NO prod (aunque ENV diga otra cosa)
+    if bool(app.config.get("DEBUG")) or bool(app.debug):
+        return False
+    return _env_name(app) == "production"
 
 
 def wants_json() -> bool:
@@ -141,11 +165,6 @@ def current_user_from_session() -> Any:
         return None
 
 
-def _is_prod(app: Flask) -> bool:
-    env = (app.config.get("ENV") or _env_str("ENV") or _env_str("FLASK_ENV") or "production").lower().strip()
-    return env == "production"
-
-
 def _require_secret_key_prod(app: Flask) -> None:
     """Guard fuerte en prod (evita CSRF/session mismatch)."""
     if not _is_prod(app):
@@ -166,7 +185,7 @@ def init_csrf(app: Flask) -> None:
     """
     CSRFProtect estable para Render.
     ✅ No pisa csrf_token()
-    ✅ Exime prefijos (webhooks/api) sin re-exempt cada request
+    ✅ Exime prefijos (webhooks) sin romper forms
     ✅ Manejo de CSRFError uniforme
     """
     from flask_wtf import CSRFProtect
@@ -175,6 +194,7 @@ def init_csrf(app: Flask) -> None:
     csrf = CSRFProtect()
     csrf.init_app(app)
 
+    # Prefijos que normalmente NO deben requerir CSRF (webhooks externos)
     exempt_prefixes: Set[str] = {
         "/webhook",
         "/webhooks",
@@ -197,17 +217,18 @@ def init_csrf(app: Flask) -> None:
         if not p:
             return None
 
+        # Solo eximir si matchea prefijos definidos
         for pref in exempt_prefixes:
             if p.startswith(pref):
                 ep = request.endpoint or ""
                 if ep and ep not in exempted_endpoints:
-                    try:
-                        vf = app.view_functions.get(ep)
-                        if vf:
+                    vf = app.view_functions.get(ep)
+                    if vf:
+                        try:
                             csrf.exempt(vf)
                             exempted_endpoints.add(ep)
-                    except Exception:
-                        pass
+                        except Exception:
+                            pass
                 break
         return None
 
@@ -283,13 +304,15 @@ def create_app() -> Flask:
         ProductionConfig.validate_required()
 
     # 4) ProxyFix (Render / reverse proxy)
+    #    (esto es CLAVE para que request.is_secure y cookies "Secure" no se rompan)
     if bool(app.config.get("TRUST_PROXY_HEADERS", True)):
-        # Render típico: 1 hop; x_prefix ayuda en subpath deploys
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
 
     # =============================================================================
     # Cookies/sesión “Render-proof”
     # =============================================================================
+    # En Render hay HTTPS siempre. Si SESSION_COOKIE_SECURE queda en False, sesión puede “flotar”
+    # y el CSRF revienta.
     if _is_prod(app):
         app.config.setdefault("SESSION_COOKIE_SECURE", True)
         app.config.setdefault("SESSION_COOKIE_SAMESITE", "Lax")
@@ -307,13 +330,16 @@ def create_app() -> Flask:
         days = 7
     app.config.setdefault("PERMANENT_SESSION_LIFETIME", timedelta(days=max(1, min(days, 90))))
 
-    # CSRF & scheme defaults
+    # CSRF defaults (IMPORTANTES)
     app.config.setdefault("WTF_CSRF_SSL_STRICT", _env_bool("WTF_CSRF_SSL_STRICT", default=False))
+    app.config.setdefault("WTF_CSRF_TIME_LIMIT", int(_env_str("WTF_CSRF_TIME_LIMIT", "3600") or "3600"))
+
+    # URL scheme
     app.config.setdefault("PREFERRED_URL_SCHEME", "https" if _is_prod(app) else "http")
 
     app.logger.info(
         "🚀 create_app ENV=%s DEBUG=%s DB=%s SECURE=%s SAMESITE=%s CSRF_TTL=%s",
-        (app.config.get("ENV") or "").lower(),
+        _env_name(app),
         bool(app.debug),
         app.config.get("SQLALCHEMY_DATABASE_URI"),
         app.config.get("SESSION_COOKIE_SECURE"),
@@ -324,7 +350,6 @@ def create_app() -> Flask:
     # =============================================================================
     # Init extensiones (orden importante)
     # =============================================================================
-    # ✅ CSRF primero (no depende de DB)
     critical_init(app, "CSRFProtect", lambda: init_csrf(app))
 
     safe_init(
@@ -339,7 +364,6 @@ def create_app() -> Flask:
     )
 
     # ✅ MODELS HUB (CRÍTICO)
-    # - Este es el ÚNICO lugar que inicializa SQLAlchemy (db.init_app) para evitar estados raros.
     def _models_hub():
         return init_models(app, create_admin=True, log_loaded_models=True, ping_db=True)
 
@@ -419,7 +443,7 @@ def create_app() -> Flask:
         return {
             "APP_NAME": app.config.get("APP_NAME", "Skyline Store"),
             "APP_URL": app.config.get("APP_URL", ""),
-            "ENV": (app.config.get("ENV") or "").lower(),
+            "ENV": _env_name(app),
             "now_utc": utcnow(),
             "request_id": getattr(request, "_request_id", None),
             "current_user": cu,
@@ -427,7 +451,7 @@ def create_app() -> Flask:
             "is_admin": bool(getattr(cu, "is_admin", False)) if cu else bool(session.get("is_admin")),
             "current_app": app,
             "view_functions": app.view_functions,
-            "has_endpoint": lambda ep: has_endpoint(app, ep),
+            "has_endpoint": (lambda ep: has_endpoint(app, ep)),
         }
 
     # =============================================================================
@@ -453,7 +477,6 @@ def create_app() -> Flask:
         if not _env_bool("HEALTH_DB_CHECK", False):
             return True, "skipped"
 
-        # Si por algún motivo SQLAlchemy no quedó registrado, no rompemos el health.
         try:
             if "sqlalchemy" not in app.extensions:
                 return False, "sqlalchemy_not_registered"
@@ -472,7 +495,7 @@ def create_app() -> Flask:
         ok_db, db_msg = _db_check()
         return {
             "status": "ok" if ok_db else "degraded",
-            "env": (app.config.get("ENV") or "").lower(),
+            "env": _env_name(app),
             "debug": bool(app.debug),
             "blueprints": registered,
             "db": db_msg,
@@ -495,13 +518,12 @@ def create_app() -> Flask:
         name = (e.name or "http_error").lower().replace(" ", "_")
         return resp_error(code, name, e.description)
 
-    @app.errorhandler(404)
-    def not_found(_e):
-        return resp_error(404, "not_found", f"No encontrado: {request.path}")
-
-    @app.errorhandler(500)
-    def server_error(e):
-        app.logger.exception("🔥 Error 500: %s", e)
+    @app.errorhandler(Exception)
+    def unhandled_error(e: Exception):
+        # No pises HTTPException (ya está arriba)
+        if isinstance(e, HTTPException):
+            return e
+        app.logger.exception("🔥 Unhandled error: %s", e)
         return resp_error(500, "server_error", "Error interno del servidor.")
 
     # =============================================================================

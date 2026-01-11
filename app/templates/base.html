@@ -1,9 +1,11 @@
-{# app/templates/base.html — Skyline Store (ULTRA PRO ENTERPRISE · v4.2 FINAL)
-   FIXES +4 mejoras nuevas (NO 500):
-   N1) url_for NO se llama si endpoint no existe (usa view_functions)
-   N2) CSRF sin "is callable" (Jinja-safe). Nunca intenta ejecutar functions.
-   N3) current_user usa is_authenticated (bulletproof)
-   N4) Cart badge fallback endpoints + fail-silent (sin consola roja)
+{# app/templates/base.html — Skyline Store (ULTRA PRO ENTERPRISE · v4.3 FINAL)
+   ✅ NO 500 / FAIL-SAFE
+   FIXES:
+   - Nunca llama url_for() si el endpoint NO existe (safe_url macro)
+   - CSRF meta + auto-inject a forms (sin usar "is callable" que rompe Jinja)
+   - current_user bulletproof
+   - Cart badge fail-silent (sin consola roja)
+   - Orden correcto de CSS: skyline-pro -> components -> page extra
 #}
 <!doctype html>
 <html lang="es">
@@ -12,6 +14,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
 
+  {# ---------- Safe helpers ---------- #}
+  {% set _vf = (view_functions if view_functions is defined and view_functions else {}) %}
+
+  {% macro safe_url(endpoint, fallback='/', **kwargs) -%}
+    {%- if endpoint in _vf -%}
+      {{- url_for(endpoint, **kwargs) -}}
+    {%- else -%}
+      {{- fallback -}}
+    {%- endif -%}
+  {%- endmacro %}
+
+  {% macro safe_static(filename, fallback='') -%}
+    {%- if filename -%}
+      {{- url_for('static', filename=filename) -}}
+    {%- else -%}
+      {{- fallback -}}
+    {%- endif -%}
+  {%- endmacro %}
+
+  {# ---------- SEO base ---------- #}
   <title>{% block title %}{{ meta_title or APP_NAME or "Skyline Store" }}{% endblock %}</title>
   <meta name="description" content="{{ meta_description or 'Skyline Store — marketplace premium de tecnología y streetwear.' }}">
   <meta name="robots" content="{{ meta_robots or 'index,follow' }}">
@@ -19,6 +41,7 @@
   {% set _canonical = (request.base_url if request is defined and request.base_url else '/') %}
   <link rel="canonical" href="{{ _canonical }}">
 
+  {# OG image: si viene og_image (ya resuelto) lo usa; si no, fallback static #}
   {% set _og_img = (og_image if og_image is defined and og_image else url_for('static', filename='img/og.png', _external=True)) %}
   <meta property="og:title" content="{{ meta_title or APP_NAME or 'Skyline Store' }}">
   <meta property="og:description" content="{{ meta_description or 'Marketplace premium de tecnología y streetwear.' }}">
@@ -31,18 +54,31 @@
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
 
+  {# CSP: mantener simple. Si usás Talisman, esto no estorba; si no, igual ayuda. #}
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; object-src 'none'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self' 'unsafe-inline'; connect-src 'self' https:;">
+        content="default-src 'self';
+                 base-uri 'self';
+                 form-action 'self';
+                 frame-ancestors 'self';
+                 object-src 'none';
+                 img-src 'self' data: https:;
+                 style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+                 font-src https://fonts.gstatic.com;
+                 script-src 'self' 'unsafe-inline';
+                 connect-src 'self' https:;">
 
   <meta name="color-scheme" content="light dark">
   <meta name="theme-color" content="#2563eb">
 
-  {# ✅ CSRF: Jinja-safe (NO callable).
-     Si csrf_token no existe → vacío.
-     Si existe → lo convertimos a string (si era función, no la ejecutamos acá).
-     RECOMENDADO: inyectar csrf_token ya como string desde Flask-WTF (lo normal).
+  {# ✅ CSRF (SIN 'is callable' que NO existe en Jinja y te rompe)
+     Flask-WTF normalmente expone csrf_token() como función global.
+     Si no existe, queda vacío y no rompe.
   #}
-  {% set _csrf_value = (csrf_token|string if csrf_token is defined and csrf_token else '') %}
+  {% set _csrf_value = '' %}
+  {% if csrf_token is defined %}
+    {# En Flask-WTF real: csrf_token() existe. Si no, no entra. #}
+    {% set _csrf_value = csrf_token() %}
+  {% endif %}
   <meta name="csrf-token" content="{{ _csrf_value }}">
 
   <link rel="icon" href="{{ url_for('static', filename='img/favicon.png') }}">
@@ -52,18 +88,21 @@
     <link rel="preload" as="image" href="{{ hero_image }}">
   {% endif %}
 
+  {# Fonts #}
   <link rel="dns-prefetch" href="https://fonts.googleapis.com">
   <link rel="dns-prefetch" href="https://fonts.gstatic.com">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 
+  {# CSS base global (orden IMPORTANTÍSIMO) #}
   <link rel="preload" as="style" href="{{ url_for('static', filename='css/skyline-pro.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/skyline-pro.css') }}">
 
   <link rel="preload" as="style" href="{{ url_for('static', filename='css/components.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}">
 
+  {# Página puede inyectar CSS extra aquí #}
   {% block extra_css %}{% endblock %}
 
   <style>
@@ -79,32 +118,30 @@
 <body>
 <a class="skip" href="#main">Saltar al contenido</a>
 
-{# ✅ URLS DINÁMICAS (N1): usa view_functions → nunca llama url_for si no existe endpoint #}
-{% set _vf = (view_functions if view_functions is defined and view_functions else {}) %}
+{# URLS dinámicas: jamás rompe aunque falte un blueprint #}
+{% set _home_href    = safe_url('main.home', '/') %}
+{% if _home_href == '/' %}{% set _home_href = safe_url('main.index', '/') %}{% endif %}
 
-{% set _home_href = '/' %}
-{% if 'main.home' in _vf %}{% set _home_href = url_for('main.home') %}
-{% elif 'main.index' in _vf %}{% set _home_href = url_for('main.index') %}
-{% endif %}
+{% set _shop_href    = safe_url('shop.shop', '/shop') %}
 
-{% set _shop_href = '/shop' %}
-{% if 'shop.shop' in _vf %}{% set _shop_href = url_for('shop.shop') %}{% endif %}
+{% set _cart_href    = safe_url('cart.view', '/cart') %}
+{% if _cart_href == '/cart' %}{% set _cart_href = safe_url('cart.cart', '/cart') %}{% endif %}
+{% if _cart_href == '/cart' %}{% set _cart_href = safe_url('cart.index', '/cart') %}{% endif %}
 
-{% set _cart_href = '/cart' %}
-{% if 'cart.view' in _vf %}{% set _cart_href = url_for('cart.view') %}
-{% elif 'cart.cart' in _vf %}{% set _cart_href = url_for('cart.cart') %}
-{% elif 'cart.index' in _vf %}{% set _cart_href = url_for('cart.index') %}
-{% endif %}
+{# Account: prioriza /account si existe, sino auth.login #}
+{% set _account_href = safe_url('account.account', '/account') %}
+{% if _account_href == '/account' %}{% set _account_href = safe_url('cuenta.account', '/account') %}{% endif %}
+{% if _account_href == '/account' %}{% set _account_href = safe_url('account.login', '/account') %}{% endif %}
+{% if _account_href == '/account' %}{% set _account_href = safe_url('cuenta.login', '/account') %}{% endif %}
+{% if _account_href == '/account' %}{% set _account_href = safe_url('auth.login', '/auth/login') %}{% endif %}
 
-{% set _account_href = '/account' %}
-{% for ep in ['account.account','account.login','cuenta.account','cuenta.login','auth.login'] %}
-  {% if _account_href == '/account' and (ep in _vf) %}
-    {% set _account_href = url_for(ep) %}
+{# current_user bulletproof #}
+{% set _user_ok = false %}
+{% if current_user is defined and current_user %}
+  {% if current_user.is_authenticated is defined and current_user.is_authenticated %}
+    {% set _user_ok = true %}
   {% endif %}
-{% endfor %}
-
-{# ✅ user safe (N3) #}
-{% set _user_ok = (current_user is defined and current_user and (current_user.is_authenticated if current_user.is_authenticated is defined else false)) %}
+{% endif %}
 
 <header class="topbar" role="banner">
   <div class="topbar-inner">
@@ -220,10 +257,10 @@
   const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
   const token = $('meta[name="csrf-token"]')?.content || "";
 
-  // CSRF hidden for non-GET forms
+  // CSRF hidden for non-GET forms (safe)
   if (token) {
     $$('form').forEach(f => {
-      const m = (f.method || 'GET').toUpperCase();
+      const m = String(f.method || 'GET').toUpperCase();
       if (m !== 'GET' && !f.querySelector('[name=csrf_token]')) {
         const i = document.createElement('input');
         i.type = 'hidden';
@@ -254,7 +291,7 @@
     q.focus({ preventScroll: true });
   });
 
-  // Cart badge (N4): try multiple endpoints, fail silent
+  // Cart badge: try multiple endpoints, fail silent
   const badge = $('[data-cart-badge]');
   if (badge) {
     const endpoints = ['/cart/json', '/_cart/json'];

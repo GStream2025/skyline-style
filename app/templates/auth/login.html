@@ -4,16 +4,21 @@
 {% block extra_head %}
   <link rel="preload" as="style" href="{{ url_for('static', filename='css/login.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
-  <meta name="robots" content="{{ 'index,follow' if ENV == 'production' else 'noindex,nofollow' }}">
 
-  {# CSRF meta (para JS/fetch si se usa) #}
-  {% if csrf_token is defined and csrf_token is callable %}
-    <meta name="csrf-token" content="{{ csrf_token() }}">
+  <meta name="robots" content="{{ 'index,follow' if (ENV|default('') == 'production') else 'noindex,nofollow' }}">
+
+  {# CSRF meta (para fetch/JS si lo necesitás) #}
+  {% if csrf_token is defined %}
+    {% if csrf_token is callable %}
+      <meta name="csrf-token" content="{{ csrf_token() }}">
+    {% else %}
+      <meta name="csrf-token" content="{{ csrf_token }}">
+    {% endif %}
   {% else %}
     <meta name="csrf-token" content="">
   {% endif %}
 
-  {# + Diseño/animaciones "safe" (no rompe tu CSS principal) #}
+  {# Micro mejoras safe: anim/UX sin romper tu CSS externo #}
   <style>
     .ss-login{position:relative}
     .ss-login__card{animation:popIn .42s ease both}
@@ -35,6 +40,7 @@
     .ss-login__flash.error{border-color:rgba(220,38,38,.25)}
     .ss-login__flash.success{border-color:rgba(34,197,94,.25)}
     .ss-login__flash.warning{border-color:rgba(245,158,11,.25)}
+    .ss-login__flash.info{border-color:rgba(59,130,246,.25)}
 
     .ss-login__input{transition:box-shadow .2s ease,transform .2s ease,border-color .2s ease}
     .ss-login__input:focus{outline:0;box-shadow:0 0 0 4px rgba(0,0,0,.08);transform:translateY(-1px)}
@@ -57,6 +63,7 @@
       .ss-login__card,.ss-login__flash{animation:none}
       .ss-login__submit:hover:after{animation:none}
       .ss-login__spinner{animation:none}
+      .ss-login__input:focus{transform:none}
     }
     @media (max-width: 520px){
       .ss-login__head h2{font-size:1.25rem}
@@ -67,11 +74,13 @@
 
 {% block content %}
 {# ---------------------------------------------------------
-   LOGIN — Skyline Store (ULTRA PRO / NO BREAK · v2)
-   ✅ Endpoints safe (no BuildError)
-   ✅ CSRF único, compatible Flask-WTF y CSRFProtect
+   LOGIN — Skyline Store (ULTRA PRO / NO BREAK · v3)
+   ✅ safe_url con kwargs (evita BuildError)
+   ✅ CSRF único (WTF hidden_tag preferido)
    ✅ next hardening (solo paths internos)
-   ✅ UX: anim, toggle pass, submit safe, a11y
+   ✅ valores posteados escapados
+   ✅ register link con querystring sin string concat insegura
+   ✅ UX: toggle pass, anti doble submit, a11y
 ---------------------------------------------------------- #}
 
 {# ---------- SAFE URL RESOLVER (NO-BREAK) ---------- #}
@@ -87,15 +96,22 @@
 {# ---------- next safe (evita redirección externa) ---------- #}
 {% set _raw_next = (next|default(request.args.get('next',''), true)|string).strip() %}
 {% set nxt = _raw_next %}
-{% if not nxt or not nxt.startswith('/') or nxt.startswith('//') %}
+{% if (not nxt) or (not nxt.startswith('/')) or (nxt.startswith('//')) %}
   {% set nxt = '' %}
 {% endif %}
 
 {# ---------- urls ---------- #}
-{% set login_action  = safe_url('auth.login',    '/auth/login',    next=nxt) %}
-{% set register_url  = safe_url('auth.register', '/auth/register', next=nxt) %}
-{% set shop_url      = safe_url('shop.shop',     '/shop') %}
-{% set forgot_url    = safe_url('auth.forgot',   '') %}
+{% set login_action = safe_url('auth.login', '/auth/login') %}
+{% set register_base = safe_url('auth.register', '/auth/register') %}
+{% set shop_url = safe_url('shop.shop', '/shop') %}
+{% set forgot_url = safe_url('auth.forgot', '') %}
+
+{# Register URL con next seguro #}
+{% if nxt %}
+  {% set register_url = register_base ~ '?next=' ~ (nxt|urlencode) %}
+{% else %}
+  {% set register_url = register_base %}
+{% endif %}
 
 <section class="ss-login" aria-label="Ingresar">
   <div class="ss-login__card">
@@ -161,13 +177,10 @@
 
         {# =========================
            CSRF (ÚNICO)
-           - Flask-WTF: hidden_tag() crea csrf_token + session
-           - CSRFProtect: <input name="csrf_token" value="...">
+           Preferido: Flask-WTF form.hidden_tag()
         ========================== #}
         {% if form is defined and form.hidden_tag is defined %}
           {{ form.hidden_tag() }}
-        {% elif form is defined and form.csrf_token is defined %}
-          {{ form.csrf_token }}
         {% elif csrf_token is defined %}
           {% if csrf_token is callable %}
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -187,8 +200,8 @@
           <input type="text" name="website" tabindex="-1" autocomplete="off">
         </div>
 
-        {% set posted_email = request.form.get('email','') %}
-        {% set posted_remember = request.form.get('remember','') %}
+        {% set posted_email = (request.form.get('email','') or '') %}
+        {% set posted_remember = (request.form.get('remember','') or '') %}
 
         <div class="ss-login__field">
           <label for="email">
@@ -206,7 +219,7 @@
                  autocapitalize="none"
                  spellcheck="false"
                  aria-describedby="emailHint"
-                 value="{{ posted_email }}"
+                 value="{{ posted_email|e }}"
                  placeholder="tu@email.com">
         </div>
 
@@ -263,58 +276,6 @@
   </div>
 </section>
 
-<script defer src="{{ url_for('static', filename='js/login.js') }}?v=2"></script>
-
-<script>
-(() => {
-  const f = document.getElementById("loginForm");
-  const b = document.getElementById("submitBtn");
-  const email = document.getElementById("email");
-  const pass = document.getElementById("password");
-  const tgl = document.getElementById("togglePass");
-
-  if (!f || !b) return;
-  if (f.dataset.bound === "1") return;
-  f.dataset.bound = "1";
-
-  // Toggle password (a11y)
-  if (tgl && pass) {
-    tgl.addEventListener("click", () => {
-      const isPwd = pass.type === "password";
-      pass.type = isPwd ? "text" : "password";
-      tgl.setAttribute("aria-pressed", String(isPwd));
-      tgl.setAttribute("aria-label", isPwd ? "Ocultar contraseña" : "Mostrar contraseña");
-    });
-  }
-
-  // Client-side hints (no bloquea server)
-  const markInvalid = (el, bad) => {
-    if (!el) return;
-    el.setAttribute("aria-invalid", bad ? "true" : "false");
-  };
-
-  f.addEventListener("submit", (ev) => {
-    // Validación mínima
-    const eok = email ? email.value.trim().length >= 6 : true;
-    const pok = pass ? pass.value.length >= 8 : true;
-    markInvalid(email, !eok);
-    markInvalid(pass, !pok);
-
-    if (!eok || !pok) {
-      ev.preventDefault();
-      ev.stopPropagation();
-      b.disabled = false;
-      b.removeAttribute("aria-busy");
-      b.textContent = "Entrar";
-      return;
-    }
-
-    // Submit safe (evita doble post + token mismatch por doble submit)
-    if (b.disabled) return;
-    b.disabled = true;
-    b.setAttribute("aria-busy", "true");
-    b.innerHTML = '<span class="ss-login__spinner" aria-hidden="true"></span> Ingresando...';
-  }, { passive: false });
-})();
-</script>
+{# JS externo PRO #}
+<script defer src="{{ url_for('static', filename='js/login.js') }}?v=3"></script>
 {% endblock %}

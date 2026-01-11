@@ -8,8 +8,12 @@
   <meta name="robots" content="{{ 'index,follow' if ENV == 'production' else 'noindex,nofollow' }}">
 
   {# CSRF meta (por si luego haces fetch/JS) #}
-  {% if csrf_token is defined and csrf_token is callable %}
-    <meta name="csrf-token" content="{{ csrf_token() }}">
+  {% if csrf_token is defined %}
+    {% if csrf_token is callable %}
+      <meta name="csrf-token" content="{{ csrf_token() }}">
+    {% else %}
+      <meta name="csrf-token" content="{{ csrf_token }}">
+    {% endif %}
   {% else %}
     <meta name="csrf-token" content="">
   {% endif %}
@@ -41,6 +45,7 @@
     .ss-reg__flash.error{border-color:rgba(220,38,38,.25)}
     .ss-reg__flash.success{border-color:rgba(34,197,94,.25)}
     .ss-reg__flash.warning{border-color:rgba(245,158,11,.25)}
+    .ss-reg__flash.info{border-color:rgba(59,130,246,.22)}
 
     .ss-reg__input{transition:box-shadow .2s ease,transform .2s ease,border-color .2s ease}
     .ss-reg__input:focus{outline:0;box-shadow:0 0 0 4px rgba(0,0,0,.08);transform:translateY(-1px)}
@@ -87,10 +92,10 @@
 ---------------------------------------------------------- #}
 
 {# ---------- SAFE URL RESOLVER (NO-BREAK) ---------- #}
-{% macro safe_url(endpoint, fallback='/', **kwargs) -%}
+{% macro safe_url(endpoint, fallback='/') -%}
   {%- set vf = (view_functions if view_functions is defined and view_functions else {}) -%}
   {%- if endpoint and endpoint in vf -%}
-    {{- url_for(endpoint, **kwargs) -}}
+    {{- url_for(endpoint) -}}
   {%- else -%}
     {{- fallback -}}
   {%- endif -%}
@@ -104,12 +109,13 @@
 {% endif %}
 
 {# ---------- form values ---------- #}
-{% set post_name  = request.form.get('name','') %}
-{% set post_email = request.form.get('email','') %}
+{% set post_name  = (request.form.get('name','') or '') %}
+{% set post_email = (request.form.get('email','') or '') %}
 
 {# ---------- endpoints ---------- #}
 {% set register_action = safe_url('auth.register', '/auth/register') %}
-{% set login_url       = safe_url('auth.login', '/auth/login', next=nxt) %}
+{% set login_base      = safe_url('auth.login', '/auth/login') %}
+{% set login_url       = login_base ~ (('?next=' ~ (nxt|urlencode)) if nxt else '') %}
 {% set shop_url        = safe_url('shop.shop', '/shop') %}
 
 <section class="ss-reg" aria-label="Crear cuenta">
@@ -140,6 +146,7 @@
     </aside>
 
     <!-- RIGHT -->
+`
     <div class="ss-reg__card ss-reg__right" aria-label="Formulario de registro">
 
       <div class="ss-reg__head">
@@ -158,7 +165,7 @@
         <div class="ss-reg__step">Listo</div>
       </div>
 
-      {# FLASH (sanitizado) #}
+      {# FLASH #}
       {% set _msgs = get_flashed_messages(with_categories=true) %}
       {% if _msgs %}
         {% for category, msg in _msgs %}
@@ -182,13 +189,13 @@
         ========================== #}
         {% if form is defined and form.hidden_tag is defined %}
           {{ form.hidden_tag() }}
-        {% elif form is defined and form.csrf_token is defined %}
-          {{ form.csrf_token }}
-        {% elif csrf_token is defined %}
-          {% if csrf_token is callable %}
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          {% else %}
-            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        {% else %}
+          {% if csrf_token is defined %}
+            {% if csrf_token is callable %}
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {% else %}
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            {% endif %}
           {% endif %}
         {% endif %}
 
@@ -211,7 +218,7 @@
                    name="name"
                    maxlength="120"
                    autocomplete="name"
-                   value="{{ post_name }}">
+                   value="{{ post_name|e }}">
           </div>
 
           <div class="ss-reg__field">
@@ -226,7 +233,7 @@
                    inputmode="email"
                    autocapitalize="none"
                    spellcheck="false"
-                   value="{{ post_email }}"
+                   value="{{ post_email|e }}"
                    placeholder="tu@email.com">
           </div>
         </div>
@@ -350,14 +357,13 @@
     }
   };
 
-  // Toggle password
   const bindToggle = (btn, input, onLabel, offLabel) => {
     if (!btn || !input) return;
     btn.addEventListener("click", () => {
-      const isPwd = input.type === "password";
-      input.type = isPwd ? "text" : "password";
-      btn.setAttribute("aria-pressed", String(isPwd));
-      btn.setAttribute("aria-label", isPwd ? onLabel : offLabel);
+      const willShow = input.type === "password";
+      input.type = willShow ? "text" : "password";
+      btn.setAttribute("aria-pressed", String(willShow));
+      btn.setAttribute("aria-label", willShow ? onLabel : offLabel);
     });
   };
   bindToggle(t1, p1, "Ocultar contraseña", "Mostrar contraseña");

@@ -1,15 +1,24 @@
 /* ==========================================================
-   Skyline Store — Account (ULTRA PRO v4.2)
-   +5 mejoras diseño/animaciones (SAFE / NO BREAK)
-   Pegá al FINAL del archivo
+   Skyline Store — Account (ULTRA PRO v4.3)
+   SAFE / NO BREAK — pegá al FINAL del archivo
 ========================================================== */
 
-/* 1) Entrada premium (hero + card) */
+/* 0) Variables suaves (no rompen si ya existen) */
+.ss-account{
+  --ss-ease: cubic-bezier(.2,.9,.2,1);
+  --ss-dur: .36s;
+  --ss-shadow-soft: 0 18px 40px rgba(2,6,23,.10);
+  --ss-border-soft: rgba(37,99,235,.18);
+}
+
+/* 1) Entrada premium (solo primera carga, no molesta en reflow)
+   - respeta prefers-reduced-motion
+*/
 .ss-account__hero,
 .ss-account__card{
   transform: translateY(8px);
   opacity: 0;
-  animation: ssEnter .36s ease forwards;
+  animation: ssEnter var(--ss-dur) var(--ss-ease) forwards;
   will-change: transform, opacity;
 }
 
@@ -29,30 +38,53 @@
   }
 }
 
-/* 2) Hover refinado en perks (más “app”) */
+/* 2) Hover refinado perks (más app, menos “salto”) */
 @media (hover:hover) and (pointer:fine){
   .perks li{
-    transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease, background .14s ease;
+    transition:
+      transform .14s var(--ss-ease),
+      box-shadow .14s var(--ss-ease),
+      border-color .14s var(--ss-ease),
+      background .14s var(--ss-ease);
+    will-change: transform;
   }
   .perks li:hover{
     transform: translateY(-1px);
-    box-shadow: 0 18px 40px rgba(2,6,23,.10);
-    border-color: rgba(37,99,235,.18);
+    box-shadow: var(--ss-shadow-soft);
+    border-color: var(--ss-border-soft);
   }
 }
 
-/* 3) Panel transition más fluida + evita “salto” */
+/* 3) Panels: transición fluida y compatible con "hidden" real
+   - Si tu base usa .is-hidden { display:none } no hay transición.
+     Entonces hacemos:
+     - por defecto: panel visible
+     - is-hidden: opacity/transform + pointer-events
+     - y dejamos que tu JS/HTML decida display si quiere
+*/
 .panel{
   transform-origin: top;
-}
-.panel.is-hidden{
-  transform: translateY(8px) scale(.995);
+  transition:
+    opacity .18s var(--ss-ease),
+    transform .18s var(--ss-ease);
 }
 
-/* 4) Dark-mode legibility boost (glass + links) */
+.panel.is-hidden{
+  opacity: 0;
+  transform: translateY(8px) scale(.995);
+  pointer-events: none;
+}
+
+/* Si tu CSS base usa display:none para is-hidden, esto ayuda a evitar “flash”
+   cuando JS lo saca: */
+.panel.is-hidden{ visibility: hidden; }
+.panel:not(.is-hidden){ visibility: visible; }
+
+/* 4) Dark-mode legibility boost (sin pisar tu theme) */
 @media (prefers-color-scheme: dark){
   .ss-account__card{
-    background: rgba(10,14,28,.72); /* un poco más sólido */
+    background: rgba(10,14,28,.72);
+    border-color: rgba(148,163,184,.18);
   }
   .divider span{
     background: rgba(10,14,28,.78);
@@ -63,16 +95,35 @@
   }
 }
 
-/* 5) Sticky: fallback si no hay backdrop-filter + mejor estabilidad */
+/* 5) Sticky: estabilidad + fallback si no hay blur */
+.ss-account__sticky .inner{
+  will-change: transform, opacity;
+}
+
+/* Cuando se oculta/entra, que sea suave (si tu base ya lo maneja, esto suma) */
+.ss-account__sticky{
+  transition: transform .18s var(--ss-ease), opacity .18s var(--ss-ease);
+}
+.ss-account__sticky[aria-hidden="true"]{
+  opacity: 0;
+  transform: translateY(10px);
+  pointer-events: none;
+}
+
+/* Fallback blur (no pisa todo, solo ajusta si de verdad falta blur) */
 @supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))){
   .ss-account__hero,
-  .ss-account__card,
+  .ss-account__card{
+    background: rgba(255,255,255,.96);
+  }
   .ss-account__sticky .inner{
     background: rgba(255,255,255,.96);
   }
   @media (prefers-color-scheme: dark){
     .ss-account__hero,
-    .ss-account__card,
+    .ss-account__card{
+      background: rgba(9,12,24,.90);
+    }
     .ss-account__sticky .inner{
       background: rgba(9,12,24,.90);
     }

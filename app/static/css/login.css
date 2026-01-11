@@ -11,21 +11,38 @@
 .ss-login,
 .ss-login *{ box-sizing: border-box; }
 
-/* 2) Variables LOCALES (sin ciclos) + fallbacks seguros */
+/* 2) Variables LOCALES (sin ciclos) + fallbacks seguros
+   OJO: NO usamos var(--ink, ...) para asignar --ss-ink, porque si
+   tu tema no define --ink y este CSS define --ink en otro lado,
+   podés caer en auto-referencia. Por eso usamos "global tokens" distintos.
+*/
 .ss-login{
-  /* tokens locales (ss-*) */
-  --ss-ink: var(--ink, #0b1220);
+  /* tokens "globales" opcionales (si existen en tu theme) */
+  --ss-global-ink: var(--ink);
+  --ss-global-stroke: var(--stroke);
+  --ss-global-shadow2: var(--shadow2);
+  --ss-global-ease: var(--ease);
+  --ss-global-grad: var(--grad);
+
+  /* tokens locales (ss-*) con fallback REAL */
+  --ss-ink: var(--ss-global-ink, #0b1220);
   --ss-muted: rgba(11,18,32,.62);
   --ss-muted2: rgba(11,18,32,.52);
   --ss-soft: rgba(2,6,23,.04);
-  --ss-stroke: var(--stroke, rgba(15,23,42,.12));
-  --ss-shadow: var(--shadow2, 0 28px 70px rgba(2,6,23,.18));
-  --ss-ease: var(--ease, cubic-bezier(.2,.8,.2,1));
+
+  --ss-stroke: var(--ss-global-stroke, rgba(15,23,42,.12));
+  --ss-shadow: var(--ss-global-shadow2, 0 28px 70px rgba(2,6,23,.18));
+  --ss-ease: var(--ss-global-ease, cubic-bezier(.2,.8,.2,1));
+
   --ss-radius: 22px;
   --ss-radius-sm: 16px;
+
   --ss-ring: rgba(47,123,255,.14);
   --ss-ring-strong: rgba(47,123,255,.35);
   --ss-danger: rgba(255,0,0,.35);
+
+  /* grad fallback seguro */
+  --ss-grad: var(--ss-global-grad, linear-gradient(135deg,#2f7bff,#06b6d4));
 
   /* ✅ MEJORA #1: deja al navegador optimizar controles light/dark */
   color-scheme: light dark;
@@ -55,9 +72,20 @@
   text-rendering: optimizeLegibility;
 }
 
+/* Fallback si env() no existe (viejos browsers) */
+@supports not (padding: max(0px)){
+  .ss-login{
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+}
+
 .ss-login__card{
   width:100%;
-  max-width: min(980px, var(--max, 980px));
+  /* FIX robusto: nada de min() con var() raro */
+  --ss-max: var(--max, 980px);
+  max-width: var(--ss-max);
+  max-width: min(100%, var(--ss-max));
   display:grid;
   grid-template-columns: 1fr 1fr;
   gap: clamp(12px, 2vw, 18px);
@@ -84,7 +112,7 @@
 .ss-login__mark{
   width:38px; height:28px;
   border-radius: 12px;
-  background: var(--grad, linear-gradient(135deg,#2f7bff,#06b6d4));
+  background: var(--ss-grad);
   box-shadow: 0 12px 22px rgba(2,6,23,.16);
 }
 .ss-login__title{ font-weight: 1000; letter-spacing:-.4px; color: rgba(11,18,32,.94); }
@@ -119,7 +147,7 @@
 .ss-login__dot{
   width:12px; height:12px;
   border-radius: 999px;
-  background: var(--grad, linear-gradient(135deg,#2f7bff,#06b6d4));
+  background: var(--ss-grad);
   margin-top: 6px;
   flex: 0 0 auto;
 }
@@ -294,7 +322,7 @@
   padding: 14px;
   min-height: 50px;
   border-radius: 16px;
-  background: var(--grad, linear-gradient(135deg,#2f7bff,#06b6d4));
+  background: var(--ss-grad);
   color:#fff;
   border:0;
   font-weight: 1000;
@@ -387,7 +415,10 @@
     box-shadow: 0 0 0 1000px rgba(2,6,23,.35) inset;
   }
 
-  .ss-login__links a{ color: rgba(226,232,240,.88); border-bottom-color: rgba(226,232,240,.22); }
+  .ss-login__links a{
+    color: rgba(226,232,240,.88);
+    border-bottom-color: rgba(226,232,240,.22);
+  }
 }
 
 /* ✅ MEJORA #4: más contraste si el usuario lo pide */
