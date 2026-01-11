@@ -5,21 +5,23 @@ OBJETIVO: "No falta nada" + "no se rompe" + "no tocar más".
 
 ✅ Registro por prioridad (core -> account -> cart/checkout -> api -> webhooks -> admin -> printful)
 ✅ Auto-scan del paquete app.routes: registra TODO blueprint encontrado
-✅ Descubre múltiples Blueprints por módulo (no depende del nombre del símbolo)
-✅ Anti duplicados por bp.name + origin (CASE-INSENSITIVE)
+✅ Descubre múltiples Blueprints por módulo
+✅ Anti duplicados por bp.name (case-insensitive) + ORIGIN + identidad del objeto (NEW)
 ✅ Disable por ENV con wildcard: ROUTES_DISABLE="admin*,printful,app.routes.debug_routes"
+✅ Allowlist opcional (NEW): ROUTES_ALLOW="main,shop,auth,account" (si existe, SOLO esos)
 ✅ Prefix override por ENV: ROUTES_PREFIX_<bpname>=/algo (bpname normalizado)
-✅ Require por ENV: ROUTES_REQUIRE="main,shop,auth,checkout,webhook"
+✅ Require por ENV: ROUTES_REQUIRE="main,shop,auth,account"
 ✅ Strict mode:
    - ROUTES_STRICT=1 (solo dev)
    - ROUTES_STRICT_FORCE=1 (siempre)
-✅ Report dict estable para debug (/health) con imports_failed + timing + counts
+✅ Report dict estable para debug
 
-NUEVO:
-✅ main primero SIEMPRE (aunque el símbolo main_bp no exista)
-✅ origin consistente: siempre "{module}.{bp.name}"
-✅ dedupe bp.name case-insensitive
-✅ report tipado sin inconsistencias
+NUEVO (5 mejoras):
+1) ✅ Dedupe por identidad del blueprint (evita register doble por imports/alias)
+2) ✅ origin verdadero: "{module}.{symbol}" cuando existe (mejor disable/trace)
+3) ✅ Allowlist ROUTES_ALLOW para “modo producción ultra controlado”
+4) ✅ Scan exclude por patrón (ROUTES_SCAN_EXCLUDE) para evitar módulos basura (perf)
+5) ✅ Orden de scan estable + skip explícito de __init__/tests (menos ruido)
 """
 
 from __future__ import annotations
@@ -45,7 +47,6 @@ _IMPORT_ERRORS: Dict[str, str] = {}
 
 _SCAN_CACHE: Optional[List[str]] = None
 _SCAN_CACHE_KEY: Optional[str] = None
-
 _ENV_CACHE_KEY: Optional[str] = None
 
 
@@ -74,8 +75,18 @@ def _disabled_patterns() -> List[str]:
     return [x.lower() for x in _split_csv_env("ROUTES_DISABLE")]
 
 
+def _scan_exclude_patterns() -> List[str]:
+    # NEW: excluir módulos del scan (wildcards)
+    return [x.lower() for x in _split_csv_env("ROUTES_SCAN_EXCLUDE")]
+
+
 def _required_names() -> Set[str]:
     return {x.lower() for x in _split_csv_env("ROUTES_REQUIRE")}
+
+
+def _allowed_names() -> Set[str]:
+    # NEW: allowlist opcional. Si está presente, SOLO se registran esos bp.name
+    return {x.lower() for x in _split_csv_env("ROUTES_ALLOW")}
 
 
 def _priority_modules() -> List[str]:
@@ -83,11 +94,8 @@ def _priority_modules() -> List[str]:
 
 
 def _strict_mode(app: "Flask") -> bool:
-    # ROUTES_STRICT_FORCE=1 -> siempre strict
     if _env_bool("ROUTES_STRICT_FORCE", False):
         return True
-
-    # ROUTES_STRICT=1 -> solo strict en dev
     if not _env_bool("ROUTES_STRICT", False):
         return False
 
@@ -127,12 +135,13 @@ def _match_any(value: str, patterns: List[str]) -> bool:
 
 
 def _is_disabled(bp_name: str, sym_tail: str, mod_path: str, patterns: List[str]) -> bool:
-    # bp_name ya viene lower
+    # bp_name/sym_tail/mod_path ya deberían venir lower
     return (
         _match_any(bp_name, patterns)
         or _match_any(sym_tail, patterns)
         or _match_any(mod_path, patterns)
         or _match_any(f"{mod_path}.{sym_tail}", patterns)
+        or _match_any(f"{mod_path}.{bp_name}", patterns)
     )
 
 
@@ -162,10 +171,12 @@ def _env_prefix_for(bp_name: str) -> Optional[str]:
 def _compute_env_cache_key() -> str:
     keys = [
         "ROUTES_DISABLE",
+        "ROUTES_ALLOW",
         "ROUTES_REQUIRE",
         "ROUTES_PRIORITY",
         "ROUTES_SCAN_SUBPACKAGES",
         "ROUTES_SCAN_ONLY",
+        "ROUTES_SCAN_EXCLUDE",
         "ROUTES_IMPORT_NO_CACHE",
         "ROUTES_DEBUG",
         "ROUTES_STRICT",
@@ -184,7 +195,6 @@ def _compute_env_cache_key() -> str:
 
 def _maybe_bust_caches() -> None:
     global _ENV_CACHE_KEY, _SCAN_CACHE, _SCAN_CACHE_KEY
-
     new_key = _compute_env_cache_key()
     if _ENV_CACHE_KEY == new_key:
         return
@@ -241,30 +251,34 @@ def _is_blueprint(obj: Any) -> bool:
         return hasattr(obj, "name") and hasattr(obj, "register")
 
 
-def _find_blueprints_in_module(mod: Any) -> List[Any]:
+def _find_blueprints_in_module(mod: Any) -> List[Tuple[Any, str]]:
+    """
+    Retorna lista de (blueprint, symbol_name).
+    NEW: devolvemos el símbolo real para origin verdadero.
+    """
     if not mod:
         return []
-    out: List[Any] = []
+    out: List[Tuple[Any, str]] = []
     for k in sorted(dir(mod)):
         if k.startswith("_"):
             continue
         obj = _safe_getattr(mod, k)
         if _is_blueprint(obj):
-            out.append(obj)
+            out.append((obj, k))
 
-    # uniq por bp.name (case-insensitive)
-    uniq: Dict[str, Any] = {}
-    for bp in out:
+    # uniq por bp.name (case-insensitive) conservando primer símbolo encontrado
+    uniq: Dict[str, Tuple[Any, str]] = {}
+    for bp, sym in out:
         n = (getattr(bp, "name", "") or "").strip()
         if not n:
             continue
         nk = n.lower()
         if nk not in uniq:
-            uniq[nk] = bp
+            uniq[nk] = (bp, sym)
     return list(uniq.values())
 
 
-def _import_symbol_or_all(mod_path: str, symbol: Optional[str]) -> Tuple[List[Any], Optional[str]]:
+def _import_symbol_or_all(mod_path: str, symbol: Optional[str]) -> Tuple[List[Tuple[Any, str]], Optional[str]]:
     mod = _safe_import_module(mod_path)
     if not mod:
         return [], _IMPORT_ERRORS.get(mod_path)
@@ -272,9 +286,9 @@ def _import_symbol_or_all(mod_path: str, symbol: Optional[str]) -> Tuple[List[An
     if symbol:
         obj = _safe_getattr(mod, symbol)
         if _is_blueprint(obj):
-            return [obj], None
+            return [(obj, symbol)], None
 
-    # fallback: descubrimos todos los blueprints del módulo
+    # fallback: descubrimos todos
     bps = _find_blueprints_in_module(mod)
     return bps, None
 
@@ -282,11 +296,11 @@ def _import_symbol_or_all(mod_path: str, symbol: Optional[str]) -> Tuple[List[An
 # =============================================================================
 # Scan modules
 # =============================================================================
-def _scan_route_modules() -> List[str]:
+def _scan_route_modules(exclude_patterns: List[str]) -> List[str]:
     global _SCAN_CACHE, _SCAN_CACHE_KEY
 
     scan_sub = _env_bool("ROUTES_SCAN_SUBPACKAGES", False)
-    key = f"sub={int(scan_sub)}"
+    key = f"sub={int(scan_sub)}|ex={'/'.join(exclude_patterns)}"
     if _SCAN_CACHE is not None and _SCAN_CACHE_KEY == key:
         return list(_SCAN_CACHE)
 
@@ -297,8 +311,12 @@ def _scan_route_modules() -> List[str]:
         mods: List[str] = []
         for m in pkgutil.iter_modules(pkg.__path__, base + "."):
             tail = m.name.split(".")[-1]
-            if tail.startswith("_"):
+            # NEW: skip ruido típico
+            if tail.startswith("_") or tail in {"tests", "test", "conftest"}:
                 continue
+            if _match_any(m.name.lower(), exclude_patterns) or _match_any(tail.lower(), exclude_patterns):
+                continue
+
             mods.append(m.name)
 
             if scan_sub and m.ispkg:
@@ -306,13 +324,15 @@ def _scan_route_modules() -> List[str]:
                     subpkg = import_module(m.name)
                     for sm in pkgutil.iter_modules(getattr(subpkg, "__path__", []), m.name + "."):
                         stail = sm.name.split(".")[-1]
-                        if stail.startswith("_"):
+                        if stail.startswith("_") or stail in {"tests", "test", "conftest"}:
+                            continue
+                        if _match_any(sm.name.lower(), exclude_patterns) or _match_any(stail.lower(), exclude_patterns):
                             continue
                         mods.append(sm.name)
                 except Exception:
-                    # no rompemos por subpkg
                     pass
 
+        # NEW: orden estable
         mods = sorted(set(mods))
         _SCAN_CACHE = mods
         _SCAN_CACHE_KEY = key
@@ -354,11 +374,14 @@ def _register_bp(
     bp: Any,
     *,
     origin: str,
+    symbol: str,
     seen_names: Set[str],
     seen_origins: Set[str],
+    seen_ids: Set[int],
     report: Dict[str, Any],
     url_prefix: Optional[str],
     disabled_patterns: List[str],
+    allowed_names: Set[str],
 ) -> None:
     if not _is_blueprint(bp):
         report["invalid"].append(origin)
@@ -371,10 +394,21 @@ def _register_bp(
 
     bp_key = bp_name.lower()
     mod_path = origin.rsplit(".", 1)[0].strip().lower()
-    sym_tail = origin.split(".")[-1].strip().lower()
+    sym_tail = (symbol or "").strip().lower() or origin.split(".")[-1].strip().lower()
+
+    # NEW: allowlist
+    if allowed_names and bp_key not in allowed_names:
+        report["disabled"].append(f"{bp_name} <- {origin} (allowlist)")
+        return
 
     if _is_disabled(bp_key, sym_tail, mod_path, disabled_patterns):
         report["disabled"].append(f"{bp_name} <- {origin}")
+        return
+
+    # NEW: dedupe por identidad
+    bp_id = id(bp)
+    if bp_id in seen_ids:
+        report["duplicate"].append(f"(id) {bp_name} <- {origin}")
         return
 
     origin_key = _normalize_origin(origin)
@@ -396,6 +430,7 @@ def _register_bp(
         else:
             app.register_blueprint(bp)
 
+        seen_ids.add(bp_id)
         seen_names.add(bp_key)
         seen_origins.add(origin_key)
 
@@ -404,7 +439,10 @@ def _register_bp(
         )
     except Exception as e:
         report["failed_register"].append(f"{bp_name} <- {origin} :: {_short_exc(e)}")
-        log.warning("⚠️ No se pudo registrar blueprint '%s' (%s): %s", bp_name, origin, e, exc_info=_routes_debug())
+        log.warning(
+            "⚠️ No se pudo registrar blueprint '%s' (%s): %s",
+            bp_name, origin, e, exc_info=_routes_debug()
+        )
         if report["strict"]:
             raise
 
@@ -413,29 +451,35 @@ def _register_bp(
 # Specs (ajustado a tu repo)
 # =============================================================================
 def _default_specs() -> List[Tuple[str, Optional[str], Optional[str]]]:
-    # IMPORTANTE: para main/shop/auth NO amarramos al símbolo: symbol=None (fallback discovery)
+    # CORE primero
     return [
-        # CORE (main primero SIEMPRE)
         ("app.routes.main_routes", None, None),
         ("app.routes.shop_routes", None, None),
         ("app.routes.auth_routes", None, None),
+
         # USER / ACCOUNT
         ("app.routes.account_routes", None, None),
         ("app.routes.profile_routes", None, None),
         ("app.routes.address_routes", None, None),
+
         # CART / CHECKOUT
         ("app.routes.cart_routes", None, None),
         ("app.routes.checkout_routes", None, None),
+
         # API / AFFILIATE
         ("app.routes.api_routes", None, None),
         ("app.routes.affiliate_routes", None, None),
+
         # MARKETING
         ("app.routes.marketing_routes", None, None),
+
         # WEBHOOKS
         ("app.routes.webhook_routes", None, None),
+
         # ADMIN
         ("app.routes.admin_routes", None, None),
         ("app.routes.admin_payments_routes", None, None),
+
         # PRINTFUL
         ("app.routes.printful_routes", None, None),
     ]
@@ -449,19 +493,20 @@ def register_blueprints(app: "Flask") -> Dict[str, Any]:
     Registro final:
     1) specs prioritarios (orden recomendado)
     2) auto-scan: registra TODO blueprint restante
-
-    Report: dict estable y ampliado (timing/counts/strict).
     """
     t0 = time.perf_counter()
     _maybe_bust_caches()
 
     strict = _strict_mode(app)
     disabled_patterns = _disabled_patterns()
+    scan_exclude = _scan_exclude_patterns()
     required = _required_names()
+    allowed = _allowed_names()
     scan_only = _env_bool("ROUTES_SCAN_ONLY", False)
 
-    seen_names: Set[str] = set()   # guardamos bp.name lower
-    seen_origins: Set[str] = set() # guardamos origin lower
+    seen_names: Set[str] = set()
+    seen_origins: Set[str] = set()
+    seen_ids: Set[int] = set()  # NEW
 
     report: Dict[str, Any] = {
         "registered": [],
@@ -489,51 +534,60 @@ def register_blueprints(app: "Flask") -> Dict[str, Any]:
 
     if not scan_only:
         for mod, symbol, pref in specs:
-            bps, err = _import_symbol_or_all(mod, symbol)
-            if not bps:
+            pairs, err = _import_symbol_or_all(mod, symbol)
+            if not pairs:
                 report["missing"].append(f"{mod}.{symbol or '*'}" + (f" :: {err}" if err else ""))
                 if err:
                     report["imports_failed"].append(f"{mod} :: {err}")
                 continue
 
-            for bp in bps:
+            for bp, sym in pairs:
                 bp_name = (getattr(bp, "name", "") or "blueprint").strip()
-                origin = f"{mod}.{bp_name}"  # ORIGIN CONSISTENTE
+
+                # NEW: origin real usando símbolo (siempre existe en pairs)
+                # => mejora disable/tracing
+                origin = f"{mod}.{sym}"
+
                 _register_bp(
                     app,
                     bp,
                     origin=origin,
+                    symbol=sym,
                     seen_names=seen_names,
                     seen_origins=seen_origins,
+                    seen_ids=seen_ids,
                     report=report,
                     url_prefix=pref,
                     disabled_patterns=disabled_patterns,
+                    allowed_names=allowed,
                 )
 
     # -----------------------------------------
     # 2) AUTO-SCAN
     # -----------------------------------------
-    for mod in _scan_route_modules():
-        bps, err = _import_symbol_or_all(mod, None)
-        if not bps:
+    for mod in _scan_route_modules(scan_exclude):
+        pairs, err = _import_symbol_or_all(mod, None)
+        if not pairs:
             report["scan_skipped"].append(mod + (f" :: {err}" if err else ""))
             if err:
                 report["imports_failed"].append(f"{mod} :: {err}")
             continue
 
-        for bp in bps:
-            bp_name = (getattr(bp, "name", "") or "blueprint").strip()
-            origin = f"{mod}.{bp_name}"
+        for bp, sym in pairs:
+            origin = f"{mod}.{sym}"
             before = len(report["registered"])
             _register_bp(
                 app,
                 bp,
                 origin=origin,
+                symbol=sym,
                 seen_names=seen_names,
                 seen_origins=seen_origins,
+                seen_ids=seen_ids,
                 report=report,
                 url_prefix=None,
                 disabled_patterns=disabled_patterns,
+                allowed_names=allowed,
             )
             if len(report["registered"]) > before:
                 report["scan_registered"].append(origin)
@@ -556,25 +610,28 @@ def register_blueprints(app: "Flask") -> Dict[str, Any]:
     # -----------------------------------------
     try:
         reg_names = [x.split(" <- ", 1)[0] for x in report["registered"]]
-        log.info("✅ Blueprints registrados (%d): %s", len(reg_names), ", ".join(reg_names) if reg_names else "(ninguno)")
+        log.info(
+            "✅ Blueprints registrados (%d): %s",
+            len(reg_names),
+            ", ".join(reg_names) if reg_names else "(ninguno)",
+        )
 
         if report["scan_registered"]:
             log.info("🧭 Auto-scan registrados (%d)", len(report["scan_registered"]))
 
         if report["disabled"]:
-            log.info("⛔ Deshabilitados (ENV): %s", ", ".join(report["disabled"]))
+            log.info("⛔ Disabled (ENV): %d", len(report["disabled"]))
 
         if report["failed_register"]:
-            log.warning("⚠️ Fallos al registrar (%d): %s", len(report["failed_register"]), " | ".join(report["failed_register"]))
+            log.warning("⚠️ Fallos al registrar (%d)", len(report["failed_register"]))
 
         if report["imports_failed"] and _routes_debug():
             uniq = sorted(set(report["imports_failed"]))
             report["imports_failed"] = uniq
-            log.debug("🧩 Imports fallidos (%d): %s", len(uniq), " | ".join(uniq))
+            log.debug("🧩 Imports fallidos (%d)", len(uniq))
     except Exception:
         pass
 
-    # timing + counts
     report["timing_ms"] = int((time.perf_counter() - t0) * 1000)
     report["counts"] = {
         "registered": len(report["registered"]),
