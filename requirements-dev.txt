@@ -1,6 +1,6 @@
 # ============================================================
 # Skyline Store — Development / Testing Requirements
-# ULTRA PRO · FINAL · NO BREAK · +10 mejoras
+# ULTRA PRO · FINAL · NO BREAK · + mejoras
 # ============================================================
 # ✔ Hereda TODO de producción
 # ✔ Testing rápido, estable y reproducible
@@ -36,8 +36,11 @@ freezegun==1.5.1
 # ✅ Mejora 4: timeouts para que no se “cuelgue” CI/local
 pytest-timeout==2.3.1
 
-# ✅ Mejora 5: mejores mensajes de assert (más legible)
-pytest-clarity==1.0.1
+# ✅ (opcional) output más lindo (no afecta tests)
+# pytest-sugar==1.0.0
+
+# ⚠️ (opcional) puede fallar según entorno; activalo si ya te funciona bien
+# pytest-clarity==1.0.1
 
 
 # =========================
@@ -45,7 +48,7 @@ pytest-clarity==1.0.1
 # =========================
 coverage[toml]==7.6.9
 
-# ✅ Mejora 6: reporte HTML local (útil para ver qué falta testear)
+# ✅ reporte HTML local
 pytest-html==4.1.1
 
 
@@ -60,10 +63,11 @@ types-requests==2.32.0.20241016
 types-python-dateutil==2.9.0.20241206
 types-six==1.17.0.20241205
 
-# ✅ Mejora 7: type stubs para libs comunes que usás (Flask-Login / WTForms)
-types-Flask==1.1.6
-types-Werkzeug==1.0.9
-types-WTForms==3.1.0.20240425
+# ✅ Nota PRO:
+# types-Flask / types-Werkzeug viejos NO sirven bien con Flask3/Werkzeug3.
+# Mejor: tipado por stubs inline + "mypy --install-types" + plugins si hiciera falta.
+# WTForms stub a veces ayuda, a veces molesta: lo dejamos opcional.
+# types-WTForms==3.1.0.20240425
 
 
 # =========================
@@ -74,17 +78,17 @@ rich==13.9.4
 watchdog==6.0.0
 debugpy==1.8.11
 
-# ✅ Mejora 8: dotenv CLI (correr comandos con .env sin magia)
-python-dotenv==1.0.1
-
 
 # =========================
 # Seguridad / Quality gates (dev)
 # =========================
 bandit==1.7.10
 
-# ✅ Mejora 9: revisar vulnerabilidades conocidas en deps (solo dev)
+# ✅ revisar vulnerabilidades conocidas en deps (solo dev)
 pip-audit==2.7.3
+
+# ✅ Mejora nueva: ver árbol de dependencias y detectar duplicados
+pipdeptree==2.23.4
 
 
 # =========================
@@ -94,8 +98,15 @@ sqlalchemy-utils==0.41.2
 faker==33.1.0
 factory-boy==3.3.1
 
-# ✅ Mejora 10: pretty-print de objetos y debugging de tests
-prettyprinter==0.18.0
+# ⚠️ (opcional) a veces rompe en algunos entornos
+# prettyprinter==0.18.0
+
+
+# =========================
+# Tooling pro (reproducible / CI)
+# =========================
+# ✅ Mejora nueva: tox para correr test/lint/mypy en entornos consistentes
+tox==4.23.2
 
 
 # =========================
@@ -106,8 +117,12 @@ pip-tools==7.4.1
 # Pre-commit (si querés automatizar ruff/black)
 # pre-commit==4.0.1
 
-# HTTP mocking
+# HTTP mocking clásico (requests)
 # responses==0.25.3
+
+# ✅ Mejora nueva: mocking moderno (opcional)
+# httpx==0.27.2
+# respx==0.21.1
 
 # Profiling
 # py-spy==0.3.14

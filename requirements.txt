@@ -5,19 +5,7 @@
 # - Deploy estable en Render / Docker / Railway / Local
 # - Flask 3.x + SQLAlchemy 2.x + Migrations
 # - Seguridad y performance reales
-# - Rate limiting incluido (no rompe si se inicializa en create_app)
-#
-# ✅ 10 MEJORAS IMPORTANTES
-# 1) Removido psycopg-binary (conflicta / no recomendado en prod si ya usás psycopg)
-# 2) Versiones compatibles Flask 3.x / Werkzeug 3.x (sin mismatch)
-# 3) SQLAlchemy + Alembic alineados (menos errores de migración)
-# 4) Cache/perf ordenado y “safe defaults”
-# 5) Extras opcionales comentados pero listos
-# 6) Pinning consistente: evita “works on my machine”
-# 7) Dependencias duplicadas evitadas
-# 8) Se mantiene WTForms/Flask-WTF por compat con tus forms actuales
-# 9) Se mantiene Talisman/Limiter/Compress/Caching como stack pro estable
-# 10) Sin paquetes “raros” que rompan wheels en Render (mínimo riesgo)
+# - Rate limiting incluido
 # ============================================================
 
 
@@ -38,6 +26,11 @@ python-dotenv==1.0.1
 gunicorn==22.0.0
 # waitress==3.0.0  # Windows (opcional)
 
+# ✅ Mejora #3 (opcional): mejor concurrencia I/O (si lo querés)
+# gevent==24.2.1
+# ✅ Mejora #3 (opcional): nombres de proceso útiles en monitoreo
+# setproctitle==1.3.3
+
 
 # ============================================================
 # HTTP / CLIENTES API
@@ -56,11 +49,15 @@ Flask-SQLAlchemy==3.1.1
 SQLAlchemy==2.0.36
 Flask-Migrate==4.0.7
 alembic==1.14.0
-greenlet==3.3.0
+
+# ✅ Mejora #4: greenlet estable para SQLAlchemy 2.x + Py3.11
+greenlet==3.1.1
 
 # PostgreSQL (Render / Producción)
 # ✅ PRO TIP: usa SOLO psycopg (no psycopg-binary) en prod
 psycopg==3.2.3
+# ✅ Mejora #1: pool explícito (útil en prod)
+psycopg-pool==3.2.3
 
 
 # ============================================================
@@ -93,7 +90,7 @@ Flask-Limiter==3.9.2
 # ============================================================
 # PERFORMANCE / STATIC / CACHE
 # ============================================================
-Flask-Compress==1.17
+Flask-Compress==1.17.0
 Flask-Caching==2.3.0
 cachelib==0.9.0
 whitenoise==6.8.2
@@ -142,8 +139,12 @@ packaging==25.0
 # OPTIONAL (LISTO PARA ESCALAR) — NO ACTIVO POR DEFECTO
 # ============================================================
 
-# Redis / Background jobs
+# ✅ Mejora #2: Redis recomendado para:
+# - Flask-Limiter (storage distribuido entre workers)
+# - Flask-Caching (cache real)
 # redis==5.0.8
+
+# Background jobs
 # rq==1.16.2
 
 # Monitoring (súper recomendado en prod)
@@ -151,3 +152,8 @@ packaging==25.0
 
 # Payments futuros
 # stripe==10.12.0
+
+# ✅ Mejora #5: tooling dev (no prod)
+# pytest==8.3.4
+# ruff==0.8.6
+# black==24.10.0
