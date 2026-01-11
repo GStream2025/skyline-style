@@ -1,12 +1,11 @@
-# wsgi.py — Skyline Store (ULTRA PRO / FINAL · Bulletproof)
+# wsgi.py — Skyline Store (ULTRA PRO / FINAL · Bulletproof v2)
 from __future__ import annotations
 
 import logging
 import os
 import sys
 import time
-from typing import Any, Optional, Tuple
-
+from typing import Any, Dict, Optional, Tuple
 
 # =============================================================================
 # Early env helpers (no side effects peligrosos)
@@ -28,6 +27,7 @@ def _bool_env(key: str, default: bool = False) -> bool:
 
 
 def _is_cloud() -> bool:
+    # Detectores típicos (Render/Railway/Fly/Heroku/Docker)
     return bool(
         os.getenv("RENDER")
         or os.getenv("RENDER_EXTERNAL_HOSTNAME")
@@ -52,9 +52,8 @@ def _normalize_env_value(raw: str) -> str:
 
 def _normalize_env() -> str:
     """
-    Mejora #1: compat limpia:
+    Compat:
     - si ENV no existe pero FLASK_ENV sí, copiamos una vez.
-    - nunca inventamos valores raros
     """
     if not os.getenv("ENV") and os.getenv("FLASK_ENV"):
         os.environ["ENV"] = os.getenv("FLASK_ENV", "production")
@@ -64,9 +63,7 @@ def _normalize_env() -> str:
 ENV = _normalize_env()
 CLOUD = _is_cloud()
 
-# Mejora #2: DEBUG determinista
-# - respeta DEBUG/FLASK_DEBUG si vienen
-# - sino DEBUG = (ENV == development)
+# DEBUG determinista
 if os.getenv("DEBUG") is not None:
     DEBUG = _bool_env("DEBUG", ENV == "development")
 elif os.getenv("FLASK_DEBUG") is not None:
@@ -87,14 +84,13 @@ if not root.handlers:
         format="%(asctime)s | %(levelname)-8s | %(name)s - %(message)s",
     )
 root.setLevel(getattr(logging, LOG_LEVEL, logging.INFO))
-
 log = logging.getLogger("wsgi")
 
-# Mejora #3: startup snapshot (sin secrets)
+# Snapshot (sin secrets)
 log.info("🚀 Skyline WSGI boot | ENV=%s DEBUG=%s CLOUD=%s", ENV, DEBUG, CLOUD)
 log.info("Python=%s | Platform=%s", sys.version.split()[0], sys.platform)
 log.info(
-    "ENV vars present: PORT=%s DATABASE_URL=%s SQLALCHEMY_DATABASE_URI=%s",
+    "ENV flags: PORT=%s DATABASE_URL=%s SQLALCHEMY_DATABASE_URI=%s",
     "yes" if os.getenv("PORT") else "no",
     "yes" if os.getenv("DATABASE_URL") else "no",
     "yes" if os.getenv("SQLALCHEMY_DATABASE_URI") else "no",
@@ -105,7 +101,8 @@ log.info(
 # Import App Factory
 # =============================================================================
 try:
-    from app import create_app  # app/__init__.py debe exponer create_app
+    # app/__init__.py debe exponer create_app
+    from app import create_app
 except Exception as e:
     log.exception("❌ No se pudo importar create_app desde app. Error: %s", e)
     raise
@@ -119,24 +116,38 @@ try:
     app = create_app()
     log.info("✅ create_app() OK en %.3fs", time.time() - t0)
 except Exception as e:
+    # Mejora: contexto útil sin exponer secretos
     log.exception("❌ create_app() falló. Error: %s", e)
+    log.error("Contexto: ENV=%s DEBUG=%s CLOUD=%s", ENV, DEBUG, CLOUD)
     raise
 
 
 # =============================================================================
-# ProxyFix (solo si corresponde)
+# ProxyFix (solo si corresponde y si NO está aplicado)
 # =============================================================================
+def _is_proxyfix_applied(wsgi_app: Any) -> bool:
+    # Evita doble ProxyFix si ya lo aplicaste en create_app()
+    try:
+        return wsgi_app.__class__.__name__ == "ProxyFix"
+    except Exception:
+        return False
+
+
 try:
     from werkzeug.middleware.proxy_fix import ProxyFix
 
-    # Mejora #4: prioridad al config del app
     trust_proxy_cfg = bool(app.config.get("TRUST_PROXY_HEADERS", False))
     trust_proxy_env = _bool_env("TRUST_PROXY_HEADERS", False)
 
-    if CLOUD or trust_proxy_cfg or trust_proxy_env:
+    should_apply = bool(CLOUD or trust_proxy_cfg or trust_proxy_env)
+    already = _is_proxyfix_applied(getattr(app, "wsgi_app", None))
+
+    if should_apply and not already:
         # Render típico: 1 hop
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)  # type: ignore[attr-defined]
         log.info("✅ ProxyFix habilitado (x_for=1 x_proto=1 x_host=1 x_prefix=1)")
+    elif should_apply and already:
+        log.info("ℹ️ ProxyFix ya estaba aplicado (omitido)")
     else:
         log.info("ℹ️ ProxyFix omitido (no cloud y TRUST_PROXY_HEADERS=0)")
 except Exception as e:
@@ -144,7 +155,7 @@ except Exception as e:
 
 
 # =============================================================================
-# Health / Ready endpoints (no rompen si ya existen)
+# Health / Ready endpoints (solo si no existen)
 # =============================================================================
 def _has_rule(rule_path: str) -> bool:
     try:
@@ -156,8 +167,8 @@ def _has_rule(rule_path: str) -> bool:
 def _db_ping() -> Tuple[bool, Optional[str], Optional[float]]:
     """
     Ready check real:
-    - si NO hay SQLALCHEMY_DATABASE_URI, no intentamos ping (evita crash y logs feos)
-    - intenta ejecutar SELECT 1 con SQLAlchemy
+    - si NO hay SQLALCHEMY_DATABASE_URI, no intentamos ping
+    - ejecuta SELECT 1 con SQLAlchemy
     """
     t0 = time.time()
     try:
@@ -165,44 +176,36 @@ def _db_ping() -> Tuple[bool, Optional[str], Optional[float]]:
         if not uri:
             return False, "SQLALCHEMY_DATABASE_URI missing", (time.time() - t0)
 
-        # Intento 1: usar app.models.text (si existe)
-        try:
-            from app.models import db as _db  # type: ignore
-            from app.models import text as _text  # type: ignore
-            _db.session.execute(_text("SELECT 1"))  # type: ignore[attr-defined]
-            return True, None, (time.time() - t0)
-        except Exception:
-            # Intento 2: fallback directo sqlalchemy.text
-            from app.models import db as _db  # type: ignore
-            from sqlalchemy import text as sa_text  # type: ignore
-            _db.session.execute(sa_text("SELECT 1"))  # type: ignore[attr-defined]
-            return True, None, (time.time() - t0)
+        from app.models import db  # type: ignore
+        from sqlalchemy import text
 
+        db.session.execute(text("SELECT 1"))
+        return True, None, (time.time() - t0)
     except Exception as e:
-        return False, str(e), (time.time() - t0)
+        return False, (str(e) or "db_error")[:240], (time.time() - t0)
 
 
-# /health: liviano (para balanceadores)
+# /health: liviano (liveness)
 try:
     if not _has_rule("/health"):
 
         @app.get("/health")
-        def health() -> Tuple[dict[str, Any], int]:  # pragma: no cover
-            return {"ok": True, "service": "skyline-store"}, 200
+        def health() -> Tuple[Dict[str, Any], int]:  # pragma: no cover
+            return {"ok": True, "service": "skyline-store", "env": ENV}, 200
 
         log.info("✅ /health agregado desde wsgi")
 except Exception:
     pass
 
 
-# /ready: chequea DB (para deploys/rollouts)
+# /ready: readiness (con ping DB)
 try:
     if not _has_rule("/ready"):
 
         @app.get("/ready")
-        def ready() -> Tuple[dict[str, Any], int]:  # pragma: no cover
+        def ready() -> Tuple[Dict[str, Any], int]:  # pragma: no cover
             ok, err, dt = _db_ping()
-            payload: dict[str, Any] = {
+            payload: Dict[str, Any] = {
                 "ok": bool(ok),
                 "service": "skyline-store",
                 "env": (app.config.get("ENV") or ENV),
