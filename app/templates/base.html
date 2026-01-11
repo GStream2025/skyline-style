@@ -1,10 +1,13 @@
-{# app/templates/base.html — Skyline Store (ULTRA PRO ENTERPRISE · v4.3 FINAL)
+{# app/templates/base.html — Skyline Store (ULTRA PRO ENTERPRISE · v4.4 FINAL)
    ✅ NO 500 / FAIL-SAFE
    FIXES:
-   - Nunca llama url_for() si el endpoint NO existe (safe_url macro)
-   - CSRF meta + auto-inject a forms (sin usar "is callable" que rompe Jinja)
+   - Jinja: NO soporta **kwargs en macros → safe_url corregido
+   - safe_url NUNCA llama url_for() si endpoint no existe
+   - CSRF meta robusto (callable o string) sin romper
    - current_user bulletproof
    - Cart badge fail-silent (sin consola roja)
+   - Canonical + OG safe
+   - CSP safe defaults
    - Orden correcto de CSS: skyline-pro -> components -> page extra
 #}
 <!doctype html>
@@ -17,9 +20,10 @@
   {# ---------- Safe helpers ---------- #}
   {% set _vf = (view_functions if view_functions is defined and view_functions else {}) %}
 
-  {% macro safe_url(endpoint, fallback='/', **kwargs) -%}
-    {%- if endpoint in _vf -%}
-      {{- url_for(endpoint, **kwargs) -}}
+  {# ✅ Jinja NO soporta **kwargs en macros. Esta macro es 100% compatible. #}
+  {% macro safe_url(endpoint, fallback='/') -%}
+    {%- if endpoint and endpoint in _vf -%}
+      {{- url_for(endpoint) -}}
     {%- else -%}
       {{- fallback -}}
     {%- endif -%}
@@ -41,7 +45,7 @@
   {% set _canonical = (request.base_url if request is defined and request.base_url else '/') %}
   <link rel="canonical" href="{{ _canonical }}">
 
-  {# OG image: si viene og_image (ya resuelto) lo usa; si no, fallback static #}
+  {# OG image safe #}
   {% set _og_img = (og_image if og_image is defined and og_image else url_for('static', filename='img/og.png', _external=True)) %}
   <meta property="og:title" content="{{ meta_title or APP_NAME or 'Skyline Store' }}">
   <meta property="og:description" content="{{ meta_description or 'Marketplace premium de tecnología y streetwear.' }}">
@@ -54,7 +58,7 @@
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
 
-  {# CSP: mantener simple. Si usás Talisman, esto no estorba; si no, igual ayuda. #}
+  {# CSP: simple y seguro. Si usás Talisman, esto no estorba. #}
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'self';
                  base-uri 'self';
@@ -70,14 +74,18 @@
   <meta name="color-scheme" content="light dark">
   <meta name="theme-color" content="#2563eb">
 
-  {# ✅ CSRF (SIN 'is callable' que NO existe en Jinja y te rompe)
-     Flask-WTF normalmente expone csrf_token() como función global.
-     Si no existe, queda vacío y no rompe.
+  {# ✅ CSRF robusto:
+     - Si csrf_token es callable → csrf_token()
+     - Si csrf_token es string → lo usa
+     - Si no existe → vacío (no rompe)
   #}
   {% set _csrf_value = '' %}
   {% if csrf_token is defined %}
-    {# En Flask-WTF real: csrf_token() existe. Si no, no entra. #}
-    {% set _csrf_value = csrf_token() %}
+    {% if csrf_token is callable %}
+      {% set _csrf_value = csrf_token() %}
+    {% else %}
+      {% set _csrf_value = csrf_token|string %}
+    {% endif %}
   {% endif %}
   <meta name="csrf-token" content="{{ _csrf_value }}">
 
@@ -137,10 +145,8 @@
 
 {# current_user bulletproof #}
 {% set _user_ok = false %}
-{% if current_user is defined and current_user %}
-  {% if current_user.is_authenticated is defined and current_user.is_authenticated %}
-    {% set _user_ok = true %}
-  {% endif %}
+{% if current_user is defined and current_user and current_user.is_authenticated is defined and current_user.is_authenticated %}
+  {% set _user_ok = true %}
 {% endif %}
 
 <header class="topbar" role="banner">
@@ -274,9 +280,10 @@
   // Search trim
   const q = $('.searchbar input[name="q"]');
   if (q) {
-    q.addEventListener('change', () => q.value = (q.value||'').trim());
+    const trim = () => { q.value = (q.value||'').trim(); };
+    q.addEventListener('change', trim);
     const form = q.closest('form');
-    if (form) form.addEventListener('submit', () => q.value = (q.value||'').trim());
+    if (form) form.addEventListener('submit', trim);
   }
 
   // Shortcut "/" focus search
