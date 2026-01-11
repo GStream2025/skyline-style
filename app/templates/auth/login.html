@@ -2,25 +2,62 @@
 {% block title %}Ingresar | Skyline Store{% endblock %}
 
 {% block extra_head %}
+  <link rel="preload" as="style" href="{{ url_for('static', filename='css/login.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
   <meta name="robots" content="{{ 'index,follow' if ENV == 'production' else 'noindex,nofollow' }}">
 
-  {# +5 mejoras diseño: micro-estilos safe (no rompe tu CSS) #}
+  {# CSRF meta (para JS/fetch si se usa) #}
+  {% if csrf_token is defined and csrf_token is callable %}
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+  {% else %}
+    <meta name="csrf-token" content="">
+  {% endif %}
+
+  {# + Diseño/animaciones "safe" (no rompe tu CSS principal) #}
   <style>
+    .ss-login{position:relative}
+    .ss-login__card{animation:popIn .42s ease both}
+    @keyframes popIn{from{opacity:0;transform:translateY(10px) scale(.99)}to{opacity:1;transform:none}}
+
     .ss-login__head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
     .ss-login__head h2{margin:0;font-size:1.35rem;letter-spacing:-.02em}
     .ss-login__head small{display:block;opacity:.75;margin-top:2px}
-    .ss-login__secure{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;border:1px solid rgba(0,0,0,.12);font-size:.9rem}
+
+    .ss-login__secure{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;border:1px solid rgba(0,0,0,.12);font-size:.9rem;backdrop-filter:saturate(120%) blur(6px)}
+    .ss-login__secure .dot{width:8px;height:8px;border-radius:50%;background:currentColor;opacity:.7}
+
     .ss-login__divider{display:flex;align-items:center;gap:12px;margin:14px 0;opacity:.85}
     .ss-login__divider:before,.ss-login__divider:after{content:"";flex:1;height:1px;background:rgba(0,0,0,.12)}
     .ss-login__divider span{font-size:.85rem}
-    .ss-login__input:focus{outline:0;box-shadow:0 0 0 4px rgba(0,0,0,.08)}
-    .ss-login__flash{border-radius:14px;padding:10px 12px;border:1px solid rgba(0,0,0,.10)}
+
+    .ss-login__flash{border-radius:14px;padding:10px 12px;border:1px solid rgba(0,0,0,.10);animation:fadeSlide .35s ease both}
+    @keyframes fadeSlide{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
     .ss-login__flash.error{border-color:rgba(220,38,38,.25)}
     .ss-login__flash.success{border-color:rgba(34,197,94,.25)}
-    .ss-login__submit[aria-busy="true"]{opacity:.85;cursor:progress}
+    .ss-login__flash.warning{border-color:rgba(245,158,11,.25)}
+
+    .ss-login__input{transition:box-shadow .2s ease,transform .2s ease,border-color .2s ease}
+    .ss-login__input:focus{outline:0;box-shadow:0 0 0 4px rgba(0,0,0,.08);transform:translateY(-1px)}
+    .ss-login__input[aria-invalid="true"]{border-color:rgba(220,38,38,.35)}
+
+    .ss-login__submit{position:relative;overflow:hidden}
+    .ss-login__submit:after{content:"";position:absolute;inset:0;transform:translateX(-120%);background:linear-gradient(90deg,transparent,rgba(255,255,255,.22),transparent)}
+    .ss-login__submit:hover:after{animation:shine 1.1s ease}
+    @keyframes shine{to{transform:translateX(120%)}}
+
+    .ss-login__submit[aria-busy="true"]{opacity:.88;cursor:progress}
     .ss-login__spinner{width:16px;height:16px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;display:inline-block;vertical-align:-3px;animation:sspin .9s linear infinite}
     @keyframes sspin{to{transform:rotate(360deg)}}
+
+    .ss-login__pass-wrap{display:flex;gap:8px;align-items:center}
+    .ss-login__pass-toggle{border-radius:10px;border:1px solid rgba(0,0,0,.12);padding:8px 10px;background:transparent;cursor:pointer;transition:transform .15s ease}
+    .ss-login__pass-toggle:active{transform:scale(.98)}
+
+    @media (prefers-reduced-motion: reduce){
+      .ss-login__card,.ss-login__flash{animation:none}
+      .ss-login__submit:hover:after{animation:none}
+      .ss-login__spinner{animation:none}
+    }
     @media (max-width: 520px){
       .ss-login__head h2{font-size:1.25rem}
       .ss-login__divider{margin:12px 0}
@@ -30,54 +67,35 @@
 
 {% block content %}
 {# ---------------------------------------------------------
-   LOGIN — Skyline Store (ULTRA PRO / NO BREAK · FINAL)
-   ✅ Endpoints safe
-   ✅ CSRF único (compat Flask-WTF/CSRFProtect)
-   ✅ next sanitizado (anti open-redirect)
-   ✅ UX + accesibilidad
+   LOGIN — Skyline Store (ULTRA PRO / NO BREAK · v2)
+   ✅ Endpoints safe (no BuildError)
+   ✅ CSRF único, compatible Flask-WTF y CSRFProtect
+   ✅ next hardening (solo paths internos)
+   ✅ UX: anim, toggle pass, submit safe, a11y
 ---------------------------------------------------------- #}
 
-{% set _vf = (view_functions if view_functions is defined and view_functions else {}) %}
-
-{# ---------- safe endpoints ---------- #}
-{% set login_ep = 'auth.login' %}
-{% if login_ep not in _vf %}{% set login_ep = None %}{% endif %}
-
-{% set register_ep = 'auth.register' %}
-{% if register_ep not in _vf %}{% set register_ep = None %}{% endif %}
-
-{% set shop_ep = 'shop.shop' %}
-{% if shop_ep not in _vf %}{% set shop_ep = None %}{% endif %}
-
-{% set forgot_ep = 'auth.forgot' %}
-{% if forgot_ep not in _vf %}{% set forgot_ep = None %}{% endif %}
+{# ---------- SAFE URL RESOLVER (NO-BREAK) ---------- #}
+{% macro safe_url(endpoint, fallback='/', **kwargs) -%}
+  {%- set vf = (view_functions if view_functions is defined and view_functions else {}) -%}
+  {%- if endpoint and endpoint in vf -%}
+    {{- url_for(endpoint, **kwargs) -}}
+  {%- else -%}
+    {{- fallback -}}
+  {%- endif -%}
+{%- endmacro %}
 
 {# ---------- next safe (evita redirección externa) ---------- #}
-{% set _raw_next = (next if next is defined and next else request.args.get('next', '')) %}
+{% set _raw_next = (next|default(request.args.get('next',''), true)|string).strip() %}
 {% set nxt = _raw_next %}
-{% if nxt and ('://' in nxt or nxt.startswith('//')) %}
+{% if not nxt or not nxt.startswith('/') or nxt.startswith('//') %}
   {% set nxt = '' %}
 {% endif %}
 
-{% set login_action = '/account' %}
-{% if login_ep %}
-  {% set login_action = url_for(login_ep, next=nxt) %}
-{% endif %}
-
-{% set register_url = '/account' %}
-{% if register_ep %}
-  {% set register_url = url_for(register_ep, next=nxt) %}
-{% endif %}
-
-{% set shop_url = '/shop' %}
-{% if shop_ep %}
-  {% set shop_url = url_for(shop_ep) %}
-{% endif %}
-
-{% set forgot_url = '' %}
-{% if forgot_ep %}
-  {% set forgot_url = url_for(forgot_ep) %}
-{% endif %}
+{# ---------- urls ---------- #}
+{% set login_action  = safe_url('auth.login',    '/auth/login',    next=nxt) %}
+{% set register_url  = safe_url('auth.register', '/auth/register', next=nxt) %}
+{% set shop_url      = safe_url('shop.shop',     '/shop') %}
+{% set forgot_url    = safe_url('auth.forgot',   '') %}
 
 <section class="ss-login" aria-label="Ingresar">
   <div class="ss-login__card">
@@ -118,7 +136,7 @@
           <small>Accedé a tu cuenta para comprar más rápido.</small>
         </div>
         <span class="ss-login__secure" title="Conexión segura" aria-label="Conexión segura">
-          🔒 <span>Seguro</span>
+          <span class="dot" aria-hidden="true"></span> Seguro
         </span>
       </div>
 
@@ -141,9 +159,11 @@
             novalidate
             autocomplete="on">
 
-        {# -------------------------
-           CSRF (UNICO / NO DUPLICA)
-        -------------------------- #}
+        {# =========================
+           CSRF (ÚNICO)
+           - Flask-WTF: hidden_tag() crea csrf_token + session
+           - CSRFProtect: <input name="csrf_token" value="...">
+        ========================== #}
         {% if form is defined and form.hidden_tag is defined %}
           {{ form.hidden_tag() }}
         {% elif form is defined and form.csrf_token is defined %}
@@ -154,11 +174,6 @@
           {% else %}
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
           {% endif %}
-        {% endif %}
-
-        {# NONCE opcional #}
-        {% if nonce is defined and nonce %}
-          <input type="hidden" name="nonce" value="{{ nonce }}">
         {% endif %}
 
         {# NEXT #}
@@ -207,7 +222,7 @@
                    type="password"
                    name="password"
                    required
-                   minlength="6"
+                   minlength="8"
                    autocomplete="current-password"
                    aria-describedby="passHint"
                    placeholder="Tu contraseña">
@@ -248,23 +263,58 @@
   </div>
 </section>
 
-<script defer src="{{ url_for('static', filename='js/login.js') }}"></script>
+<script defer src="{{ url_for('static', filename='js/login.js') }}?v=2"></script>
 
-{# UX micro: submit disable + loader accesible #}
 <script>
 (() => {
   const f = document.getElementById("loginForm");
   const b = document.getElementById("submitBtn");
+  const email = document.getElementById("email");
+  const pass = document.getElementById("password");
+  const tgl = document.getElementById("togglePass");
+
   if (!f || !b) return;
   if (f.dataset.bound === "1") return;
   f.dataset.bound = "1";
 
-  f.addEventListener("submit", () => {
+  // Toggle password (a11y)
+  if (tgl && pass) {
+    tgl.addEventListener("click", () => {
+      const isPwd = pass.type === "password";
+      pass.type = isPwd ? "text" : "password";
+      tgl.setAttribute("aria-pressed", String(isPwd));
+      tgl.setAttribute("aria-label", isPwd ? "Ocultar contraseña" : "Mostrar contraseña");
+    });
+  }
+
+  // Client-side hints (no bloquea server)
+  const markInvalid = (el, bad) => {
+    if (!el) return;
+    el.setAttribute("aria-invalid", bad ? "true" : "false");
+  };
+
+  f.addEventListener("submit", (ev) => {
+    // Validación mínima
+    const eok = email ? email.value.trim().length >= 6 : true;
+    const pok = pass ? pass.value.length >= 8 : true;
+    markInvalid(email, !eok);
+    markInvalid(pass, !pok);
+
+    if (!eok || !pok) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      b.disabled = false;
+      b.removeAttribute("aria-busy");
+      b.textContent = "Entrar";
+      return;
+    }
+
+    // Submit safe (evita doble post + token mismatch por doble submit)
     if (b.disabled) return;
     b.disabled = true;
     b.setAttribute("aria-busy", "true");
     b.innerHTML = '<span class="ss-login__spinner" aria-hidden="true"></span> Ingresando...';
-  }, { passive: true });
+  }, { passive: false });
 })();
 </script>
 {% endblock %}

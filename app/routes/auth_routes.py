@@ -1,4 +1,4 @@
-# app/routes/auth_routes.py — Skyline Store (ULTRA PRO / FINAL / NO BREAK)
+# app/routes/auth_routes.py — Skyline Store (ULTRA PRO / BULLETPROOF v2)
 from __future__ import annotations
 
 import logging
@@ -6,9 +6,10 @@ import os
 import re
 import secrets
 import time
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Tuple
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 
 from flask import (
     Blueprint,
@@ -20,6 +21,7 @@ from flask import (
     request,
     session,
     url_for,
+    make_response,
 )
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from sqlalchemy import select
@@ -35,16 +37,15 @@ except Exception:
 
 log = logging.getLogger("auth_routes")
 
-# ✅ Blueprint estable: /auth/...
 auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
 
 _TRUE = {"1", "true", "yes", "y", "on", "checked"}
 _FALSE = {"0", "false", "no", "n", "off"}
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
-# ============================================================
+# =============================================================================
 # ENV helpers
-# ============================================================
+# =============================================================================
 
 def _env_flag(name: str, default: bool = False) -> bool:
     v = os.getenv(name)
@@ -77,26 +78,24 @@ AUTH_RATE_LIMIT_SECONDS = _env_float("AUTH_RATE_LIMIT_SECONDS", 2.0, min_v=0.1, 
 
 VERIFY_EMAIL_REQUIRED = _env_flag("VERIFY_EMAIL_REQUIRED", True)
 VERIFY_ADMIN_TOO = _env_flag("VERIFY_ADMIN_TOO", False)
-VERIFY_TOKEN_MAX_AGE_SEC = _env_int(
-    "VERIFY_TOKEN_MAX_AGE_SEC",
-    60 * 60 * 24,
-    min_v=60,
-    max_v=60 * 60 * 24 * 14,
-)
+VERIFY_TOKEN_MAX_AGE_SEC = _env_int("VERIFY_TOKEN_MAX_AGE_SEC", 60 * 60 * 24, min_v=60, max_v=60 * 60 * 24 * 14)
 RESEND_VERIFY_COOLDOWN_SEC = _env_int("RESEND_VERIFY_COOLDOWN_SEC", 60, min_v=10, max_v=3600)
 
-# ✅ CSRF compat:
-# - Si tu create_app() ya valida CSRF global, esto puede quedar en 0.
-# - Si querés validación extra SOLO en auth, poné AUTH_REQUIRE_CSRF=1
+# IMPORTANTE:
+# - Si ya tenés CSRFProtect global (tu app lo tiene), dejá esto en 0.
+# - Si querés check extra local, ponelo en 1.
 AUTH_REQUIRE_CSRF = _env_flag("AUTH_REQUIRE_CSRF", False)
 
-# ✅ Nonce anti doble submit / replay (evita “doble click”, back/forward, etc.)
+# Nonce anti-doble-submit
 FORM_NONCE_TTL = _env_int("AUTH_FORM_NONCE_TTL", 20 * 60, min_v=30, max_v=60 * 60)
 
+# Canonical host (para cortar el 90% de CSRF mismatch en Render)
+CANONICAL_HOST_ENFORCE = _env_flag("CANONICAL_HOST_ENFORCE", True)
 
-# ============================================================
+
+# =============================================================================
 # Helpers generales
-# ============================================================
+# =============================================================================
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
@@ -135,13 +134,13 @@ def _wants_json() -> bool:
 def _json_or_redirect(message: str, category: str, endpoint: str, **kwargs):
     """
     Dual response:
-    - JSON => {"ok", "message", "redirect?"}
-    - HTML => flash + redirect
+      - JSON => {"ok","message","redirect?","code?"}
+      - HTML => flash + redirect
     """
     if _wants_json():
         ok = category not in {"error", "warning"}
         status = 400 if not ok else 200
-        payload: Dict[str, Any] = {"ok": ok, "message": message}
+        payload: Dict[str, Any] = {"ok": ok, "message": message, "category": category}
         redir = kwargs.pop("_redirect", None)
         if redir:
             payload["redirect"] = redir
@@ -155,10 +154,11 @@ def _is_safe_next(nxt: str) -> bool:
     if not nxt:
         return False
     nxt = nxt.strip()
-    if not nxt.startswith("/"):
+    # SOLO paths internos
+    if not nxt.startswith("/") or nxt.startswith("//"):
         return False
     p = urlparse(nxt)
-    return p.scheme == "" and p.netloc == ""
+    return (p.scheme == "" and p.netloc == "")
 
 def _next_url(default_url: str) -> str:
     nxt = (request.args.get("next") or request.form.get("next") or "").strip()
@@ -206,39 +206,91 @@ def _read_bool_field(name: str) -> bool:
     return v in _TRUE
 
 
-# ============================================================
-# CSRF compat (WTForms o sesión)
-# ============================================================
+# =============================================================================
+# Canonical host (MEJORA #1 anti-CSRF mismatch por host)
+# =============================================================================
+
+def _canonical_redirect_if_needed() -> Optional[Any]:
+    """
+    Si APP_URL está definido, fuerza el host/scheme.
+    Esto evita que navegues con 2 hosts distintos y pierdas la cookie => CSRF mismatch.
+    """
+    if not CANONICAL_HOST_ENFORCE:
+        return None
+    if (os.getenv("ENV") or "").lower() != "production":
+        return None
+    app_url = (os.getenv("APP_URL") or "").strip()
+    if not app_url:
+        return None
+
+    try:
+        target = urlparse(app_url)
+        cur = urlparse(request.url)
+        if not target.scheme or not target.netloc:
+            return None
+
+        # Si ya coincide host y scheme, ok
+        if cur.netloc == target.netloc and cur.scheme == target.scheme:
+            return None
+
+        # Solo redirigimos GET/HEAD para no romper POST
+        if request.method not in {"GET", "HEAD"}:
+            return None
+
+        new = cur._replace(scheme=target.scheme, netloc=target.netloc)
+        return redirect(urlunparse(new), code=301)
+    except Exception:
+        return None
+
+
+@auth_bp.before_request
+def _before_auth():
+    red = _canonical_redirect_if_needed()
+    if red is not None:
+        return red
+    return None
+
+
+@auth_bp.after_request
+def _after_auth(resp):
+    # MEJORA #2: no-cache en pantallas de auth (evita token viejo por back/forward)
+    if request.path.startswith(("/auth/login", "/auth/register", "/auth/verify-notice")) and request.method == "GET":
+        resp.headers["Cache-Control"] = "no-store"
+        resp.headers["Pragma"] = "no-cache"
+        resp.headers["Vary"] = "Cookie"
+
+    # Headers seguros sin romper Talisman
+    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+    resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    return resp
+
+
+# =============================================================================
+# CSRF compat (MEJORA #3: valida con Flask-WTF si existe, sin pelearse)
+# =============================================================================
 
 def _csrf_ok() -> bool:
-    """
-    ✅ No rompe si falta token.
-    ✅ Acepta:
-      - form csrf_token
-      - header X-CSRF-Token
-      - json csrf_token
-    """
     if request.method not in {"POST", "PUT", "PATCH", "DELETE"}:
         return True
     if not AUTH_REQUIRE_CSRF:
         return True
 
-    stored = (session.get("csrf_token") or "").strip()
-    if not stored:
-        return True  # tolerante
-
-    sent = (request.form.get("csrf_token") or request.headers.get("X-CSRF-Token") or "").strip()
-    if sent and secrets.compare_digest(sent, stored):
+    # Intento 1: usar validate_csrf de Flask-WTF si está
+    try:
+        from flask_wtf.csrf import validate_csrf  # type: ignore
+        token = (request.form.get("csrf_token") or request.headers.get("X-CSRF-Token") or "").strip()
+        if not token:
+            data = _safe_get_json()
+            token = str(data.get("csrf_token") or "").strip()
+        validate_csrf(token)  # levanta excepción si falla
         return True
-
-    data = _safe_get_json()
-    sent2 = (str(data.get("csrf_token") or "")).strip()
-    return bool(sent2) and secrets.compare_digest(sent2, stored)
+    except Exception:
+        return False
 
 
-# ============================================================
-# Nonce anti doble submit / replay
-# ============================================================
+# =============================================================================
+# Nonce anti doble submit / replay (MEJORA #4: tolerante + rotación)
+# =============================================================================
 
 def _new_form_nonce(key: str) -> str:
     tok = secrets.token_urlsafe(20)
@@ -271,9 +323,9 @@ def _check_form_nonce(key: str) -> bool:
     return True
 
 
-# ============================================================
-# Rate limit (session + ip)
-# ============================================================
+# =============================================================================
+# Rate limit (session + ip) (MEJORA #5)
+# =============================================================================
 
 def _rl_key(prefix: str) -> str:
     return f"rl:{prefix}:{_client_ip()}"
@@ -316,20 +368,26 @@ def _rate_limit_email_ok(prefix: str, email: str, cooldown: int) -> Tuple[bool, 
     return True, 0
 
 
-# ============================================================
-# Session user
-# ============================================================
+# =============================================================================
+# Session user (MEJORA #6: rotación segura)
+# =============================================================================
 
-def _clear_session_keep_csrf() -> None:
-    keep = session.get_toggle if False else None  # type: ignore[attr-defined]
-    _keep = session.get("csrf_token")
+def _session_rotate(keep_keys: Tuple[str, ...] = ("csrf_token",)) -> None:
+    kept: Dict[str, Any] = {}
+    for k in keep_keys:
+        if k in session:
+            kept[k] = session.get(k)
     try:
         session.clear()
     except Exception:
         for k in list(session.keys()):
             session.pop(k, None)
-    if _keep:
-        session["csrf_token"] = _keep
+    for k, v in kept.items():
+        session[k] = v
+    session.modified = True
+
+def _clear_session_keep_csrf() -> None:
+    _session_rotate(keep_keys=("csrf_token",))
 
 def _get_current_user() -> Optional[User]:
     uid = session.get("user_id")
@@ -346,14 +404,8 @@ def _get_current_user() -> Optional[User]:
         return None
 
 def _set_session_user(user: User) -> None:
-    keep = session.get("csrf_token")
-    try:
-        session.clear()
-    except Exception:
-        for k in list(session.keys()):
-            session.pop(k, None)
-    if keep:
-        session["csrf_token"] = keep
+    # Rotamos para evitar fixation
+    _session_rotate(keep_keys=("csrf_token",))
 
     session["user_id"] = int(getattr(user, "id"))
     session["user_email"] = (getattr(user, "email", "") or "").lower()
@@ -378,9 +430,9 @@ def _post_login_redirect(user: User) -> str:
     return "/"
 
 
-# ============================================================
-# Email verification (token)
-# ============================================================
+# =============================================================================
+# Email verification
+# =============================================================================
 
 def _serializer() -> URLSafeTimedSerializer:
     secret = (current_app.config.get("SECRET_KEY") or os.getenv("SECRET_KEY") or "").strip()
@@ -417,11 +469,7 @@ def _set_user_verified(user: User) -> None:
             pass
 
 def _make_verify_token(user: User) -> str:
-    data = {
-        "uid": int(getattr(user, "id")),
-        "email": (getattr(user, "email", "") or "").lower(),
-        "v": 1,
-    }
+    data = {"uid": int(getattr(user, "id")), "email": (getattr(user, "email", "") or "").lower(), "v": 1}
     return _serializer().dumps(data)
 
 def _read_verify_token(token: str, max_age: int) -> Tuple[Optional[Dict[str, Any]], str]:
@@ -454,11 +502,7 @@ def _send_email_verify(user: User, *, force: bool = False) -> bool:
         return False
 
     if not force:
-        ok_rl, _left = _rate_limit_email_ok(
-            "verify",
-            getattr(user, "email", "") or "",
-            RESEND_VERIFY_COOLDOWN_SEC,
-        )
+        ok_rl, _left = _rate_limit_email_ok("verify", getattr(user, "email", "") or "", RESEND_VERIFY_COOLDOWN_SEC)
         if not ok_rl:
             return False
 
@@ -493,23 +537,9 @@ def _send_email_verify(user: User, *, force: bool = False) -> bool:
     try:
         svc = EmailService()
         if hasattr(svc, "send_html"):
-            return bool(
-                svc.send_html(
-                    to_email=getattr(user, "email", ""),
-                    subject="Confirmá tu cuenta · Skyline Store",
-                    html=html,
-                    text=text,
-                )
-            )
+            return bool(svc.send_html(to_email=getattr(user, "email", ""), subject="Confirmá tu cuenta · Skyline Store", html=html, text=text))
         if hasattr(svc, "send"):
-            return bool(
-                svc.send(
-                    to=getattr(user, "email", ""),
-                    subject="Confirmá tu cuenta · Skyline Store",
-                    html=html,
-                    text=text,
-                )
-            )
+            return bool(svc.send(to=getattr(user, "email", ""), subject="Confirmá tu cuenta · Skyline Store", html=html, text=text))
         log.warning("EmailService existe pero no tiene send_html/send.")
         return False
     except Exception:
@@ -519,18 +549,16 @@ def _send_email_verify(user: User, *, force: bool = False) -> bool:
 def _needs_verify_gate(user: User) -> bool:
     if not VERIFY_EMAIL_REQUIRED:
         return False
-
     is_admin = bool(getattr(user, "is_admin", False))
     is_owner = bool(getattr(user, "is_owner", False))
     if (is_admin or is_owner) and not VERIFY_ADMIN_TOO:
         return False
-
     return not _user_is_verified(user)
 
 
-# ============================================================
-# DB helpers
-# ============================================================
+# =============================================================================
+# DB helper
+# =============================================================================
 
 def _get_user_by_email(email: str) -> Optional[User]:
     try:
@@ -539,9 +567,9 @@ def _get_user_by_email(email: str) -> Optional[User]:
         return None
 
 
-# ============================================================
+# =============================================================================
 # Routes
-# ============================================================
+# =============================================================================
 
 @auth_bp.route("/login", methods=["GET", "POST"])
 def login():
@@ -553,13 +581,22 @@ def login():
     nxt = _next_url(default_next)
 
     if request.method == "GET":
-        nonce = _new_form_nonce("login")  # ✅ template compat
-        return render_template("auth/login.html", next=nxt, nonce=nonce)
+        nonce = _new_form_nonce("login")
+        resp = make_response(render_template("auth/login.html", next=nxt, nonce=nonce), 200)
+        resp.headers["Cache-Control"] = "no-store"
+        return resp
 
-    # POST
+    # MEJORA #7: Honeypot anti-bot
+    if (request.form.get("website") or "").strip():
+        return _json_or_redirect("Solicitud inválida.", "error", "auth.login", next=nxt)
+
+    # Nonce
     if not _check_form_nonce("login"):
-        return _json_or_redirect("Solicitud inválida. Recargá e intentá de nuevo.", "error", "auth.login", next=nxt)
+        # regenero nonce nuevo para que el usuario no quede “pegado”
+        flash("Solicitud inválida. Recargá e intentá de nuevo.", "error")
+        return redirect(_safe_url_for("auth.login", next=nxt) or "/auth/login")
 
+    # CSRF extra opcional (si lo activaste)
     if not _csrf_ok():
         return _json_or_redirect("Sesión expirada o formulario inválido.", "error", "auth.login", next=nxt)
 
@@ -567,15 +604,14 @@ def login():
         return _json_or_redirect("Demasiados intentos. Esperá un momento y reintentá.", "warning", "auth.login", next=nxt)
 
     data = _safe_get_json()
-    email = _safe_email((_safe_str_field("email", 255) or str(data.get("email") or "")))
-    password = ((_safe_str_field("password", 256)) or str(data.get("password") or "")).strip()
+    email = _safe_email(_safe_str_field("email", 255) or str(data.get("email") or ""))
+    password = (_safe_str_field("password", 256) or str(data.get("password") or "")).strip()
     nxt_safe = _next_url("")
 
     if not _valid_email(email) or not password:
         return _json_or_redirect("Email o contraseña incorrectos.", "error", "auth.login", next=nxt_safe)
 
     user = _get_user_by_email(email)
-
     if not user or not getattr(user, "check_password", None) or not user.check_password(password):  # type: ignore[truthy-function]
         return _json_or_redirect("Email o contraseña incorrectos.", "error", "auth.login", next=nxt_safe)
 
@@ -613,12 +649,18 @@ def register():
     nxt = _next_url(default_next)
 
     if request.method == "GET":
-        nonce = _new_form_nonce("register")  # ✅ template compat
-        return render_template("auth/register.html", next=nxt, nonce=nonce)
+        nonce = _new_form_nonce("register")
+        resp = make_response(render_template("auth/register.html", next=nxt, nonce=nonce), 200)
+        resp.headers["Cache-Control"] = "no-store"
+        return resp
 
-    # POST
+    # Honeypot
+    if (request.form.get("website") or "").strip():
+        return _json_or_redirect("Solicitud inválida.", "error", "auth.register", next=nxt)
+
     if not _check_form_nonce("register"):
-        return _json_or_redirect("Solicitud inválida. Recargá e intentá de nuevo.", "error", "auth.register", next=nxt)
+        flash("Solicitud inválida. Recargá e intentá de nuevo.", "error")
+        return redirect(_safe_url_for("auth.register", next=nxt) or "/auth/register")
 
     if not _csrf_ok():
         return _json_or_redirect("Sesión expirada o formulario inválido.", "error", "auth.register", next=nxt)
@@ -627,9 +669,9 @@ def register():
         return _json_or_redirect("Esperá un momento y reintentá.", "warning", "auth.register", next=nxt)
 
     data = _safe_get_json()
-    email = _safe_email((_safe_str_field("email", 255) or str(data.get("email") or "")))
-    password = ((_safe_str_field("password", 256)) or str(data.get("password") or "")).strip()
-    password2 = ((_safe_str_field("password2", 256)) or str(data.get("password2") or "")).strip()
+    email = _safe_email(_safe_str_field("email", 255) or str(data.get("email") or ""))
+    password = (_safe_str_field("password", 256) or str(data.get("password") or "")).strip()
+    password2 = (_safe_str_field("password2", 256) or str(data.get("password2") or "")).strip()
     name = (_safe_str_field("name", 120) or str(data.get("name") or "")).strip()
     nxt_safe = _next_url("")
 
@@ -639,9 +681,7 @@ def register():
     if len(password) < 8:
         return _json_or_redirect("La contraseña debe tener al menos 8 caracteres.", "warning", "auth.register", next=nxt_safe)
 
-    # ✅ FIX: validar confirmación (si vino)
-    # - Si el template manda password2 (tu template lo manda), exigimos match.
-    # - Si algún cliente API no manda password2, no rompe (pero podés exigirlo si querés).
+    # MEJORA #8: confirmación estricta si viene (tu template lo manda)
     if password2 and password2 != password:
         return _json_or_redirect("Las contraseñas no coinciden.", "warning", "auth.register", next=nxt_safe)
 
@@ -658,36 +698,20 @@ def register():
     except Exception:
         pass
 
-    try:
-        if hasattr(user, "is_admin"):
-            setattr(user, "is_admin", False)
-    except Exception:
-        pass
-
-    try:
-        if hasattr(user, "is_active"):
-            setattr(user, "is_active", True)
-    except Exception:
-        pass
-
-    try:
-        if hasattr(user, "email_verified"):
-            setattr(user, "email_verified", False)
-    except Exception:
-        pass
+    for attr, val in (("is_admin", False), ("is_active", True), ("email_verified", False)):
+        try:
+            if hasattr(user, attr):
+                setattr(user, attr, val)
+        except Exception:
+            pass
 
     # role
     try:
-        if want_affiliate:
-            if hasattr(user, "set_role_safe"):
-                user.set_role_safe("affiliate")  # type: ignore[attr-defined]
-            else:
-                setattr(user, "role", "affiliate")
+        role = "affiliate" if want_affiliate else "customer"
+        if hasattr(user, "set_role_safe"):
+            user.set_role_safe(role)  # type: ignore[attr-defined]
         else:
-            if hasattr(user, "set_role_safe"):
-                user.set_role_safe("customer")  # type: ignore[attr-defined]
-            else:
-                setattr(user, "role", "customer")
+            setattr(user, "role", role)
     except Exception:
         pass
 
@@ -755,13 +779,13 @@ def verify_notice():
     email = (request.args.get("email") or "").strip()
     if not email:
         email = (session.get("user_email") or "").strip()
-    # ✅ usa tu template real (según lo que venías usando)
-    return render_template("auth/verify_email.html", email=email)
+    resp = make_response(render_template("auth/verify_email.html", email=email), 200)
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
 
 
 @auth_bp.post("/resend-verification")
 def resend_verification():
-    # tolerante: si AUTH_REQUIRE_CSRF=0 no rompe
     if not _csrf_ok():
         if _wants_json():
             return jsonify({"ok": False, "message": "csrf_failed"}), 400
@@ -785,7 +809,6 @@ def resend_verification():
         return redirect(_safe_url_for("auth.verify_notice", email=email) or "/auth/verify-notice")
 
     user = _get_user_by_email(email)
-
     if not user:
         return _json_or_redirect("Si el email existe, te enviamos el enlace.", "info", "auth.verify_notice", email=email)
 
@@ -799,46 +822,11 @@ def resend_verification():
     return _json_or_redirect("Listo ✅ Te reenviamos el enlace de verificación.", "success", "auth.verify_notice", email=email)
 
 
-@auth_bp.post("/resend-verification-json")
-def resend_verification_json():
-    if not _csrf_ok():
-        return jsonify({"ok": False, "error": "csrf_failed"}), 400
-
-    data = _safe_get_json()
-    email = _safe_email(str(data.get("email") or "").strip())
-
-    if not _valid_email(email):
-        return jsonify({"ok": False, "error": "invalid_email", "message": "Email inválido."}), 400
-
-    ok_rl, left = _rate_limit_email_ok("resend", email, RESEND_VERIFY_COOLDOWN_SEC)
-    if not ok_rl:
-        resp = jsonify({"ok": False, "error": "cooldown", "message": f"Esperá {left}s.", "retry_after": left})
-        resp.status_code = 429
-        resp.headers["Retry-After"] = str(left)
-        return resp
-
-    user = _get_user_by_email(email)
-    if not user:
-        return jsonify({"ok": True, "message": "Si el email existe, te enviamos el enlace."}), 200
-
-    if _user_is_verified(user):
-        return jsonify({"ok": True, "message": "Tu email ya está verificado ✅"}), 200
-
-    ok = _send_email_verify(user, force=True)
-    if not ok:
-        return jsonify({"ok": False, "error": "send_failed", "message": "No se pudo reenviar ahora."}), 503
-
-    return jsonify({"ok": True, "message": "Listo ✅ Te reenviamos el enlace."}), 200
-
-
 @auth_bp.get("/verify-email/<token>")
 def verify_email(token: str):
     data, reason = _read_verify_token(token or "", max_age=VERIFY_TOKEN_MAX_AGE_SEC)
     if not data:
-        flash(
-            "El enlace expiró. Pedí uno nuevo." if reason == "expired" else "El enlace es inválido. Pedí uno nuevo.",
-            "error",
-        )
+        flash("El enlace expiró. Pedí uno nuevo." if reason == "expired" else "El enlace es inválido. Pedí uno nuevo.", "error")
         return redirect(_safe_url_for("auth.verify_notice") or "/auth/verify-notice")
 
     uid = data.get("uid")
