@@ -1,27 +1,25 @@
 """
-Skyline Store · Routes Package (BULLETPROOF FINAL / FULL AUTO · +20 mejoras)
-============================================================================
+Skyline Store · Routes Package (BULLETPROOF FINAL / FULL AUTO · vNEXT)
+========================================================================
 OBJETIVO: "No falta nada" + "no se rompe" + "no tocar más".
 
-✅ Registro ordenado por prioridad (core -> account -> cart/checkout -> api -> webhooks -> admin -> printful)
+✅ Registro por prioridad (core -> account -> cart/checkout -> api -> webhooks -> admin -> printful)
 ✅ Auto-scan del paquete app.routes: registra TODO blueprint encontrado
-✅ Soporta múltiples blueprints por módulo (descubre todos los Blueprint del módulo)
-✅ Autodiscovery: si símbolo no existe, igual registra los blueprints del módulo
-✅ Anti duplicados por name + origin (case-insensitive)
-✅ Disable por ENV con wildcard real: ROUTES_DISABLE="admin*,printful,app.routes.debug_routes"
+✅ Descubre múltiples Blueprints por módulo (no depende del nombre del símbolo)
+✅ Anti duplicados por bp.name + origin (CASE-INSENSITIVE)
+✅ Disable por ENV con wildcard: ROUTES_DISABLE="admin*,printful,app.routes.debug_routes"
 ✅ Prefix override por ENV: ROUTES_PREFIX_<bpname>=/algo (bpname normalizado)
 ✅ Require por ENV: ROUTES_REQUIRE="main,shop,auth,checkout,webhook"
 ✅ Strict mode:
-   - ROUTES_STRICT=1 (solo en dev) -> explota si algo falla
-   - ROUTES_STRICT_FORCE=1 -> explota siempre (debug fuerte)
-✅ Report dict estable para /health + imports_failed para depurar rápido
+   - ROUTES_STRICT=1 (solo dev)
+   - ROUTES_STRICT_FORCE=1 (siempre)
+✅ Report dict estable para debug (/health) con imports_failed + timing + counts
 
-NUEVO (+5):
-✅ ENV-aware cache busting (si cambia ENV relevante, se rescan/importa de nuevo)
-✅ Fallback prefix: usa prefix definido dentro del bp si existe (best-effort)
-✅ Normalización fuerte de bpname para ROUTES_PREFIX_ (soporta guiones/espacios)
-✅ Report con timing_ms + counts + strict
-✅ REQUIRED check con listado "have" y "missing" (incluye scan)
+NUEVO:
+✅ main primero SIEMPRE (aunque el símbolo main_bp no exista)
+✅ origin consistente: siempre "{module}.{bp.name}"
+✅ dedupe bp.name case-insensitive
+✅ report tipado sin inconsistencias
 """
 
 from __future__ import annotations
@@ -48,7 +46,6 @@ _IMPORT_ERRORS: Dict[str, str] = {}
 _SCAN_CACHE: Optional[List[str]] = None
 _SCAN_CACHE_KEY: Optional[str] = None
 
-# NUEVO: ENV key (para invalidar caches si cambia config)
 _ENV_CACHE_KEY: Optional[str] = None
 
 
@@ -64,35 +61,6 @@ def _env_bool(key: str, default: bool = False) -> bool:
 
 def _routes_debug() -> bool:
     return _env_bool("ROUTES_DEBUG", False)
-
-
-def _strict_mode(app: "Flask") -> bool:
-    """
-    - ROUTES_STRICT_FORCE=1 -> siempre strict
-    - ROUTES_STRICT=1 -> strict solo en dev
-    """
-    if _env_bool("ROUTES_STRICT_FORCE", False):
-        return True
-
-    if not _env_bool("ROUTES_STRICT", False):
-        return False
-
-    env = ""
-    try:
-        env = (app.config.get("ENV") or "").strip().lower()
-    except Exception:
-        env = ""
-
-    if not env:
-        env = (os.getenv("ENV") or os.getenv("FLASK_ENV") or "").strip().lower()
-
-    if env:
-        return env in {"development", "dev"}
-
-    try:
-        return bool(getattr(app, "debug", False))
-    except Exception:
-        return False
 
 
 def _split_csv_env(key: str) -> List[str]:
@@ -114,11 +82,37 @@ def _priority_modules() -> List[str]:
     return [x for x in _split_csv_env("ROUTES_PRIORITY") if x]
 
 
+def _strict_mode(app: "Flask") -> bool:
+    # ROUTES_STRICT_FORCE=1 -> siempre strict
+    if _env_bool("ROUTES_STRICT_FORCE", False):
+        return True
+
+    # ROUTES_STRICT=1 -> solo strict en dev
+    if not _env_bool("ROUTES_STRICT", False):
+        return False
+
+    env = ""
+    try:
+        env = (app.config.get("ENV") or "").strip().lower()
+    except Exception:
+        env = ""
+
+    if not env:
+        env = (os.getenv("ENV") or os.getenv("FLASK_ENV") or "").strip().lower()
+
+    if env:
+        return env in {"development", "dev"}
+
+    try:
+        return bool(getattr(app, "debug", False))
+    except Exception:
+        return False
+
+
 def _match_any(value: str, patterns: List[str]) -> bool:
     v = (value or "").strip().lower()
     if not v:
         return False
-
     for p in patterns:
         pat = (p or "").strip().lower()
         if not pat:
@@ -133,6 +127,7 @@ def _match_any(value: str, patterns: List[str]) -> bool:
 
 
 def _is_disabled(bp_name: str, sym_tail: str, mod_path: str, patterns: List[str]) -> bool:
+    # bp_name ya viene lower
     return (
         _match_any(bp_name, patterns)
         or _match_any(sym_tail, patterns)
@@ -142,15 +137,8 @@ def _is_disabled(bp_name: str, sym_tail: str, mod_path: str, patterns: List[str]
 
 
 def _bp_env_key(bp_name: str) -> str:
-    """
-    NUEVO: normaliza bp_name para poder usar:
-    - admin-panel -> ROUTES_PREFIX_ADMIN_PANEL
-    - "admin panel" -> ROUTES_PREFIX_ADMIN_PANEL
-    """
     s = (bp_name or "").strip().upper()
-    # reemplazos seguros
     s = s.replace("-", "_").replace(" ", "_")
-    # colapsar múltiple "_"
     while "__" in s:
         s = s.replace("__", "_")
     return s or "BLUEPRINT"
@@ -169,12 +157,9 @@ def _env_prefix_for(bp_name: str) -> Optional[str]:
 
 
 # =============================================================================
-# Cache invalidation (NEW)
+# Cache invalidation
 # =============================================================================
 def _compute_env_cache_key() -> str:
-    """
-    NUEVO: Si cambia cualquiera de estas ENV, invalidamos scan/import cache.
-    """
     keys = [
         "ROUTES_DISABLE",
         "ROUTES_REQUIRE",
@@ -185,9 +170,9 @@ def _compute_env_cache_key() -> str:
         "ROUTES_DEBUG",
         "ROUTES_STRICT",
         "ROUTES_STRICT_FORCE",
+        "ROUTES_BUST_IMPORT_CACHE",
     ]
-    # también prefijos por bp: no podemos enumerar todos, pero metemos todo el env con prefijo
-    prefix_items = []
+    prefix_items: List[str] = []
     for k, v in os.environ.items():
         if k.startswith("ROUTES_PREFIX_"):
             prefix_items.append(f"{k}={v}")
@@ -198,19 +183,16 @@ def _compute_env_cache_key() -> str:
 
 
 def _maybe_bust_caches() -> None:
-    global _ENV_CACHE_KEY, _SCAN_CACHE, _SCAN_CACHE_KEY, _MODULE_CACHE, _IMPORT_ERRORS
+    global _ENV_CACHE_KEY, _SCAN_CACHE, _SCAN_CACHE_KEY
 
     new_key = _compute_env_cache_key()
     if _ENV_CACHE_KEY == new_key:
         return
 
     _ENV_CACHE_KEY = new_key
-
-    # bust scan cache
     _SCAN_CACHE = None
     _SCAN_CACHE_KEY = None
 
-    # opcional: bust import cache si el user lo pide
     if _env_bool("ROUTES_BUST_IMPORT_CACHE", False):
         _MODULE_CACHE.clear()
         _IMPORT_ERRORS.clear()
@@ -242,7 +224,7 @@ def _safe_import_module(path: str):
         return None
 
 
-def _safe_getattr(mod, name: str):
+def _safe_getattr(mod: Any, name: str):
     try:
         return getattr(mod, name, None)
     except Exception:
@@ -259,7 +241,7 @@ def _is_blueprint(obj: Any) -> bool:
         return hasattr(obj, "name") and hasattr(obj, "register")
 
 
-def _find_blueprints_in_module(mod) -> List[Any]:
+def _find_blueprints_in_module(mod: Any) -> List[Any]:
     if not mod:
         return []
     out: List[Any] = []
@@ -270,11 +252,15 @@ def _find_blueprints_in_module(mod) -> List[Any]:
         if _is_blueprint(obj):
             out.append(obj)
 
+    # uniq por bp.name (case-insensitive)
     uniq: Dict[str, Any] = {}
     for bp in out:
         n = (getattr(bp, "name", "") or "").strip()
-        if n and n not in uniq:
-            uniq[n] = bp
+        if not n:
+            continue
+        nk = n.lower()
+        if nk not in uniq:
+            uniq[nk] = bp
     return list(uniq.values())
 
 
@@ -288,6 +274,7 @@ def _import_symbol_or_all(mod_path: str, symbol: Optional[str]) -> Tuple[List[An
         if _is_blueprint(obj):
             return [obj], None
 
+    # fallback: descubrimos todos los blueprints del módulo
     bps = _find_blueprints_in_module(mod)
     return bps, None
 
@@ -296,15 +283,10 @@ def _import_symbol_or_all(mod_path: str, symbol: Optional[str]) -> Tuple[List[An
 # Scan modules
 # =============================================================================
 def _scan_route_modules() -> List[str]:
-    """
-    Escanea app.routes y devuelve módulos: app.routes.xxx
-    ✅ cache por proceso + invalidación por ENV
-    """
     global _SCAN_CACHE, _SCAN_CACHE_KEY
 
     scan_sub = _env_bool("ROUTES_SCAN_SUBPACKAGES", False)
     key = f"sub={int(scan_sub)}"
-
     if _SCAN_CACHE is not None and _SCAN_CACHE_KEY == key:
         return list(_SCAN_CACHE)
 
@@ -328,6 +310,7 @@ def _scan_route_modules() -> List[str]:
                             continue
                         mods.append(sm.name)
                 except Exception:
+                    # no rompemos por subpkg
                     pass
 
         mods = sorted(set(mods))
@@ -359,12 +342,7 @@ def _normalize_prefix(prefix: Optional[str]) -> Optional[str]:
 
 
 def _bp_internal_prefix(bp: Any) -> Optional[str]:
-    """
-    NUEVO: best-effort: si el blueprint trae un prefix interno (poco común),
-    lo usamos como fallback, sin romper nada.
-    """
     try:
-        # algunos proyectos guardan url_prefix custom
         v = getattr(bp, "url_prefix", None) or getattr(bp, "_url_prefix", None)
         return _normalize_prefix(v)
     except Exception:
@@ -378,7 +356,7 @@ def _register_bp(
     origin: str,
     seen_names: Set[str],
     seen_origins: Set[str],
-    report: Dict[str, List[str]],
+    report: Dict[str, Any],
     url_prefix: Optional[str],
     disabled_patterns: List[str],
 ) -> None:
@@ -391,20 +369,20 @@ def _register_bp(
         report["invalid"].append(origin)
         return
 
+    bp_key = bp_name.lower()
     mod_path = origin.rsplit(".", 1)[0].strip().lower()
     sym_tail = origin.split(".")[-1].strip().lower()
 
-    if _is_disabled(bp_name.lower(), sym_tail, mod_path, disabled_patterns):
+    if _is_disabled(bp_key, sym_tail, mod_path, disabled_patterns):
         report["disabled"].append(f"{bp_name} <- {origin}")
         return
 
     origin_key = _normalize_origin(origin)
-
     if origin_key in seen_origins:
         report["duplicate"].append(f"(origin) {bp_name} <- {origin}")
         return
 
-    if bp_name in seen_names:
+    if bp_key in seen_names:
         report["duplicate"].append(f"(name) {bp_name} <- {origin}")
         return
 
@@ -418,23 +396,16 @@ def _register_bp(
         else:
             app.register_blueprint(bp)
 
-        seen_names.add(bp_name)
+        seen_names.add(bp_key)
         seen_origins.add(origin_key)
 
         report["registered"].append(
             f"{bp_name} <- {origin}" + (f" (prefix={final_prefix})" if final_prefix else "")
         )
-
     except Exception as e:
         report["failed_register"].append(f"{bp_name} <- {origin} :: {_short_exc(e)}")
-        log.warning(
-            "⚠️ No se pudo registrar blueprint '%s' (%s): %s",
-            bp_name,
-            origin,
-            e,
-            exc_info=_routes_debug(),
-        )
-        if _strict_mode(app):
+        log.warning("⚠️ No se pudo registrar blueprint '%s' (%s): %s", bp_name, origin, e, exc_info=_routes_debug())
+        if report["strict"]:
             raise
 
 
@@ -442,30 +413,31 @@ def _register_bp(
 # Specs (ajustado a tu repo)
 # =============================================================================
 def _default_specs() -> List[Tuple[str, Optional[str], Optional[str]]]:
+    # IMPORTANTE: para main/shop/auth NO amarramos al símbolo: symbol=None (fallback discovery)
     return [
-        # CORE
-        ("app.routes.main_routes", "main_bp", None),
-        ("app.routes.shop_routes", "shop_bp", None),
-        ("app.routes.auth_routes", "auth_bp", None),
+        # CORE (main primero SIEMPRE)
+        ("app.routes.main_routes", None, None),
+        ("app.routes.shop_routes", None, None),
+        ("app.routes.auth_routes", None, None),
         # USER / ACCOUNT
-        ("app.routes.account_routes", "account_bp", None),
-        ("app.routes.profile_routes", "profile_bp", None),
-        ("app.routes.address_routes", "address_bp", None),
+        ("app.routes.account_routes", None, None),
+        ("app.routes.profile_routes", None, None),
+        ("app.routes.address_routes", None, None),
         # CART / CHECKOUT
-        ("app.routes.cart_routes", "cart_bp", None),
-        ("app.routes.checkout_routes", "checkout_bp", None),
+        ("app.routes.cart_routes", None, None),
+        ("app.routes.checkout_routes", None, None),
         # API / AFFILIATE
-        ("app.routes.api_routes", "api_bp", None),
-        ("app.routes.affiliate_routes", "affiliate_bp", None),
+        ("app.routes.api_routes", None, None),
+        ("app.routes.affiliate_routes", None, None),
         # MARKETING
-        ("app.routes.marketing_routes", "marketing_bp", None),
+        ("app.routes.marketing_routes", None, None),
         # WEBHOOKS
-        ("app.routes.webhook_routes", "webhook_bp", None),
+        ("app.routes.webhook_routes", None, None),
         # ADMIN
-        ("app.routes.admin_routes", "admin_bp", None),
-        ("app.routes.admin_payments_routes", "admin_payments_bp", None),
+        ("app.routes.admin_routes", None, None),
+        ("app.routes.admin_payments_routes", None, None),
         # PRINTFUL
-        ("app.routes.printful_routes", "printful_bp", None),
+        ("app.routes.printful_routes", None, None),
     ]
 
 
@@ -481,16 +453,15 @@ def register_blueprints(app: "Flask") -> Dict[str, Any]:
     Report: dict estable y ampliado (timing/counts/strict).
     """
     t0 = time.perf_counter()
-
-    # NUEVO: bust caches si cambió ENV relevante
     _maybe_bust_caches()
 
-    seen_names: Set[str] = set()
-    seen_origins: Set[str] = set()
+    strict = _strict_mode(app)
     disabled_patterns = _disabled_patterns()
     required = _required_names()
     scan_only = _env_bool("ROUTES_SCAN_ONLY", False)
-    strict = _strict_mode(app)
+
+    seen_names: Set[str] = set()   # guardamos bp.name lower
+    seen_origins: Set[str] = set() # guardamos origin lower
 
     report: Dict[str, Any] = {
         "registered": [],
@@ -500,10 +471,10 @@ def register_blueprints(app: "Flask") -> Dict[str, Any]:
         "failed_register": [],
         "disabled": [],
         "required_missing": [],
+        "required_have": [],
         "scan_registered": [],
         "scan_skipped": [],
         "imports_failed": [],
-        # NUEVO
         "timing_ms": 0,
         "counts": {},
         "strict": strict,
@@ -513,8 +484,6 @@ def register_blueprints(app: "Flask") -> Dict[str, Any]:
     # 1) PRIORIDAD
     # -----------------------------------------
     specs = _default_specs()
-
-    # prioridad extra por ENV (se inserta ANTES del scan)
     for m in _priority_modules():
         specs.append((m, None, None))
 
@@ -528,7 +497,8 @@ def register_blueprints(app: "Flask") -> Dict[str, Any]:
                 continue
 
             for bp in bps:
-                origin = f"{mod}.{(symbol or getattr(bp, 'name', 'blueprint'))}"
+                bp_name = (getattr(bp, "name", "") or "blueprint").strip()
+                origin = f"{mod}.{bp_name}"  # ORIGIN CONSISTENTE
                 _register_bp(
                     app,
                     bp,
@@ -543,12 +513,11 @@ def register_blueprints(app: "Flask") -> Dict[str, Any]:
     # -----------------------------------------
     # 2) AUTO-SCAN
     # -----------------------------------------
-    scan_modules = _scan_route_modules()
-    for mod in scan_modules:
+    for mod in _scan_route_modules():
         bps, err = _import_symbol_or_all(mod, None)
         if not bps:
             report["scan_skipped"].append(mod + (f" :: {err}" if err else ""))
-            if err and _routes_debug():
+            if err:
                 report["imports_failed"].append(f"{mod} :: {err}")
             continue
 
@@ -570,15 +539,14 @@ def register_blueprints(app: "Flask") -> Dict[str, Any]:
                 report["scan_registered"].append(origin)
 
     # -----------------------------------------
-    # REQUIRED CHECK (por bp.name, incluye scan)
+    # REQUIRED CHECK (por bp.name real)
     # -----------------------------------------
     if required:
         have = {x.split(" <- ", 1)[0].strip().lower() for x in report["registered"]}
-        miss = sorted(list(required - have))
+        report["required_have"] = sorted(have)
+        miss = sorted(required - have)
         if miss:
             report["required_missing"] = miss
-            # NUEVO: lista lo que hay (para debug rápido)
-            report["required_have"] = sorted(list(have))
             if strict:
                 raise RuntimeError(f"ROUTES_REQUIRE faltantes: {', '.join(miss)}")
             log.warning("⚠️ ROUTES_REQUIRE faltantes: %s", ", ".join(miss))
@@ -599,29 +567,15 @@ def register_blueprints(app: "Flask") -> Dict[str, Any]:
         if report["failed_register"]:
             log.warning("⚠️ Fallos al registrar (%d): %s", len(report["failed_register"]), " | ".join(report["failed_register"]))
 
-        if report.get("required_missing"):
-            log.warning("⚠️ Required faltantes: %s", ", ".join(report["required_missing"]))
-
-        if _routes_debug():
-            if report["missing"]:
-                log.debug("ℹ️ Missing (%d): %s", len(report["missing"]), " | ".join(report["missing"]))
-            if report["invalid"]:
-                log.debug("ℹ️ Invalid (%d): %s", len(report["invalid"]), " | ".join(report["invalid"]))
-            if report["duplicate"]:
-                log.debug("ℹ️ Duplicados evitados (%d): %s", len(report["duplicate"]), " | ".join(report["duplicate"]))
-            if report["scan_skipped"]:
-                log.debug("ℹ️ Scan skipped (%d): %s", len(report["scan_skipped"]), " | ".join(report["scan_skipped"]))
-            if report["imports_failed"]:
-                # dedupe imports_failed
-                uniq = sorted(set(report["imports_failed"]))
-                report["imports_failed"] = uniq
-                log.debug("🧩 Imports fallidos (%d): %s", len(uniq), " | ".join(uniq))
+        if report["imports_failed"] and _routes_debug():
+            uniq = sorted(set(report["imports_failed"]))
+            report["imports_failed"] = uniq
+            log.debug("🧩 Imports fallidos (%d): %s", len(uniq), " | ".join(uniq))
     except Exception:
         pass
 
-    # NUEVO: timing + counts
-    dt_ms = int((time.perf_counter() - t0) * 1000)
-    report["timing_ms"] = dt_ms
+    # timing + counts
+    report["timing_ms"] = int((time.perf_counter() - t0) * 1000)
     report["counts"] = {
         "registered": len(report["registered"]),
         "scan_registered": len(report["scan_registered"]),
