@@ -1,4 +1,4 @@
-# app/routes/auth_routes.py — Skyline Store (ULTRA PRO / CSRF-SAFE / v4 FINAL)
+# app/routes/auth_routes.py — Skyline Store (ULTRA PRO / CSRF-SAFE / v4.1 FINAL)
 from __future__ import annotations
 
 import logging
@@ -35,11 +35,9 @@ except Exception:
     AffiliateProfile = None  # type: ignore
 
 log = logging.getLogger("auth_routes")
-
 auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
 
 _TRUE: Set[str] = {"1", "true", "yes", "y", "on", "checked"}
-_FALSE: Set[str] = {"0", "false", "no", "n", "off"}
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 # =============================================================================
@@ -77,16 +75,12 @@ def _env_float(name: str, default: float, *, min_v: float = 0.0, max_v: float = 
 
 
 AUTH_RATE_LIMIT_SECONDS = _env_float("AUTH_RATE_LIMIT_SECONDS", 2.0, min_v=0.1, max_v=30.0)
-
 VERIFY_EMAIL_REQUIRED = _env_flag("VERIFY_EMAIL_REQUIRED", True)
 VERIFY_ADMIN_TOO = _env_flag("VERIFY_ADMIN_TOO", False)
 VERIFY_TOKEN_MAX_AGE_SEC = _env_int("VERIFY_TOKEN_MAX_AGE_SEC", 60 * 60 * 24, min_v=60, max_v=60 * 60 * 24 * 14)
 RESEND_VERIFY_COOLDOWN_SEC = _env_int("RESEND_VERIFY_COOLDOWN_SEC", 60, min_v=10, max_v=3600)
 
-# Nonce anti doble submit (NO toca CSRF, sólo replay/UX)
 FORM_NONCE_TTL = _env_int("AUTH_FORM_NONCE_TTL", 20 * 60, min_v=30, max_v=60 * 60)
-
-# Canonical host
 CANONICAL_HOST_ENFORCE = _env_flag("CANONICAL_HOST_ENFORCE", True)
 
 # =============================================================================
@@ -132,11 +126,6 @@ def _wants_json() -> bool:
 
 
 def _json_or_redirect(message: str, category: str, endpoint: str, **kwargs):
-    """
-    Dual response:
-      - JSON => {"ok","message","category","redirect?"}
-      - HTML => flash + redirect
-    """
     if _wants_json():
         ok = category not in {"error", "warning"}
         status = 400 if not ok else 200
@@ -199,9 +188,7 @@ def _safe_email(raw: str) -> str:
 
 
 def _valid_email(email: str) -> bool:
-    if not email or len(email) > 254:
-        return False
-    return bool(EMAIL_RE.match(email))
+    return bool(email) and len(email) <= 254 and bool(EMAIL_RE.match(email))
 
 
 def _safe_str_field(name: str, max_len: int = 200) -> str:
@@ -214,7 +201,7 @@ def _read_bool_field(name: str) -> bool:
 
 
 # =============================================================================
-# Canonical host (anti-CSRF mismatch por host) — SAFE
+# Canonical host (anti cookie split)
 # =============================================================================
 
 def _is_production() -> bool:
@@ -228,25 +215,24 @@ def _is_production() -> bool:
 
 
 def _canonical_redirect_if_needed() -> Optional[Any]:
-    if not CANONICAL_HOST_ENFORCE:
-        return None
-    if not _is_production():
+    if not CANONICAL_HOST_ENFORCE or not _is_production():
         return None
 
-    app_url = _env_str("APP_URL", "") or str(current_app.config.get("APP_URL") or "").strip()
+    app_url = (_env_str("APP_URL", "") or str(current_app.config.get("APP_URL") or "")).strip()
     if not app_url:
         return None
 
     try:
         target = urlparse(app_url)
         cur = urlparse(request.url)
-
         if not target.scheme or not target.netloc:
             return None
 
+        # ya coincide
         if cur.netloc == target.netloc and cur.scheme == target.scheme:
             return None
 
+        # SOLO GET/HEAD
         if request.method not in {"GET", "HEAD"}:
             return None
 
@@ -266,19 +252,17 @@ def _before_auth():
 
 @auth_bp.after_request
 def _after_auth(resp):
-    # Evita caches que reusan formularios viejos
     if request.path.startswith(("/auth/login", "/auth/register", "/auth/verify-notice")) and request.method == "GET":
         resp.headers["Cache-Control"] = "no-store"
         resp.headers["Pragma"] = "no-cache"
         resp.headers["Vary"] = "Cookie"
-
     resp.headers.setdefault("X-Content-Type-Options", "nosniff")
     resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     return resp
 
 
 # =============================================================================
-# Nonce anti doble submit / replay (NO toca CSRF)
+# Nonce anti replay/doble submit
 # =============================================================================
 
 def _new_form_nonce(key: str) -> str:
@@ -314,7 +298,7 @@ def _check_form_nonce(key: str) -> bool:
 
 
 # =============================================================================
-# Rate limit (session + ip)
+# Rate limit
 # =============================================================================
 
 def _rl_key(prefix: str) -> str:
@@ -329,10 +313,8 @@ def _rate_limit_ok(prefix: str, cooldown_sec: float) -> bool:
         last_f = float(last)
     except Exception:
         last_f = 0.0
-
     if (now - last_f) < float(cooldown_sec):
         return False
-
     session[key] = now
     session.modified = True
     return True
@@ -361,8 +343,16 @@ def _rate_limit_email_ok(prefix: str, email: str, cooldown: int) -> Tuple[bool, 
 
 
 # =============================================================================
-# Session helpers (CSRF-SAFE)
+# Session helpers (NO tocan CSRF interno)
 # =============================================================================
+
+_SESSION_KEYS_OWNED = (
+    "user_id",
+    "user_email",
+    "is_admin",
+    "login_at",
+)
+
 
 def _get_current_user() -> Optional[User]:
     uid = session.get("user_id")
@@ -378,22 +368,19 @@ def _get_current_user() -> Optional[User]:
         return None
 
 
-def _regenerate_session() -> None:
-    """
-    ✅ Regenera sesión SIN intentar “preservar csrf”.
-    Flask-WTF se encarga del CSRF; nosotros no tocamos esas keys.
-    """
+def _clear_auth_session_only() -> None:
+    """✅ Limpia SOLO tus keys (no borra csrf/session interna)."""
     try:
-        session.clear()
-    except Exception:
-        for k in list(session.keys()):
+        for k in _SESSION_KEYS_OWNED:
             session.pop(k, None)
+    except Exception:
+        pass
     session.modified = True
 
 
 def _set_session_user(user: User) -> None:
-    # Evita fixation y NO rompe CSRF (ya validó CSRFProtect antes de entrar aquí)
-    _regenerate_session()
+    # Evita fixation sin romper CSRF: limpiamos solo nuestras keys
+    _clear_auth_session_only()
 
     session["user_id"] = int(getattr(user, "id"))
     session["user_email"] = (getattr(user, "email", "") or "").lower()
@@ -426,7 +413,7 @@ def _post_login_redirect(user: User) -> str:
 def _serializer() -> URLSafeTimedSerializer:
     secret = (current_app.config.get("SECRET_KEY") or _env_str("SECRET_KEY", "")).strip()
     if not secret:
-        secret = "dev-secret"  # dev only
+        secret = "dev-secret"
     return URLSafeTimedSerializer(secret_key=secret, salt="skyline-email-verify-v1")
 
 
@@ -537,9 +524,23 @@ def _send_email_verify(user: User, *, force: bool = False) -> bool:
     try:
         svc = EmailService()
         if hasattr(svc, "send_html"):
-            return bool(svc.send_html(to_email=getattr(user, "email", ""), subject="Confirmá tu cuenta · Skyline Store", html=html, text=text))
+            return bool(
+                svc.send_html(
+                    to_email=getattr(user, "email", ""),
+                    subject="Confirmá tu cuenta · Skyline Store",
+                    html=html,
+                    text=text,
+                )
+            )
         if hasattr(svc, "send"):
-            return bool(svc.send(to=getattr(user, "email", ""), subject="Confirmá tu cuenta · Skyline Store", html=html, text=text))
+            return bool(
+                svc.send(
+                    to=getattr(user, "email", ""),
+                    subject="Confirmá tu cuenta · Skyline Store",
+                    html=html,
+                    text=text,
+                )
+            )
         log.warning("EmailService existe pero no tiene send_html/send.")
         return False
     except Exception:
@@ -571,9 +572,7 @@ def _get_user_by_email(email: str) -> Optional[User]:
 def _check_password(user: User, password: str) -> bool:
     try:
         fn = getattr(user, "check_password", None)
-        if not callable(fn):
-            return False
-        return bool(fn(password))
+        return bool(callable(fn) and fn(password))
     except Exception:
         return False
 
@@ -660,7 +659,6 @@ def register():
         resp.headers["Cache-Control"] = "no-store"
         return resp
 
-    # Honeypot
     if (request.form.get("website") or "").strip():
         return _json_or_redirect("Solicitud inválida.", "error", "auth.register", next=nxt)
 
@@ -782,9 +780,7 @@ def register():
 
 @auth_bp.get("/verify-notice")
 def verify_notice():
-    email = (request.args.get("email") or "").strip()
-    if not email:
-        email = (session.get("user_email") or "").strip()
+    email = (request.args.get("email") or "").strip() or (session.get("user_email") or "").strip()
     resp = make_response(render_template("auth/verify_email.html", email=email), 200)
     resp.headers["Cache-Control"] = "no-store"
     return resp
@@ -856,7 +852,7 @@ def verify_email(token: str):
 
 @auth_bp.get("/logout")
 def logout():
-    _regenerate_session()
+    _clear_auth_session_only()
     if _wants_json():
         return jsonify({"ok": True}), 200
     flash("Sesión cerrada.", "info")
