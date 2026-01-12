@@ -1,4 +1,4 @@
-# app/routes/auth_routes.py — Skyline Store (ULTRA PRO / BULLETPROOF v2)
+# app/routes/auth_routes.py — Skyline Store (ULTRA PRO / BULLETPROOF v3 — REVIEWED & FIXED)
 from __future__ import annotations
 
 import logging
@@ -6,9 +6,8 @@ import os
 import re
 import secrets
 import time
-from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Set, Tuple
 from urllib.parse import urlparse, urlunparse
 
 from flask import (
@@ -37,40 +36,45 @@ except Exception:
 
 log = logging.getLogger("auth_routes")
 
+# ✅ Blueprint correcto (esto crea el endpoint auth.login, auth.register, etc.)
 auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
 
-_TRUE = {"1", "true", "yes", "y", "on", "checked"}
-_FALSE = {"0", "false", "no", "n", "off"}
+_TRUE: Set[str] = {"1", "true", "yes", "y", "on", "checked"}
+_FALSE: Set[str] = {"0", "false", "no", "n", "off"}
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
 
 # =============================================================================
 # ENV helpers
 # =============================================================================
 
-def _env_flag(name: str, default: bool = False) -> bool:
+def _env_str(name: str, default: str = "") -> str:
     v = os.getenv(name)
-    if v is None:
+    return (default if v is None else str(v)).strip()
+
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    v = _env_str(name, "")
+    if not v:
         return default
-    return str(v).strip().lower() in _TRUE
+    return v.lower() in _TRUE
+
 
 def _env_int(name: str, default: int, *, min_v: int = 0, max_v: int = 10_000_000) -> int:
-    v = os.getenv(name)
-    if v is None:
-        return default
+    s = _env_str(name, "")
     try:
-        n = int(str(v).strip())
+        n = int(s) if s else int(default)
     except Exception:
-        return default
+        n = int(default)
     return max(min_v, min(max_v, n))
 
+
 def _env_float(name: str, default: float, *, min_v: float = 0.0, max_v: float = 3600.0) -> float:
-    v = os.getenv(name)
-    if v is None:
-        return default
+    s = _env_str(name, "")
     try:
-        n = float(str(v).strip())
+        n = float(s) if s else float(default)
     except Exception:
-        return default
+        n = float(default)
     return max(min_v, min(max_v, n))
 
 
@@ -78,18 +82,20 @@ AUTH_RATE_LIMIT_SECONDS = _env_float("AUTH_RATE_LIMIT_SECONDS", 2.0, min_v=0.1, 
 
 VERIFY_EMAIL_REQUIRED = _env_flag("VERIFY_EMAIL_REQUIRED", True)
 VERIFY_ADMIN_TOO = _env_flag("VERIFY_ADMIN_TOO", False)
-VERIFY_TOKEN_MAX_AGE_SEC = _env_int("VERIFY_TOKEN_MAX_AGE_SEC", 60 * 60 * 24, min_v=60, max_v=60 * 60 * 24 * 14)
+VERIFY_TOKEN_MAX_AGE_SEC = _env_int(
+    "VERIFY_TOKEN_MAX_AGE_SEC", 60 * 60 * 24, min_v=60, max_v=60 * 60 * 24 * 14
+)
 RESEND_VERIFY_COOLDOWN_SEC = _env_int("RESEND_VERIFY_COOLDOWN_SEC", 60, min_v=10, max_v=3600)
 
 # IMPORTANTE:
-# - Si ya tenés CSRFProtect global (tu app lo tiene), dejá esto en 0.
-# - Si querés check extra local, ponelo en 1.
+# - Si ya tenés CSRFProtect global (tu app lo tiene), dejá esto en False.
+# - Si querés check extra local, ponelo en True.
 AUTH_REQUIRE_CSRF = _env_flag("AUTH_REQUIRE_CSRF", False)
 
 # Nonce anti-doble-submit
 FORM_NONCE_TTL = _env_int("AUTH_FORM_NONCE_TTL", 20 * 60, min_v=30, max_v=60 * 60)
 
-# Canonical host (para cortar el 90% de CSRF mismatch en Render)
+# Canonical host (para cortar CSRF mismatch en Render por hosts mixtos)
 CANONICAL_HOST_ENFORCE = _env_flag("CANONICAL_HOST_ENFORCE", True)
 
 
@@ -100,6 +106,7 @@ CANONICAL_HOST_ENFORCE = _env_flag("CANONICAL_HOST_ENFORCE", True)
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
+
 def _safe_url_for(endpoint: str, **kwargs) -> Optional[str]:
     try:
         return url_for(endpoint, **kwargs)
@@ -107,6 +114,7 @@ def _safe_url_for(endpoint: str, **kwargs) -> Optional[str]:
         return None
     except Exception:
         return None
+
 
 def _safe_get_json() -> Dict[str, Any]:
     try:
@@ -116,6 +124,7 @@ def _safe_get_json() -> Dict[str, Any]:
     except Exception:
         pass
     return {}
+
 
 def _wants_json() -> bool:
     if (request.args.get("format") or "").strip().lower() == "json":
@@ -131,10 +140,11 @@ def _wants_json() -> bool:
         return True
     return False
 
+
 def _json_or_redirect(message: str, category: str, endpoint: str, **kwargs):
     """
     Dual response:
-      - JSON => {"ok","message","redirect?","code?"}
+      - JSON => {"ok","message","category","redirect?"}
       - HTML => flash + redirect
     """
     if _wants_json():
@@ -150,6 +160,7 @@ def _json_or_redirect(message: str, category: str, endpoint: str, **kwargs):
     u = _safe_url_for(endpoint, **kwargs)
     return redirect(u or "/")
 
+
 def _is_safe_next(nxt: str) -> bool:
     if not nxt:
         return False
@@ -160,9 +171,11 @@ def _is_safe_next(nxt: str) -> bool:
     p = urlparse(nxt)
     return (p.scheme == "" and p.netloc == "")
 
+
 def _next_url(default_url: str) -> str:
     nxt = (request.args.get("next") or request.form.get("next") or "").strip()
     return nxt if _is_safe_next(nxt) else default_url
+
 
 def _client_ip() -> str:
     xf = (request.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
@@ -173,6 +186,7 @@ def _client_ip() -> str:
         return xr[:64]
     return (request.remote_addr or "0.0.0.0")[:64]
 
+
 def _commit_safe() -> bool:
     try:
         db.session.commit()
@@ -181,6 +195,7 @@ def _commit_safe() -> bool:
         db.session.rollback()
         log.exception("DB commit failed")
         return False
+
 
 def _safe_email(raw: str) -> str:
     raw = (raw or "").strip()
@@ -193,13 +208,16 @@ def _safe_email(raw: str) -> str:
             pass
     return raw.lower().strip()
 
+
 def _valid_email(email: str) -> bool:
     if not email or len(email) > 254:
         return False
     return bool(EMAIL_RE.match(email))
 
+
 def _safe_str_field(name: str, max_len: int = 200) -> str:
     return (request.form.get(name) or "").strip()[:max_len]
+
 
 def _read_bool_field(name: str) -> bool:
     v = (request.form.get(name) or "").strip().lower()
@@ -207,25 +225,44 @@ def _read_bool_field(name: str) -> bool:
 
 
 # =============================================================================
-# Canonical host (MEJORA #1 anti-CSRF mismatch por host)
+# Canonical host (anti-CSRF mismatch por host) — FIXED
 # =============================================================================
+
+def _is_production() -> bool:
+    # Preferimos config; fallback ENV var.
+    try:
+        if bool(current_app.debug) or bool(current_app.config.get("DEBUG")):
+            return False
+    except Exception:
+        pass
+    env = (current_app.config.get("ENV") or current_app.config.get("ENVIRONMENT") or _env_str("ENV", "")).lower().strip()
+    return (env or "production") == "production"
+
 
 def _canonical_redirect_if_needed() -> Optional[Any]:
     """
-    Si APP_URL está definido, fuerza el host/scheme.
-    Esto evita que navegues con 2 hosts distintos y pierdas la cookie => CSRF mismatch.
+    Si APP_URL está definido, fuerza host/scheme.
+    Evita navegar con 2 hosts distintos y perder cookies => CSRF mismatch.
     """
     if not CANONICAL_HOST_ENFORCE:
         return None
-    if (os.getenv("ENV") or "").lower() != "production":
+    if not _is_production():
         return None
-    app_url = (os.getenv("APP_URL") or "").strip()
+
+    app_url = _env_str("APP_URL", "")
+    if not app_url:
+        # fallback: si está en config
+        try:
+            app_url = str(current_app.config.get("APP_URL") or "").strip()
+        except Exception:
+            app_url = ""
     if not app_url:
         return None
 
     try:
         target = urlparse(app_url)
         cur = urlparse(request.url)
+
         if not target.scheme or not target.netloc:
             return None
 
@@ -253,20 +290,20 @@ def _before_auth():
 
 @auth_bp.after_request
 def _after_auth(resp):
-    # MEJORA #2: no-cache en pantallas de auth (evita token viejo por back/forward)
+    # no-cache en pantallas de auth (evita token viejo por back/forward)
     if request.path.startswith(("/auth/login", "/auth/register", "/auth/verify-notice")) and request.method == "GET":
         resp.headers["Cache-Control"] = "no-store"
         resp.headers["Pragma"] = "no-cache"
         resp.headers["Vary"] = "Cookie"
 
-    # Headers seguros sin romper Talisman
+    # Headers seguros mínimos (sin pelear con Talisman)
     resp.headers.setdefault("X-Content-Type-Options", "nosniff")
     resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     return resp
 
 
 # =============================================================================
-# CSRF compat (MEJORA #3: valida con Flask-WTF si existe, sin pelearse)
+# CSRF compat (extra local opcional)
 # =============================================================================
 
 def _csrf_ok() -> bool:
@@ -275,7 +312,6 @@ def _csrf_ok() -> bool:
     if not AUTH_REQUIRE_CSRF:
         return True
 
-    # Intento 1: usar validate_csrf de Flask-WTF si está
     try:
         from flask_wtf.csrf import validate_csrf  # type: ignore
         token = (request.form.get("csrf_token") or request.headers.get("X-CSRF-Token") or "").strip()
@@ -289,7 +325,7 @@ def _csrf_ok() -> bool:
 
 
 # =============================================================================
-# Nonce anti doble submit / replay (MEJORA #4: tolerante + rotación)
+# Nonce anti doble submit / replay
 # =============================================================================
 
 def _new_form_nonce(key: str) -> str:
@@ -297,6 +333,7 @@ def _new_form_nonce(key: str) -> str:
     session[f"nonce:{key}"] = {"v": tok, "ts": int(time.time())}
     session.modified = True
     return tok
+
 
 def _check_form_nonce(key: str) -> bool:
     raw = session.get(f"nonce:{key}") or {}
@@ -324,11 +361,12 @@ def _check_form_nonce(key: str) -> bool:
 
 
 # =============================================================================
-# Rate limit (session + ip) (MEJORA #5)
+# Rate limit (session + ip)
 # =============================================================================
 
 def _rl_key(prefix: str) -> str:
     return f"rl:{prefix}:{_client_ip()}"
+
 
 def _rate_limit_ok(prefix: str, cooldown_sec: float) -> bool:
     key = _rl_key(prefix)
@@ -345,6 +383,7 @@ def _rate_limit_ok(prefix: str, cooldown_sec: float) -> bool:
     session[key] = now
     session.modified = True
     return True
+
 
 def _rate_limit_email_ok(prefix: str, email: str, cooldown: int) -> Tuple[bool, int]:
     e = (email or "").strip().lower()
@@ -369,7 +408,7 @@ def _rate_limit_email_ok(prefix: str, email: str, cooldown: int) -> Tuple[bool, 
 
 
 # =============================================================================
-# Session user (MEJORA #6: rotación segura)
+# Session user (rotación segura)
 # =============================================================================
 
 def _session_rotate(keep_keys: Tuple[str, ...] = ("csrf_token",)) -> None:
@@ -377,17 +416,22 @@ def _session_rotate(keep_keys: Tuple[str, ...] = ("csrf_token",)) -> None:
     for k in keep_keys:
         if k in session:
             kept[k] = session.get(k)
+
     try:
         session.clear()
     except Exception:
         for k in list(session.keys()):
             session.pop(k, None)
+
     for k, v in kept.items():
         session[k] = v
+
     session.modified = True
+
 
 def _clear_session_keep_csrf() -> None:
     _session_rotate(keep_keys=("csrf_token",))
+
 
 def _get_current_user() -> Optional[User]:
     uid = session.get("user_id")
@@ -403,8 +447,8 @@ def _get_current_user() -> Optional[User]:
     except Exception:
         return None
 
+
 def _set_session_user(user: User) -> None:
-    # Rotamos para evitar fixation
     _session_rotate(keep_keys=("csrf_token",))
 
     session["user_id"] = int(getattr(user, "id"))
@@ -414,7 +458,9 @@ def _set_session_user(user: User) -> None:
     session.permanent = True
     session.modified = True
 
+
 def _post_login_redirect(user: User) -> str:
+    # Admin → dashboard si existe
     try:
         if bool(getattr(user, "is_admin", False)) or bool(getattr(user, "is_owner", False)):
             u = _safe_url_for("admin.dashboard")
@@ -423,7 +469,7 @@ def _post_login_redirect(user: User) -> str:
     except Exception:
         pass
 
-    for ep in ("account.account_home", "shop.shop", "main.home"):
+    for ep in ("account.account_home", "shop.shop", "main.index", "main.home"):
         u = _safe_url_for(ep)
         if u:
             return u
@@ -435,10 +481,11 @@ def _post_login_redirect(user: User) -> str:
 # =============================================================================
 
 def _serializer() -> URLSafeTimedSerializer:
-    secret = (current_app.config.get("SECRET_KEY") or os.getenv("SECRET_KEY") or "").strip()
+    secret = (current_app.config.get("SECRET_KEY") or _env_str("SECRET_KEY", "")).strip()
     if not secret:
-        secret = "dev-secret"  # local
+        secret = "dev-secret"  # dev only (no rompe local)
     return URLSafeTimedSerializer(secret_key=secret, salt="skyline-email-verify-v1")
+
 
 def _user_is_verified(user: User) -> bool:
     if hasattr(user, "email_verified"):
@@ -447,6 +494,7 @@ def _user_is_verified(user: User) -> bool:
         except Exception:
             return False
     return True
+
 
 def _set_user_verified(user: User) -> None:
     if hasattr(user, "verify_email"):
@@ -468,9 +516,15 @@ def _set_user_verified(user: User) -> None:
         except Exception:
             pass
 
+
 def _make_verify_token(user: User) -> str:
-    data = {"uid": int(getattr(user, "id")), "email": (getattr(user, "email", "") or "").lower(), "v": 1}
+    data = {
+        "uid": int(getattr(user, "id")),
+        "email": (getattr(user, "email", "") or "").lower(),
+        "v": 1,
+    }
     return _serializer().dumps(data)
+
 
 def _read_verify_token(token: str, max_age: int) -> Tuple[Optional[Dict[str, Any]], str]:
     try:
@@ -485,8 +539,9 @@ def _read_verify_token(token: str, max_age: int) -> Tuple[Optional[Dict[str, Any
     except Exception:
         return None, "invalid"
 
+
 def _app_url() -> str:
-    base = (os.getenv("APP_URL") or "").strip()
+    base = (_env_str("APP_URL", "") or str(current_app.config.get("APP_URL") or "")).strip()
     if base:
         return base.rstrip("/")
     try:
@@ -494,15 +549,19 @@ def _app_url() -> str:
     except Exception:
         return "http://127.0.0.1:5000"
 
+
 def _emails_enabled() -> bool:
     return _env_flag("ENABLE_EMAILS", False)
+
 
 def _send_email_verify(user: User, *, force: bool = False) -> bool:
     if not _emails_enabled():
         return False
 
     if not force:
-        ok_rl, _left = _rate_limit_email_ok("verify", getattr(user, "email", "") or "", RESEND_VERIFY_COOLDOWN_SEC)
+        ok_rl, _left = _rate_limit_email_ok(
+            "verify", getattr(user, "email", "") or "", RESEND_VERIFY_COOLDOWN_SEC
+        )
         if not ok_rl:
             return False
 
@@ -510,13 +569,18 @@ def _send_email_verify(user: User, *, force: bool = False) -> bool:
     verify_path = _safe_url_for("auth.verify_email", token=token) or f"/auth/verify-email/{token}"
     verify_url = f"{_app_url()}{verify_path}"
 
-    html = render_template(
-        "emails/welcome_verify.html",
-        name=getattr(user, "name", None),
-        email=getattr(user, "email", ""),
-        verify_url=verify_url,
-        year=_utcnow().year,
-    )
+    # templates de email (si no existen, no rompe: cae a False)
+    try:
+        html = render_template(
+            "emails/welcome_verify.html",
+            name=getattr(user, "name", None),
+            email=getattr(user, "email", ""),
+            verify_url=verify_url,
+            year=_utcnow().year,
+        )
+    except Exception:
+        html = ""
+
     text = (
         "Confirmá tu cuenta en Skyline Store\n\n"
         f"Abrí este enlace para verificar tu email:\n{verify_url}\n\n"
@@ -537,14 +601,29 @@ def _send_email_verify(user: User, *, force: bool = False) -> bool:
     try:
         svc = EmailService()
         if hasattr(svc, "send_html"):
-            return bool(svc.send_html(to_email=getattr(user, "email", ""), subject="Confirmá tu cuenta · Skyline Store", html=html, text=text))
+            return bool(
+                svc.send_html(
+                    to_email=getattr(user, "email", ""),
+                    subject="Confirmá tu cuenta · Skyline Store",
+                    html=html,
+                    text=text,
+                )
+            )
         if hasattr(svc, "send"):
-            return bool(svc.send(to=getattr(user, "email", ""), subject="Confirmá tu cuenta · Skyline Store", html=html, text=text))
+            return bool(
+                svc.send(
+                    to=getattr(user, "email", ""),
+                    subject="Confirmá tu cuenta · Skyline Store",
+                    html=html,
+                    text=text,
+                )
+            )
         log.warning("EmailService existe pero no tiene send_html/send.")
         return False
     except Exception:
         log.exception("Falló el envío de verificación.")
         return False
+
 
 def _needs_verify_gate(user: User) -> bool:
     if not VERIFY_EMAIL_REQUIRED:
@@ -567,6 +646,19 @@ def _get_user_by_email(email: str) -> Optional[User]:
         return None
 
 
+def _check_password(user: User, password: str) -> bool:
+    """
+    ✅ FIX: evita truthy-function y maneja modelos sin check_password.
+    """
+    try:
+        fn = getattr(user, "check_password", None)
+        if not callable(fn):
+            return False
+        return bool(fn(password))
+    except Exception:
+        return False
+
+
 # =============================================================================
 # Routes
 # =============================================================================
@@ -577,7 +669,7 @@ def login():
     if u:
         return redirect(_post_login_redirect(u))
 
-    default_next = _safe_url_for("shop.shop") or _safe_url_for("main.home") or "/"
+    default_next = _safe_url_for("shop.shop") or _safe_url_for("main.index") or _safe_url_for("main.home") or "/"
     nxt = _next_url(default_next)
 
     if request.method == "GET":
@@ -586,13 +678,12 @@ def login():
         resp.headers["Cache-Control"] = "no-store"
         return resp
 
-    # MEJORA #7: Honeypot anti-bot
+    # Honeypot anti-bot
     if (request.form.get("website") or "").strip():
         return _json_or_redirect("Solicitud inválida.", "error", "auth.login", next=nxt)
 
-    # Nonce
+    # Nonce (anti replay/doble submit)
     if not _check_form_nonce("login"):
-        # regenero nonce nuevo para que el usuario no quede “pegado”
         flash("Solicitud inválida. Recargá e intentá de nuevo.", "error")
         return redirect(_safe_url_for("auth.login", next=nxt) or "/auth/login")
 
@@ -601,18 +692,25 @@ def login():
         return _json_or_redirect("Sesión expirada o formulario inválido.", "error", "auth.login", next=nxt)
 
     if not _rate_limit_ok("login", AUTH_RATE_LIMIT_SECONDS):
-        return _json_or_redirect("Demasiados intentos. Esperá un momento y reintentá.", "warning", "auth.login", next=nxt)
+        return _json_or_redirect(
+            "Demasiados intentos. Esperá un momento y reintentá.",
+            "warning",
+            "auth.login",
+            next=nxt,
+        )
 
     data = _safe_get_json()
     email = _safe_email(_safe_str_field("email", 255) or str(data.get("email") or ""))
     password = (_safe_str_field("password", 256) or str(data.get("password") or "")).strip()
+
+    # next sólo si es seguro (del POST/GET actual)
     nxt_safe = _next_url("")
 
     if not _valid_email(email) or not password:
         return _json_or_redirect("Email o contraseña incorrectos.", "error", "auth.login", next=nxt_safe)
 
     user = _get_user_by_email(email)
-    if not user or not getattr(user, "check_password", None) or not user.check_password(password):  # type: ignore[truthy-function]
+    if not user or not _check_password(user, password):
         return _json_or_redirect("Email o contraseña incorrectos.", "error", "auth.login", next=nxt_safe)
 
     try:
@@ -625,7 +723,9 @@ def login():
         _send_email_verify(user, force=False)
         red = _safe_url_for("auth.verify_notice", email=getattr(user, "email", "")) or "/auth/verify-notice"
         if _wants_json():
-            return jsonify({"ok": False, "needs_verify": True, "redirect": red, "message": "Verificá tu email para continuar."}), 403
+            return jsonify(
+                {"ok": False, "needs_verify": True, "redirect": red, "message": "Verificá tu email para continuar."}
+            ), 403
         flash("Verificá tu email para continuar.", "warning")
         return redirect(red)
 
@@ -645,7 +745,7 @@ def register():
     if u:
         return redirect(_post_login_redirect(u))
 
-    default_next = _safe_url_for("shop.shop") or _safe_url_for("main.home") or "/"
+    default_next = _safe_url_for("shop.shop") or _safe_url_for("main.index") or _safe_url_for("main.home") or "/"
     nxt = _next_url(default_next)
 
     if request.method == "GET":
@@ -681,7 +781,7 @@ def register():
     if len(password) < 8:
         return _json_or_redirect("La contraseña debe tener al menos 8 caracteres.", "warning", "auth.register", next=nxt_safe)
 
-    # MEJORA #8: confirmación estricta si viene (tu template lo manda)
+    # confirmación estricta si viene
     if password2 and password2 != password:
         return _json_or_redirect("Las contraseñas no coinciden.", "warning", "auth.register", next=nxt_safe)
 
@@ -690,14 +790,24 @@ def register():
 
     want_affiliate = _read_bool_field("want_affiliate") or (str(data.get("want_affiliate") or "").strip().lower() in _TRUE)
 
-    user = User(email=email)
+    # ✅ Construcción tolerante de User (algunos modelos piden más args)
+    try:
+        user = User(email=email)  # type: ignore[call-arg]
+    except Exception:
+        user = User()  # type: ignore[call-arg]
+        try:
+            setattr(user, "email", email)
+        except Exception:
+            return _json_or_redirect("No se pudo asignar el email al usuario.", "error", "auth.register", next=nxt_safe)
 
+    # nombre
     try:
         if hasattr(user, "name") and name:
             setattr(user, "name", name)
     except Exception:
         pass
 
+    # defaults
     for attr, val in (("is_admin", False), ("is_active", True), ("email_verified", False)):
         try:
             if hasattr(user, attr):
@@ -708,15 +818,16 @@ def register():
     # role
     try:
         role = "affiliate" if want_affiliate else "customer"
-        if hasattr(user, "set_role_safe"):
+        if hasattr(user, "set_role_safe") and callable(getattr(user, "set_role_safe")):
             user.set_role_safe(role)  # type: ignore[attr-defined]
-        else:
+        elif hasattr(user, "role"):
             setattr(user, "role", role)
     except Exception:
         pass
 
+    # password
     try:
-        if hasattr(user, "set_password"):
+        if hasattr(user, "set_password") and callable(getattr(user, "set_password")):
             user.set_password(password)  # type: ignore[attr-defined]
         else:
             return _json_or_redirect("El modelo User no tiene set_password().", "error", "auth.register", next=nxt_safe)
@@ -736,7 +847,7 @@ def register():
             display_name = (_safe_str_field("affiliate_display_name", 120) or str(data.get("affiliate_display_name") or "")).strip() or name
             instagram = (_safe_str_field("affiliate_instagram", 120) or str(data.get("affiliate_instagram") or "")).strip()
 
-            if hasattr(AffiliateProfile, "create_for_user"):
+            if hasattr(AffiliateProfile, "create_for_user") and callable(getattr(AffiliateProfile, "create_for_user")):
                 prof = AffiliateProfile.create_for_user(  # type: ignore[attr-defined]
                     user.id,
                     display_name=display_name,
@@ -860,7 +971,7 @@ def logout():
     if _wants_json():
         return jsonify({"ok": True}), 200
     flash("Sesión cerrada.", "info")
-    for ep in ("main.home", "shop.shop"):
+    for ep in ("main.index", "main.home", "shop.shop"):
         u = _safe_url_for(ep)
         if u:
             return redirect(u)
