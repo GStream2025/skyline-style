@@ -1,141 +1,262 @@
-/* Skyline Store — Login JS (ULTRA PRO / v3 / NO BREAK)
-   ✅ Anti doble submit real
-   ✅ Toggle password (a11y)
-   ✅ Validación UX suave (no bloquea servidor innecesariamente)
-   ✅ Respeta autofill / Enter
-   ✅ Lee CSRF desde meta si luego hacés fetch()
-   ✅ No rompe si falta algún elemento
+/* static/js/login.js — Skyline Store (ULTRA PRO / NO BREAK · v45)
+   Objetivo: UX excelente SIN romper CSRF.
+   - NO usamos fetch para login (evita token mismatch)
+   - Anti doble submit + loading + a11y
+   - Validación liviana + hints
+   - Toggle pass accesible
+   - Guardado email (opt-in suave) via localStorage
 */
+
 (() => {
   "use strict";
 
-  const $ = (id) => document.getElementById(id);
+  const $ = (sel, root = document) => root.querySelector(sel);
 
-  const form = $("loginForm");
-  const btn = $("submitBtn");
-  const email = $("email");
-  const pass = $("password");
-  const toggle = $("togglePass");
+  const form = $("#loginForm");
+  if (!form) return;
 
-  if (!form || !btn) return;
+  const email = $("#email", form);
+  const pass = $("#password", form);
+  const submit = $("#submitBtn", form);
+  const toggle = $("#togglePass", form);
+  const emailHint = $("#emailHint", form);
+  const passHint = $("#passHint", form);
 
-  // Evita doble bind si el template se inyecta o se re-renderiza
-  if (form.dataset.bound === "1") return;
-  form.dataset.bound = "1";
+  const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+  const csrfToken = (csrfMeta && typeof csrfMeta.content === "string") ? csrfMeta.content : "";
 
-  const metaCsrf = document.querySelector('meta[name="csrf-token"]');
-  const csrfToken = metaCsrf ? (metaCsrf.getAttribute("content") || "") : "";
+  // ---- Helpers
+  const isSmall = () => window.matchMedia && window.matchMedia("(max-width: 560px)").matches;
 
-  // Helpers
-  const setBusy = (busy, label) => {
-    if (!btn) return;
-    if (busy) {
-      btn.disabled = true;
-      btn.setAttribute("aria-busy", "true");
-      btn.innerHTML =
-        '<span class="ss-login__spinner" aria-hidden="true"></span> ' +
-        (label || "Ingresando...");
-    } else {
-      btn.disabled = false;
-      btn.removeAttribute("aria-busy");
-      btn.textContent = label || "Entrar";
-    }
-  };
-
-  const markInvalid = (el, bad) => {
+  const setHint = (el, text, kind) => {
     if (!el) return;
-    el.setAttribute("aria-invalid", bad ? "true" : "false");
+    el.textContent = text;
+    el.classList.remove("bad", "ok");
+    if (kind === "bad") el.classList.add("bad");
+    if (kind === "ok") el.classList.add("ok");
   };
 
-  const isEmailish = (v) => {
-    const s = (v || "").trim();
-    if (s.length < 6) return false;
-    // regex simple (sin volverse loco)
+  const setInvalid = (input, yes) => {
+    if (!input) return;
+    input.setAttribute("aria-invalid", yes ? "true" : "false");
+  };
+
+  const trim = (v) => (v || "").toString().trim();
+
+  const validEmail = (v) => {
+    const s = trim(v).toLowerCase();
+    if (s.length < 6 || s.length > 254) return false;
+    // regex simple, suficiente UX
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
   };
 
-  // Toggle password (a11y + no rompe)
+  const validPass = (v) => {
+    const s = (v || "").toString();
+    return s.length >= 8 && s.length <= 256;
+  };
+
+  const withSpinner = (btn, on) => {
+    if (!btn) return;
+    const busy = on ? "true" : "false";
+    btn.setAttribute("aria-busy", busy);
+    btn.disabled = !!on;
+
+    if (on) {
+      const original = btn.dataset.label || btn.textContent || "Entrar";
+      btn.dataset.label = original;
+      btn.innerHTML = `<span class="ss-login__spinner" aria-hidden="true"></span> <span>Ingresando…</span>`;
+    } else {
+      btn.textContent = btn.dataset.label || "Entrar";
+    }
+  };
+
+  // ---- CSRF hidden guard: si falta input csrf_token, lo agregamos
+  (() => {
+    const existing = form.querySelector('input[name="csrf_token"]');
+    if (existing) {
+      if (!existing.value && csrfToken) existing.value = csrfToken;
+      return;
+    }
+    const i = document.createElement("input");
+    i.type = "hidden";
+    i.name = "csrf_token";
+    i.value = csrfToken || "";
+    form.appendChild(i);
+  })();
+
+  // ---- Restore saved email (si existe)
+  const LS_KEY = "ss_login_email";
+  try {
+    const saved = localStorage.getItem(LS_KEY);
+    if (email && !email.value && saved) email.value = saved;
+  } catch (_) {}
+
+  // ---- Focus inteligente
+  (() => {
+    if (!email) return;
+    if (isSmall()) return;
+    // si hay flash error, enfocá email
+    try { email.focus({ preventScroll: true }); } catch (_) { try { email.focus(); } catch (__) {} }
+  })();
+
+  // ---- Toggle password (a11y + teclado)
   if (toggle && pass) {
+    const setState = (show) => {
+      pass.type = show ? "text" : "password";
+      toggle.setAttribute("aria-pressed", show ? "true" : "false");
+      toggle.setAttribute("aria-label", show ? "Ocultar contraseña" : "Mostrar contraseña");
+      toggle.textContent = show ? "🙈" : "👁";
+    };
+
+    let showing = false;
+    setState(showing);
+
     toggle.addEventListener("click", () => {
-      const willShow = pass.type === "password";
-      pass.type = willShow ? "text" : "password";
-      toggle.setAttribute("aria-pressed", String(willShow));
-      toggle.setAttribute("aria-label", willShow ? "Ocultar contraseña" : "Mostrar contraseña");
-      // mantiene foco útil
-      try { pass.focus({ preventScroll: true }); } catch (_) {}
+      showing = !showing;
+      setState(showing);
+      try { pass.focus({ preventScroll: true }); } catch (_) { try { pass.focus(); } catch (__) {} }
+    });
+
+    toggle.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        toggle.click();
+      }
+    });
+  }
+
+  // ---- Live validation (suave)
+  if (email) {
+    email.addEventListener("input", () => {
+      const v = email.value;
+      if (!v) {
+        setInvalid(email, false);
+        setHint(emailHint, "Requerido", "");
+        return;
+      }
+      if (validEmail(v)) {
+        setInvalid(email, false);
+        setHint(emailHint, "Ok", "ok");
+      } else {
+        setInvalid(email, true);
+        setHint(emailHint, "Email inválido", "bad");
+      }
+    }, { passive: true });
+
+    email.addEventListener("blur", () => {
+      const v = trim(email.value);
+      if (v && validEmail(v)) {
+        try { localStorage.setItem(LS_KEY, v.toLowerCase()); } catch (_) {}
+      }
     }, { passive: true });
   }
 
-  // UX: limpiar error al tipear
-  const bindLiveClear = (el, validator) => {
-    if (!el) return;
-    el.addEventListener("input", () => {
-      const ok = validator ? validator(el.value) : true;
-      markInvalid(el, !ok);
+  if (pass) {
+    pass.addEventListener("input", () => {
+      const v = pass.value;
+      if (!v) {
+        setInvalid(pass, false);
+        setHint(passHint, "Requerido", "");
+        return;
+      }
+      if (validPass(v)) {
+        setInvalid(pass, false);
+        setHint(passHint, "Ok", "ok");
+      } else {
+        setInvalid(pass, true);
+        setHint(passHint, "Mínimo 8 caracteres", "bad");
+      }
     }, { passive: true });
+  }
 
-    el.addEventListener("blur", () => {
-      const ok = validator ? validator(el.value) : true;
-      markInvalid(el, !ok);
-    }, { passive: true });
-  };
+  // ---- Anti doble submit + submit seguro (sin fetch)
+  let inflight = false;
 
-  bindLiveClear(email, isEmailish);
-  bindLiveClear(pass, (v) => (v || "").length >= 8);
-
-  // Anti doble submit + validación mínima
-  form.addEventListener("submit", (ev) => {
-    // Honeypot
-    const hp = form.querySelector('input[name="website"]');
-    if (hp && (hp.value || "").trim()) {
-      // bot detected -> no hacemos nada, dejamos que el server lo bloquee si querés
-      ev.preventDefault();
-      ev.stopPropagation();
+  form.addEventListener("submit", (e) => {
+    if (inflight) {
+      e.preventDefault();
       return;
     }
 
-    const eVal = email ? email.value : "";
-    const pVal = pass ? pass.value : "";
-
-    const eok = email ? isEmailish(eVal) : true;
-    const pok = pass ? (pVal.length >= 8) : true;
-
-    markInvalid(email, !eok);
-    markInvalid(pass, !pok);
-
-    if (!eok || !pok) {
-      ev.preventDefault();
-      ev.stopPropagation();
-      // feedback visual leve
-      setBusy(false, "Entrar");
+    // Honeypot anti-bot
+    const honey = form.querySelector('input[name="website"]');
+    if (honey && honey.value) {
+      e.preventDefault();
       return;
     }
 
-    // Doble submit guard (la causa #1 de CSRF mismatch)
-    if (btn.disabled) {
-      ev.preventDefault();
-      ev.stopPropagation();
+    // Validación UX (NO reemplaza backend)
+    const ev = email ? email.value : "";
+    const pv = pass ? pass.value : "";
+
+    let ok = true;
+
+    if (email) {
+      if (!validEmail(ev)) {
+        ok = false;
+        setInvalid(email, true);
+        setHint(emailHint, ev ? "Email inválido" : "Requerido", "bad");
+        try { email.focus({ preventScroll: true }); } catch (_) { try { email.focus(); } catch (__) {} }
+      }
+    }
+
+    if (ok && pass) {
+      if (!validPass(pv)) {
+        ok = false;
+        setInvalid(pass, true);
+        setHint(passHint, pv ? "Mínimo 8 caracteres" : "Requerido", "bad");
+        try { pass.focus({ preventScroll: true }); } catch (_) { try { pass.focus(); } catch (__) {} }
+      }
+    }
+
+    // CSRF presence (si está vacío, mejor recargar antes de mandar)
+    const csrfInput = form.querySelector('input[name="csrf_token"]');
+    const csrfVal = csrfInput ? (csrfInput.value || "") : "";
+    if (ok && !csrfVal) {
+      ok = false;
+      // evita mandar request que seguro falla
+      e.preventDefault();
+      try { window.location.reload(); } catch (_) {}
       return;
     }
 
-    setBusy(true, "Ingresando...");
-  }, { passive: false });
+    if (!ok) {
+      e.preventDefault();
+      return;
+    }
 
-  // Bonus: Enter en email -> foco pass (mejor UX)
+    inflight = true;
+    withSpinner(submit, true);
+
+    // Si tarda mucho, dejamos al usuario cancelar con refresh sin romper
+    window.setTimeout(() => {
+      if (inflight) {
+        // re-habilitá el botón por si el navegador canceló navegación
+        inflight = false;
+        withSpinner(submit, false);
+      }
+    }, 12000);
+    // dejamos que el POST normal continúe
+  });
+
+  // ---- Enter key polish: si estás en email y apretás Enter, pasa a pass
   if (email && pass) {
     email.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
-        // si email parece ok, movemos a pass; si no, dejamos submit normal
-        if (isEmailish(email.value)) {
+        // si email válido, mover a password, si no, no
+        if (validEmail(email.value)) {
           e.preventDefault();
-          try { pass.focus({ preventScroll: true }); } catch (_) {}
+          try { pass.focus({ preventScroll: true }); } catch (_) { try { pass.focus(); } catch (__) {} }
         }
       }
     });
   }
 
-  // Exponer token CSRF de forma segura por si luego hacés fetch() (opcional)
-  // window.SS_CSRF = csrfToken;  // si querés usarlo global, descomentá
-  // Si no, queda sólo local.
-  void csrfToken;
+  // ---- Seguridad UX: deshabilita pegado de espacios raros (solo trim al blur)
+  if (email) {
+    email.addEventListener("blur", () => {
+      const v = trim(email.value);
+      if (v !== email.value) email.value = v;
+    }, { passive: true });
+  }
 })();

@@ -1,3 +1,4 @@
+{# app/templates/auth/login.html — Skyline Store (ULTRA PRO / NO BREAK · v45) #}
 {% extends "base.html" %}
 {% block title %}Ingresar | Skyline Store{% endblock %}
 
@@ -5,20 +6,12 @@
   <link rel="preload" as="style" href="{{ url_for('static', filename='css/login.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
 
-  <meta name="robots" content="{{ 'index,follow' if (ENV|default('') == 'production') else 'noindex,nofollow' }}">
+  <meta name="robots" content="{{ 'index,follow' if (ENV|default('')|lower == 'production') else 'noindex,nofollow' }}">
 
-  {# CSRF meta (para fetch/JS si lo necesitás) #}
-  {% if csrf_token is defined %}
-    {% if csrf_token is callable %}
-      <meta name="csrf-token" content="{{ csrf_token() }}">
-    {% else %}
-      <meta name="csrf-token" content="{{ csrf_token }}">
-    {% endif %}
-  {% else %}
-    <meta name="csrf-token" content="">
-  {% endif %}
+  {# ✅ CSRF: una sola fuente estable (inject_globals -> csrf_token_value) #}
+  <meta name="csrf-token" content="{{ csrf_token_value|default('') }}">
 
-  {# Micro mejoras safe: anim/UX sin romper tu CSS externo #}
+  {# ✅ Micro mejoras UI safe (no rompen tu CSS externo) #}
   <style>
     .ss-login{position:relative}
     .ss-login__card{animation:popIn .42s ease both}
@@ -50,7 +43,6 @@
     .ss-login__submit:after{content:"";position:absolute;inset:0;transform:translateX(-120%);background:linear-gradient(90deg,transparent,rgba(255,255,255,.22),transparent)}
     .ss-login__submit:hover:after{animation:shine 1.1s ease}
     @keyframes shine{to{transform:translateX(120%)}}
-
     .ss-login__submit[aria-busy="true"]{opacity:.88;cursor:progress}
     .ss-login__spinner{width:16px;height:16px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;display:inline-block;vertical-align:-3px;animation:sspin .9s linear infinite}
     @keyframes sspin{to{transform:rotate(360deg)}}
@@ -58,6 +50,10 @@
     .ss-login__pass-wrap{display:flex;gap:8px;align-items:center}
     .ss-login__pass-toggle{border-radius:10px;border:1px solid rgba(0,0,0,.12);padding:8px 10px;background:transparent;cursor:pointer;transition:transform .15s ease}
     .ss-login__pass-toggle:active{transform:scale(.98)}
+
+    .ss-login__hint{opacity:.75}
+    .ss-login__hint.bad{color:rgba(220,38,38,.92);opacity:1}
+    .ss-login__hint.ok{color:rgba(34,197,94,.92);opacity:1}
 
     @media (prefers-reduced-motion: reduce){
       .ss-login__card,.ss-login__flash{animation:none}
@@ -74,16 +70,13 @@
 
 {% block content %}
 {# ---------------------------------------------------------
-   LOGIN — Skyline Store (ULTRA PRO / NO BREAK · v3)
-   ✅ safe_url con kwargs (evita BuildError)
-   ✅ CSRF único (WTF hidden_tag preferido)
+   LOGIN — Skyline Store (ULTRA PRO / NO BREAK · v45)
+   ✅ CSRF único y estable (csrf_token_value)
    ✅ next hardening (solo paths internos)
-   ✅ valores posteados escapados
-   ✅ register link con querystring sin string concat insegura
-   ✅ UX: toggle pass, anti doble submit, a11y
+   ✅ safe_url (no BuildError)
+   ✅ a11y, UX, anti-doble submit, toggle pass
 ---------------------------------------------------------- #}
 
-{# ---------- SAFE URL RESOLVER (NO-BREAK) ---------- #}
 {% macro safe_url(endpoint, fallback='/', **kwargs) -%}
   {%- set vf = (view_functions if view_functions is defined and view_functions else {}) -%}
   {%- if endpoint and endpoint in vf -%}
@@ -93,20 +86,19 @@
   {%- endif -%}
 {%- endmacro %}
 
-{# ---------- next safe (evita redirección externa) ---------- #}
+{# next safe #}
 {% set _raw_next = (next|default(request.args.get('next',''), true)|string).strip() %}
 {% set nxt = _raw_next %}
 {% if (not nxt) or (not nxt.startswith('/')) or (nxt.startswith('//')) %}
   {% set nxt = '' %}
 {% endif %}
 
-{# ---------- urls ---------- #}
+{# urls #}
 {% set login_action = safe_url('auth.login', '/auth/login') %}
 {% set register_base = safe_url('auth.register', '/auth/register') %}
 {% set shop_url = safe_url('shop.shop', '/shop') %}
 {% set forgot_url = safe_url('auth.forgot', '') %}
 
-{# Register URL con next seguro #}
 {% if nxt %}
   {% set register_url = register_base ~ '?next=' ~ (nxt|urlencode) %}
 {% else %}
@@ -116,7 +108,6 @@
 <section class="ss-login" aria-label="Ingresar">
   <div class="ss-login__card">
 
-    <!-- LEFT -->
     <aside class="ss-login__left" aria-label="Beneficios de la cuenta">
       <div class="ss-login__brand">
         <span class="ss-login__mark" aria-hidden="true"></span>
@@ -127,10 +118,7 @@
       </div>
 
       <h1>Bienvenido de vuelta</h1>
-      <p>
-        Ingresá para continuar con tu compra, ver pedidos
-        y acceder a beneficios exclusivos.
-      </p>
+      <p>Ingresá para continuar con tu compra, ver pedidos y acceder a beneficios exclusivos.</p>
 
       <div class="ss-login__benefits" role="list" aria-label="Beneficios">
         <div class="ss-login__benefit" role="listitem">
@@ -144,7 +132,6 @@
       </div>
     </aside>
 
-    <!-- RIGHT -->
     <div class="ss-login__right" aria-label="Formulario de ingreso">
       <div class="ss-login__head">
         <div>
@@ -156,7 +143,6 @@
         </span>
       </div>
 
-      {# FLASH MESSAGES #}
       {% set _msgs = get_flashed_messages(with_categories=true) %}
       {% if _msgs %}
         {% for category, msg in _msgs %}
@@ -175,26 +161,13 @@
             novalidate
             autocomplete="on">
 
-        {# =========================
-           CSRF (ÚNICO)
-           Preferido: Flask-WTF form.hidden_tag()
-        ========================== #}
-        {% if form is defined and form.hidden_tag is defined %}
-          {{ form.hidden_tag() }}
-        {% elif csrf_token is defined %}
-          {% if csrf_token is callable %}
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          {% else %}
-            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-          {% endif %}
-        {% endif %}
+        {# ✅ CSRF hidden definitivo (no dependemos de form.hidden_tag) #}
+        <input type="hidden" name="csrf_token" value="{{ csrf_token_value|default('') }}">
 
-        {# NEXT #}
         {% if nxt %}
           <input type="hidden" name="next" value="{{ nxt|e }}">
         {% endif %}
 
-        {# Honeypot anti-bot #}
         <div style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden" aria-hidden="true">
           <label>Website</label>
           <input type="text" name="website" tabindex="-1" autocomplete="off">
@@ -262,9 +235,7 @@
           Entrar
         </button>
 
-        <div class="ss-login__divider" aria-hidden="true">
-          <span>o</span>
-        </div>
+        <div class="ss-login__divider" aria-hidden="true"><span>o</span></div>
 
         <div class="ss-login__links" aria-label="Links">
           <a href="{{ register_url }}">Crear cuenta</a>
@@ -277,5 +248,5 @@
 </section>
 
 {# JS externo PRO #}
-<script defer src="{{ url_for('static', filename='js/login.js') }}?v=3"></script>
+<script defer src="{{ url_for('static', filename='js/login.js') }}?v=45"></script>
 {% endblock %}

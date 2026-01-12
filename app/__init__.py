@@ -1,18 +1,18 @@
-﻿# app/__init__.py — Skyline Store (ULTRA PRO / NO BREAK / Render-safe) — vNEXT FINAL (FIXED)
+﻿# app/__init__.py — Skyline Store (ULTRA PRO / NO BREAK / Render-safe) — vNEXT FINAL (HARDENED)
 from __future__ import annotations
 
 import logging
 import os
 import secrets
 import time
-from datetime import datetime, timezone, timedelta
-from typing import Any, Callable, Dict, List, Set, Tuple, Type, Optional
+from datetime import datetime, timedelta, timezone
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Type
 
 from flask import Flask, jsonify, render_template, request, session
 from werkzeug.exceptions import HTTPException
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-from app.config import get_config, ProductionConfig
+from app.config import ProductionConfig, get_config
 from app.models import db, init_models
 
 # ✅ compat (no rompe si no existe)
@@ -20,7 +20,6 @@ try:
     from app.models import create_admin_if_missing  # type: ignore
 except Exception:
     create_admin_if_missing = None  # type: ignore
-
 
 # =============================================================================
 # Helpers
@@ -323,33 +322,32 @@ def init_limiter(app: Flask) -> None:
 
 
 # =============================================================================
-# Cookies/sesión (FIX Flask 3 KeyError)
+# Cookies/sesión (Render-proof + Flask 3-proof)
 # =============================================================================
 
 def _configure_session_cookies(app: Flask) -> None:
     """
     ✅ Render-proof + Flask 3-proof
-    - Flask 3 puede acceder a app.config["SESSION_COOKIE_DOMAIN"] (key requerida)
-    - En Render NO conviene setear dominio a mano salvo que sepas lo que hacés.
+    - Flask usa varias keys; setdefault evita KeyError
+    - En Render NO conviene setear dominio a mano salvo que sepas lo que hacés
     """
     allow_domain = _env_bool("ALLOW_COOKIE_DOMAIN", False)
 
-    # Si no querés dominio custom, forzamos None pero MANTENEMOS la key.
+    # Mantener siempre la key (Flask puede leerla)
     if not allow_domain:
         app.config["SESSION_COOKIE_DOMAIN"] = None
     else:
-        # Si el usuario lo define, lo respetamos (ej: ".tudominio.com")
         app.config.setdefault("SESSION_COOKIE_DOMAIN", None)
 
-    # ✅ Keys que Flask usa internamente (evita futuros KeyError)
     app.config.setdefault("SESSION_COOKIE_PATH", "/")
     app.config.setdefault("SESSION_COOKIE_HTTPONLY", True)
 
     # SameSite
     samesite = str(app.config.get("SESSION_COOKIE_SAMESITE") or "Lax")
-    if samesite not in {"Lax", "Strict", "None"}:
-        samesite = "Lax"
-    app.config["SESSION_COOKIE_SAMESITE"] = samesite
+    samesite_norm = samesite[:1].upper() + samesite[1:].lower()
+    if samesite_norm not in {"Lax", "Strict", "None"}:
+        samesite_norm = "Lax"
+    app.config["SESSION_COOKIE_SAMESITE"] = samesite_norm
 
     # Secure
     if _is_prod(app):
@@ -357,18 +355,17 @@ def _configure_session_cookies(app: Flask) -> None:
     else:
         app.config.setdefault("SESSION_COOKIE_SECURE", False)
 
-    # En producción, si SameSite=None => Secure debe ser True (reglas de browsers)
+    # browsers: SameSite=None => Secure=True
     if app.config.get("SESSION_COOKIE_SAMESITE") == "None":
         app.config["SESSION_COOKIE_SECURE"] = True
 
-    # Refresh strategy
     app.config.setdefault("SESSION_REFRESH_EACH_REQUEST", False)
 
     # Lifetime robusto
     days = _env_int("SESSION_DAYS", int(app.config.get("SESSION_DAYS", 7) or 7), min_v=1, max_v=90)
     app.config.setdefault("PERMANENT_SESSION_LIFETIME", timedelta(days=days))
 
-    # URL scheme (ayuda a url_for externos)
+    # Scheme (ayuda en url_for externos)
     app.config.setdefault("PREFERRED_URL_SCHEME", "https" if _is_prod(app) else "http")
 
 
@@ -400,18 +397,22 @@ def create_app() -> Flask:
     if isinstance(cfg_cls, type) and issubclass(cfg_cls, ProductionConfig):
         ProductionConfig.validate_required()
 
-    # 4) ProxyFix (Render / reverse proxy) — no duplicar
-    if bool(app.config.get("TRUST_PROXY_HEADERS", True)):
-        if not getattr(app, "_proxyfix_applied", False):
-            app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
-            setattr(app, "_proxyfix_applied", True)
+    # 4) ProxyFix (Render / reverse proxy) — idempotente
+    if bool(app.config.get("TRUST_PROXY_HEADERS", True)) and not getattr(app, "_proxyfix_applied", False):
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
+        setattr(app, "_proxyfix_applied", True)
 
-    # 5) Cookies/sesión “Render-proof” (FIX KeyError Flask 3)
+    # 5) Cookies/sesión (FIX KeyError Flask 3 + Render)
     _configure_session_cookies(app)
 
-    # 6) CSRF defaults
+    # 6) CSRF defaults (⚠️ tiempo y ssl strict)
     app.config.setdefault("WTF_CSRF_SSL_STRICT", _env_bool("WTF_CSRF_SSL_STRICT", default=False))
     app.config.setdefault("WTF_CSRF_TIME_LIMIT", _env_int("WTF_CSRF_TIME_LIMIT", 3600, min_v=60, max_v=24 * 3600))
+
+    # ✅ Si tus deploys usan 2+ workers y secret keys variables -> CSRF se rompe.
+    # Recomendado: clavar WTF_CSRF_SECRET_KEY en env (misma en todos los workers).
+    if _is_prod(app):
+        app.config.setdefault("WTF_CSRF_SECRET_KEY", app.config.get("SECRET_KEY"))
 
     app.logger.info(
         "🚀 create_app ENV=%s DEBUG=%s DB=%s SECURE=%s SAMESITE=%s CSRF_TTL=%s COOKIE_DOMAIN=%s",
@@ -511,7 +512,6 @@ def create_app() -> Flask:
     # =============================================================================
     @app.context_processor
     def inject_globals() -> Dict[str, Any]:
-        # Flask-Login si está disponible
         cu = None
         try:
             from flask_login import current_user as fl_current_user  # type: ignore
@@ -523,7 +523,6 @@ def create_app() -> Flask:
         if cu is None:
             cu = current_user_from_session()
 
-        # ✅ CSRF definitivo: se genera acá (request-context) y se pasa como string
         csrf_value = ""
         try:
             from flask_wtf.csrf import generate_csrf
@@ -540,7 +539,7 @@ def create_app() -> Flask:
             "current_user": cu,
             "is_logged_in": bool(getattr(cu, "id", None)) if cu else False,
             "is_admin": bool(getattr(cu, "is_admin", False)) if cu else bool(session.get("is_admin")),
-            "view_functions": app.view_functions,  # para safe_url
+            "view_functions": app.view_functions,
             "has_endpoint": (lambda ep: has_endpoint(app, ep)),
             # ✅ USAR EN base.html: <meta name="csrf-token" content="{{ csrf_token_value }}">
             "csrf_token_value": csrf_value,
@@ -566,7 +565,6 @@ def create_app() -> Flask:
     # Health / Ready
     # =============================================================================
     def _db_check() -> Tuple[bool, str]:
-        # ✅ por defecto: no exige DB en health para que no mate deploy si DB tarda
         if not _env_bool("HEALTH_DB_CHECK", False):
             return True, "skipped"
 
