@@ -1,4 +1,4 @@
-﻿# app/__init__.py — Skyline Store (ULTRA PRO / NO BREAK / Render-safe) — vNEXT FINAL
+﻿# app/__init__.py — Skyline Store (ULTRA PRO / NO BREAK / Render-safe) — vNEXT FINAL (FIXED)
 from __future__ import annotations
 
 import logging
@@ -6,7 +6,7 @@ import os
 import secrets
 import time
 from datetime import datetime, timezone, timedelta
-from typing import Any, Callable, Dict, List, Set, Tuple, Type
+from typing import Any, Callable, Dict, List, Set, Tuple, Type, Optional
 
 from flask import Flask, jsonify, render_template, request, session
 from werkzeug.exceptions import HTTPException
@@ -45,6 +45,19 @@ def _env_bool(name: str, default: bool = False) -> bool:
     if vv in _FALSE:
         return False
     return default
+
+
+def _env_int(name: str, default: int, min_v: Optional[int] = None, max_v: Optional[int] = None) -> int:
+    s = _env_str(name, "")
+    try:
+        v = int(s) if s else int(default)
+    except Exception:
+        v = int(default)
+    if min_v is not None:
+        v = max(min_v, v)
+    if max_v is not None:
+        v = min(max_v, v)
+    return v
 
 
 def utcnow() -> datetime:
@@ -94,17 +107,21 @@ def wants_json() -> bool:
 
 
 def resp_error(status: int, code: str, message: str):
+    """
+    Respuesta de error única.
+    ✅ No rompe si faltan templates
+    ✅ JSON para API/AJAX
+    """
     if wants_json():
         return jsonify({"ok": False, "error": code, "message": message, "status": status}), status
 
-    # templates de errores: intenta por status, luego fallback
     try:
         return render_template(f"errors/{status}.html", message=message), status
     except Exception:
         try:
             return render_template("error.html", message=message), status
         except Exception:
-            return message, status
+            return (message or "Error"), status
 
 
 def setup_logging(app: Flask) -> None:
@@ -191,11 +208,10 @@ def _ensure_secret_key_dev(app: Flask) -> None:
 
 
 def _mask_db_url(uri: Any) -> str:
-    """✅ Mejora: no logs la password real."""
+    """✅ Mejora: no loguear la password real."""
     s = str(uri or "")
     if not s:
         return ""
-    # formato típico: scheme://user:pass@host/db
     try:
         if "://" in s and "@" in s and ":" in s.split("://", 1)[1].split("@", 1)[0]:
             left, right = s.split("://", 1)
@@ -307,6 +323,56 @@ def init_limiter(app: Flask) -> None:
 
 
 # =============================================================================
+# Cookies/sesión (FIX Flask 3 KeyError)
+# =============================================================================
+
+def _configure_session_cookies(app: Flask) -> None:
+    """
+    ✅ Render-proof + Flask 3-proof
+    - Flask 3 puede acceder a app.config["SESSION_COOKIE_DOMAIN"] (key requerida)
+    - En Render NO conviene setear dominio a mano salvo que sepas lo que hacés.
+    """
+    allow_domain = _env_bool("ALLOW_COOKIE_DOMAIN", False)
+
+    # Si no querés dominio custom, forzamos None pero MANTENEMOS la key.
+    if not allow_domain:
+        app.config["SESSION_COOKIE_DOMAIN"] = None
+    else:
+        # Si el usuario lo define, lo respetamos (ej: ".tudominio.com")
+        app.config.setdefault("SESSION_COOKIE_DOMAIN", None)
+
+    # ✅ Keys que Flask usa internamente (evita futuros KeyError)
+    app.config.setdefault("SESSION_COOKIE_PATH", "/")
+    app.config.setdefault("SESSION_COOKIE_HTTPONLY", True)
+
+    # SameSite
+    samesite = str(app.config.get("SESSION_COOKIE_SAMESITE") or "Lax")
+    if samesite not in {"Lax", "Strict", "None"}:
+        samesite = "Lax"
+    app.config["SESSION_COOKIE_SAMESITE"] = samesite
+
+    # Secure
+    if _is_prod(app):
+        app.config.setdefault("SESSION_COOKIE_SECURE", True)
+    else:
+        app.config.setdefault("SESSION_COOKIE_SECURE", False)
+
+    # En producción, si SameSite=None => Secure debe ser True (reglas de browsers)
+    if app.config.get("SESSION_COOKIE_SAMESITE") == "None":
+        app.config["SESSION_COOKIE_SECURE"] = True
+
+    # Refresh strategy
+    app.config.setdefault("SESSION_REFRESH_EACH_REQUEST", False)
+
+    # Lifetime robusto
+    days = _env_int("SESSION_DAYS", int(app.config.get("SESSION_DAYS", 7) or 7), min_v=1, max_v=90)
+    app.config.setdefault("PERMANENT_SESSION_LIFETIME", timedelta(days=days))
+
+    # URL scheme (ayuda a url_for externos)
+    app.config.setdefault("PREFERRED_URL_SCHEME", "https" if _is_prod(app) else "http")
+
+
+# =============================================================================
 # App Factory
 # =============================================================================
 
@@ -323,11 +389,6 @@ def create_app() -> Flask:
     # 1) Config primero (CRÍTICO)
     app.config.from_mapping(cfg_cls.as_flask_config())
 
-    # ✅ Mejora extra: evitá configs que rompen cookies en Render si quedaron seteadas
-    # (si vos querés usarlas explícitamente, poné ALLOW_COOKIE_DOMAIN=1)
-    if not _env_bool("ALLOW_COOKIE_DOMAIN", False):
-        app.config.pop("SESSION_COOKIE_DOMAIN", None)
-
     # 2) Logging idempotente
     setup_logging(app)
 
@@ -339,45 +400,28 @@ def create_app() -> Flask:
     if isinstance(cfg_cls, type) and issubclass(cfg_cls, ProductionConfig):
         ProductionConfig.validate_required()
 
-    # 4) ProxyFix (Render / reverse proxy)
+    # 4) ProxyFix (Render / reverse proxy) — no duplicar
     if bool(app.config.get("TRUST_PROXY_HEADERS", True)):
-        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
+        if not getattr(app, "_proxyfix_applied", False):
+            app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
+            setattr(app, "_proxyfix_applied", True)
 
-    # =============================================================================
-    # Cookies/sesión “Render-proof”
-    # =============================================================================
-    if _is_prod(app):
-        app.config.setdefault("SESSION_COOKIE_SECURE", True)
-        app.config.setdefault("SESSION_COOKIE_SAMESITE", "Lax")
-    else:
-        app.config.setdefault("SESSION_COOKIE_SECURE", False)
-        app.config.setdefault("SESSION_COOKIE_SAMESITE", "Lax")
+    # 5) Cookies/sesión “Render-proof” (FIX KeyError Flask 3)
+    _configure_session_cookies(app)
 
-    app.config.setdefault("SESSION_COOKIE_HTTPONLY", True)
-    app.config.setdefault("SESSION_REFRESH_EACH_REQUEST", False)
-
-    # Lifetime robusto
-    try:
-        days = int(_env_str("SESSION_DAYS", str(app.config.get("SESSION_DAYS", 7))) or "7")
-    except Exception:
-        days = 7
-    app.config.setdefault("PERMANENT_SESSION_LIFETIME", timedelta(days=max(1, min(days, 90))))
-
-    # CSRF defaults
+    # 6) CSRF defaults
     app.config.setdefault("WTF_CSRF_SSL_STRICT", _env_bool("WTF_CSRF_SSL_STRICT", default=False))
-    app.config.setdefault("WTF_CSRF_TIME_LIMIT", int(_env_str("WTF_CSRF_TIME_LIMIT", "3600") or "3600"))
-
-    # URL scheme
-    app.config.setdefault("PREFERRED_URL_SCHEME", "https" if _is_prod(app) else "http")
+    app.config.setdefault("WTF_CSRF_TIME_LIMIT", _env_int("WTF_CSRF_TIME_LIMIT", 3600, min_v=60, max_v=24 * 3600))
 
     app.logger.info(
-        "🚀 create_app ENV=%s DEBUG=%s DB=%s SECURE=%s SAMESITE=%s CSRF_TTL=%s",
+        "🚀 create_app ENV=%s DEBUG=%s DB=%s SECURE=%s SAMESITE=%s CSRF_TTL=%s COOKIE_DOMAIN=%s",
         _env_name(app),
         bool(app.debug),
         _mask_db_url(app.config.get("SQLALCHEMY_DATABASE_URI")),
         app.config.get("SESSION_COOKIE_SECURE"),
         app.config.get("SESSION_COOKIE_SAMESITE"),
         app.config.get("WTF_CSRF_TIME_LIMIT"),
+        app.config.get("SESSION_COOKIE_DOMAIN"),
     )
 
     # =============================================================================

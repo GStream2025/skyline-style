@@ -1,15 +1,29 @@
+{# app/templates/errors/404.html — Skyline Store (NO-500 / Render-safe) #}
 {% extends "base.html" %}
+
+{# ==========================
+   SAFE RESOLVERS (NO-500)
+========================== #}
+{% set _vf = (view_functions if view_functions is defined and view_functions else {}) %}
+
+{% set home_url = '/' %}
+{% if 'main.index' in _vf %}{% set home_url = url_for('main.index') %}{% endif %}
+
+{% set shop_url = '/shop' %}
+{% if 'shop.shop' in _vf %}{% set shop_url = url_for('shop.shop') %}{% elif 'main.shop' in _vf %}{% set shop_url = url_for('main.shop') %}{% endif %}
+
+{% set contact_url = home_url ~ '#contacto' %}
 
 {% block title %}404 — Página no encontrada | Skyline Store{% endblock %}
 
 {% block extra_head %}
-  {# ✅ Mejora: robots noindex para errores #}
   <meta name="robots" content="noindex,nofollow">
 {% endblock %}
 
 {% block content %}
 <section class="container" aria-labelledby="err-title" style="padding-top:28px;padding-bottom:44px;">
   <div class="card" role="region" aria-label="Error 404" style="max-width:920px;margin:0 auto;padding:26px;">
+
     {# ===== Header ===== #}
     <div class="grid" style="gap:14px;">
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:space-between;">
@@ -19,16 +33,11 @@
             <div class="small" style="letter-spacing:.18em;text-transform:uppercase;font-weight:800;color:var(--muted);">
               Skyline Store
             </div>
-            <h1 id="err-title" style="margin-top:2px;">
-              Ups… esta página no existe
-            </h1>
+            <h1 id="err-title" style="margin-top:2px;">Ups… esta página no existe</h1>
           </div>
         </div>
 
-        {# ✅ Mejora: status pill #}
-        <span class="badge warn" aria-label="Estado">
-          404 • No encontrado
-        </span>
+        <span class="badge warn" aria-label="Estado">404 • No encontrado</span>
       </div>
 
       <p class="small" style="max-width:70ch;">
@@ -44,28 +53,18 @@
           <span style="font-size:64px;font-weight:950;line-height:1;color:rgba(11,18,32,.15);">4</span>
           <span style="font-size:64px;font-weight:950;line-height:1;
                        background:linear-gradient(135deg,var(--primary),var(--primary-2));
-                       -webkit-background-clip:text;background-clip:text;color:transparent;">
-            0
-          </span>
+                       -webkit-background-clip:text;background-clip:text;color:transparent;">0</span>
           <span style="font-size:64px;font-weight:950;line-height:1;color:rgba(11,18,32,.15);">4</span>
         </div>
 
-        {# ✅ Mejora: hint #}
         <div class="small" style="text-align:center;margin-top:2px;">
           Error de navegación • Código: <b>SS-404</b>
         </div>
 
-        {# ✅ Mejora: acciones recomendadas #}
         <div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:14px;">
-          <a class="btn btn-primary" href="{{ url_for('main.index') }}" aria-label="Volver al inicio">
-            Volver al inicio
-          </a>
-          <a class="btn" href="{{ url_for('main.shop') }}" aria-label="Ir a la tienda">
-            Ir a la tienda
-          </a>
-          <button class="btn btn-ghost" type="button" id="btnBack" aria-label="Volver atrás">
-            Volver atrás
-          </button>
+          <a class="btn btn-primary" href="{{ home_url }}" aria-label="Volver al inicio">Volver al inicio</a>
+          <a class="btn" href="{{ shop_url }}" aria-label="Ir a la tienda">Ir a la tienda</a>
+          <button class="btn btn-ghost" type="button" id="btnBack" aria-label="Volver atrás">Volver atrás</button>
         </div>
       </div>
 
@@ -76,8 +75,7 @@
           Usá el buscador para productos, categorías o marcas. Te llevamos directo.
         </p>
 
-        {# ✅ Mejora: mini search form (no rompe si shop usa q) #}
-        <form class="grid" action="{{ url_for('main.shop') }}" method="get" role="search" aria-label="Buscar en la tienda" style="gap:10px;margin-top:10px;">
+        <form class="grid" action="{{ shop_url }}" method="get" role="search" aria-label="Buscar en la tienda" style="gap:10px;margin-top:10px;">
           <div class="field">
             <label for="q">Buscar</label>
             <input id="q" name="q" type="search" inputmode="search"
@@ -87,41 +85,40 @@
           </div>
           <div style="display:flex;gap:10px;flex-wrap:wrap;">
             <button class="btn btn-primary" type="submit">Buscar ahora</button>
-            <a class="btn" href="{{ url_for('main.shop') }}">Ver todo</a>
+            <a class="btn" href="{{ shop_url }}">Ver todo</a>
           </div>
         </form>
 
-        {# ✅ Mejora: atajos rápidos (solo links) #}
         <div style="margin-top:14px;">
           <div class="small" style="font-weight:800;color:var(--muted);margin-bottom:8px;">Atajos rápidos</div>
           <div style="display:flex;flex-wrap:wrap;gap:8px;">
-            <a class="btn" href="{{ url_for('main.shop') }}?categoria=ropa">Ropa</a>
-            <a class="btn" href="{{ url_for('main.shop') }}?categoria=accesorios">Accesorios</a>
-            <a class="btn" href="{{ url_for('main.shop') }}?categoria=tecnologia">Tecnología</a>
-            <a class="btn" href="{{ url_for('main.shop') }}?ofertas=1">Ofertas</a>
+            <a class="btn" href="{{ shop_url }}?categoria=ropa">Ropa</a>
+            <a class="btn" href="{{ shop_url }}?categoria=accesorios">Accesorios</a>
+            <a class="btn" href="{{ shop_url }}?categoria=tecnologia">Tecnología</a>
+            <a class="btn" href="{{ shop_url }}?q=oferta">Ofertas</a>
           </div>
         </div>
 
-        {# ✅ Mejora: soporte rápido #}
         <div class="empty" style="margin-top:16px;padding:16px;">
           <div style="font-weight:900;">¿Seguís con el problema?</div>
           <div class="small" style="margin-top:4px;">
             Si llegaste desde un enlace roto, avisame y lo arreglamos.
           </div>
           <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:10px;">
-            <a class="btn" href="{{ url_for('main.index') }}#contacto">Contactar soporte</a>
-            <a class="btn btn-ghost" href="{{ url_for('main.shop') }}">Seguir comprando</a>
+            <a class="btn" href="{{ contact_url }}">Contactar soporte</a>
+            <a class="btn btn-ghost" href="{{ shop_url }}">Seguir comprando</a>
           </div>
         </div>
       </div>
     </div>
 
-    {# ✅ Mejora: detalles técnicos discretos (solo si DEBUG=1) #}
-    {% if config.DEBUG %}
+    {# Debug (safe) #}
+    {% if config is defined and config and config.DEBUG %}
       <div class="card" style="margin-top:16px;box-shadow:none;border:1px solid rgba(220,38,38,.18);background:rgba(220,38,38,.06);">
         <div style="font-weight:900;color:rgba(220,38,38,.92);">Debug</div>
         <div class="small" style="margin-top:6px;">
-          Path: <code style="font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;">
+          Path:
+          <code style="font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;">
             {{ request.path }}
           </code>
         </div>
@@ -129,22 +126,21 @@
     {% endif %}
   </div>
 </section>
-
 {% endblock %}
 
 {% block extra_js %}
 <script>
-  // ✅ Mejora: "volver atrás" elegante y seguro
+  // Volver atrás (safe)
   (function(){
     const btn = document.getElementById('btnBack');
     if(!btn) return;
     btn.addEventListener('click', function(){
       if (history.length > 1) history.back();
-      else window.location.href = "{{ url_for('main.index') }}";
+      else window.location.href = "{{ home_url }}";
     });
   })();
 
-  // ✅ Mejora: autofocus buscador en desktop (sin molestar mobile)
+  // Autofocus buscador en desktop
   (function(){
     const q = document.getElementById('q');
     if(!q) return;
