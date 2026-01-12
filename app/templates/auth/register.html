@@ -5,20 +5,11 @@
   <link rel="preload" as="style" href="{{ url_for('static', filename='css/register.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/register.css') }}">
 
-  <meta name="robots" content="{{ 'index,follow' if ENV == 'production' else 'noindex,nofollow' }}">
+  <meta name="robots" content="{{ 'index,follow' if (ENV|default('')|lower == 'production') else 'noindex,nofollow' }}">
 
-  {# CSRF meta (por si luego haces fetch/JS) #}
-  {% if csrf_token is defined %}
-    {% if csrf_token is callable %}
-      <meta name="csrf-token" content="{{ csrf_token() }}">
-    {% else %}
-      <meta name="csrf-token" content="{{ csrf_token }}">
-    {% endif %}
-  {% else %}
-    <meta name="csrf-token" content="">
-  {% endif %}
+  {# ✅ CSRF meta estable (inject_globals -> csrf_token_value) #}
+  <meta name="csrf-token" content="{{ csrf_token_value|default('') }}">
 
-  {# +15 mejoras: animaciones, UX, accesibilidad, micro-interacciones (safe) #}
   <style>
     .ss-reg{position:relative}
     .ss-reg__shell{animation:popIn .45s ease both}
@@ -82,20 +73,11 @@
 {% endblock %}
 
 {% block content %}
-{# ---------------------------------------------------------
-   REGISTER — Skyline Store (ULTRA PRO / NO BREAK · v2)
-   ✅ safe_url: evita BuildError si endpoint no existe
-   ✅ next hardening (solo paths internos)
-   ✅ CSRF único (WTF / CSRFProtect)
-   ✅ anti doble submit (reduce CSRF mismatch)
-   ✅ validación UX + fuerza de password (sin bloquear server)
----------------------------------------------------------- #}
-
 {# ---------- SAFE URL RESOLVER (NO-BREAK) ---------- #}
-{% macro safe_url(endpoint, fallback='/') -%}
+{% macro safe_url(endpoint, fallback='/', **kwargs) -%}
   {%- set vf = (view_functions if view_functions is defined and view_functions else {}) -%}
   {%- if endpoint and endpoint in vf -%}
-    {{- url_for(endpoint) -}}
+    {{- url_for(endpoint, **kwargs) -}}
   {%- else -%}
     {{- fallback -}}
   {%- endif -%}
@@ -104,7 +86,7 @@
 {# ---------- next safe ---------- #}
 {% set _raw_next = (next|default(request.args.get('next',''), true)|string).strip() %}
 {% set nxt = _raw_next %}
-{% if not nxt or not nxt.startswith('/') or nxt.startswith('//') %}
+{% if (not nxt) or (not nxt.startswith('/')) or (nxt.startswith('//')) %}
   {% set nxt = '' %}
 {% endif %}
 
@@ -146,7 +128,6 @@
     </aside>
 
     <!-- RIGHT -->
-`
     <div class="ss-reg__card ss-reg__right" aria-label="Formulario de registro">
 
       <div class="ss-reg__head">
@@ -184,20 +165,11 @@
             novalidate
             autocomplete="on">
 
-        {# =========================
-           CSRF (ÚNICO)
-        ========================== #}
-        {% if form is defined and form.hidden_tag is defined %}
-          {{ form.hidden_tag() }}
-        {% else %}
-          {% if csrf_token is defined %}
-            {% if csrf_token is callable %}
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            {% else %}
-              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            {% endif %}
-          {% endif %}
-        {% endif %}
+        {# ✅ CSRF hidden definitivo (misma fuente que login) #}
+        <input type="hidden" name="csrf_token" value="{{ csrf_token_value|default('') }}">
+
+        {# ✅ NONCE (FIX CRÍTICO): auth_routes.py exige _check_form_nonce("register") #}
+        <input type="hidden" name="nonce" value="{{ nonce|default('')|e }}">
 
         {% if nxt %}
           <input type="hidden" name="next" value="{{ nxt|e }}">
@@ -303,7 +275,7 @@
   </div>
 </section>
 
-<script defer src="{{ url_for('static', filename='js/register.js') }}?v=2"></script>
+<script defer src="{{ url_for('static', filename='js/register.js') }}?v=2.1"></script>
 
 <script>
 (() => {
@@ -373,7 +345,6 @@
   if (p2) p2.addEventListener("input", updatePwUI, { passive: true });
   updatePwUI();
 
-  // Anti doble submit + validación mínima (reduce CSRF mismatch por doble POST)
   f.addEventListener("submit", (ev) => {
     const em = email ? email.value.trim() : "";
     const pw1 = p1 ? p1.value : "";
