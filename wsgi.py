@@ -1,4 +1,4 @@
-# wsgi.py — Skyline Store (ULTRA PRO / FINAL · Bulletproof v2)
+# wsgi.py — Skyline Store (ULTRA PRO / FINAL · Bulletproof v3)
 from __future__ import annotations
 
 import logging
@@ -8,9 +8,9 @@ import time
 from typing import Any, Dict, Optional, Tuple
 
 # =============================================================================
-# Early env helpers (no side effects peligrosos)
+# Early env helpers (sin side-effects peligrosos)
 # =============================================================================
-_TRUE = {"1", "true", "yes", "y", "on"}
+_TRUE = {"1", "true", "yes", "y", "on", "checked"}
 _FALSE = {"0", "false", "no", "n", "off"}
 
 
@@ -24,21 +24,6 @@ def _bool_env(key: str, default: bool = False) -> bool:
     if s in _FALSE:
         return False
     return default
-
-
-def _is_cloud() -> bool:
-    # Detectores típicos (Render/Railway/Fly/Heroku/Docker)
-    return bool(
-        os.getenv("RENDER")
-        or os.getenv("RENDER_EXTERNAL_HOSTNAME")
-        or os.getenv("RAILWAY_ENVIRONMENT")
-        or os.getenv("RAILWAY_PROJECT_ID")
-        or os.getenv("FLY_APP_NAME")
-        or os.getenv("DYNO")
-        or os.getenv("HEROKU_APP_NAME")
-        or os.getenv("PORT")
-        or os.path.exists("/.dockerenv")
-    )
 
 
 def _normalize_env_value(raw: str) -> str:
@@ -60,10 +45,29 @@ def _normalize_env() -> str:
     return _normalize_env_value(os.getenv("ENV") or "production")
 
 
+def _is_cloud() -> bool:
+    """
+    Detectores típicos (Render/Railway/Fly/Heroku/Docker/K8s)
+    """
+    return bool(
+        os.getenv("RENDER")
+        or os.getenv("RENDER_EXTERNAL_HOSTNAME")
+        or os.getenv("RAILWAY_ENVIRONMENT")
+        or os.getenv("RAILWAY_PROJECT_ID")
+        or os.getenv("FLY_APP_NAME")
+        or os.getenv("DYNO")
+        or os.getenv("HEROKU_APP_NAME")
+        or os.getenv("K_SERVICE")  # Cloud Run
+        or os.getenv("KUBERNETES_SERVICE_HOST")
+        or os.getenv("PORT")
+        or os.path.exists("/.dockerenv")
+    )
+
+
 ENV = _normalize_env()
 CLOUD = _is_cloud()
 
-# DEBUG determinista
+# DEBUG determinista (prioridad: DEBUG > FLASK_DEBUG > env)
 if os.getenv("DEBUG") is not None:
     DEBUG = _bool_env("DEBUG", ENV == "development")
 elif os.getenv("FLASK_DEBUG") is not None:
@@ -104,7 +108,7 @@ try:
     # app/__init__.py debe exponer create_app
     from app import create_app
 except Exception as e:
-    log.exception("❌ No se pudo importar create_app desde app. Error: %s", e)
+    log.exception("❌ No se pudo importar create_app desde app: %s", e)
     raise
 
 
@@ -116,8 +120,7 @@ try:
     app = create_app()
     log.info("✅ create_app() OK en %.3fs", time.time() - t0)
 except Exception as e:
-    # Mejora: contexto útil sin exponer secretos
-    log.exception("❌ create_app() falló. Error: %s", e)
+    log.exception("❌ create_app() falló: %s", e)
     log.error("Contexto: ENV=%s DEBUG=%s CLOUD=%s", ENV, DEBUG, CLOUD)
     raise
 
@@ -126,9 +129,8 @@ except Exception as e:
 # ProxyFix (solo si corresponde y si NO está aplicado)
 # =============================================================================
 def _is_proxyfix_applied(wsgi_app: Any) -> bool:
-    # Evita doble ProxyFix si ya lo aplicaste en create_app()
     try:
-        return wsgi_app.__class__.__name__ == "ProxyFix"
+        return (getattr(wsgi_app, "__class__", None).__name__ == "ProxyFix")
     except Exception:
         return False
 
@@ -138,13 +140,18 @@ try:
 
     trust_proxy_cfg = bool(app.config.get("TRUST_PROXY_HEADERS", False))
     trust_proxy_env = _bool_env("TRUST_PROXY_HEADERS", False)
-
     should_apply = bool(CLOUD or trust_proxy_cfg or trust_proxy_env)
-    already = _is_proxyfix_applied(getattr(app, "wsgi_app", None))
 
+    already = _is_proxyfix_applied(getattr(app, "wsgi_app", None))
     if should_apply and not already:
         # Render típico: 1 hop
-        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)  # type: ignore[attr-defined]
+        app.wsgi_app = ProxyFix(
+            app.wsgi_app,
+            x_for=1,
+            x_proto=1,
+            x_host=1,
+            x_prefix=1,
+        )  # type: ignore[attr-defined]
         log.info("✅ ProxyFix habilitado (x_for=1 x_proto=1 x_host=1 x_prefix=1)")
     elif should_apply and already:
         log.info("ℹ️ ProxyFix ya estaba aplicado (omitido)")
@@ -167,8 +174,9 @@ def _has_rule(rule_path: str) -> bool:
 def _db_ping() -> Tuple[bool, Optional[str], Optional[float]]:
     """
     Ready check real:
-    - si NO hay SQLALCHEMY_DATABASE_URI, no intentamos ping
+    - si NO hay SQLALCHEMY_DATABASE_URI, no intentamos ping duro
     - ejecuta SELECT 1 con SQLAlchemy
+    - rollback seguro si falla
     """
     t0 = time.time()
     try:
@@ -182,10 +190,15 @@ def _db_ping() -> Tuple[bool, Optional[str], Optional[float]]:
         db.session.execute(text("SELECT 1"))
         return True, None, (time.time() - t0)
     except Exception as e:
-        return False, (str(e) or "db_error")[:240], (time.time() - t0)
+        try:
+            from app.models import db  # type: ignore
+            db.session.rollback()
+        except Exception:
+            pass
+        return False, (f"{type(e).__name__}: {e}"[:240] if str(e) else "db_error"), (time.time() - t0)
 
 
-# /health: liviano (liveness)
+# /health: liveness (liviano)
 try:
     if not _has_rule("/health"):
 
