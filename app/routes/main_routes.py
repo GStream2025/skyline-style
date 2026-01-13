@@ -1,9 +1,10 @@
-# app/routes/main_routes.py — Skyline Store (ULTRA PRO++ / NO BREAK / FAIL-SAFE v3)
+# app/routes/main_routes.py — Skyline Store (ULTRA PRO++ / NO BREAK / FAIL-SAFE v3.2)
 from __future__ import annotations
 
 import hashlib
 import logging
 import os
+import secrets
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -18,6 +19,7 @@ from flask import (
     redirect,
     render_template,
     request,
+    session,
     url_for,
 )
 
@@ -221,10 +223,34 @@ def _render(template: str, *, status: int = 200, **ctx: Any):
     # view_functions para templates “safe resolver”
     ctx.setdefault("view_functions", getattr(current_app, "view_functions", {}) or {})
 
-    # config para feature flags en templates (tu account.html lo usa)
+    # config para feature flags en templates
     ctx.setdefault("config", getattr(current_app, "config", {}) or {})
 
     return make_response(render_template(template, **ctx), status)
+
+
+# -----------------------------------------------------------------------------
+# Account unified helpers (NONCE compatible con auth_routes.py)
+# -----------------------------------------------------------------------------
+
+def _new_form_nonce(key: str) -> str:
+    """
+    ✅ Compatible con auth_routes._check_form_nonce():
+    session["nonce:<key>"] = {"v": <token>, "ts": <epoch>}
+    """
+    tok = secrets.token_urlsafe(20)
+    session[f"nonce:{key}"] = {"v": tok, "ts": int(time.time())}
+    session.modified = True
+    return tok
+
+
+def _account_active_tab() -> str:
+    """
+    Permite abrir directo la pestaña:
+      /account?tab=register  (o mode=signup)
+    """
+    t = (request.args.get("tab") or request.args.get("mode") or "").strip().lower()
+    return "register" if t in {"register", "signup", "crear"} else "login"
 
 
 # -----------------------------------------------------------------------------
@@ -297,15 +323,28 @@ def home():
 @main_bp.get("/account")
 def account():
     """
-    ✅ Página de cuenta (tabs login/register)
-    Renderiza templates/account.html
+    ✅ Página de cuenta UNIFICADA (tabs login/register)
+    Renderiza: templates/auth/account.html
+    - Genera nonce_login y nonce_register (compatibles con auth_routes)
+    - respeta next safe
+    - no-store para evitar formularios viejos
     """
     nxt = _safe_next_from_args()
-    return _render(
-        "account.html",
+    active_tab = _account_active_tab()
+
+    # nonces para que auth_routes.py valide _check_form_nonce("login/register")
+    nonce_login = _new_form_nonce("login")
+    nonce_register = _new_form_nonce("register")
+
+    resp = _render(
+        "auth/account.html",
         meta_title=f"Mi cuenta | {SEO_DEFAULTS.title}",
         next=nxt,
+        active_tab=active_tab,
+        nonce_login=nonce_login,
+        nonce_register=nonce_register,
     )
+    return _resp_no_store(resp)
 
 
 @main_bp.get("/cuenta")
