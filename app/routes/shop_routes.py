@@ -1,4 +1,4 @@
-# app/routes/shop_routes.py
+# app/routes/shop_routes.py — Skyline Store (ULTRA PRO++ / NO BREAK / FAIL-SAFE)
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -7,13 +7,13 @@ from typing import Dict, List, Optional, Tuple
 
 from flask import (
     Blueprint,
-    redirect,
     render_template,
     request,
     url_for,
     session,
     current_app,
     make_response,
+    redirect,
 )
 from sqlalchemy import asc, desc, or_
 from sqlalchemy.orm import selectinload
@@ -28,9 +28,9 @@ shop_bp = Blueprint("shop", __name__)
 
 AFF_COOKIE_NAME = "sk_aff"
 AFF_COOKIE_SUB_NAME = "sk_sub"
-AFF_COOKIE_TTL_DAYS = 30  # ventana de atribución (ajustable sin migraciones)
+AFF_COOKIE_TTL_DAYS = 30  # ventana de atribución
 
-_TRUE = {"1", "true", "yes", "y", "on"}
+_TRUE = {"1", "true", "yes", "y", "on", "checked"}
 
 
 def utcnow() -> datetime:
@@ -270,14 +270,42 @@ def _safe_like(value: str) -> str:
     return f"%{v}%" if v else ""
 
 
+def _resp_no_store(resp):
+    resp.headers.setdefault("Cache-Control", "no-store")
+    resp.headers.setdefault("Pragma", "no-cache")
+    return resp
+
+
+def _resp_public_cache(resp, seconds: int = 60):
+    resp.headers["Cache-Control"] = f"public, max-age={max(0, int(seconds))}"
+    return resp
+
+
+def _render_404():
+    """
+    404 consistente:
+    - si main.not_found existe, lo usamos (usa tu error.html)
+    - si no, fallback 404.html / texto
+    """
+    try:
+        vf = getattr(current_app, "view_functions", {}) or {}
+        if "main.not_found" in vf:
+            return vf["main.not_found"](None)  # type: ignore[misc]
+    except Exception:
+        pass
+
+    try:
+        return render_template("404.html"), 404
+    except Exception:
+        return ("Not Found", 404)
+
+
 # ============================================================
 # Routes
 # ============================================================
 
-
-@shop_bp.get("/")
-def root():
-    return redirect(url_for("shop.shop"))
+# ❌ ELIMINADO: @shop_bp.get("/") (evita duplicado con main.home "/")
+# Si querés que "/" vaya a la tienda, hacelo en main_routes.py con redirect a shop.shop.
 
 
 @shop_bp.get("/shop")
@@ -321,9 +349,8 @@ def shop():
     # Category filter (slug or slug_path)
     # -------------------------
     if cat:
-        # join seguro (si Category existe)
         try:
-            # soporta slug_path jerárquico si lo usás
+            # join seguro (si Category existe)
             query = query.join(Category, isouter=True).filter(
                 or_(
                     Category.slug == cat,
@@ -331,7 +358,7 @@ def shop():
                 )
             )
         except Exception:
-            # fallback por campo string si existiera
+            # fallback por campo string
             for attr in ("category_slug", "category", "categoria", "cat"):
                 if hasattr(Product, attr):
                     try:
@@ -385,7 +412,6 @@ def shop():
         elif sort == "new" and created_field is not None:
             query = query.order_by(desc(created_field))
         else:
-            # default pro: updated -> created -> id
             if updated_field is not None:
                 query = query.order_by(desc(updated_field))
             elif created_field is not None:
@@ -393,7 +419,6 @@ def shop():
             else:
                 query = query.order_by(desc(Product.id))
     except Exception:
-        # fallback ultra seguro
         query = query.order_by(desc(Product.id))
 
     # -------------------------
@@ -402,9 +427,8 @@ def shop():
     total = _safe_count(query)
     offset = (page - 1) * per
 
-    products: List[Product] = []
     try:
-        products = query.offset(offset).limit(per).all()
+        products: List[Product] = query.offset(offset).limit(per).all()
     except Exception:
         products = []
 
@@ -445,7 +469,8 @@ def shop():
 
     resp = make_response(html)
     resp = _capture_affiliation_for_response(resp)
-    return resp
+    # cache corto: listado cambia seguido, pero ayuda rendimiento
+    return _resp_public_cache(resp, seconds=30)
 
 
 @shop_bp.get("/shop/product/<path:slug>")
@@ -459,19 +484,29 @@ def product_detail(slug: str):
 
     p: Optional[Product] = None
     try:
-        p = db.session.query(Product).filter(Product.slug == slug).first()
+        q = db.session.query(Product)
+
+        # perf: carga relaciones si existen
+        try:
+            if hasattr(Product, "category"):
+                q = q.options(selectinload(Product.category))
+        except Exception:
+            pass
+        try:
+            if hasattr(Product, "media"):
+                q = q.options(selectinload(Product.media))
+        except Exception:
+            pass
+
+        p = q.filter(Product.slug == slug).first()
     except Exception:
         p = None
 
     if not p or (getattr(p, "status", "") or "").lower() != "active":
-        # 404 real
-        try:
-            return render_template("404.html"), 404
-        except Exception:
-            return ("Not Found", 404)
+        return _render_404()
 
     # Track click afiliado si corresponde
-    _track_aff_click_if_any(int(p.id))
+    _track_aff_click_if_any(int(getattr(p, "id", 0) or 0))
 
     aff_code, aff_sub = _get_aff_attribution()
 
@@ -483,7 +518,8 @@ def product_detail(slug: str):
     )
     resp = make_response(html)
     resp = _capture_affiliation_for_response(resp)
-    return resp
+    # producto: no-store (precio/stock)
+    return _resp_no_store(resp)
 
 
 __all__ = ["shop_bp"]
