@@ -799,3 +799,262 @@
 /* =========================================================
    END v4
 ========================================================= */
+/* =========================================================
+   Skyline HOME — PRO BOOST PACK (add-on)
+   Pegar al final del v4 para subir “nivel tienda real”
+========================================================= */
+
+/* 1) Tipografía + jerarquía real */
+.home-pro, .hp{
+  --hp-h1: clamp(2.2rem, 3.9vw, 3.8rem);
+  --hp-h2: clamp(1.35rem, 2.2vw, 1.9rem);
+  --hp-h3: 1.05rem;
+
+  --hp-line: 1.55;
+  --hp-track: -0.04em;
+
+  /* más “marca”: bordes y sombras más finos */
+  --hp-border: rgba(15,23,42,.10);
+  --hp-glow: 0 0 0 6px rgba(37,99,235,.18);
+}
+
+/* Titles y secciones */
+.hp-section{
+  margin-top: 18px;
+  padding: 16px;
+  border-radius: var(--hp-r-xl);
+  border: 1px solid var(--hp-border);
+  background: linear-gradient(180deg, rgba(255,255,255,.86), rgba(255,255,255,.72));
+  box-shadow: var(--hp-sh1);
+}
+@media(prefers-color-scheme:dark){
+  .hp-section{
+    background: linear-gradient(180deg, rgba(12,16,34,.76), rgba(12,16,34,.62));
+    box-shadow:none;
+  }
+}
+.hp-sectionHead{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom: 10px;
+}
+.hp-sectionTitle{
+  margin:0;
+  font-weight:1000;
+  letter-spacing: var(--hp-track);
+  font-size: var(--hp-h2);
+}
+.hp-sectionDesc{
+  margin: 4px 0 0;
+  color: var(--hp-muted);
+  font-weight: 750;
+  max-width: 70ch;
+  line-height: var(--hp-line);
+}
+.hp-sectionLink{
+  font-weight: 1000;
+  text-decoration:none;
+  color: var(--hp-ink);
+  padding: 8px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--hp-border);
+  background: rgba(255,255,255,.6);
+}
+@media(prefers-color-scheme:dark){
+  .hp-sectionLink{ background: rgba(255,255,255,.06); }
+}
+.hp-sectionLink:hover{ box-shadow: var(--hp-sh1); transform: translateY(-1px); }
+
+/* 2) Barra “confianza” arriba del hero (se nota MUCHO) */
+.hp-topTrust{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  margin: 0 0 12px;
+}
+.hp-topTrust .item{
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  padding: 10px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--hp-border);
+  background: rgba(255,255,255,.70);
+  box-shadow: var(--hp-sh1);
+  font-weight: 950;
+}
+@media(prefers-color-scheme:dark){
+  .hp-topTrust .item{ background: rgba(255,255,255,.06); box-shadow:none; }
+}
+.hp-topTrust .dot{
+  width:10px;height:10px;border-radius:999px;
+  background: linear-gradient(135deg, var(--hp-good), var(--hp-p2));
+  box-shadow: 0 12px 26px rgba(22,163,74,.18);
+}
+.hp-topTrust small{ display:block; font-weight: 800; color: var(--hp-muted); }
+
+/* 3) HERO: que se sienta “landing premium” */
+.hp-title{
+  font-size: var(--hp-h1);
+  letter-spacing: var(--hp-track);
+}
+.hp-sub{
+  font-size: 1.08rem;
+  line-height: var(--hp-line);
+}
+.hp-heroMain{
+  outline: 1px solid rgba(255,255,255,.35);
+  outline-offset: -1px;
+}
+@media(prefers-color-scheme:dark){
+  .hp-heroMain{ outline-color: rgba(255,255,255,.08); }
+}
+
+/* 4) Cards de producto: look marketplace real */
+.hpCard{
+  border-radius: 26px;
+  border: 1px solid rgba(10,16,32,.10);
+  background:
+    radial-gradient(800px 280px at 20% 0%, rgba(37,99,235,.08), transparent 60%),
+    linear-gradient(180deg, rgba(255,255,255,.96), rgba(255,255,255,.86));
+}
+.hpCard::after{
+  content:"";
+  position:absolute; inset:0;
+  border-radius: inherit;
+  pointer-events:none;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.60);
+  opacity:.8;
+}
+@media(prefers-color-scheme:dark){
+  .hpCard{
+    background:
+      radial-gradient(800px 280px at 20% 0%, rgba(37,99,235,.14), transparent 60%),
+      linear-gradient(180deg, rgba(12,16,34,.88), rgba(12,16,34,.78));
+  }
+  .hpCard::after{ box-shadow: inset 0 1px 0 rgba(255,255,255,.08); }
+}
+
+/* Badges (SALE / NEW / -20%) */
+.hpBadgeRow{
+  position:absolute;
+  top:10px; left:10px; right:10px;
+  display:flex;
+  gap:8px;
+  z-index:3;
+  pointer-events:none;
+}
+.hpBadge{
+  pointer-events:none;
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  font-weight: 1000;
+  font-size: .78rem;
+  color: rgba(10,16,32,.88);
+  background: rgba(255,255,255,.86);
+  border: 1px solid rgba(10,16,32,.10);
+  box-shadow: var(--hp-sh1);
+}
+@media(prefers-color-scheme:dark){
+  .hpBadge{
+    color: rgba(238,242,255,.90);
+    background: rgba(9,12,24,.62);
+    border-color: rgba(148,163,184,.18);
+    box-shadow:none;
+  }
+}
+.hpBadge.sale{ background: rgba(245,158,11,.18); border-color: rgba(245,158,11,.28); }
+.hpBadge.new{ background: rgba(37,99,235,.14); border-color: rgba(37,99,235,.22); }
+
+/* Meta “tienda real”: rating, envíos, stock */
+.hpMetaTop{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.hpRating{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  font-weight: 950;
+  font-size: .86rem;
+  color: rgba(10,16,32,.75);
+}
+@media(prefers-color-scheme:dark){ .hpRating{ color: rgba(240,246,255,.75); } }
+.hpRating .star{
+  width:10px;height:10px;border-radius:3px;
+  background: linear-gradient(135deg, var(--hp-acc), rgba(245,158,11,.65));
+}
+.hpShip{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--hp-border);
+  background: rgba(255,255,255,.70);
+  font-weight: 950;
+  font-size: .78rem;
+}
+@media(prefers-color-scheme:dark){ .hpShip{ background: rgba(255,255,255,.06); } }
+.hpShip .bolt{
+  width:9px;height:9px;border-radius:999px;
+  background: linear-gradient(135deg, var(--hp-good), var(--hp-p2));
+}
+
+/* Precio con “before/after” */
+.hpPriceRow{ display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }
+.hpPriceNow{ font-weight: 1000; font-size: 1.12rem; }
+.hpPriceWas{
+  font-weight: 900;
+  color: var(--hp-muted);
+  text-decoration: line-through;
+  font-size: .92rem;
+}
+.hpOff{
+  font-weight: 1000;
+  font-size: .84rem;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: rgba(22,163,74,.12);
+  border: 1px solid rgba(22,163,74,.22);
+  color: rgba(22,163,74,.98);
+}
+
+/* 5) Grid se siente “premium”: separaciones y ritmo */
+.home-pro .gridP, .hp .gridP{ gap: 16px; margin-top: 12px; }
+
+/* 6) Botones: más “e-commerce” */
+.hpActions .btn.primary{
+  box-shadow: 0 18px 44px rgba(37,99,235,.20);
+}
+.hpActions .btn.ghost{
+  background: rgba(255,255,255,.60);
+}
+@media(prefers-color-scheme:dark){
+  .hpActions .btn.ghost{ background: rgba(255,255,255,.06); }
+}
+
+/* 7) Footer mini (si lo agregás) */
+.hp-miniFooter{
+  margin-top: 18px;
+  padding: 14px 16px;
+  border-radius: var(--hp-r-xl);
+  border: 1px solid var(--hp-border);
+  background: rgba(255,255,255,.62);
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  justify-content:space-between;
+  color: var(--hp-muted);
+  font-weight: 850;
+}
+@media(prefers-color-scheme:dark){
+  .hp-miniFooter{ background: rgba(255,255,255,.06); }
+}

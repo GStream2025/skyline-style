@@ -1,4 +1,4 @@
-{# app/templates/index.html — Skyline Store (PRO v10.1 · Premium · NO-500 · Account Unified) #}
+{# app/templates/index.html — Skyline Store (PRO v10.2 · Premium · NO-500 · Account Unified) #}
 {% extends "base.html" %}
 
 {% block title %}{{ meta_title | default("Skyline Store · Tech + Streetwear premium", true) }}{% endblock %}
@@ -90,8 +90,21 @@
   {# ---------- Assets (repetidos acá para usar en HTML) ---------- #}
   {% set hero_img = url_for('static', filename='img/banners/hero_home.png') %}
 
+  {# ============================================================
+     CONTENT
+  ============================================================= #}
   <main class="hp" id="hp" role="main">
 
+    {# ========= TOP TRUST PILLS (marketplace feel) ========= #}
+    <div class="hp-wrap">
+      <div class="hp-topTrust" aria-label="Beneficios destacados">
+        <div class="item"><span class="dot" aria-hidden="true"></span>Pago seguro <small>Protección & soporte</small></div>
+        <div class="item"><span class="dot" aria-hidden="true"></span>Envíos con tracking <small>Seguimiento real</small></div>
+        <div class="item"><span class="dot" aria-hidden="true"></span>Compra rápida <small>Checkout optimizado</small></div>
+      </div>
+    </div>
+
+    {# ========= TOPBAR (tu versión) ========= #}
     <section class="hp-topbar" aria-label="Beneficios principales">
       <div class="hp-wrap hp-topbar__inner">
         <div class="hp-topbar__item">
@@ -109,6 +122,7 @@
       </div>
     </section>
 
+    {# ========= HERO ========= #}
     <section class="hp-hero" aria-labelledby="hpTitle">
       <div class="hp-wrap hp-hero__grid">
 
@@ -185,6 +199,7 @@
       </div>
     </section>
 
+    {# ========= TRUST CARDS ========= #}
     <section class="hp-trust" aria-label="Confianza y seguridad">
       <div class="hp-wrap hp-trust__grid">
 
@@ -215,6 +230,7 @@
       </div>
     </section>
 
+    {# ========= CATEGORIES ========= #}
     <section class="hp-cats" aria-labelledby="hpCats">
       <div class="hp-wrap">
         <div class="hp-secHead">
@@ -251,6 +267,7 @@
       </div>
     </section>
 
+    {# ========= FEATURED ========= #}
     <section class="hp-featured" aria-labelledby="hpFeat">
       <div class="hp-wrap">
         <div class="hp-secHead">
@@ -265,18 +282,34 @@
             <div class="hp-empty card" aria-live="polite">
               <b>Sin destacados por ahora</b>
               <p>Podés explorar todo el catálogo y volver más tarde.</p>
-              <a class="btn primary" href="{{ shop_url }}">Ir a la tienda</a>
-              <a class="btn soft" href="{{ account_register_url }}">Crear cuenta</a>
+              <div class="hp-empty__actions">
+                <a class="btn primary" href="{{ shop_url }}">Ir a la tienda</a>
+                <a class="btn soft" href="{{ account_register_url }}">Crear cuenta</a>
+              </div>
             </div>
           {% else %}
             {% for p in featured_list %}
-              <article class="hp-prod">
-                <a class="hp-prod__img"
-                   href="{{ p.href | default(shop_url, true) }}"
-                   aria-label="{{ p.title | default('Producto', true) }}">
+              {# ---- SAFE fields ---- #}
+              {% set p_title = (p.title if p is defined and p and p.title is defined and p.title else 'Producto') %}
+              {% set p_href = (p.href if p is defined and p and p.href is defined and p.href else shop_url) %}
+              {% set p_img = (p.img if p is defined and p and p.img is defined and p.img else hero_img) %}
+              {% set p_tag = (p.tag if p is defined and p and p.tag is defined and p.tag else '') %}
+              {% set p_badge = (p.badge if p is defined and p and p.badge is defined and p.badge else '') %}
+              {% set p_rating = (p.rating if p is defined and p and p.rating is defined and p.rating else '') %}
+
+              <article class="hp-prod" aria-label="{{ p_title }}">
+                {# Badges (si vienen) #}
+                {% if p_badge or p_tag %}
+                  <div class="hp-badges" aria-hidden="true">
+                    {% if p_badge %}<span class="hp-badge hp-badge--sale">{{ p_badge }}</span>{% endif %}
+                    {% if p_tag %}<span class="hp-badge">{{ p_tag }}</span>{% endif %}
+                  </div>
+                {% endif %}
+
+                <a class="hp-prod__img" href="{{ p_href }}" aria-label="{{ p_title }}">
                   <img
-                    src="{{ p.img | default(hero_img, true) }}"
-                    alt="{{ p.title | default('Producto', true) }}"
+                    src="{{ p_img }}"
+                    alt="{{ p_title }}"
                     loading="lazy"
                     decoding="async"
                     class="hp-prodImg"
@@ -284,16 +317,31 @@
                 </a>
 
                 <div class="hp-prod__meta">
-                  <b class="hp-prod__title">{{ p.title | default('Producto', true) }}</b>
-                  <div class="hp-prod__price">
+                  <div class="hp-prod__top">
+                    <b class="hp-prod__title">{{ p_title }}</b>
+
+                    {# rating opcional (si no existe, no muestra) #}
+                    {% if p_rating %}
+                      <span class="hp-rating" aria-label="Rating {{ p_rating }}">
+                        <i aria-hidden="true">★</i> {{ p_rating }}
+                      </span>
+                    {% endif %}
+                  </div>
+
+                  <div class="hp-prod__price" aria-label="Precio">
                     {% with product=p %}
                       {% include "components/price.html" ignore missing %}
                     {% endwith %}
                   </div>
+
+                  <div class="hp-prod__micro" aria-label="Beneficios del producto">
+                    <span class="hp-microChip">⚡ Envío rápido</span>
+                    <span class="hp-microChip">🔒 Pago seguro</span>
+                  </div>
                 </div>
 
-                <div class="hp-prod__actions">
-                  <a class="btn primary" href="{{ p.href | default(shop_url, true) }}">Ver</a>
+                <div class="hp-prod__actions" role="group" aria-label="Acciones del producto">
+                  <a class="btn primary" href="{{ p_href }}">Ver</a>
                   <a class="btn ghost" href="{{ shop_url }}">Más</a>
                 </div>
               </article>
@@ -303,19 +351,21 @@
       </div>
     </section>
 
+    {# ========= FINAL CTA ========= #}
     <section class="hp-cta" aria-label="Llamado a la acción final">
       <div class="hp-wrap hp-cta__inner">
         <div>
           <h2 class="hp-cta__title">Comprá con confianza</h2>
           <p class="hp-cta__sub">Marketplace + marca propia. Envíos con seguimiento y soporte real.</p>
         </div>
-        <div class="hp-cta__btns">
+        <div class="hp-cta__btns" role="group" aria-label="Acciones finales">
           <a class="btn primary" href="{{ shop_url }}">Empezar ahora</a>
           <a class="btn soft" href="{{ account_register_url }}">Crear cuenta</a>
         </div>
       </div>
     </section>
 
+    {# ========= STICKY MOBILE CTA ========= #}
     <div class="hp-sticky" id="hpSticky" aria-live="polite">
       <div class="hp-sticky__txt">
         <b>Skyline Store</b>
@@ -324,6 +374,7 @@
       <a href="{{ shop_url }}" class="hp-sticky__btn">Comprar</a>
     </div>
 
+    {# ========= TO TOP ========= #}
     <button id="toTop" type="button" class="to-top" aria-label="Volver arriba">↑</button>
 
   </main>
