@@ -1,23 +1,32 @@
 services:
   - type: web
     name: skyline-style
-    env: python
+    runtime: python
     region: oregon
     plan: free
     branch: master
     autoDeploy: true
 
+    # Liveness
     healthCheckPath: /health
 
+    # -------------------------
     # Build reproducible + rápido
+    # -------------------------
     buildCommand: |
       python -m pip install --upgrade pip setuptools wheel
       pip install --no-cache-dir -r requirements.txt
 
-    # Gunicorn sólido para Render
+    # (Opcional) si usás Flask-Migrate en prod:
+    # preDeployCommand: |
+    #   flask --app app db upgrade
+
+    # -------------------------
+    # Start (Gunicorn sólido para Render)
+    # -------------------------
     startCommand: >
       gunicorn wsgi:app
-      --bind 0.0.0.0:$PORT
+      --bind 0.0.0.0:${PORT}
       --workers ${WEB_CONCURRENCY:-2}
       --threads ${GUNICORN_THREADS:-4}
       --timeout ${GUNICORN_TIMEOUT:-120}
@@ -34,7 +43,7 @@ services:
       # Runtime
       # -------------------------
       - key: PYTHON_VERSION
-        value: 3.12.9
+        value: "3.12.9"
 
       # -------------------------
       # App env
@@ -48,25 +57,31 @@ services:
 
       # -------------------------
       # Seguridad / HTTPS / Proxy
-      # CLAVE para CSRF y sesiones en Render
+      # IMPORTANTÍSIMO en Render para cookies/CSRF
       # -------------------------
       - key: FORCE_HTTPS
         value: "1"
       - key: TRUST_PROXY_HEADERS
         value: "1"
+
+      # Cookies (tu create_app debería leerlas)
       - key: COOKIE_SECURE
         value: "1"
       - key: SESSION_SAMESITE
-        value: Lax
+        value: "Lax"
       - key: SESSION_COOKIE_HTTPONLY
         value: "1"
 
-      # Token CSRF con más tolerancia en mobile
+      # CSRF: más tolerancia
       - key: WTF_CSRF_TIME_LIMIT
         value: "3600"
 
+      # (Opcional ultra strict) bloquear sqlite en prod:
+      # - key: REQUIRE_POSTGRES
+      #   value: "1"
+
       # -------------------------
-      # Secrets (solo dashboard)
+      # Secrets (solo dashboard / Render UI)
       # -------------------------
       - key: SECRET_KEY
         sync: false
@@ -74,10 +89,11 @@ services:
         sync: false
 
       # -------------------------
-      # Uploads (ojo: FREE no persiste)
+      # Uploads (FREE NO persiste en disco)
+      # Recomendado: S3/R2 en futuro
       # -------------------------
       - key: UPLOADS_DIR
-        value: static/uploads
+        value: "static/uploads"
 
       # -------------------------
       # Printful
