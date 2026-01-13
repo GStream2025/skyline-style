@@ -11,31 +11,41 @@
 
 # -----------------------------------------------------
 # 1) DEFAULTS
-# Todo texto se normaliza automáticamente
+# Normaliza texto automáticamente (recomendado)
 # -----------------------------------------------------
 * text=auto
 
 # -----------------------------------------------------
 # 2) CÓDIGO / CONFIG (SIEMPRE LF)
-# Compatible con Render, Docker y Linux
+# Render/Docker/Linux friendly
 # -----------------------------------------------------
 *.py        text eol=lf
 *.wsgi      text eol=lf
+
 *.jinja     text eol=lf
 *.j2        text eol=lf
 *.html      text eol=lf
 *.css       text eol=lf
 *.js        text eol=lf
 *.mjs       text eol=lf
+*.ts        text eol=lf
+*.tsx       text eol=lf
+*.map       text eol=lf
+
 *.json      text eol=lf
 *.yml       text eol=lf
 *.yaml      text eol=lf
 *.toml      text eol=lf
 *.ini       text eol=lf
 *.cfg       text eol=lf
+
 *.md        text eol=lf
 *.txt       text eol=lf
-*.env*      text eol=lf
+*.csv       text eol=lf
+*.sql       text eol=lf
+
+.env        text eol=lf
+.env.*      text eol=lf
 Dockerfile  text eol=lf
 *.sh        text eol=lf
 
@@ -50,49 +60,50 @@ Dockerfile  text eol=lf
 *.bat       text eol=crlf
 
 # -----------------------------------------------------
-# 4) BINARIOS (NUNCA TOCAR / NUNCA DIFF)
+# 4) BINARIOS (NUNCA TOCAR / NUNCA EOL)
 # -----------------------------------------------------
-*.png       -text
-*.jpg       -text
-*.jpeg      -text
-*.webp      -text
-*.gif       -text
-*.ico       -text
-*.pdf       -text
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.webp      binary
+*.gif       binary
+*.ico       binary
+*.pdf       binary
+*.svg       binary
 
-*.zip       -text
-*.rar       -text
-*.7z        -text
-*.tar       -text
-*.gz        -text
-*.tgz       -text
+*.zip       binary
+*.rar       binary
+*.7z        binary
+*.tar       binary
+*.gz        binary
+*.tgz       binary
 
-*.woff      -text
-*.woff2     -text
-*.ttf       -text
-*.otf       -text
-*.eot       -text
+*.woff      binary
+*.woff2     binary
+*.ttf       binary
+*.otf       binary
+*.eot       binary
 
-*.mp4       -text
-*.mov       -text
-*.avi       -text
-*.mp3       -text
-*.wav       -text
+*.mp4       binary
+*.mov       binary
+*.avi       binary
+*.mp3       binary
+*.wav       binary
 
 # -----------------------------------------------------
-# 5) MERGE / LOCK FILES
-# Evita conflictos inútiles
+# 5) LOCKFILES (texto LF, merge normal)
+# OJO: NO usar merge=ours por defecto (puede ocultar updates)
 # -----------------------------------------------------
-*.lock          -text merge=ours
-poetry.lock    -text merge=ours
-Pipfile.lock   -text merge=ours
+poetry.lock   text eol=lf
+Pipfile.lock  text eol=lf
+*.lock        text eol=lf
 
 # -----------------------------------------------------
 # 6) BASES DE DATOS (aunque no se versionen)
 # -----------------------------------------------------
-*.db        -text
-*.sqlite    -text
-*.sqlite3   -text
+*.db        binary
+*.sqlite    binary
+*.sqlite3   binary
 
 # -----------------------------------------------------
 # FIN

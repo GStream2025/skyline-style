@@ -18,18 +18,20 @@ __pycache__/
 .pytype/
 .pyright/
 .pyrightcache/
-.pycoverage/
+
 .coverage
 coverage.xml
 htmlcov/
 *.cover
+.pycoverage/
 
 # -----------------------------------------------------
-# BUILD / DIST
+# BUILD / DIST / PACKAGING
 # -----------------------------------------------------
 build/
 dist/
 *.egg-info/
+.eggs/
 pip-wheel-metadata/
 pip-log.txt
 pip-delete-this-directory.txt
@@ -107,8 +109,14 @@ instance/
 *.sqlite-shm
 skyline_local.db
 
+# Postgres dumps / backups locales
+*.dump
+*.sql
+*.sql.gz
+
 # -----------------------------------------------------
 # ALEMBIC / MIGRATIONS (CACHE)
+# (No ignorar versiones .py reales)
 # -----------------------------------------------------
 **/alembic/__pycache__/
 **/alembic/versions/*.pyc
@@ -131,18 +139,20 @@ desktop.ini
 *.tmp
 
 # -----------------------------------------------------
-# FRONTEND / NODE (FUTURO)
+# FRONTEND / NODE (SI SE USA)
 # -----------------------------------------------------
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+
 .parcel-cache/
 .next/
 .nuxt/
 .cache/
-dist/
+
+# (dist ya está arriba, evitar duplicados)
 
 # -----------------------------------------------------
 # BACKUPS / ARCHIVOS PESADOS
@@ -157,23 +167,19 @@ dist/
 _backup_*/
 backup/
 backups/
-*.dump
-*.sql
-*.sql.gz
 
 # -----------------------------------------------------
 # UPLOADS / MEDIA DINÁMICA
-# -----------------------------------------------------
 # Assets oficiales → versionar en app/static/img/
 # Uploads dinámicos → NO versionar
+# -----------------------------------------------------
 app/static/uploads/**
 
-# Mantener estructura
+# Mantener estructura mínima
 !app/static/uploads/.gitkeep
-!app/static/uploads/products/
 !app/static/uploads/products/.gitkeep
 
-# Temporales
+# Temporales / thumbs
 app/static/uploads/**/thumbs/**
 app/static/uploads/**/tmp/**
 
@@ -186,6 +192,8 @@ app/static/uploads/**/tmp/**
 .netlify/
 .railway/
 .fly/
+
+# Docker local helpers
 .docker/
 docker-compose.override.yml
 

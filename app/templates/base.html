@@ -1,13 +1,15 @@
-{# app/templates/base.html — Skyline Store (ULTRA PRO ENTERPRISE · v5 FINAL)
+{# app/templates/base.html — Skyline Store (ULTRA PRO ENTERPRISE · v5.1 FINAL)
    ✅ NO 500 / FAIL-SAFE / FUTURE-PROOF / Account Unified
 
-   FIXES/MEJORAS v5:
-   1) ✅ Account unificado: prioriza /auth/account (tabs login/register) + links con ?tab=
-   2) ✅ CSP nonce-friendly: soporte nonce para <style>/<script> inline (sin romper si no existe)
-   3) ✅ CSRF robusto: preferir csrf_token_value; fallback csrf_token() si existe
-   4) ✅ safe_url sin kwargs (Jinja compatible) + fallbacks estables
-   5) ✅ Fetch patch + CSRF hidden para forms non-GET (same-origin)
-   6) ✅ Pequeñas mejoras a11y / robustness (no reventar si faltan cosas)
+   FIXES v5.1:
+   1) ✅ FIX: Jinja syntax (faltaba cierre en _csp_nonce)
+   2) ✅ FIX: CSP nonce ultra-safe (sin depender de g)
+   3) ✅ FIX: Endpoints reales (según flask routes)
+      - home: main.home
+      - shop: shop.shop
+      - cart: cart.cart_view
+      - account: main.account (unificado)
+   4) ✅ FIX: remove main.index fallback inexistente
 #}
 <!doctype html>
 <html lang="es">
@@ -22,8 +24,12 @@
   {% set _path = (_req.path if _req and _req.path else '') %}
   {% set _args = (_req.args if _req and _req.args else {}) %}
 
-  {# CSP nonce: compatible con varias configuraciones (Talisman / custom) #}
-  {% set _csp_nonce = csp_nonce|default(nonce|default(g.nonce|default('', true), true), true) %}
+  {# CSP nonce: ultra safe (no depende de g) #}
+  {% set _csp_nonce = (csp_nonce
+      if csp_nonce is defined and csp_nonce
+      else (nonce if nonce is defined and nonce else '')
+    )
+  %}
 
   {# ✅ Jinja compatible: sin **kwargs #}
   {% macro safe_url(endpoint, fallback='/') -%}
@@ -63,9 +69,7 @@
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
 
-  {# ✅ CSP meta (si Talisman mete headers, esto no debería usarse).
-     Si querés 100% nonce-strict: lo ideal es CSP en headers (Talisman) y sacar 'unsafe-inline'.
-  #}
+  {# CSP meta (si Talisman mete headers, esto es secundario) #}
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'self';
                  base-uri 'self';
@@ -81,12 +85,7 @@
   <meta name="color-scheme" content="light dark">
   <meta name="theme-color" content="#2563eb">
 
-  {# ✅ CSRF robusto:
-     Prioridad:
-       1) csrf_token_value (inyectado desde Python)
-       2) csrf_token() (Flask-WTF)
-       3) vacío
-  #}
+  {# ✅ CSRF robusto #}
   {% set _csrf_value = '' %}
   {% if csrf_token_value is defined and csrf_token_value %}
     {% set _csrf_value = csrf_token_value %}
@@ -102,21 +101,20 @@
     <link rel="preload" as="image" href="{{ hero_image }}">
   {% endif %}
 
-  {# Fonts (perf) #}
+  {# Fonts #}
   <link rel="dns-prefetch" href="https://fonts.googleapis.com">
   <link rel="dns-prefetch" href="https://fonts.gstatic.com">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 
-  {# CSS base global (orden IMPORTANTÍSIMO) #}
+  {# CSS #}
   <link rel="preload" as="style" href="{{ url_for('static', filename='css/skyline-pro.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/skyline-pro.css') }}">
 
   <link rel="preload" as="style" href="{{ url_for('static', filename='css/components.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}">
 
-  {# Página puede inyectar CSS extra aquí #}
   {% block extra_css %}{% endblock %}
 
   <style{% if _csp_nonce %} nonce="{{ _csp_nonce|e }}"{% endif %}>
@@ -133,25 +131,14 @@
 <a class="skip" href="#main">Saltar al contenido</a>
 
 {# =========================
-   URLS dinámicas: jamás rompe
+   URLS dinámicas: REALES (según flask routes)
 ========================= #}
 {% set _home_href = safe_url('main.home', '/') %}
-{% if _home_href == '/' %}{% set _home_href = safe_url('main.index', '/') %}{% endif %}
-
 {% set _shop_href = safe_url('shop.shop', '/shop') %}
+{% set _cart_href = safe_url('cart.cart_view', '/cart/') %}
 
-{% set _cart_href = safe_url('cart.view', '/cart') %}
-{% if _cart_href == '/cart' %}{% set _cart_href = safe_url('cart.cart', '/cart') %}{% endif %}
-{% if _cart_href == '/cart' %}{% set _cart_href = safe_url('cart.index', '/cart') %}{% endif %}
-
-{# ✅ Account unificado: prioriza /auth/account, luego viejos endpoints #}
-{% set _account_href = safe_url('auth.account', '/auth/account') %}
-{% if _account_href == '/auth/account' %}{% set _account_href = safe_url('account.account', '/auth/account') %}{% endif %}
-{% if _account_href == '/auth/account' %}{% set _account_href = safe_url('cuenta.account', '/auth/account') %}{% endif %}
-{% if _account_href == '/auth/account' %}{% set _account_href = safe_url('auth.login', '/auth/login') %}{% endif %}
-{% if _account_href == '/auth/account' %}{% set _account_href = safe_url('account.login', '/auth/login') %}{% endif %}
-
-{# helpers: links directos a tabs (no rompe aunque no los uses) #}
+{# ✅ Account unificado real: main.account => /account #}
+{% set _account_href = safe_url('main.account', '/account') %}
 {% set _acc_login = _account_href ~ ('?tab=login' if '?' not in _account_href else '&tab=login') %}
 {% set _acc_register = _account_href ~ ('?tab=register' if '?' not in _account_href else '&tab=register') %}
 
@@ -210,7 +197,6 @@
               style="display:none">0</span>
       </a>
 
-      {# ✅ cuando no está logueado, te manda al tab login por defecto #}
       <a href="{{ (_account_href if _user_ok else _acc_login) }}" class="account-chip" aria-label="Mi cuenta">
         <span class="avatar" aria-hidden="true"></span>
         <span class="account-txt">
@@ -252,7 +238,8 @@
     <div>
       <strong>Explorar</strong><br>
       <a href="{{ _shop_href }}">Tienda</a><br>
-      <a href="{{ _shop_href }}?ofertas=1">Ofertas</a>
+      <a href="{{ _shop_href }}?ofertas=1">Ofertas</a><br>
+      <a href="{{ safe_url('main.about', '/about') }}">Sobre nosotros</a>
     </div>
 
     <div>
@@ -281,7 +268,7 @@
   const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
   const token = $('meta[name="csrf-token"]')?.content || "";
 
-  // ✅ Mejora: agrega CSRF por defecto a fetch (solo same-origin)
+  // ✅ Fetch patch CSRF (solo same-origin)
   if (token && !window.__ss_fetch_patched) {
     window.__ss_fetch_patched = true;
     const _fetch = window.fetch.bind(window);
@@ -299,7 +286,7 @@
     };
   }
 
-  // CSRF hidden for non-GET forms (safe)
+  // CSRF hidden for non-GET forms
   if (token) {
     $$('form').forEach(f => {
       const m = String(f.method || 'GET').toUpperCase();
@@ -334,10 +321,10 @@
     q.focus({ preventScroll: true });
   });
 
-  // Cart badge: try multiple endpoints, fail silent
+  // Cart badge (tu endpoint real es /cart/json)
   const badge = $('[data-cart-badge]');
   if (badge) {
-    const endpoints = ['/cart/json', '/_cart/json'];
+    const endpoints = ['/cart/json'];
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 3500);
 

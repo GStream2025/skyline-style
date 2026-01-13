@@ -49,6 +49,7 @@ main_bp = Blueprint(
 # -----------------------------------------------------------------------------
 
 _TRUE = {"1", "true", "yes", "y", "on", "checked"}
+_FALSE = {"0", "false", "no", "n", "off", "unchecked"}
 
 # ✅ Debe coincidir (aprox) con auth_routes.py (AUTH_FORM_NONCE_TTL)
 FORM_NONCE_TTL = int(os.getenv("AUTH_FORM_NONCE_TTL", "1200") or "1200")
@@ -58,12 +59,19 @@ FORM_NONCE_TTL = max(30, min(FORM_NONCE_TTL, 3600))
 NONCE_CLEANUP_MAX = int(os.getenv("AUTH_NONCE_CLEANUP_MAX", "25") or "25")
 NONCE_CLEANUP_MAX = max(5, min(NONCE_CLEANUP_MAX, 200))
 
+# ✅ Podés forzar que "/" redirija a la tienda (evita choque si existe shop.root "/")
+HOME_REDIRECT_TO_SHOP = str(os.getenv("HOME_REDIRECT_TO_SHOP", "") or "").strip().lower() in _TRUE
 
 def _env_bool(key: str, default: bool = False) -> bool:
     v = os.getenv(key)
     if v is None:
         return default
-    return str(v).strip().lower() in _TRUE
+    s = str(v).strip().lower()
+    if not s:
+        return default
+    if s in _FALSE:
+        return False
+    return s in _TRUE
 
 
 def _utcnow() -> datetime:
@@ -168,10 +176,12 @@ def _etag_for(text: str) -> str:
     return f'W/"{h[:32]}"'
 
 
-def _resp_no_store(resp):
+def _resp_no_store(resp, *, vary_cookie: bool = True):
+    # no-store para formularios / áreas sensibles
     resp.headers["Cache-Control"] = "no-store"
     resp.headers["Pragma"] = "no-cache"
-    resp.headers["Vary"] = "Cookie"
+    if vary_cookie:
+        resp.headers.setdefault("Vary", "Cookie")
     return resp
 
 
@@ -188,7 +198,11 @@ def _maybe_304(req_etag: Optional[str], etag: str):
     if not req_etag:
         return None
     try:
-        return make_response("", 304) if req_etag == etag else None
+        # If-None-Match puede traer lista: W/"xxx", W/"yyy"
+        inm = req_etag.strip()
+        if inm == etag or etag in {x.strip() for x in inm.split(",")}:
+            return make_response("", 304)
+        return None
     except Exception:
         return None
 
@@ -231,7 +245,11 @@ def _render(template: str, *, status: int = 200, **ctx: Any):
     except Exception:
         # fallback ABSOLUTO: nunca debe romper (evita 500 por template missing)
         log.exception("Template render failed: %s", template)
-        return make_response("Ocurrió un error cargando la página.", 500)
+        # intentamos usar un error.html si existe; si no, texto simple
+        try:
+            return make_response(render_template("error.html", error_code=500, error_title="Error", error_message="Ocurrió un error."), 500)
+        except Exception:
+            return make_response("Ocurrió un error cargando la página.", 500)
 
 
 # -----------------------------------------------------------------------------
@@ -258,34 +276,23 @@ def _cleanup_old_nonces() -> None:
     """
     try:
         keys = [k for k in session.keys() if isinstance(k, str) and k.startswith("nonce:")]
-        if len(keys) <= NONCE_CLEANUP_MAX:
-            # igual limpiamos los vencidos
-            for k in keys:
-                raw = session.get(k)
-                if not _nonce_is_valid(raw):
-                    session.pop(k, None)
-            return
-
-        # si hay demasiados, borramos vencidos primero
-        removed = 0
+        # primero limpiamos vencidos siempre
         for k in keys:
             raw = session.get(k)
             if not _nonce_is_valid(raw):
                 session.pop(k, None)
-                removed += 1
 
-        # si sigue habiendo muchos, recortamos arbitrariamente
         keys = [k for k in session.keys() if isinstance(k, str) and k.startswith("nonce:")]
-        if len(keys) > NONCE_CLEANUP_MAX:
-            # borramos extras (orden no garantizado, pero es suficiente)
-            for k in keys[: max(0, len(keys) - NONCE_CLEANUP_MAX)]:
-                session.pop(k, None)
-                removed += 1
+        if len(keys) <= NONCE_CLEANUP_MAX:
+            return
 
-        if removed:
-            session.modified = True
+        # si sigue habiendo demasiados, recortamos arbitrariamente
+        extras = len(keys) - NONCE_CLEANUP_MAX
+        for k in keys[: max(0, extras)]:
+            session.pop(k, None)
+
+        session.modified = True
     except Exception:
-        # no rompe jamás
         return
 
 
@@ -325,13 +332,13 @@ def _security_headers(resp):
     resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
     resp.headers.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+    resp.headers.setdefault("X-Served-By", "skyline")
 
     # No cachear pantallas sensibles
     if request.path.startswith(("/auth", "/admin", "/account", "/checkout", "/cart")):
         resp.headers.setdefault("Cache-Control", "no-store")
+        resp.headers.setdefault("Vary", "Cookie")
 
-    # Señal útil para debugging de proxies (no sensible)
-    resp.headers.setdefault("X-Served-By", "skyline")
     return resp
 
 
@@ -341,6 +348,13 @@ def _security_headers(resp):
 
 @main_bp.get("/")
 def home():
+    # ✅ Si querés que la tienda sea el home y evitar choques con shop.root
+    if HOME_REDIRECT_TO_SHOP:
+        try:
+            return redirect(url_for("shop.shop"), code=302)
+        except Exception:
+            return redirect("/shop", code=302)
+
     lang = (request.headers.get("Accept-Language") or "es").split(",")[0].strip().lower()
     key = f"home:v3.3:lang={lang}"
 
@@ -397,7 +411,7 @@ def account():
         nonce_login=nonce_login,
         nonce_register=nonce_register,
     )
-    return _resp_no_store(resp)
+    return _resp_no_store(resp, vary_cookie=True)
 
 
 @main_bp.get("/cuenta")
@@ -438,8 +452,9 @@ def health():
     }
 
     resp = jsonify(data)
-    resp = _resp_no_store(resp)
-    return resp, (200 if ok else 503)
+    _resp_no_store(resp, vary_cookie=False)
+    resp.status_code = 200 if ok else 503
+    return resp
 
 
 @main_bp.get("/robots.txt")
@@ -527,14 +542,14 @@ def sitemap():
 def go():
     nxt = (request.args.get("next", "") or "").strip()
     if _is_safe_next(nxt):
-        return redirect(nxt)
-    return redirect(url_for("main.home"))
+        return redirect(nxt, code=302)
+    return redirect(url_for("main.home"), code=302)
 
 
 @main_bp.get("/favicon.ico")
 def favicon():
     try:
-        return redirect(url_for("static", filename="favicon.ico"))
+        return redirect(url_for("static", filename="favicon.ico"), code=302)
     except Exception:
         return ("", 204)
 

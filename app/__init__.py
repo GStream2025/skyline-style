@@ -1,4 +1,4 @@
-﻿# app/__init__.py — Skyline Store (ULTRA PRO / NO BREAK / Render-safe) — vNEXT FINAL (HARDENED + Unified Account)
+﻿# app/__init__.py — Skyline Store (ULTRA PRO / NO BREAK / Render-safe)
 from __future__ import annotations
 
 import logging
@@ -18,7 +18,7 @@ from app.models import db, init_models
 # ✅ compat (no rompe si no existe)
 try:
     from app.models import create_admin_if_missing  # type: ignore
-except Exception:
+except Exception:  # pragma: no cover
     create_admin_if_missing = None  # type: ignore
 
 
@@ -26,7 +26,7 @@ except Exception:
 # Helpers
 # =============================================================================
 
-_TRUE = {"1", "true", "yes", "y", "on"}
+_TRUE = {"1", "true", "yes", "y", "on", "checked"}
 _FALSE = {"0", "false", "no", "n", "off"}
 
 
@@ -84,7 +84,7 @@ def _env_name(app: Flask) -> str:
 
 def _is_prod(app: Flask) -> bool:
     # Si DEBUG=True => NO prod (aunque ENV diga otra cosa)
-    if bool(app.config.get("DEBUG")) or bool(app.debug):
+    if bool(app.config.get("DEBUG")) or bool(getattr(app, "debug", False)):
         return False
     return _env_name(app) == "production"
 
@@ -130,7 +130,7 @@ def setup_logging(app: Flask) -> None:
     if lvl in {"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"}:
         level = getattr(logging, lvl)
     else:
-        level = logging.DEBUG if app.debug else logging.INFO
+        level = logging.DEBUG if bool(getattr(app, "debug", False)) else logging.INFO
 
     root = logging.getLogger()
     if not root.handlers:
@@ -149,7 +149,7 @@ def safe_init(app: Flask, label: str, fn: Callable[[], Any]) -> Any:
         app.logger.info("✅ %s inicializado", label)
         return out
     except Exception as e:
-        app.logger.warning("⚠️ %s omitido: %s", label, e, exc_info=bool(app.debug))
+        app.logger.warning("⚠️ %s omitido: %s", label, e, exc_info=bool(getattr(app, "debug", False)))
         return None
 
 
@@ -208,7 +208,7 @@ def _ensure_secret_key_dev(app: Flask) -> None:
 
 
 def _mask_db_url(uri: Any) -> str:
-    """✅ Mejora: no loguear la password real."""
+    """✅ No loguear la password real."""
     s = str(uri or "")
     if not s:
         return ""
@@ -251,6 +251,7 @@ def init_csrf(app: Flask) -> None:
         for pref in [x.strip() for x in extra.split(",") if x.strip()]:
             exempt_prefixes.add(pref)
 
+    # cache para no estar eximiendo el mismo endpoint 1000 veces
     exempted_endpoints: Set[str] = set()
 
     @app.before_request
@@ -296,11 +297,6 @@ def init_compress(app: Flask) -> None:
 
 
 def init_talisman(app: Flask) -> None:
-    """
-    ✅ Unificación + account:
-    - Si usás nonces/headers CSP acá, podés pasar dict CSP en app.config['CONTENT_SECURITY_POLICY'].
-    - base.html puede traer meta CSP, pero lo ideal es HEADERS (Talisman) en prod.
-    """
     from flask_talisman import Talisman
 
     force_https = bool(app.config.get("FORCE_HTTPS", _is_prod(app)))
@@ -319,8 +315,14 @@ def init_migrate(app: Flask) -> None:
 
 
 def init_limiter(app: Flask) -> None:
-    from flask_limiter import Limiter
-    from flask_limiter.util import get_remote_address
+    """
+    ✅ Limiter opcional: si no está instalado, no rompe.
+    """
+    try:
+        from flask_limiter import Limiter
+        from flask_limiter.util import get_remote_address
+    except Exception as e:
+        raise RuntimeError(f"flask_limiter missing ({e})")
 
     storage = _env_str("RATE_LIMIT_STORAGE_URI", "memory://")
     default_limit = _env_str("RATE_LIMIT_DEFAULT", "300 per hour")
@@ -332,11 +334,6 @@ def init_limiter(app: Flask) -> None:
 # =============================================================================
 
 def _configure_session_cookies(app: Flask) -> None:
-    """
-    ✅ Render-proof + Flask 3-proof
-    - Flask usa varias keys; setdefault evita KeyError
-    - En Render NO conviene setear dominio a mano salvo que sepas lo que hacés
-    """
     allow_domain = _env_bool("ALLOW_COOKIE_DOMAIN", False)
 
     if not allow_domain:
@@ -347,30 +344,25 @@ def _configure_session_cookies(app: Flask) -> None:
     app.config.setdefault("SESSION_COOKIE_PATH", "/")
     app.config.setdefault("SESSION_COOKIE_HTTPONLY", True)
 
-    # SameSite
-    samesite = str(app.config.get("SESSION_COOKIE_SAMESITE") or "Lax")
-    samesite_norm = samesite[:1].upper() + samesite[1:].lower()
+    samesite = str(app.config.get("SESSION_COOKIE_SAMESITE") or "Lax").strip()
+    samesite_norm = samesite[:1].upper() + samesite[1:].lower() if samesite else "Lax"
     if samesite_norm not in {"Lax", "Strict", "None"}:
         samesite_norm = "Lax"
     app.config["SESSION_COOKIE_SAMESITE"] = samesite_norm
 
-    # Secure
     if _is_prod(app):
         app.config.setdefault("SESSION_COOKIE_SECURE", True)
     else:
         app.config.setdefault("SESSION_COOKIE_SECURE", False)
 
-    # browsers: SameSite=None => Secure=True
     if app.config.get("SESSION_COOKIE_SAMESITE") == "None":
         app.config["SESSION_COOKIE_SECURE"] = True
 
     app.config.setdefault("SESSION_REFRESH_EACH_REQUEST", False)
 
-    # Lifetime robusto
     days = _env_int("SESSION_DAYS", int(app.config.get("SESSION_DAYS", 7) or 7), min_v=1, max_v=90)
     app.config.setdefault("PERMANENT_SESSION_LIFETIME", timedelta(days=days))
 
-    # Scheme (ayuda en url_for externos)
     app.config.setdefault("PREFERRED_URL_SCHEME", "https" if _is_prod(app) else "http")
 
 
@@ -407,10 +399,10 @@ def create_app() -> Flask:
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
         setattr(app, "_proxyfix_applied", True)
 
-    # 5) Cookies/sesión (FIX KeyError Flask 3 + Render)
+    # 5) Cookies/sesión
     _configure_session_cookies(app)
 
-    # 6) CSRF defaults (⚠️ tiempo y ssl strict)
+    # 6) CSRF defaults
     app.config.setdefault("WTF_CSRF_SSL_STRICT", _env_bool("WTF_CSRF_SSL_STRICT", default=False))
     app.config.setdefault("WTF_CSRF_TIME_LIMIT", _env_int("WTF_CSRF_TIME_LIMIT", 3600, min_v=60, max_v=24 * 3600))
 
@@ -421,7 +413,7 @@ def create_app() -> Flask:
     app.logger.info(
         "🚀 create_app ENV=%s DEBUG=%s DB=%s SECURE=%s SAMESITE=%s CSRF_TTL=%s COOKIE_DOMAIN=%s",
         _env_name(app),
-        bool(app.debug),
+        bool(getattr(app, "debug", False)),
         _mask_db_url(app.config.get("SQLALCHEMY_DATABASE_URI")),
         app.config.get("SESSION_COOKIE_SECURE"),
         app.config.get("SESSION_COOKIE_SAMESITE"),
@@ -434,57 +426,80 @@ def create_app() -> Flask:
     # =============================================================================
     critical_init(app, "CSRFProtect", lambda: init_csrf(app))
 
-    safe_init(
-        app,
-        "Flask-Compress",
-        lambda: init_compress(app) if app.config.get("ENABLE_COMPRESS", True) else None,
-    )
-    safe_init(
-        app,
-        "Flask-Talisman",
-        lambda: init_talisman(app) if app.config.get("ENABLE_TALISMAN", False) else None,
-    )
+    safe_init(app, "Flask-Compress", lambda: init_compress(app) if app.config.get("ENABLE_COMPRESS", True) else None)
+    safe_init(app, "Flask-Talisman", lambda: init_talisman(app) if app.config.get("ENABLE_TALISMAN", False) else None)
 
     # ✅ MODELS HUB (CRÍTICO)
-    def _models_hub():
-        return init_models(app, create_admin=True, log_loaded_models=True, ping_db=True)
-
-    critical_init(app, "Models hub", _models_hub)
+    critical_init(app, "Models hub", lambda: init_models(app, create_admin=True, log_loaded_models=True, ping_db=True))
 
     # ✅ Migrate / Limiter DESPUÉS de DB lista
     safe_init(app, "Flask-Migrate", lambda: init_migrate(app))
     safe_init(app, "Flask-Limiter", lambda: init_limiter(app))
 
     # =============================================================================
-    # Jinja Globals (UNION SAFE) — para templates fail-safe (has_endpoint)
+    # Jinja Globals
     # =============================================================================
     app.jinja_env.globals["has_endpoint"] = (lambda ep: has_endpoint(app, ep))
 
     # =============================================================================
-    # Hooks: request-id + admin no-cache + session permanent
+    # Hooks: un SOLO pipeline before_request / after_request (evita duplicados)
     # =============================================================================
+    registered: List[str] = []
+
     @app.before_request
-    def _before_request():
+    def _pipeline_before_request():
+        # request-id
         rid = request.headers.get("X-Request-Id") or secrets.token_urlsafe(10)
         try:
             request._request_id = rid  # type: ignore[attr-defined]
         except Exception:
             pass
 
+        # admin no-cache mark
         if _env_bool("ADMIN_NO_CACHE", True) and (request.path or "").startswith("/admin"):
             try:
                 request._admin_no_cache = True  # type: ignore[attr-defined]
             except Exception:
                 pass
 
+        # session permanent default
         if _env_bool("SESSION_PERMANENT_DEFAULT", True):
             try:
                 session.permanent = True
             except Exception:
                 pass
 
+        # Unified Account redirects (solo GET/HEAD)
+        if request.method in {"GET", "HEAD"}:
+            p = (request.path or "")
+            if not p.startswith("/auth/account"):
+                nxt = (request.args.get("next") or "").strip()
+                if not (nxt.startswith("/") and not nxt.startswith("//")):
+                    nxt = ""
+
+                def _redir(tab: str):
+                    try:
+                        if "main.account" in app.view_functions:
+                            # tu canonical real ahora es main.account (/account)
+                            if nxt:
+                                return redirect(url_for("main.account", tab=tab, next=nxt))
+                            return redirect(url_for("main.account", tab=tab))
+                    except Exception:
+                        pass
+                    q = f"?tab={tab}"
+                    if nxt:
+                        q += f"&next={nxt}"
+                    return redirect("/account" + q)
+
+                if p in {"/auth/login", "/login", "/account/login", "/cuenta/login"}:
+                    return _redir("login")
+                if p in {"/auth/register", "/register", "/account/register", "/cuenta/register"}:
+                    return _redir("register")
+
+        return None
+
     @app.after_request
-    def _after_request(resp):
+    def _pipeline_after_request(resp):
         # request-id
         try:
             rid = getattr(request, "_request_id", None)
@@ -517,54 +532,7 @@ def create_app() -> Flask:
         return resp
 
     # =============================================================================
-    # Unified Account: canonical redirects (sin romper legacy)
-    # =============================================================================
-    @app.before_request
-    def _account_unify_redirects():
-        """
-        ✅ Si unificaste login+registro en /auth/account:
-        - /auth/login  -> /auth/account?tab=login
-        - /auth/register -> /auth/account?tab=register
-        - /account/login -> /auth/account?tab=login
-        - /account/register -> /auth/account?tab=register
-        Solo aplica en GET/HEAD, evita loops.
-        """
-        p = (request.path or "")
-        if request.method not in {"GET", "HEAD"}:
-            return None
-
-        if p.startswith("/auth/account"):
-            return None
-
-        nxt = (request.args.get("next") or "").strip()
-        if not (nxt.startswith("/") and not nxt.startswith("//")):
-            nxt = ""
-
-        def _redir(tab: str):
-            try:
-                if "auth.account" in app.view_functions:
-                    if nxt:
-                        return redirect(url_for("auth.account", tab=tab, next=nxt))
-                    return redirect(url_for("auth.account", tab=tab))
-            except Exception:
-                pass
-            q = f"?tab={tab}"
-            if nxt:
-                q += f"&next={nxt}"
-            return redirect("/auth/account" + q)
-
-        if p in {"/auth/login", "/login"}:
-            return _redir("login")
-        if p in {"/auth/register", "/register"}:
-            return _redir("register")
-        if p in {"/account/login", "/cuenta/login"}:
-            return _redir("login")
-        if p in {"/account/register", "/cuenta/register"}:
-            return _redir("register")
-        return None
-
-    # =============================================================================
-    # Template globals (CSRF definitivo: generate_csrf desde Python)
+    # Template globals (CSRF definitivo)
     # =============================================================================
     @app.context_processor
     def inject_globals() -> Dict[str, Any]:
@@ -610,8 +578,6 @@ def create_app() -> Flask:
     # =============================================================================
     # Blueprints
     # =============================================================================
-    registered: List[str] = []
-
     def _register_all_routes():
         from app.routes import register_blueprints
         register_blueprints(app)
@@ -629,13 +595,6 @@ def create_app() -> Flask:
     def _db_check() -> Tuple[bool, str]:
         if not _env_bool("HEALTH_DB_CHECK", False):
             return True, "skipped"
-
-        try:
-            if "sqlalchemy" not in app.extensions:
-                return False, "sqlalchemy_not_registered"
-        except Exception:
-            return False, "sqlalchemy_not_registered"
-
         try:
             from sqlalchemy import text
             db.session.execute(text("SELECT 1"))
@@ -649,7 +608,7 @@ def create_app() -> Flask:
         return {
             "status": "ok" if ok_db else "degraded",
             "env": _env_name(app),
-            "debug": bool(app.debug),
+            "debug": bool(getattr(app, "debug", False)),
             "blueprints": registered,
             "db": db_msg,
             "app": app.config.get("APP_NAME", "Skyline Store"),
