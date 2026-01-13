@@ -8,7 +8,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Type
 
-from flask import Flask, jsonify, render_template, request, session
+from flask import Flask, jsonify, redirect, render_template, request, session, url_for
 from werkzeug.exceptions import HTTPException
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -414,8 +414,7 @@ def create_app() -> Flask:
     app.config.setdefault("WTF_CSRF_SSL_STRICT", _env_bool("WTF_CSRF_SSL_STRICT", default=False))
     app.config.setdefault("WTF_CSRF_TIME_LIMIT", _env_int("WTF_CSRF_TIME_LIMIT", 3600, min_v=60, max_v=24 * 3600))
 
-    # ✅ Si tus deploys usan 2+ workers y secret keys variables -> CSRF se rompe.
-    # Recomendado: clavar WTF_CSRF_SECRET_KEY en env (misma en todos los workers).
+    # ✅ Multi-worker: fijar WTF_CSRF_SECRET_KEY igual en todos los workers.
     if _is_prod(app):
         app.config.setdefault("WTF_CSRF_SECRET_KEY", app.config.get("SECRET_KEY"))
 
@@ -455,6 +454,11 @@ def create_app() -> Flask:
     # ✅ Migrate / Limiter DESPUÉS de DB lista
     safe_init(app, "Flask-Migrate", lambda: init_migrate(app))
     safe_init(app, "Flask-Limiter", lambda: init_limiter(app))
+
+    # =============================================================================
+    # Jinja Globals (UNION SAFE) — para templates fail-safe (has_endpoint)
+    # =============================================================================
+    app.jinja_env.globals["has_endpoint"] = (lambda ep: has_endpoint(app, ep))
 
     # =============================================================================
     # Hooks: request-id + admin no-cache + session permanent
@@ -523,29 +527,27 @@ def create_app() -> Flask:
         - /auth/register -> /auth/account?tab=register
         - /account/login -> /auth/account?tab=login
         - /account/register -> /auth/account?tab=register
-        Solo aplica si existe endpoint auth.account o si el path existe.
+        Solo aplica en GET/HEAD, evita loops.
         """
         p = (request.path or "")
         if request.method not in {"GET", "HEAD"}:
             return None
 
-        # evita loops si ya está en /auth/account
         if p.startswith("/auth/account"):
             return None
 
-        # detect next seguro básico (path-only)
         nxt = (request.args.get("next") or "").strip()
         if not (nxt.startswith("/") and not nxt.startswith("//")):
             nxt = ""
 
         def _redir(tab: str):
             try:
-                # si existe endpoint, mejor
                 if "auth.account" in app.view_functions:
-                    return redirect(url_for("auth.account", tab=tab, next=nxt) if nxt else url_for("auth.account", tab=tab))
+                    if nxt:
+                        return redirect(url_for("auth.account", tab=tab, next=nxt))
+                    return redirect(url_for("auth.account", tab=tab))
             except Exception:
                 pass
-            # fallback hard
             q = f"?tab={tab}"
             if nxt:
                 q += f"&next={nxt}"
@@ -584,8 +586,6 @@ def create_app() -> Flask:
         except Exception:
             csrf_value = ""
 
-        # ✅ Nonce opcional (solo si lo seteás en algún middleware/talisman)
-        # No lo inventamos: si no existe, queda ""
         csp_nonce = ""
         try:
             csp_nonce = str(getattr(request, "csp_nonce", "") or "")
@@ -602,7 +602,6 @@ def create_app() -> Flask:
             "is_logged_in": bool(getattr(cu, "id", None)) if cu else False,
             "is_admin": bool(getattr(cu, "is_admin", False)) if cu else bool(session.get("is_admin")),
             "view_functions": app.view_functions,
-            "has_endpoint": (lambda ep: has_endpoint(app, ep)),
             # ✅ USAR EN base.html: <meta name="csrf-token" content="{{ csrf_token_value }}">
             "csrf_token_value": csrf_value,
             "csp_nonce": csp_nonce,

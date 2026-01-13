@@ -1,4 +1,4 @@
-﻿# app/models/user.py — Skyline Store (ULTRA PRO++ / NO BREAK / FAIL-SAFE · FIXED)
+﻿# app/models/user.py — Skyline Store (ULTRA PRO+++ / UNION-SAFE / NO BREAK / FAIL-SAFE · vNEXT)
 from __future__ import annotations
 
 import hmac
@@ -79,7 +79,7 @@ def _clamp_int(v: Optional[int], lo: int = 0, hi: int = 10_000) -> int:
     return n
 
 def _normalize_email(email: str) -> str:
-    # FIX PRO: limpia NBSP / zero-width / espacios raros
+    # limpia NBSP / zero-width / espacios raros
     e = (email or "").replace("\u00A0", " ").replace("\u200B", "").strip().lower()
     return e
 
@@ -106,7 +106,7 @@ def _safe_digest_eq(a: Optional[str], b: Optional[str]) -> bool:
         return False
 
 def _env_owner_email() -> str:
-    # Tu owner lo definís con ADMIN_EMAIL (como lo tenías)
+    # Owner definido por ADMIN_EMAIL (env)
     return _normalize_email(os.getenv("ADMIN_EMAIL") or "")
 
 def _safe_ip(ip: Optional[str]) -> Optional[str]:
@@ -128,9 +128,9 @@ def _ensure_unique_token(
     max_tries: Optional[int] = None,
 ) -> str:
     """
-    ✅ Token uniqueness guard (DB-safe / fail-safe):
+    Token uniqueness guard (DB-safe / fail-safe):
     - Genera token
-    - Chequea colisión en DB (si hay sesión)
+    - Chequea colisión en DB
     - Reintenta si colisiona
     - Si DB falla, devuelve token igual (no rompe)
     """
@@ -145,9 +145,7 @@ def _ensure_unique_token(
             if q.first() is None:
                 return tok
         except Exception:
-            # si la DB no está lista o no hay app_context, no rompemos
             return tok
-
     return last
 
 def _password_is_bad(pwd: str, email: Optional[str]) -> bool:
@@ -169,7 +167,6 @@ def _password_is_bad(pwd: str, email: Optional[str]) -> bool:
         if user_part and user_part in low:
             return True
 
-    # repetición exagerada
     if len(low) >= 10 and len(set(low)) <= 2:
         return True
 
@@ -181,15 +178,15 @@ def _password_is_bad(pwd: str, email: Optional[str]) -> bool:
 
 class User(UserMixin, db.Model):
     """
-    Skyline Store — User (ULTRA PRO++ / OWNER HARD LOCK / FAIL-SAFE)
+    Skyline Store — User (ULTRA PRO++ / UNION-SAFE / FAIL-SAFE)
 
     ✅ No agrega columnas nuevas
-    ✅ Normalización de email fuerte + evita bugs en login
-    ✅ Owner hard lock estable por ADMIN_EMAIL
+    ✅ Normalización fuerte de email
+    ✅ Owner hard lock por ADMIN_EMAIL
     ✅ Lockouts seguros (owner no se bloquea)
     ✅ Tokens únicos (DB-safe)
     ✅ Hooks idempotentes
-    ✅ Sin backref en orders (evita choques si Order ya define relación)
+    ✅ Evita choques con Order (sin backref)
     """
 
     __tablename__ = "users"
@@ -223,7 +220,6 @@ class User(UserMixin, db.Model):
 
     failed_login_count = db.Column(db.Integer, nullable=False, default=0)
     locked_until = db.Column(db.DateTime(timezone=True), nullable=True, index=True)
-
     last_login_ip = db.Column(db.String(64), nullable=True)
 
     # Tokens (64 fixed)
@@ -234,7 +230,6 @@ class User(UserMixin, db.Model):
     # Marketing
     email_opt_in = db.Column(db.Boolean, nullable=False, default=True, index=True)
     email_opt_in_at = db.Column(db.DateTime(timezone=True), nullable=True)
-
     unsubscribe_token = db.Column(db.String(64), nullable=False, unique=True, index=True, default=_token64)
 
     # Relaciones
@@ -246,7 +241,7 @@ class User(UserMixin, db.Model):
         passive_deletes=True,
     )
 
-    # ⚠️ Importante: NO definimos backref acá para evitar choque si Order ya define `user`
+    # ⚠️ NO backref (evita choque si Order ya define relación)
     orders = db.relationship(
         "Order",
         lazy="selectin",
@@ -281,9 +276,6 @@ class User(UserMixin, db.Model):
             return
         try:
             self.is_admin = True
-        except Exception:
-            pass
-        try:
             self.role = "admin"
         except Exception:
             pass
@@ -349,7 +341,6 @@ class User(UserMixin, db.Model):
 
     def set_role_safe(self, role: Optional[str]) -> None:
         nr = _normalize_role(role)
-        # Nadie puede “subirse” a admin solo por role
         if nr == "admin" and not (self.is_admin or self.is_owner):
             self.role = "customer"
             return
@@ -385,7 +376,6 @@ class User(UserMixin, db.Model):
             return False
         ok, new_hash = verify_and_maybe_rehash(raw_password or "", self.password_hash)
         if ok and new_hash:
-            # NO commit acá: lo hace el route/servicio
             self.password_hash = new_hash
             self.password_changed_at = utcnow()
         return bool(ok)
@@ -498,37 +488,62 @@ class User(UserMixin, db.Model):
         return addrs[0] if addrs else None
 
     # --------------------------------------------------------
-    # Normalización / consistencia
+    # Normalización / consistencia (UNION SAFE)
     # --------------------------------------------------------
     def ensure_tokens(self) -> None:
         if not self.unsubscribe_token:
             self.unsubscribe_token = _ensure_unique_token("unsubscribe_token", _token64, User)
 
     def prepare_for_save(self) -> None:
-        # Idempotente (se puede llamar 10 veces)
-        if self.email is not None:
-            self.email = self.normalize_email(self.email)[:255]
+        """
+        ✅ Punto de unión:
+        - Asegura email/role/tokens SIEMPRE
+        - Evita valores inválidos que rompen templates/routes
+        - Idempotente (safe en insert/update)
+        """
+        try:
+            if self.email is not None:
+                self.email = self.normalize_email(self.email)[:255]
+        except Exception:
+            pass
 
-        self.phone = _clean_phone(self.phone)
+        try:
+            self.phone = _clean_phone(self.phone)
+        except Exception:
+            pass
 
-        self.country = (self.country or "").strip().upper()[:2] or None
-        self.city = (self.city or "").strip()[:80] or None
+        try:
+            self.country = (self.country or "").strip().upper()[:2] or None
+            self.city = (self.city or "").strip()[:80] or None
+        except Exception:
+            pass
 
-        # role safe
-        self.set_role_safe(self.role)
+        try:
+            self.set_role_safe(self.role)
+        except Exception:
+            pass
 
-        # tokens
-        self.ensure_tokens()
+        try:
+            self.ensure_tokens()
+        except Exception:
+            pass
 
-        # timestamps coherentes
-        if self.email_opt_in and not self.email_opt_in_at:
-            self.email_opt_in_at = utcnow()
+        try:
+            if self.email_opt_in and not self.email_opt_in_at:
+                self.email_opt_in_at = utcnow()
+        except Exception:
+            pass
 
-        if self.email_verified and not self.email_verified_at:
-            self.email_verified_at = utcnow()
+        try:
+            if self.email_verified and not self.email_verified_at:
+                self.email_verified_at = utcnow()
+        except Exception:
+            pass
 
-        # owner lock
-        self.reinforce_owner_flags()
+        try:
+            self.reinforce_owner_flags()
+        except Exception:
+            pass
 
     # --------------------------------------------------------
     # Serialización segura
@@ -693,7 +708,6 @@ def _user_before_update(_mapper, _conn, target: User):
     except Exception:
         pass
 
-# Garantiza 1 default address por usuario (sin migraciones)
 @event.listens_for(UserAddress, "before_insert", propagate=True)
 @event.listens_for(UserAddress, "before_update", propagate=True)
 def _addr_ensure_single_default(_mapper, conn, target: UserAddress):

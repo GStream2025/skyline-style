@@ -1,4 +1,4 @@
-{# app/templates/shop.html — Skyline Store (SHOP · ULTRA PRO FINAL v4 · NO BREAK / FAIL-SAFE) #}
+{# app/templates/shop.html — Skyline Store (SHOP · ULTRA PRO FINAL v5 · NO BREAK / FAIL-SAFE) #}
 {% extends "base.html" %}
 {% block title %}Tienda | Skyline Store{% endblock %}
 
@@ -6,18 +6,18 @@
 <meta name="description" content="{{ meta_description | default('Explorá tecnología y streetwear premium en Skyline Store.') }}">
 <link rel="canonical" href="{{ request.url }}">
 
-{# OpenGraph básico (no depende de og.png) #}
 <meta property="og:title" content="Tienda | Skyline Store">
 <meta property="og:description" content="{{ meta_description | default('Explorá tecnología y streetwear premium en Skyline Store.') }}">
 <meta property="og:type" content="website">
 
 <style>
 /* ==========================================================
-   SKYLINE STORE · SHOP — ULTRA PRO MARKETPLACE (FINAL v4)
-   ✅ NO usa globals() (evita 500)
-   ✅ No hace url_for “riesgoso” en loops (reduce posibilidad de BuildError)
+   SKYLINE STORE · SHOP — ULTRA PRO MARKETPLACE (FINAL v5)
+   ✅ FAIL-SAFE url_for (no BuildError)
+   ✅ Fix CSS typo (border-color)
+   ✅ A11y + focus-visible + reduced motion
+   ✅ Sticky controls + filtros rápidos + sort client-side robusto
    ✅ 100% scoped (.shop-page)
-   ✅ A11y, perf, reduced motion, focus-visible
 ========================================================== */
 
 .shop-page{
@@ -522,8 +522,7 @@
 .shop-page .shop-card:hover{
   transform: translateY(-9px);
   box-shadow: var(--shadow2), var(--glow);
-  border-color:
-  : rgba(37,99,235,.22);
+  border-color: rgba(37,99,235,.22); /* ✅ FIX */
   filter: saturate(1.05);
 }
 .shop-page .shop-card:hover::before{ opacity:1; }
@@ -749,11 +748,13 @@
 {% endblock %}
 
 {% block content %}
-{# Pre-cálculos FAIL-SAFE para evitar BuildError si cambia un endpoint #}
-{% set SHOP_URL = url_for('shop.shop') %}
-{% set CART_URL = '/cart' %}
-
-{# Producto: por defecto hardcode (no rompe si endpoint cambia). Si tu ruta real es otra, ajustá acá UNA vez. #}
+{# ------------------------------
+   FAIL-SAFE URLS (NO BuildError)
+   - usa has_endpoint global del __init__.py
+------------------------------ #}
+{% set SHOP_URL = (url_for('shop.shop') if (has_endpoint is defined and has_endpoint('shop.shop')) else '/shop') %}
+{% set CART_URL = (url_for('cart.view') if (has_endpoint is defined and has_endpoint('cart.view')) else '/cart') %}
+{% set CART_JSON = (url_for('cart.cart_json') if (has_endpoint is defined and has_endpoint('cart.cart_json')) else '/cart/json') %}
 {% set PRODUCT_PREFIX = '/product/' %}
 
 <section class="shop-page" aria-label="Tienda">
@@ -803,8 +804,6 @@
               spellcheck="false"
               enterkeyhint="search"
             >
-
-            {# Persistencia de filtros si vienen por querystring #}
             {% if request.args.get('sort') %}<input type="hidden" name="sort" value="{{ request.args.get('sort') }}">{% endif %}
             {% if request.args.get('categoria') %}<input type="hidden" name="categoria" value="{{ request.args.get('categoria') }}">{% endif %}
           </form>
@@ -855,18 +854,12 @@
           {% set cat = (p.category if p.category is defined else (p.category_slug if p.category_slug is defined else ''))|string %}
           {% set price = (p.price if p.price is defined else (p.price_display if p.price_display is defined else ''))|string %}
 
-          {# FAIL-SAFE href:
-             - si viene p.href lo usa
-             - sino, si hay slug: /product/<slug> (evita url_for dentro del loop)
-             - sino: SHOP_URL
-          #}
           {% set href = (p.href if p.href is defined and p.href else '')|string %}
           {% if not href and (p.slug is defined and p.slug) %}
             {% set href = PRODUCT_PREFIX ~ (p.slug|string) %}
           {% endif %}
           {% if not href %}{% set href = SHOP_URL %}{% endif %}
 
-          {# data-price: intenta numérico para sort client-side #}
           {% set price_value = '' %}
           {% if p.price_value is defined and p.price_value is not none %}
             {% set price_value = p.price_value %}
@@ -874,11 +867,20 @@
             {% set price_value = p.price %}
           {% endif %}
 
+          {# NEW: timestamp for "Novedades" (si existe) #}
+          {% set ts = '' %}
+          {% if p.created_at is defined and p.created_at %}
+            {% set ts = p.created_at %}
+          {% elif p.ts is defined and p.ts %}
+            {% set ts = p.ts %}
+          {% endif %}
+
           <a class="shop-card"
              href="{{ href|e }}"
              data-title="{{ title|lower|e }}"
              data-cat="{{ cat|lower|e }}"
              data-price="{{ price_value|string|e }}"
+             data-ts="{{ ts|string|e }}"
              aria-label="{{ title|e }}">
 
             <div class="media">
@@ -949,7 +951,6 @@
   if (!grid) return;
 
   const q = document.getElementById('q');
-  const cards = Array.from(grid.querySelectorAll('.shop-card'));
   const countNum = document.getElementById('countNum');
   const activeFilterText = document.getElementById('activeFilterText');
   const filters = document.getElementById('filters');
@@ -958,23 +959,21 @@
   const stickyText = document.getElementById('stickyText');
   const sort = document.getElementById('sort');
 
+  // cards live (se reordenan)
+  const getCards = () => Array.from(grid.querySelectorAll('.shop-card'));
+
   const state = {
     cat: "",
     query: (q?.value || "").trim().toLowerCase(),
+    sort: (sort?.value || "").trim()
   };
 
   // Fade-in images + remove skeleton
-  cards.forEach(card => {
+  getCards().forEach(card => {
     const img = card.querySelector('img');
     const skel = card.querySelector('.skel');
-    if (!img) {
-      if (skel) skel.style.display = 'none';
-      return;
-    }
-    const done = () => {
-      img.style.opacity = '1';
-      if (skel) skel.style.display = 'none';
-    };
+    if (!img) { if (skel) skel.style.display = 'none'; return; }
+    const done = () => { img.style.opacity = '1'; if (skel) skel.style.display = 'none'; };
     if (img.complete) done();
     img.addEventListener('load', done, { once:true });
     img.addEventListener('error', () => {
@@ -997,23 +996,49 @@
     el.innerHTML = safeTxt.replace(new RegExp(`(${n})`, "ig"), "<mark class='hl'>$1</mark>");
   };
 
+  const numPrice = (el) => {
+    const raw = el.getAttribute('data-price') || "";
+    const n = parseFloat(String(raw).replace(/[^0-9.,]/g,'').replace(',','.'));
+    return Number.isFinite(n) ? n : 0;
+  };
+
+  const tsValue = (el) => {
+    const raw = (el.getAttribute('data-ts') || "").trim();
+    // acepta unix, iso, o vacío
+    const asNum = Number(raw);
+    if (Number.isFinite(asNum) && asNum > 0) return asNum;
+    const t = Date.parse(raw);
+    return Number.isFinite(t) ? t : 0;
+  };
+
+  const matches = (card) => {
+    const title = (card.getAttribute('data-title') || "");
+    const cat = (card.getAttribute('data-cat') || "");
+    const okQ = !state.query || title.includes(state.query);
+    const okC = !state.cat || cat === state.cat;
+    return okQ && okC;
+  };
+
   const apply = () => {
-    const needle = state.query;
+    const cards = getCards();
     let visible = 0;
 
     for (const card of cards) {
-      const title = (card.getAttribute('data-title') || "");
-      const cat = (card.getAttribute('data-cat') || "");
       const nameEl = card.querySelector('[data-name]');
-      highlight(nameEl, needle);
+      highlight(nameEl, state.query);
 
-      const okQ = !needle || title.includes(needle);
-      const okC = !state.cat || cat === state.cat;
-      const show = okQ && okC;
-
+      const show = matches(card);
       card.style.display = show ? "" : "none";
       if (show) visible++;
     }
+
+    // sort AFTER filtering (solo reordena visibles, pero estable)
+    const visibles = cards.filter(c => c.style.display !== "none");
+    if (state.sort === "price_asc") visibles.sort((a,b) => numPrice(a) - numPrice(b));
+    else if (state.sort === "price_desc") visibles.sort((a,b) => numPrice(b) - numPrice(a));
+    else if (state.sort === "new") visibles.sort((a,b) => tsValue(b) - tsValue(a));
+
+    for (const el of visibles) grid.appendChild(el);
 
     if (countNum) countNum.textContent = String(visible);
     if (activeFilterText) activeFilterText.textContent = `Mostrando: ${state.cat ? state.cat : "Todo"}`;
@@ -1028,7 +1053,7 @@
         state.query = (q.value || "").trim().toLowerCase();
         apply();
       }, 90);
-    });
+    }, {passive:true});
   }
 
   // Filter pills
@@ -1045,12 +1070,22 @@
     });
   }
 
+  // Sort
+  if (sort) {
+    sort.addEventListener('change', () => {
+      state.sort = (sort.value || "").trim();
+      apply();
+    }, {passive:true});
+  }
+
   // Reset
   if (resetBtn) {
     resetBtn.addEventListener('click', () => {
       state.cat = "";
       state.query = "";
+      state.sort = "";
       if (q) q.value = "";
+      if (sort) sort.value = "";
 
       if (filters) {
         filters.querySelectorAll('.pill').forEach(b => b.setAttribute('aria-pressed','false'));
@@ -1058,10 +1093,8 @@
         if (first) first.setAttribute('aria-pressed','true');
       }
 
-      if (sort) sort.value = "";
       apply();
 
-      // Limpia querystring sin recargar
       try {
         const u = new URL(window.location.href);
         u.search = "";
@@ -1070,27 +1103,7 @@
     });
   }
 
-  // Sort client-side (solo reordena visibles)
-  if (sort) {
-    sort.addEventListener('change', () => {
-      const v = sort.value;
-
-      const num = (el) => {
-        const raw = el.getAttribute('data-price') || "";
-        const n = parseFloat(String(raw).replace(/[^0-9.,]/g,'').replace(',','.'));
-        return Number.isFinite(n) ? n : 0;
-      };
-
-      const visibles = cards.filter(c => c.style.display !== "none");
-      if (v === "price_asc") visibles.sort((a,b) => num(a) - num(b));
-      else if (v === "price_desc") visibles.sort((a,b) => num(b) - num(a));
-
-      // append en nuevo orden; los ocultos quedan donde estaban pero no molestan
-      for (const el of visibles) grid.appendChild(el);
-    });
-  }
-
-  // Sticky CTA (carrito)
+  // Sticky CTA (carrito) - FAIL SAFE URL
   const showSticky = (count) => {
     if (!sticky) return;
     if (count > 0) {
@@ -1103,7 +1116,7 @@
     }
   };
 
-  fetch('/cart/json', { credentials: 'same-origin' })
+  fetch("{{ CART_JSON }}", { credentials: 'same-origin' })
     .then(r => r.ok ? r.json() : null)
     .then(d => showSticky(d?.items_count || 0))
     .catch(() => {});
