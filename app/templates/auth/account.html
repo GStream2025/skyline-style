@@ -1,4 +1,4 @@
-{# app/templates/auth/account.html — Skyline Store (ULTRA PRO / CSRF + NONCE SAFE / v2) #}
+{# app/templates/auth/account.html — Skyline Store (ULTRA PRO / CSRF + CSP NONCE SAFE / vFINAL) #}
 {% extends "base.html" %}
 {% block title %}Mi cuenta | Skyline Store{% endblock %}
 
@@ -11,19 +11,21 @@
 <meta name="robots" content="{{ 'index,follow' if (ENV|default('')|lower == 'production') else 'noindex,nofollow' }}">
 <meta name="csrf-token" content="{{ csrf_token_value|default('') }}">
 
-{# ✅ 10 mejoras extra:
-   1) safe_url macro (no rompe si falta endpoint)
-   2) next hardening (solo paths internos)
-   3) honeypot en ambos forms
-   4) flash categories normalizadas + aria-live
-   5) tabs accesibles (role=tablist, aria-selected, teclado)
-   6) persiste tab en localStorage + query ?tab=
-   7) anti doble submit (reduce replays/CSRF mismatch por doble click)
-   8) toggles show/hide password (login y register)
-   9) validación mínima UX (sin bloquear server)
-   10) no-store hint adicional (frontend) + micro estilos tabs/panels
+{# ✅ FINAL improvements:
+   1) CSP nonce support for inline <style> and <script> (works with Flask-Talisman)
+   2) Safe next hardening + keeps tab on server flashes
+   3) Honeypot in both forms
+   4) Tabs: full a11y + hidden/aria-hidden for inactive panels
+   5) Prevent double submit + auto-unlock fallback (network stall)
+   6) UX validation with tiny inline error message (no blocking server)
+   7) Preserve typed values on server re-render (optional fields)
+   8) Safer JS: null checks, dataset guards, consistent labels
 #}
-<style>
+
+{# CSP nonce var (compatible with different setups) #}
+{% set _csp_nonce = csp_nonce|default(nonce|default(g.nonce|default('', true), true), true) %}
+
+<style{% if _csp_nonce %} nonce="{{ _csp_nonce|e }}"{% endif %}>
   .ss-account{max-width:1040px;margin:0 auto;padding:clamp(16px,2vw,26px)}
   .ss-tabs{display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 14px}
   .ss-tab{border:1px solid rgba(0,0,0,.12);background:rgba(255,255,255,.7);padding:10px 14px;border-radius:999px;cursor:pointer;transition:transform .12s ease, box-shadow .2s ease, border-color .2s ease}
@@ -45,21 +47,19 @@
   .ss-pw-btn{border-radius:12px;border:1px solid rgba(0,0,0,.12);background:transparent;padding:10px 12px;cursor:pointer}
   .ss-submit[aria-busy="true"]{opacity:.88;cursor:progress}
   .ss-spinner{width:16px;height:16px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;display:inline-block;vertical-align:-3px;animation:sspin .9s linear infinite}
+  .ss-help{font-size:.92rem;opacity:.8}
+  .ss-err{display:none;margin-top:6px;border-radius:12px;padding:9px 10px;border:1px solid rgba(220,38,38,.22);background:rgba(254,242,242,.75)}
+  .ss-err.is-on{display:block}
   @keyframes sspin{to{transform:rotate(360deg)}}
-  @media (prefers-reduced-motion: reduce){.ss-tab{transition:none}.ss-tab.is-active{transform:none}.ss-spinner{animation:none}}
+  @media (prefers-reduced-motion: reduce){
+    .ss-tab{transition:none}
+    .ss-tab.is-active{transform:none}
+    .ss-spinner{animation:none}
+  }
 </style>
 {% endblock %}
 
 {% block content %}
-{# ---------- SAFE URL RESOLVER (NO-BREAK) ---------- #}
-{% macro safe_url(endpoint, fallback='/', **kwargs) -%}
-  {%- set vf = (view_functions if view_functions is defined and view_functions else {}) -%}
-  {%- if endpoint and endpoint in vf -%}
-    {{- url_for(endpoint, **kwargs) -}}
-  {%- else -%}
-    {{- fallback -}}
-  {%- endif -%}
-{%- endmacro %}
 
 {# ---------- next hardening ---------- #}
 {% set _raw_next = (next|default(request.args.get('next',''), true)|string).strip() %}
@@ -68,10 +68,10 @@
   {% set nxt = '' %}
 {% endif %}
 
-{# ---------- endpoints ---------- #}
-{% set login_action    = safe_url('auth.login', '/auth/login') %}
-{% set register_action = safe_url('auth.register', '/auth/register') %}
-{% set shop_url        = safe_url('shop.shop', '/shop') %}
+{# ---------- endpoints (prefer real url_for; keep safe fallbacks) ---------- #}
+{% set login_action    = url_for('auth.login') if (url_for is defined) else '/auth/login' %}
+{% set register_action = url_for('auth.register') if (url_for is defined) else '/auth/register' %}
+{% set shop_url        = url_for('shop.shop') if (url_for is defined) else '/shop' %}
 
 {# ---------- initial tab: server hint + query param ---------- #}
 {% set qtab = (request.args.get('tab','')|string|lower|trim) %}
@@ -79,6 +79,11 @@
 {% if qtab in ['login','register'] %}
   {% set initial_tab = qtab %}
 {% endif %}
+
+{# ---------- preserve typed values (optional) ---------- #}
+{% set _login_email = (request.form.get('email','') if request.method == 'POST' else '')|string %}
+{% set _reg_name    = (request.form.get('name','') if request.method == 'POST' else '')|string %}
+{% set _reg_email   = (request.form.get('email','') if request.method == 'POST' else '')|string %}
 
 <section class="ss-account" aria-label="Mi cuenta">
 
@@ -119,7 +124,11 @@
 
   <div class="ss-panels">
     <!-- ================= LOGIN ================= -->
-    <div class="ss-panel {{ 'is-active' if initial_tab == 'login' else '' }}" id="panel-login" role="tabpanel" aria-labelledby="tab-login">
+    <div class="ss-panel {{ 'is-active' if initial_tab == 'login' else '' }}"
+         id="panel-login"
+         role="tabpanel"
+         aria-labelledby="tab-login"
+         {% if initial_tab != 'login' %}hidden aria-hidden="true"{% else %}aria-hidden="false"{% endif %}>
       <form method="post" action="{{ login_action }}" novalidate autocomplete="on" id="loginForm">
         <input type="hidden" name="csrf_token" value="{{ csrf_token_value|default('') }}">
         <input type="hidden" name="nonce" value="{{ nonce_login|default('')|e }}">
@@ -133,14 +142,29 @@
 
         <div class="ss-field">
           <label for="loginEmail">Email</label>
-          <input class="ss-input" id="loginEmail" type="email" name="email" required maxlength="254" autocomplete="email" inputmode="email"
-                 autocapitalize="none" spellcheck="false" placeholder="tu@email.com">
+          <input class="ss-input"
+                 id="loginEmail"
+                 type="email"
+                 name="email"
+                 value="{{ _login_email|e }}"
+                 required maxlength="254"
+                 autocomplete="email"
+                 inputmode="email"
+                 autocapitalize="none"
+                 spellcheck="false"
+                 placeholder="tu@email.com">
+          <div class="ss-err" id="loginErr" role="status" aria-live="polite"></div>
         </div>
 
         <div class="ss-field">
           <label for="loginPass">Contraseña</label>
           <div class="ss-pw-wrap">
-            <input class="ss-input" id="loginPass" type="password" name="password" required minlength="8" autocomplete="current-password"
+            <input class="ss-input"
+                   id="loginPass"
+                   type="password"
+                   name="password"
+                   required minlength="8"
+                   autocomplete="current-password"
                    placeholder="Tu contraseña">
             <button type="button" class="ss-pw-btn" id="toggleLoginPass" aria-label="Mostrar contraseña" aria-pressed="false">👁</button>
           </div>
@@ -150,11 +174,16 @@
           <a href="{{ shop_url }}" style="opacity:.8">Seguir como invitado</a>
           <button class="ss-submit" id="loginSubmit" type="submit">Entrar</button>
         </div>
+        <p class="ss-help" style="margin-top:10px">Tip: si ya tenés cuenta, entrá con tu email y contraseña.</p>
       </form>
     </div>
 
     <!-- ================= REGISTER ================= -->
-    <div class="ss-panel {{ 'is-active' if initial_tab == 'register' else '' }}" id="panel-register" role="tabpanel" aria-labelledby="tab-register">
+    <div class="ss-panel {{ 'is-active' if initial_tab == 'register' else '' }}"
+         id="panel-register"
+         role="tabpanel"
+         aria-labelledby="tab-register"
+         {% if initial_tab != 'register' %}hidden aria-hidden="true"{% else %}aria-hidden="false"{% endif %}>
       <form method="post" action="{{ register_action }}" novalidate autocomplete="on" id="registerForm">
         <input type="hidden" name="csrf_token" value="{{ csrf_token_value|default('') }}">
         <input type="hidden" name="nonce" value="{{ nonce_register|default('')|e }}">
@@ -168,19 +197,34 @@
 
         <div class="ss-field">
           <label for="regName">Nombre <span style="opacity:.7">(opcional)</span></label>
-          <input class="ss-input" id="regName" type="text" name="name" maxlength="120" autocomplete="name" placeholder="Tu nombre">
+          <input class="ss-input" id="regName" type="text" name="name" value="{{ _reg_name|e }}" maxlength="120" autocomplete="name" placeholder="Tu nombre">
         </div>
 
         <div class="ss-field">
           <label for="regEmail">Email</label>
-          <input class="ss-input" id="regEmail" type="email" name="email" required maxlength="254" autocomplete="email" inputmode="email"
-                 autocapitalize="none" spellcheck="false" placeholder="tu@email.com">
+          <input class="ss-input"
+                 id="regEmail"
+                 type="email"
+                 name="email"
+                 value="{{ _reg_email|e }}"
+                 required maxlength="254"
+                 autocomplete="email"
+                 inputmode="email"
+                 autocapitalize="none"
+                 spellcheck="false"
+                 placeholder="tu@email.com">
+          <div class="ss-err" id="regErr" role="status" aria-live="polite"></div>
         </div>
 
         <div class="ss-field">
           <label for="regPass">Contraseña</label>
           <div class="ss-pw-wrap">
-            <input class="ss-input" id="regPass" type="password" name="password" required minlength="8" autocomplete="new-password"
+            <input class="ss-input"
+                   id="regPass"
+                   type="password"
+                   name="password"
+                   required minlength="8"
+                   autocomplete="new-password"
                    placeholder="Mínimo 8 caracteres">
             <button type="button" class="ss-pw-btn" id="toggleRegPass" aria-label="Mostrar contraseña" aria-pressed="false">👁</button>
           </div>
@@ -189,7 +233,12 @@
         <div class="ss-field">
           <label for="regPass2">Confirmar contraseña</label>
           <div class="ss-pw-wrap">
-            <input class="ss-input" id="regPass2" type="password" name="password2" required minlength="8" autocomplete="new-password"
+            <input class="ss-input"
+                   id="regPass2"
+                   type="password"
+                   name="password2"
+                   required minlength="8"
+                   autocomplete="new-password"
                    placeholder="Repetí la contraseña">
             <button type="button" class="ss-pw-btn" id="toggleRegPass2" aria-label="Mostrar confirmación" aria-pressed="false">👁</button>
           </div>
@@ -199,14 +248,18 @@
           <a href="{{ shop_url }}" style="opacity:.8">Seguir como invitado</a>
           <button class="ss-submit" id="regSubmit" type="submit">Crear cuenta</button>
         </div>
+        <p class="ss-help" style="margin-top:10px">Al crear cuenta aceptás nuestros términos y políticas (los podés ver desde el footer).</p>
       </form>
     </div>
   </div>
 </section>
 
-<script>
+<script{% if _csp_nonce %} nonce="{{ _csp_nonce|e }}"{% endif %}>
 (() => {
+  "use strict";
+
   const KEY = "ss_account_tab";
+
   const tabs = {
     login: document.getElementById("tab-login"),
     register: document.getElementById("tab-register"),
@@ -216,47 +269,70 @@
     register: document.getElementById("panel-register"),
   };
 
-  const setTab = (t, {persist=true, focus=false} = {}) => {
+  const setPanelHidden = (panel, isHidden) => {
+    if (!panel) return;
+    if (isHidden) {
+      panel.setAttribute("hidden", "");
+      panel.setAttribute("aria-hidden", "true");
+    } else {
+      panel.removeAttribute("hidden");
+      panel.setAttribute("aria-hidden", "false");
+    }
+  };
+
+  const setTab = (t, { persist = true, focus = false } = {}) => {
     if (!panels[t] || !tabs[t]) return;
 
-    Object.keys(tabs).forEach(k => {
+    Object.keys(tabs).forEach((k) => {
       const isOn = (k === t);
       tabs[k].classList.toggle("is-active", isOn);
       tabs[k].setAttribute("aria-selected", String(isOn));
       tabs[k].setAttribute("tabindex", isOn ? "0" : "-1");
       panels[k].classList.toggle("is-active", isOn);
+      setPanelHidden(panels[k], !isOn);
     });
 
     if (persist) {
-      try { localStorage.setItem(KEY, t); } catch(e) {}
-      // mantiene URL limpia pero con tab (para reload)
+      try { localStorage.setItem(KEY, t); } catch (e) {}
       try {
         const u = new URL(window.location.href);
         u.searchParams.set("tab", t);
         window.history.replaceState({}, "", u.toString());
-      } catch(e) {}
+      } catch (e) {}
     }
     if (focus) tabs[t].focus();
   };
 
-  // init: query ?tab= gana, sino localStorage
+  // init: query ?tab= wins, else localStorage
   const qp = (() => {
-    try { return new URL(window.location.href).searchParams.get("tab"); } catch(e) { return ""; }
+    try { return new URL(window.location.href).searchParams.get("tab") || ""; } catch (e) { return ""; }
   })();
-  const stored = (() => { try { return localStorage.getItem(KEY) || ""; } catch(e) { return ""; } })();
-  const initial = (qp === "login" || qp === "register") ? qp : ((stored === "login" || stored === "register") ? stored : null);
-  if (initial) setTab(initial, {persist:false});
+  const stored = (() => {
+    try { return localStorage.getItem(KEY) || ""; } catch (e) { return ""; }
+  })();
+  const initial =
+    (qp === "login" || qp === "register") ? qp :
+    ((stored === "login" || stored === "register") ? stored : null);
 
-  Object.values(tabs).forEach(btn => {
-    btn.addEventListener("click", () => setTab(btn.dataset.tab, {persist:true}));
+  if (initial) setTab(initial, { persist: false });
+
+  Object.values(tabs).forEach((btn) => {
+    if (!btn) return;
+    btn.addEventListener("click", () => {
+      const t = btn.dataset.tab;
+      if (t === "login" || t === "register") setTab(t, { persist: true });
+    });
+
     btn.addEventListener("keydown", (e) => {
-      const order = ["login","register"];
-      const cur = btn.dataset.tab;
+      const order = ["login", "register"];
+      const cur = btn.dataset.tab || "";
       const idx = order.indexOf(cur);
+      if (idx === -1) return;
+
       if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
         e.preventDefault();
         const next = order[(idx + (e.key === "ArrowRight" ? 1 : -1) + order.length) % order.length];
-        setTab(next, {persist:true, focus:true});
+        setTab(next, { persist: true, focus: true });
       }
     });
   });
@@ -265,6 +341,7 @@
     const b = document.getElementById(btnId);
     const i = document.getElementById(inputId);
     if (!b || !i) return;
+
     b.addEventListener("click", () => {
       const willShow = i.type === "password";
       i.type = willShow ? "text" : "password";
@@ -272,42 +349,74 @@
       b.setAttribute("aria-label", willShow ? onLabel : offLabel);
     });
   };
-  bindToggle("toggleLoginPass","loginPass","Ocultar contraseña","Mostrar contraseña");
-  bindToggle("toggleRegPass","regPass","Ocultar contraseña","Mostrar contraseña");
-  bindToggle("toggleRegPass2","regPass2","Ocultar confirmación","Mostrar confirmación");
+  bindToggle("toggleLoginPass", "loginPass", "Ocultar contraseña", "Mostrar contraseña");
+  bindToggle("toggleRegPass", "regPass", "Ocultar contraseña", "Mostrar contraseña");
+  bindToggle("toggleRegPass2", "regPass2", "Ocultar confirmación", "Mostrar confirmación");
 
-  // Anti doble submit + validación mínima (UX)
-  const guardSubmit = (formId, btnId, validateFn) => {
+  const showErr = (el, msg) => {
+    if (!el) return;
+    if (!msg) {
+      el.textContent = "";
+      el.classList.remove("is-on");
+      return;
+    }
+    el.textContent = msg;
+    el.classList.add("is-on");
+  };
+
+  // Anti doble submit + validación mínima (UX) + auto-unlock fallback
+  const guardSubmit = (formId, btnId, errId, validateFn, restoreLabel) => {
     const f = document.getElementById(formId);
     const b = document.getElementById(btnId);
+    const err = document.getElementById(errId);
     if (!f || !b) return;
 
     f.addEventListener("submit", (ev) => {
       if (b.disabled) return;
 
       if (typeof validateFn === "function") {
-        const ok = validateFn();
-        if (!ok) { ev.preventDefault(); ev.stopPropagation(); return; }
+        const res = validateFn();
+        if (res !== true) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          showErr(err, typeof res === "string" ? res : "Revisá los datos e intentá de nuevo.");
+          return;
+        }
       }
 
+      showErr(err, "");
       b.disabled = true;
-      b.setAttribute("aria-busy","true");
+      b.setAttribute("aria-busy", "true");
+      b.dataset._label = b.textContent || restoreLabel || "Enviar";
       b.innerHTML = '<span class="ss-spinner" aria-hidden="true"></span> Enviando...';
-    }, {passive:false});
+
+      // fallback: if network stalls, re-enable after 12s
+      window.setTimeout(() => {
+        if (!b.disabled) return;
+        b.disabled = false;
+        b.removeAttribute("aria-busy");
+        b.textContent = b.dataset._label || restoreLabel || "Enviar";
+      }, 12000);
+    }, { passive: false });
   };
 
-  guardSubmit("loginForm","loginSubmit", () => {
+  guardSubmit("loginForm", "loginSubmit", "loginErr", () => {
     const em = (document.getElementById("loginEmail")?.value || "").trim();
     const pw = (document.getElementById("loginPass")?.value || "");
-    return em.length >= 6 && em.includes("@") && pw.length >= 8;
-  });
+    if (em.length < 6 || !em.includes("@")) return "Ingresá un email válido.";
+    if (pw.length < 8) return "La contraseña debe tener al menos 8 caracteres.";
+    return true;
+  }, "Entrar");
 
-  guardSubmit("registerForm","regSubmit", () => {
+  guardSubmit("registerForm", "regSubmit", "regErr", () => {
     const em = (document.getElementById("regEmail")?.value || "").trim();
     const pw = (document.getElementById("regPass")?.value || "");
     const pw2 = (document.getElementById("regPass2")?.value || "");
-    return em.length >= 6 && em.includes("@") && pw.length >= 8 && pw === pw2;
-  });
+    if (em.length < 6 || !em.includes("@")) return "Ingresá un email válido.";
+    if (pw.length < 8) return "La contraseña debe tener al menos 8 caracteres.";
+    if (pw !== pw2) return "Las contraseñas no coinciden.";
+    return true;
+  }, "Crear cuenta");
 })();
 </script>
 {% endblock %}

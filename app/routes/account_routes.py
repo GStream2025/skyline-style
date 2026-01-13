@@ -1,4 +1,4 @@
-# app/routes/account_routes.py — Skyline Store (ULTRA PRO++++ / FINAL / NO BREAK)
+# app/routes/account_routes.py — Skyline Store (ULTRA PRO++++ / FINAL / NO BREAK / Unified Account v1)
 from __future__ import annotations
 
 import logging
@@ -6,9 +6,8 @@ import os
 import re
 import secrets
 import time
-from dataclasses import dataclass
-from datetime import date, datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import datetime, timezone
+from typing import Any, Dict, Optional
 from urllib.parse import urljoin, urlparse
 
 from flask import (
@@ -22,8 +21,7 @@ from flask import (
     session,
     url_for,
 )
-
-from sqlalchemy import select, func
+from sqlalchemy import select
 
 from app.models import db, User, UserAddress, Order
 
@@ -33,6 +31,10 @@ log = logging.getLogger("account_routes")
 # Blueprints
 # ============================================================
 
+# ✅ IMPORTANTE:
+# - Este módulo queda para "Mi cuenta" (panel, perfil, direcciones, pedidos)
+# - Login/Registro unificado vive en /auth/account (auth blueprint)
+# - Acá metemos redirects compatibles: /account -> /auth/account (si no está logueado)
 account_bp = Blueprint(
     "account",
     __name__,
@@ -40,7 +42,7 @@ account_bp = Blueprint(
     template_folder="../templates",
 )
 
-# Alias /cuenta (sin url_prefix)
+# Alias /cuenta (sin url_prefix) — compat legacy
 cuenta_bp = Blueprint("cuenta", __name__)
 
 # ============================================================
@@ -50,11 +52,13 @@ cuenta_bp = Blueprint("cuenta", __name__)
 _TRUE = {"1", "true", "yes", "y", "on", "checked"}
 _FALSE = {"0", "false", "no", "n", "off"}
 
+
 def _env_flag(name: str, default: bool) -> bool:
     v = os.getenv(name)
     if v is None:
         return default
     return str(v).strip().lower() in _TRUE
+
 
 def _env_int(name: str, default: int, *, min_v: int, max_v: int) -> int:
     v = os.getenv(name)
@@ -66,6 +70,7 @@ def _env_int(name: str, default: int, *, min_v: int, max_v: int) -> int:
         return default
     return max(min_v, min(max_v, n))
 
+
 def _env_float(name: str, default: float, *, min_v: float, max_v: float) -> float:
     v = os.getenv(name)
     if v is None:
@@ -75,6 +80,7 @@ def _env_float(name: str, default: float, *, min_v: float, max_v: float) -> floa
     except Exception:
         return default
     return max(min_v, min(max_v, n))
+
 
 REQUIRE_CSRF = _env_flag("REQUIRE_CSRF", True)
 ACCOUNT_ALLOW_JSON = _env_flag("ACCOUNT_ALLOW_JSON", True)
@@ -96,8 +102,10 @@ _PHONE_CLEAN_RE = re.compile(r"[^0-9\+\-\(\)\s]")
 # Helpers — Time / JSON / Templates / Seguridad
 # ============================================================
 
+
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
 
 def _safe_get_json() -> Dict[str, Any]:
     """No rompe si el body no es JSON válido. Limita size."""
@@ -116,6 +124,7 @@ def _safe_get_json() -> Dict[str, Any]:
         pass
     return {}
 
+
 def _wants_json() -> bool:
     if not ACCOUNT_ALLOW_JSON:
         return False
@@ -128,10 +137,12 @@ def _wants_json() -> bool:
     xr = (request.headers.get("X-Requested-With") or "").lower()
     return ("application/json" in accept) or (xr == "xmlhttprequest")
 
+
 def _json_or_html(payload: Dict[str, Any], html_fn):
     if _wants_json():
         return jsonify(payload)
     return html_fn()
+
 
 def _template_exists(name: str) -> bool:
     try:
@@ -140,11 +151,13 @@ def _template_exists(name: str) -> bool:
     except Exception:
         return False
 
+
 def _safe_url_for(endpoint: str, **kwargs) -> Optional[str]:
     try:
         return url_for(endpoint, **kwargs)
     except Exception:
         return None
+
 
 def _is_safe_next(target: Optional[str]) -> bool:
     """Evita open-redirect: solo rutas internas del mismo host."""
@@ -153,6 +166,8 @@ def _is_safe_next(target: Optional[str]) -> bool:
     target = target.strip()
     if not target.startswith("/"):
         return False
+    if target.startswith("//"):
+        return False
     try:
         ref = urlparse(request.host_url)
         test = urlparse(urljoin(request.host_url, target))
@@ -160,9 +175,11 @@ def _is_safe_next(target: Optional[str]) -> bool:
     except Exception:
         return False
 
+
 def _next_url(default: str = "/account") -> str:
     nxt = (request.args.get("next") or request.form.get("next") or "").strip()
     return nxt if _is_safe_next(nxt) else default
+
 
 def _no_store(resp):
     """Evita cache de páginas sensibles."""
@@ -172,6 +189,7 @@ def _no_store(resp):
     except Exception:
         pass
     return resp
+
 
 def _safe_redirect_back(default_url: str):
     """Vuelve por referrer solo si es mismo host."""
@@ -185,9 +203,11 @@ def _safe_redirect_back(default_url: str):
             pass
     return redirect(default_url)
 
+
 # ============================================================
 # CSRF (compat con tus templates + Render)
 # ============================================================
+
 
 def _ensure_csrf_token() -> str:
     tok = session.get("csrf_token")
@@ -197,11 +217,12 @@ def _ensure_csrf_token() -> str:
         session.modified = True
     return tok
 
+
 def _csrf_ok() -> bool:
     """
     ✅ CSRF real (cuando REQUIRE_CSRF=1)
     - Form: csrf_token
-    - Header: X-CSRF-Token
+    - Header: X-CSRF-Token / X-CSRFToken
     - JSON: {"csrf_token": "..."}
     """
     if request.method not in {"POST", "PUT", "PATCH", "DELETE"}:
@@ -213,13 +234,18 @@ def _csrf_ok() -> bool:
     if not stored:
         return False
 
-    sent = (request.form.get("csrf_token") or request.headers.get("X-CSRF-Token") or "").strip()
+    sent = (
+        (request.form.get("csrf_token") or "").strip()
+        or (request.headers.get("X-CSRF-Token") or "").strip()
+        or (request.headers.get("X-CSRFToken") or "").strip()
+    )
     if sent and secrets.compare_digest(sent, stored):
         return True
 
     data = _safe_get_json()
     sent2 = (str(data.get("csrf_token") or "")).strip()
     return bool(sent2) and secrets.compare_digest(sent2, stored)
+
 
 def _rate_limit_ok(key: str) -> bool:
     """Rate-limit simple por sesión (evita spam en writes)."""
@@ -236,9 +262,11 @@ def _rate_limit_ok(key: str) -> bool:
     session.modified = True
     return True
 
+
 # ============================================================
 # DB helpers
 # ============================================================
+
 
 def _commit_or_rollback() -> bool:
     try:
@@ -249,9 +277,11 @@ def _commit_or_rollback() -> bool:
         log.exception("DB commit failed")
         return False
 
+
 # ============================================================
 # Session user helpers
 # ============================================================
+
 
 def _clear_session_keep_csrf() -> None:
     csrf = session.get("csrf_token")
@@ -263,9 +293,168 @@ def _clear_session_keep_csrf() -> None:
     if csrf:
         session["csrf_token"] = csrf
 
+
 def _get_current_user() -> Optional[User]:
     uid = session.get("user_id")
     if not uid:
         return None
     try:
         uid_int = int(uid)
+    except Exception:
+        return None
+
+    try:
+        # SQLAlchemy 2.0 style:
+        u = db.session.execute(select(User).where(User.id == uid_int)).scalar_one_or_none()
+        return u
+    except Exception:
+        log.exception("failed to load current user")
+        return None
+
+
+def _require_login() -> Optional[Any]:
+    """
+    ✅ Unificación: si no está logueado, manda a /auth/account (tab=login)
+    Mantiene next seguro.
+    """
+    u = _get_current_user()
+    if u:
+        return None
+
+    nxt = _next_url(default="/account")
+    # Prefer endpoint auth.account si existe
+    try:
+        dest = url_for("auth.account", tab="login", next=nxt)
+    except Exception:
+        # Fallback legacy
+        dest = f"/auth/account?tab=login&next={nxt}"
+    return redirect(dest)
+
+
+# ============================================================
+# Unified entrypoints (compat) — /account y /cuenta
+# ============================================================
+
+@account_bp.get("/")
+def account_home():
+    """
+    /account
+    - Si logueado: muestra panel (account dashboard)
+    - Si NO: redirect al login/registro unificado (/auth/account)
+    """
+    _ensure_csrf_token()
+    u = _get_current_user()
+    if not u:
+        return _require_login()
+
+    # Template preferido (si existe)
+    tpl = "account/dashboard.html"
+    if not _template_exists(tpl):
+        tpl = "account/index.html" if _template_exists("account/index.html") else "account/account.html"
+
+    def _html():
+        resp = render_template(
+            tpl,
+            csrf_token_value=session.get("csrf_token", ""),
+            user=u,
+        )
+        return _no_store(resp)
+
+    return _json_or_html({"ok": True, "user_id": u.id}, _html)
+
+
+@account_bp.get("/login")
+def account_login_compat():
+    """Compat legacy: /account/login -> /auth/account?tab=login"""
+    nxt = _next_url(default="/account")
+    try:
+        return redirect(url_for("auth.account", tab="login", next=nxt))
+    except Exception:
+        return redirect(f"/auth/account?tab=login&next={nxt}")
+
+
+@account_bp.get("/register")
+def account_register_compat():
+    """Compat legacy: /account/register -> /auth/account?tab=register"""
+    nxt = _next_url(default="/account")
+    try:
+        return redirect(url_for("auth.account", tab="register", next=nxt))
+    except Exception:
+        return redirect(f"/auth/account?tab=register&next={nxt}")
+
+
+# Alias /cuenta (sin prefix). Registrar este blueprint en app/__init__.py sin url_prefix.
+@cuenta_bp.get("/cuenta")
+def cuenta_home():
+    """Compat: /cuenta -> /account"""
+    return redirect("/account")
+
+
+@cuenta_bp.get("/cuenta/login")
+def cuenta_login():
+    """Compat: /cuenta/login -> /auth/account?tab=login"""
+    nxt = _next_url(default="/account")
+    try:
+        return redirect(url_for("auth.account", tab="login", next=nxt))
+    except Exception:
+        return redirect(f"/auth/account?tab=login&next={nxt}")
+
+
+@cuenta_bp.get("/cuenta/register")
+def cuenta_register():
+    """Compat: /cuenta/register -> /auth/account?tab=register"""
+    nxt = _next_url(default="/account")
+    try:
+        return redirect(url_for("auth.account", tab="register", next=nxt))
+    except Exception:
+        return redirect(f"/auth/account?tab=register&next={nxt}")
+
+
+# ============================================================
+# Resto de endpoints reales de cuenta (perfil, direcciones, pedidos)
+# ============================================================
+# 👇 Mantengo la estructura ULTRA PRO. Podés pegar tus endpoints existentes abajo
+#    (update profile, addresses CRUD, orders list, etc.) y usar _require_login()
+#    al inicio de cada handler para forzar auth unified.
+
+
+@account_bp.get("/orders")
+def account_orders():
+    """
+    Ejemplo PRO: lista pedidos del usuario.
+    (Si ya tenías esta ruta, podés reemplazarla por tu versión; la idea es el patrón.)
+    """
+    _ensure_csrf_token()
+    guard = _require_login()
+    if guard:
+        return guard
+    u = _get_current_user()
+    assert u is not None
+
+    try:
+        rows = db.session.execute(
+            select(Order).where(Order.user_id == u.id).order_by(Order.id.desc()).limit(50)
+        ).scalars().all()
+    except Exception:
+        log.exception("failed to load orders")
+        rows = []
+
+    def _html():
+        tpl = "account/orders.html"
+        if not _template_exists(tpl):
+            # fallback ultra-safe
+            tpl = "account/orders_fallback.html" if _template_exists("account/orders_fallback.html") else "account/account.html"
+        resp = render_template(
+            tpl,
+            csrf_token_value=session.get("csrf_token", ""),
+            user=u,
+            orders=rows,
+        )
+        return _no_store(resp)
+
+    payload = {
+        "ok": True,
+        "user_id": u.id,
+        "orders": [{"id": getattr(o, "id", None)} for o in rows],
+    }
+    return _json_or_html(payload, _html)

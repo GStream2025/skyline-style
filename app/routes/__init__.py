@@ -6,9 +6,9 @@ OBJETIVO: "No falta nada" + "no se rompe" + "no tocar más".
 ✅ Registro por prioridad (core -> account -> cart/checkout -> api -> webhooks -> admin -> printful)
 ✅ Auto-scan del paquete app.routes: registra TODO blueprint encontrado
 ✅ Descubre múltiples Blueprints por módulo
-✅ Anti duplicados por bp.name (case-insensitive) + ORIGIN + identidad del objeto (NEW)
+✅ Anti duplicados por bp.name (case-insensitive) + ORIGIN + identidad del objeto
 ✅ Disable por ENV con wildcard: ROUTES_DISABLE="admin*,printful,app.routes.debug_routes"
-✅ Allowlist opcional (NEW): ROUTES_ALLOW="main,shop,auth,account" (si existe, SOLO esos)
+✅ Allowlist opcional: ROUTES_ALLOW="main,shop,auth,account" (si existe, SOLO esos)
 ✅ Prefix override por ENV: ROUTES_PREFIX_<bpname>=/algo (bpname normalizado)
 ✅ Require por ENV: ROUTES_REQUIRE="main,shop,auth,account"
 ✅ Strict mode:
@@ -16,12 +16,15 @@ OBJETIVO: "No falta nada" + "no se rompe" + "no tocar más".
    - ROUTES_STRICT_FORCE=1 (siempre)
 ✅ Report dict estable para debug
 
-NUEVO (5 mejoras):
-1) ✅ Dedupe por identidad del blueprint (evita register doble por imports/alias)
+MEJORAS vNEXT (8):
+1) ✅ Dedupe por identidad del blueprint + también por (module,symbol) (evita doble import/alias)
 2) ✅ origin verdadero: "{module}.{symbol}" cuando existe (mejor disable/trace)
 3) ✅ Allowlist ROUTES_ALLOW para “modo producción ultra controlado”
-4) ✅ Scan exclude por patrón (ROUTES_SCAN_EXCLUDE) para evitar módulos basura (perf)
+4) ✅ Scan exclude por patrón (ROUTES_SCAN_EXCLUDE) (perf)
 5) ✅ Orden de scan estable + skip explícito de __init__/tests (menos ruido)
+6) ✅ ROUTES_SCAN_ONLY_MODULES: si está, escanea SOLO esos módulos (perf/hardening)
+7) ✅ ROUTES_PRIORITY_DEFAULTS: permite apagar specs default (para proyectos chicos)
+8) ✅ Report incluye map bp_name->origin/prefix (debug más claro)
 """
 
 from __future__ import annotations
@@ -31,6 +34,7 @@ import logging
 import os
 import pkgutil
 import time
+from dataclasses import dataclass
 from importlib import import_module
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple
 
@@ -76,8 +80,15 @@ def _disabled_patterns() -> List[str]:
 
 
 def _scan_exclude_patterns() -> List[str]:
-    # NEW: excluir módulos del scan (wildcards)
     return [x.lower() for x in _split_csv_env("ROUTES_SCAN_EXCLUDE")]
+
+
+def _scan_only_modules() -> Set[str]:
+    """
+    NEW: si definís ROUTES_SCAN_ONLY_MODULES,
+    el autoscan solo incluye esos módulos (wildcards permitidos).
+    """
+    return {x.lower() for x in _split_csv_env("ROUTES_SCAN_ONLY_MODULES")}
 
 
 def _required_names() -> Set[str]:
@@ -85,7 +96,6 @@ def _required_names() -> Set[str]:
 
 
 def _allowed_names() -> Set[str]:
-    # NEW: allowlist opcional. Si está presente, SOLO se registran esos bp.name
     return {x.lower() for x in _split_csv_env("ROUTES_ALLOW")}
 
 
@@ -177,11 +187,13 @@ def _compute_env_cache_key() -> str:
         "ROUTES_SCAN_SUBPACKAGES",
         "ROUTES_SCAN_ONLY",
         "ROUTES_SCAN_EXCLUDE",
+        "ROUTES_SCAN_ONLY_MODULES",
         "ROUTES_IMPORT_NO_CACHE",
         "ROUTES_DEBUG",
         "ROUTES_STRICT",
         "ROUTES_STRICT_FORCE",
         "ROUTES_BUST_IMPORT_CACHE",
+        "ROUTES_PRIORITY_DEFAULTS",
     ]
     prefix_items: List[str] = []
     for k, v in os.environ.items():
@@ -252,10 +264,7 @@ def _is_blueprint(obj: Any) -> bool:
 
 
 def _find_blueprints_in_module(mod: Any) -> List[Tuple[Any, str]]:
-    """
-    Retorna lista de (blueprint, symbol_name).
-    NEW: devolvemos el símbolo real para origin verdadero.
-    """
+    """Retorna lista de (blueprint, symbol_name)."""
     if not mod:
         return []
     out: List[Tuple[Any, str]] = []
@@ -296,11 +305,11 @@ def _import_symbol_or_all(mod_path: str, symbol: Optional[str]) -> Tuple[List[Tu
 # =============================================================================
 # Scan modules
 # =============================================================================
-def _scan_route_modules(exclude_patterns: List[str]) -> List[str]:
+def _scan_route_modules(exclude_patterns: List[str], only_modules: Set[str]) -> List[str]:
     global _SCAN_CACHE, _SCAN_CACHE_KEY
 
     scan_sub = _env_bool("ROUTES_SCAN_SUBPACKAGES", False)
-    key = f"sub={int(scan_sub)}|ex={'/'.join(exclude_patterns)}"
+    key = f"sub={int(scan_sub)}|ex={'/'.join(exclude_patterns)}|only={'/'.join(sorted(only_modules))}"
     if _SCAN_CACHE is not None and _SCAN_CACHE_KEY == key:
         return list(_SCAN_CACHE)
 
@@ -311,11 +320,18 @@ def _scan_route_modules(exclude_patterns: List[str]) -> List[str]:
         mods: List[str] = []
         for m in pkgutil.iter_modules(pkg.__path__, base + "."):
             tail = m.name.split(".")[-1]
-            # NEW: skip ruido típico
-            if tail.startswith("_") or tail in {"tests", "test", "conftest"}:
+            # skip ruido típico
+            if tail.startswith("_") or tail in {"tests", "test", "conftest", "__init__"}:
                 continue
+
+            # exclude global
             if _match_any(m.name.lower(), exclude_patterns) or _match_any(tail.lower(), exclude_patterns):
                 continue
+
+            # only filter (NEW) con wildcard
+            if only_modules:
+                if not _match_any(m.name.lower(), list(only_modules)) and not _match_any(tail.lower(), list(only_modules)):
+                    continue
 
             mods.append(m.name)
 
@@ -324,16 +340,20 @@ def _scan_route_modules(exclude_patterns: List[str]) -> List[str]:
                     subpkg = import_module(m.name)
                     for sm in pkgutil.iter_modules(getattr(subpkg, "__path__", []), m.name + "."):
                         stail = sm.name.split(".")[-1]
-                        if stail.startswith("_") or stail in {"tests", "test", "conftest"}:
+                        if stail.startswith("_") or stail in {"tests", "test", "conftest", "__init__"}:
                             continue
                         if _match_any(sm.name.lower(), exclude_patterns) or _match_any(stail.lower(), exclude_patterns):
                             continue
+
+                        if only_modules:
+                            if not _match_any(sm.name.lower(), list(only_modules)) and not _match_any(stail.lower(), list(only_modules)):
+                                continue
+
                         mods.append(sm.name)
                 except Exception:
                     pass
 
-        # NEW: orden estable
-        mods = sorted(set(mods))
+        mods = sorted(set(mods))  # orden estable
         _SCAN_CACHE = mods
         _SCAN_CACHE_KEY = key
         return mods
@@ -369,6 +389,14 @@ def _bp_internal_prefix(bp: Any) -> Optional[str]:
         return None
 
 
+@dataclass(frozen=True)
+class _BpKey:
+    """NEW: key estable para dedupe extra."""
+    bp_id: int
+    bp_name: str
+    origin: str
+
+
 def _register_bp(
     app: "Flask",
     bp: Any,
@@ -378,6 +406,7 @@ def _register_bp(
     seen_names: Set[str],
     seen_origins: Set[str],
     seen_ids: Set[int],
+    seen_modsym: Set[str],
     report: Dict[str, Any],
     url_prefix: Optional[str],
     disabled_patterns: List[str],
@@ -396,7 +425,7 @@ def _register_bp(
     mod_path = origin.rsplit(".", 1)[0].strip().lower()
     sym_tail = (symbol or "").strip().lower() or origin.split(".")[-1].strip().lower()
 
-    # NEW: allowlist
+    # allowlist
     if allowed_names and bp_key not in allowed_names:
         report["disabled"].append(f"{bp_name} <- {origin} (allowlist)")
         return
@@ -405,10 +434,16 @@ def _register_bp(
         report["disabled"].append(f"{bp_name} <- {origin}")
         return
 
-    # NEW: dedupe por identidad
+    # dedupe por identidad
     bp_id = id(bp)
     if bp_id in seen_ids:
         report["duplicate"].append(f"(id) {bp_name} <- {origin}")
+        return
+
+    # dedupe por (module,symbol) (NEW)
+    modsym = f"{mod_path}.{sym_tail}".lower()
+    if modsym in seen_modsym:
+        report["duplicate"].append(f"(modsym) {bp_name} <- {origin}")
         return
 
     origin_key = _normalize_origin(origin)
@@ -433,10 +468,16 @@ def _register_bp(
         seen_ids.add(bp_id)
         seen_names.add(bp_key)
         seen_origins.add(origin_key)
+        seen_modsym.add(modsym)
 
         report["registered"].append(
             f"{bp_name} <- {origin}" + (f" (prefix={final_prefix})" if final_prefix else "")
         )
+        report["map"][bp_name] = {
+            "origin": origin,
+            "symbol": symbol,
+            "prefix": final_prefix or "",
+        }
     except Exception as e:
         report["failed_register"].append(f"{bp_name} <- {origin} :: {_short_exc(e)}")
         log.warning(
@@ -448,19 +489,19 @@ def _register_bp(
 
 
 # =============================================================================
-# Specs (ajustado a tu repo)
+# Specs (ajustado a tu repo) — ACTUALIZADO para unificación account/auth
 # =============================================================================
 def _default_specs() -> List[Tuple[str, Optional[str], Optional[str]]]:
     # CORE primero
     return [
         ("app.routes.main_routes", None, None),
         ("app.routes.shop_routes", None, None),
+
+        # ✅ AUTH unificado (account.html con tabs)
         ("app.routes.auth_routes", None, None),
 
-        # USER / ACCOUNT
+        # USER / ACCOUNT (panel)
         ("app.routes.account_routes", None, None),
-        ("app.routes.profile_routes", None, None),
-        ("app.routes.address_routes", None, None),
 
         # CART / CHECKOUT
         ("app.routes.cart_routes", None, None),
@@ -485,6 +526,17 @@ def _default_specs() -> List[Tuple[str, Optional[str], Optional[str]]]:
     ]
 
 
+def _use_default_specs() -> bool:
+    """
+    NEW: ROUTES_PRIORITY_DEFAULTS=0 => no usa _default_specs()
+    (por si querés un modo minimalista).
+    """
+    raw = (os.getenv("ROUTES_PRIORITY_DEFAULTS") or "").strip().lower()
+    if raw in _FALSE:
+        return False
+    return True
+
+
 # =============================================================================
 # Public API
 # =============================================================================
@@ -500,13 +552,15 @@ def register_blueprints(app: "Flask") -> Dict[str, Any]:
     strict = _strict_mode(app)
     disabled_patterns = _disabled_patterns()
     scan_exclude = _scan_exclude_patterns()
+    scan_only_mods = _scan_only_modules()
     required = _required_names()
     allowed = _allowed_names()
     scan_only = _env_bool("ROUTES_SCAN_ONLY", False)
 
     seen_names: Set[str] = set()
     seen_origins: Set[str] = set()
-    seen_ids: Set[int] = set()  # NEW
+    seen_ids: Set[int] = set()
+    seen_modsym: Set[str] = set()  # NEW
 
     report: Dict[str, Any] = {
         "registered": [],
@@ -523,12 +577,16 @@ def register_blueprints(app: "Flask") -> Dict[str, Any]:
         "timing_ms": 0,
         "counts": {},
         "strict": strict,
+        "map": {},  # NEW: bp_name -> {origin,prefix}
     }
 
     # -----------------------------------------
     # 1) PRIORIDAD
     # -----------------------------------------
-    specs = _default_specs()
+    specs: List[Tuple[str, Optional[str], Optional[str]]] = []
+    if _use_default_specs():
+        specs.extend(_default_specs())
+
     for m in _priority_modules():
         specs.append((m, None, None))
 
@@ -542,12 +600,7 @@ def register_blueprints(app: "Flask") -> Dict[str, Any]:
                 continue
 
             for bp, sym in pairs:
-                bp_name = (getattr(bp, "name", "") or "blueprint").strip()
-
-                # NEW: origin real usando símbolo (siempre existe en pairs)
-                # => mejora disable/tracing
                 origin = f"{mod}.{sym}"
-
                 _register_bp(
                     app,
                     bp,
@@ -556,6 +609,7 @@ def register_blueprints(app: "Flask") -> Dict[str, Any]:
                     seen_names=seen_names,
                     seen_origins=seen_origins,
                     seen_ids=seen_ids,
+                    seen_modsym=seen_modsym,
                     report=report,
                     url_prefix=pref,
                     disabled_patterns=disabled_patterns,
@@ -565,7 +619,7 @@ def register_blueprints(app: "Flask") -> Dict[str, Any]:
     # -----------------------------------------
     # 2) AUTO-SCAN
     # -----------------------------------------
-    for mod in _scan_route_modules(scan_exclude):
+    for mod in _scan_route_modules(scan_exclude, scan_only_mods):
         pairs, err = _import_symbol_or_all(mod, None)
         if not pairs:
             report["scan_skipped"].append(mod + (f" :: {err}" if err else ""))
@@ -584,6 +638,7 @@ def register_blueprints(app: "Flask") -> Dict[str, Any]:
                 seen_names=seen_names,
                 seen_origins=seen_origins,
                 seen_ids=seen_ids,
+                seen_modsym=seen_modsym,
                 report=report,
                 url_prefix=None,
                 disabled_patterns=disabled_patterns,

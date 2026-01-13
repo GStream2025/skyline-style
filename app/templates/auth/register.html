@@ -1,0 +1,612 @@
+{% extends "base.html" %}
+{% block title %}Crear cuenta | Skyline Store{% endblock %}
+
+{% block extra_head %}
+  <link rel="preload" as="style" href="{{ url_for('static', filename='css/register.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/register.css') }}">
+
+  <meta name="robots" content="{{ 'index,follow' if (ENV|default('')|lower == 'production') else 'noindex,nofollow' }}">
+
+  {# ✅ CSRF meta estable (inject_globals -> csrf_token_value) #}
+  <meta name="csrf-token" content="{{ csrf_token_value|default('') }}">
+
+  <style>
+    .ss-reg{position:relative}
+    .ss-reg__shell{animation:popIn .45s ease both}
+    @keyframes popIn{from{opacity:0;transform:translateY(12px) scale(.99)}to{opacity:1;transform:none}}
+
+    .ss-reg__head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px}
+    .ss-reg__head h2{margin:0;font-size:1.35rem;letter-spacing:-.02em}
+    .ss-reg__head small{display:block;opacity:.75;margin-top:2px}
+
+    .ss-reg__secure{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;border:1px solid rgba(0,0,0,.12);font-size:.9rem;backdrop-filter:saturate(120%) blur(6px)}
+    .ss-reg__secure .dot{width:8px;height:8px;border-radius:50%;background:currentColor;opacity:.65}
+
+    .ss-reg__steps{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 14px}
+    .ss-reg__step{padding:7px 10px;border-radius:999px;border:1px solid rgba(0,0,0,.12);opacity:.8;font-size:.9rem}
+    .ss-reg__step.is-active{opacity:1;transform:translateY(-1px);box-shadow:0 10px 24px -18px rgba(0,0,0,.35)}
+    @media (prefers-reduced-motion: reduce){.ss-reg__shell{animation:none}.ss-reg__step.is-active{transform:none}}
+
+    .ss-reg__divider{display:flex;align-items:center;gap:12px;margin:16px 0;opacity:.85}
+    .ss-reg__divider:before,.ss-reg__divider:after{content:"";flex:1;height:1px;background:rgba(0,0,0,.12)}
+    .ss-reg__divider span{font-size:.85rem}
+
+    .ss-reg__flash{border-radius:14px;padding:10px 12px;border:1px solid rgba(0,0,0,.10);margin:10px 0;animation:fadeSlide .35s ease both}
+    @keyframes fadeSlide{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+    .ss-reg__flash.error{border-color:rgba(220,38,38,.25)}
+    .ss-reg__flash.success{border-color:rgba(34,197,94,.25)}
+    .ss-reg__flash.warning{border-color:rgba(245,158,11,.25)}
+    .ss-reg__flash.info{border-color:rgba(59,130,246,.22)}
+
+    .ss-reg__input{transition:box-shadow .2s ease,transform .2s ease,border-color .2s ease}
+    .ss-reg__input:focus{outline:0;box-shadow:0 0 0 4px rgba(0,0,0,.08);transform:translateY(-1px)}
+    .ss-reg__input[aria-invalid="true"]{border-color:rgba(220,38,38,.35)}
+
+    .ss-reg__pwbar{height:8px;border-radius:999px;background:rgba(0,0,0,.08);overflow:hidden}
+    .ss-reg__pwbar > i{display:block;height:100%;width:0%}
+    .ss-reg__pwmsg{font-size:.88rem;opacity:.8;margin-top:6px}
+
+    .ss-reg__submit{position:relative;overflow:hidden}
+    .ss-reg__submit:after{content:"";position:absolute;inset:0;transform:translateX(-120%);background:linear-gradient(90deg,transparent,rgba(255,255,255,.22),transparent)}
+    .ss-reg__submit:hover:after{animation:shine 1.1s ease}
+    @keyframes shine{to{transform:translateX(120%)}}
+
+    .ss-reg__submit[aria-busy="true"]{opacity:.88;cursor:progress}
+    .ss-reg__spinner{width:16px;height:16px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;display:inline-block;vertical-align:-3px;animation:sspin .9s linear infinite}
+    @keyframes sspin{to{transform:rotate(360deg)}}
+
+    .ss-reg__pw-toggle{border-radius:10px;border:1px solid rgba(0,0,0,.12);padding:8px 10px;background:transparent;cursor:pointer;transition:transform .15s ease}
+    .ss-reg__pw-toggle:active{transform:scale(.98)}
+    .ss-reg__pw-wrap{display:flex;gap:8px;align-items:center}
+
+    @media (max-width:520px){
+      .ss-reg__head h2{font-size:1.25rem}
+      .ss-reg__divider{margin:12px 0}
+    }
+    @media (prefers-reduced-motion: reduce){
+      .ss-reg__flash{animation:none}
+      .ss-reg__submit:hover:after{animation:none}
+      .ss-reg__spinner{animation:none}
+      .ss-reg__input:focus{transform:none}
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+{# ---------- SAFE URL RESOLVER (NO-BREAK) ---------- #}
+{% macro safe_url(endpoint, fallback='/', **kwargs) -%}
+  {%- set vf = (view_functions if view_functions is defined and view_functions else {}) -%}
+  {%- if endpoint and endpoint in vf -%}
+    {{- url_for(endpoint, **kwargs) -}}
+  {%- else -%}
+    {{- fallback -}}
+  {%- endif -%}
+{%- endmacro %}
+
+{# ---------- next safe ---------- #}
+{% set _raw_next = (next|default(request.args.get('next',''), true)|string).strip() %}
+{% set nxt = _raw_next %}
+{% if (not nxt) or (not nxt.startswith('/')) or (nxt.startswith('//')) %}
+  {% set nxt = '' %}
+{% endif %}
+
+{# ---------- form values ---------- #}
+{% set post_name  = (request.form.get('name','') or '') %}
+{% set post_email = (request.form.get('email','') or '') %}
+
+{# ---------- endpoints ---------- #}
+{% set register_action = safe_url('auth.register', '/auth/register') %}
+{% set login_base      = safe_url('auth.login', '/auth/login') %}
+{% set login_url       = login_base ~ (('?next=' ~ (nxt|urlencode)) if nxt else '') %}
+{% set shop_url        = safe_url('shop.shop', '/shop') %}
+
+<section class="ss-reg" aria-label="Crear cuenta">
+  <div class="ss-reg__shell">
+
+    <!-- LEFT -->
+    <aside class="ss-reg__card ss-reg__left" aria-label="Beneficios">
+      <div class="ss-reg__brand">
+        <div class="ss-reg__logo" aria-hidden="true"></div>
+        <div>
+          <b>Skyline Store</b>
+          <span>Marketplace premium</span>
+        </div>
+      </div>
+
+      <h1>Creá tu cuenta</h1>
+      <p>
+        Comprá más rápido, gestioná pedidos y accedé a beneficios exclusivos.
+        (Afiliados y recompensas se habilitan por etapas).
+      </p>
+
+      <div class="ss-reg__trust" aria-label="Confianza">
+        <span>✔ Cuenta protegida</span>
+        <span>✔ Verificación por email</span>
+        <span>✔ Datos cifrados</span>
+        <span>✔ Soporte real</span>
+      </div>
+    </aside>
+
+    <!-- RIGHT -->
+    <div class="ss-reg__card ss-reg__right" aria-label="Formulario de registro">
+
+      <div class="ss-reg__head">
+        <div>
+          <h2>Crear cuenta</h2>
+          <small>Solo toma unos segundos</small>
+        </div>
+        <span class="ss-reg__secure" aria-label="Conexión segura">
+          <span class="dot" aria-hidden="true"></span> Seguro
+        </span>
+      </div>
+
+      <div class="ss-reg__steps" aria-label="Progreso">
+        <div class="ss-reg__step is-active" aria-current="step">Cuenta</div>
+        <div class="ss-reg__step">Verificación</div>
+        <div class="ss-reg__step">Listo</div>
+      </div>
+
+      {# FLASH #}
+      {% set _msgs = get_flashed_messages(with_categories=true) %}
+      {% if _msgs %}
+        {% for category, msg in _msgs %}
+          {% set cat = (category|string|lower|trim) %}
+          {% set cat = cat if cat in ['error','warning','success','info'] else 'info' %}
+          <div class="ss-reg__flash {{ cat }}" role="alert" aria-live="polite" aria-atomic="true">
+            {{ msg }}
+          </div>
+        {% endfor %}
+      {% endif %}
+
+      <form method="post"
+            action="{{ register_action }}"
+            class="ss-reg__form"
+            id="registerForm"
+            novalidate
+            autocomplete="on">
+
+        {# ✅ CSRF hidden definitivo (misma fuente que login) #}
+        <input type="hidden" name="csrf_token" value="{{ csrf_token_value|default('') }}">
+
+        {# ✅ NONCE (FIX CRÍTICO): auth_routes.py exige _check_form_nonce("register") #}
+        <input type="hidden" name="nonce" value="{{ nonce|default('')|e }}">
+
+        {% if nxt %}
+          <input type="hidden" name="next" value="{{ nxt|e }}">
+        {% endif %}
+
+        {# Honeypot anti-bot #}
+        <div style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden" aria-hidden="true">
+          <label>Website</label>
+          <input type="text" name="website" tabindex="-1" autocomplete="off">
+        </div>
+
+        <div class="ss-reg__grid2">
+          <div class="ss-reg__field">
+            <label for="name">Nombre <span class="ss-reg__hint">Opcional</span></label>
+            <input class="ss-reg__input"
+                   id="name"
+                   type="text"
+                   name="name"
+                   maxlength="120"
+                   autocomplete="name"
+                   value="{{ post_name|e }}">
+          </div>
+
+          <div class="ss-reg__field">
+            <label for="email">Email <span class="ss-reg__hint">Requerido</span></label>
+            <input class="ss-reg__input"
+                   id="email"
+                   type="email"
+                   name="email"
+                   required
+                   maxlength="254"
+                   autocomplete="email"
+                   inputmode="email"
+                   autocapitalize="none"
+                   spellcheck="false"
+                   value="{{ post_email|e }}"
+                   placeholder="tu@email.com">
+          </div>
+        </div>
+
+        <div class="ss-reg__grid2">
+          <div class="ss-reg__field">
+            <label for="password">Contraseña <span class="ss-reg__hint">8+ caracteres</span></label>
+
+            <div class="ss-reg__pw-wrap">
+              <input class="ss-reg__input"
+                     id="password"
+                     type="password"
+                     name="password"
+                     required
+                     minlength="8"
+                     autocomplete="new-password"
+                     placeholder="Mínimo 8 caracteres">
+              <button type="button"
+                      class="ss-reg__pw-toggle"
+                      id="togglePass"
+                      aria-label="Mostrar contraseña"
+                      aria-pressed="false">👁</button>
+            </div>
+
+            <div class="ss-reg__pwbar" aria-hidden="true"><i id="pwBar"></i></div>
+            <div class="ss-reg__pwmsg" id="pwMsg">Usá 8+ caracteres, combiná letras y números.</div>
+          </div>
+
+          <div class="ss-reg__field">
+            <label for="password2">Confirmar <span class="ss-reg__hint">Requerido</span></label>
+
+            <div class="ss-reg__pw-wrap">
+              <input class="ss-reg__input"
+                     id="password2"
+                     type="password"
+                     name="password2"
+                     required
+                     minlength="8"
+                     autocomplete="new-password"
+                     placeholder="Repetí la contraseña">
+              <button type="button"
+                      class="ss-reg__pw-toggle"
+                      id="togglePass2"
+                      aria-label="Mostrar confirmación"
+                      aria-pressed="false">👁</button>
+            </div>
+
+            <div class="ss-reg__pwmsg" id="pw2Msg" aria-live="polite"></div>
+          </div>
+        </div>
+
+        <div class="ss-reg__divider"><span>finalizar</span></div>
+
+        <button class="ss-reg__submit" id="submitBtn" type="submit">
+          Crear cuenta
+        </button>
+
+        <div class="ss-reg__footer">
+          ¿Ya tenés cuenta?
+          <a href="{{ login_url }}">Ingresar</a>
+          ·
+          <a href="{{ shop_url }}">Seguir como invitado</a>
+        </div>
+      </form>
+    </div>
+
+  </div>
+</section>
+
+<script defer src="{{ url_for('static', filename='js/register.js') }}?v=2.1"></script>
+
+<script>
+(() => {
+  const f = document.getElementById("registerForm");
+  const b = document.getElementById("submitBtn");
+  const email = document.getElementById("email");
+  const p1 = document.getElementById("password");
+  const p2 = document.getElementById("password2");
+  const t1 = document.getElementById("togglePass");
+  const t2 = document.getElementById("togglePass2");
+  const bar = document.getElementById("pwBar");
+  const msg = document.getElementById("pwMsg");
+  const msg2 = document.getElementById("pw2Msg");
+
+  if (!f || !b) return;
+  if (f.dataset.bound === "1") return;
+  f.dataset.bound = "1";
+
+  const markInvalid = (el, bad) => {
+    if (!el) return;
+    el.setAttribute("aria-invalid", bad ? "true" : "false");
+  };
+
+  const scorePw = (s) => {
+    if (!s) return 0;
+    let sc = 0;
+    if (s.length >= 8) sc++;
+    if (s.length >= 12) sc++;
+    if (/[A-Z]/.test(s)) sc++;
+    if (/[0-9]/.test(s)) sc++;
+    if (/[^A-Za-z0-9]/.test(s)) sc++;
+    return Math.min(sc, 5);
+  };
+
+  const updatePwUI = () => {
+    const s = p1 ? p1.value : "";
+    const sc = scorePw(s); // 0..5
+    if (bar) bar.style.width = (sc * 20) + "%";
+
+    if (msg) {
+      if (!s) msg.textContent = "Usá 8+ caracteres, combiná letras y números.";
+      else if (sc <= 1) msg.textContent = "Débil: agregá más caracteres y números.";
+      else if (sc <= 3) msg.textContent = "Bien: mejorá con mayúsculas o símbolos.";
+      else msg.textContent = "Fuerte: excelente contraseña.";
+    }
+
+    if (p2 && msg2) {
+      if (!p2.value) msg2.textContent = "";
+      else if (p2.value === s) msg2.textContent = "✅ Coinciden";
+      else msg2.textContent = "⚠️ No coinciden";
+    }
+  };
+
+  const bindToggle = (btn, input, onLabel, offLabel) => {
+    if (!btn || !input) return;
+    btn.addEventListener("click", () => {
+      const willShow = input.type === "password";
+      input.type = willShow ? "text" : "password";
+      btn.setAttribute("aria-pressed", String(willShow));
+      btn.setAttribute("aria-label", willShow ? onLabel : offLabel);
+    });
+  };
+  bindToggle(t1, p1, "Ocultar contraseña", "Mostrar contraseña");
+  bindToggle(t2, p2, "Ocultar confirmación", "Mostrar confirmación");
+
+  if (p1) p1.addEventListener("input", updatePwUI, { passive: true });
+  if (p2) p2.addEventListener("input", updatePwUI, { passive: true });
+  updatePwUI();
+
+  f.addEventListener("submit", (ev) => {
+    const em = email ? email.value.trim() : "";
+    const pw1 = p1 ? p1.value : "";
+    const pw2 = p2 ? p2.value : "";
+
+    const eok = em.length >= 6 && em.includes("@");
+    const pOk = pw1.length >= 8;
+    const match = pw1 && pw1 === pw2;{# app/templates/auth/login.html — Skyline Store (ULTRA PRO / NO BREAK · v45.1 FIX) #}
+{% extends "base.html" %}
+{% block title %}Ingresar | Skyline Store{% endblock %}
+
+{% block extra_head %}
+  <link rel="preload" as="style" href="{{ url_for('static', filename='css/login.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
+
+  <meta name="robots" content="{{ 'index,follow' if (ENV|default('')|lower == 'production') else 'noindex,nofollow' }}">
+
+  {# ✅ CSRF: una sola fuente estable (inject_globals -> csrf_token_value) #}
+  <meta name="csrf-token" content="{{ csrf_token_value|default('') }}">
+
+  <style>
+    .ss-login{position:relative}
+    .ss-login__card{animation:popIn .42s ease both}
+    @keyframes popIn{from{opacity:0;transform:translateY(10px) scale(.99)}to{opacity:1;transform:none}}
+    .ss-login__head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+    .ss-login__head h2{margin:0;font-size:1.35rem;letter-spacing:-.02em}
+    .ss-login__head small{display:block;opacity:.75;margin-top:2px}
+    .ss-login__secure{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;border:1px solid rgba(0,0,0,.12);font-size:.9rem;backdrop-filter:saturate(120%) blur(6px)}
+    .ss-login__secure .dot{width:8px;height:8px;border-radius:50%;background:currentColor;opacity:.7}
+    .ss-login__divider{display:flex;align-items:center;gap:12px;margin:14px 0;opacity:.85}
+    .ss-login__divider:before,.ss-login__divider:after{content:"";flex:1;height:1px;background:rgba(0,0,0,.12)}
+    .ss-login__divider span{font-size:.85rem}
+    .ss-login__flash{border-radius:14px;padding:10px 12px;border:1px solid rgba(0,0,0,.10);animation:fadeSlide .35s ease both}
+    @keyframes fadeSlide{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+    .ss-login__flash.error{border-color:rgba(220,38,38,.25)}
+    .ss-login__flash.success{border-color:rgba(34,197,94,.25)}
+    .ss-login__flash.warning{border-color:rgba(245,158,11,.25)}
+    .ss-login__flash.info{border-color:rgba(59,130,246,.25)}
+    .ss-login__input{transition:box-shadow .2s ease,transform .2s ease,border-color .2s ease}
+    .ss-login__input:focus{outline:0;box-shadow:0 0 0 4px rgba(0,0,0,.08);transform:translateY(-1px)}
+    .ss-login__input[aria-invalid="true"]{border-color:rgba(220,38,38,.35)}
+    .ss-login__submit{position:relative;overflow:hidden}
+    .ss-login__submit:after{content:"";position:absolute;inset:0;transform:translateX(-120%);background:linear-gradient(90deg,transparent,rgba(255,255,255,.22),transparent)}
+    .ss-login__submit:hover:after{animation:shine 1.1s ease}
+    @keyframes shine{to{transform:translateX(120%)}}
+    .ss-login__submit[aria-busy="true"]{opacity:.88;cursor:progress}
+    .ss-login__spinner{width:16px;height:16px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;display:inline-block;vertical-align:-3px;animation:sspin .9s linear infinite}
+    @keyframes sspin{to{transform:rotate(360deg)}}
+    .ss-login__pass-wrap{display:flex;gap:8px;align-items:center}
+    .ss-login__pass-toggle{border-radius:10px;border:1px solid rgba(0,0,0,.12);padding:8px 10px;background:transparent;cursor:pointer;transition:transform .15s ease}
+    .ss-login__pass-toggle:active{transform:scale(.98)}
+    .ss-login__hint{opacity:.75}
+    .ss-login__hint.bad{color:rgba(220,38,38,.92);opacity:1}
+    .ss-login__hint.ok{color:rgba(34,197,94,.92);opacity:1}
+    @media (prefers-reduced-motion: reduce){
+      .ss-login__card,.ss-login__flash{animation:none}
+      .ss-login__submit:hover:after{animation:none}
+      .ss-login__spinner{animation:none}
+      .ss-login__input:focus{transform:none}
+    }
+    @media (max-width: 520px){
+      .ss-login__head h2{font-size:1.25rem}
+      .ss-login__divider{margin:12px 0}
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+{% macro safe_url(endpoint, fallback='/', **kwargs) -%}
+  {%- set vf = (view_functions if view_functions is defined and view_functions else {}) -%}
+  {%- if endpoint and endpoint in vf -%}
+    {{- url_for(endpoint, **kwargs) -}}
+  {%- else -%}
+    {{- fallback -}}
+  {%- endif -%}
+{%- endmacro %}
+
+{% set _raw_next = (next|default(request.args.get('next',''), true)|string).strip() %}
+{% set nxt = _raw_next %}
+{% if (not nxt) or (not nxt.startswith('/')) or (nxt.startswith('//')) %}
+  {% set nxt = '' %}
+{% endif %}
+
+{% set login_action = safe_url('auth.login', '/auth/login') %}
+{% set register_base = safe_url('auth.register', '/auth/register') %}
+{% set shop_url = safe_url('shop.shop', '/shop') %}
+{% set forgot_url = safe_url('auth.forgot', '') %}
+
+{% if nxt %}
+  {% set register_url = register_base ~ '?next=' ~ (nxt|urlencode) %}
+{% else %}
+  {% set register_url = register_base %}
+{% endif %}
+
+<section class="ss-login" aria-label="Ingresar">
+  <div class="ss-login__card">
+
+    <aside class="ss-login__left" aria-label="Beneficios de la cuenta">
+      <div class="ss-login__brand">
+        <span class="ss-login__mark" aria-hidden="true"></span>
+        <div>
+          <div class="ss-login__title">Skyline Store</div>
+          <div class="ss-login__sub">Marketplace premium</div>
+        </div>
+      </div>
+
+      <h1>Bienvenido de vuelta</h1>
+      <p>Ingresá para continuar con tu compra, ver pedidos y acceder a beneficios exclusivos.</p>
+
+      <div class="ss-login__benefits" role="list" aria-label="Beneficios">
+        <div class="ss-login__benefit" role="listitem">
+          <span class="ss-login__dot" aria-hidden="true"></span>
+          <div><b>Acceso rápido</b><span>Entrá y seguí comprando.</span></div>
+        </div>
+        <div class="ss-login__benefit" role="listitem">
+          <span class="ss-login__dot" aria-hidden="true"></span>
+          <div><b>Historial</b><span>Pedidos y seguimiento en un lugar.</span></div>
+        </div>
+      </div>
+    </aside>
+
+    <div class="ss-login__right" aria-label="Formulario de ingreso">
+      <div class="ss-login__head">
+        <div>
+          <h2>Ingresar</h2>
+          <small>Accedé a tu cuenta para comprar más rápido.</small>
+        </div>
+        <span class="ss-login__secure" title="Conexión segura" aria-label="Conexión segura">
+          <span class="dot" aria-hidden="true"></span> Seguro
+        </span>
+      </div>
+
+      {% set _msgs = get_flashed_messages(with_categories=true) %}
+      {% if _msgs %}
+        {% for category, msg in _msgs %}
+          {% set cat = (category|string|lower|trim) %}
+          {% set cat = cat if cat in ['error','warning','success','info'] else 'info' %}
+          <div class="ss-login__flash {{ cat }}" role="alert" aria-live="polite" aria-atomic="true">
+            {{ msg }}
+          </div>
+        {% endfor %}
+      {% endif %}
+
+      <form method="post"
+            action="{{ login_action }}"
+            class="ss-login__form"
+            id="loginForm"
+            novalidate
+            autocomplete="on">
+
+        {# ✅ CSRF hidden definitivo #}
+        <input type="hidden" name="csrf_token" value="{{ csrf_token_value|default('') }}">
+
+        {# ✅ NONCE (FIX CRÍTICO): auth_routes.py lo exige con _check_form_nonce("login") #}
+        <input type="hidden" name="nonce" value="{{ nonce|default('')|e }}">
+
+        {% if nxt %}
+          <input type="hidden" name="next" value="{{ nxt|e }}">
+        {% endif %}
+
+        <div style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden" aria-hidden="true">
+          <label>Website</label>
+          <input type="text" name="website" tabindex="-1" autocomplete="off">
+        </div>
+
+        {% set posted_email = (request.form.get('email','') or '') %}
+        {% set posted_remember = (request.form.get('remember','') or '') %}
+
+        <div class="ss-login__field">
+          <label for="email">
+            <span>Correo electrónico</span>
+            <span class="ss-login__hint" id="emailHint">Requerido</span>
+          </label>
+          <input id="email"
+                 class="ss-login__input"
+                 type="email"
+                 name="email"
+                 required
+                 maxlength="254"
+                 autocomplete="email"
+                 inputmode="email"
+                 autocapitalize="none"
+                 spellcheck="false"
+                 aria-describedby="emailHint"
+                 value="{{ posted_email|e }}"
+                 placeholder="tu@email.com">
+        </div>
+
+        <div class="ss-login__field">
+          <label for="password">
+            <span>Contraseña</span>
+            <span class="ss-login__hint" id="passHint">Requerido</span>
+          </label>
+
+          <div class="ss-login__pass-wrap">
+            <input id="password"
+                   class="ss-login__input"
+                   type="password"
+                   name="password"
+                   required
+                   minlength="8"
+                   autocomplete="current-password"
+                   aria-describedby="passHint"
+                   placeholder="Tu contraseña">
+            <button type="button"
+                    class="ss-login__pass-toggle"
+                    id="togglePass"
+                    aria-label="Mostrar contraseña"
+                    aria-pressed="false">👁</button>
+          </div>
+        </div>
+
+        <div class="ss-login__row" aria-label="Opciones">
+          <label class="ss-login__check">
+            <input type="checkbox" name="remember" value="1" {% if posted_remember %}checked{% endif %}>
+            Mantener sesión
+          </label>
+
+          {% if forgot_url %}
+            <a href="{{ forgot_url }}" class="ss-login__forgot">Olvidé mi contraseña</a>
+          {% endif %}
+        </div>
+
+        <button type="submit" class="ss-login__submit" id="submitBtn">
+          Entrar
+        </button>
+
+        <div class="ss-login__divider" aria-hidden="true"><span>o</span></div>
+
+        <div class="ss-login__links" aria-label="Links">
+          <a href="{{ register_url }}">Crear cuenta</a>
+          <a href="{{ shop_url }}">Seguir como invitado</a>
+        </div>
+      </form>
+    </div>
+
+  </div>
+</section>
+
+<script defer src="{{ url_for('static', filename='js/login.js') }}?v=45.1"></script>
+{% endblock %}
+
+
+    markInvalid(email, !eok);
+    markInvalid(p1, !pOk);
+    markInvalid(p2, !match);
+
+    if (!eok || !pOk || !match) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      b.disabled = false;
+      b.removeAttribute("aria-busy");
+      b.textContent = "Crear cuenta";
+      if (msg2 && pw2 && !match) msg2.textContent = "⚠️ Las contraseñas no coinciden";
+      return;
+    }
+
+    if (b.disabled) return;
+    b.disabled = true;
+    b.setAttribute("aria-busy","true");
+    b.innerHTML = '<span class="ss-reg__spinner" aria-hidden="true"></span> Creando cuenta...';
+  }, { passive:false });
+})();
+</script>
+{% endblock %}

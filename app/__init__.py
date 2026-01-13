@@ -1,4 +1,4 @@
-﻿# app/__init__.py — Skyline Store (ULTRA PRO / NO BREAK / Render-safe) — vNEXT FINAL (HARDENED)
+﻿# app/__init__.py — Skyline Store (ULTRA PRO / NO BREAK / Render-safe) — vNEXT FINAL (HARDENED + Unified Account)
 from __future__ import annotations
 
 import logging
@@ -20,6 +20,7 @@ try:
     from app.models import create_admin_if_missing  # type: ignore
 except Exception:
     create_admin_if_missing = None  # type: ignore
+
 
 # =============================================================================
 # Helpers
@@ -295,6 +296,11 @@ def init_compress(app: Flask) -> None:
 
 
 def init_talisman(app: Flask) -> None:
+    """
+    ✅ Unificación + account:
+    - Si usás nonces/headers CSP acá, podés pasar dict CSP en app.config['CONTENT_SECURITY_POLICY'].
+    - base.html puede traer meta CSP, pero lo ideal es HEADERS (Talisman) en prod.
+    """
     from flask_talisman import Talisman
 
     force_https = bool(app.config.get("FORCE_HTTPS", _is_prod(app)))
@@ -333,7 +339,6 @@ def _configure_session_cookies(app: Flask) -> None:
     """
     allow_domain = _env_bool("ALLOW_COOKIE_DOMAIN", False)
 
-    # Mantener siempre la key (Flask puede leerla)
     if not allow_domain:
         app.config["SESSION_COOKIE_DOMAIN"] = None
     else:
@@ -508,6 +513,55 @@ def create_app() -> Flask:
         return resp
 
     # =============================================================================
+    # Unified Account: canonical redirects (sin romper legacy)
+    # =============================================================================
+    @app.before_request
+    def _account_unify_redirects():
+        """
+        ✅ Si unificaste login+registro en /auth/account:
+        - /auth/login  -> /auth/account?tab=login
+        - /auth/register -> /auth/account?tab=register
+        - /account/login -> /auth/account?tab=login
+        - /account/register -> /auth/account?tab=register
+        Solo aplica si existe endpoint auth.account o si el path existe.
+        """
+        p = (request.path or "")
+        if request.method not in {"GET", "HEAD"}:
+            return None
+
+        # evita loops si ya está en /auth/account
+        if p.startswith("/auth/account"):
+            return None
+
+        # detect next seguro básico (path-only)
+        nxt = (request.args.get("next") or "").strip()
+        if not (nxt.startswith("/") and not nxt.startswith("//")):
+            nxt = ""
+
+        def _redir(tab: str):
+            try:
+                # si existe endpoint, mejor
+                if "auth.account" in app.view_functions:
+                    return redirect(url_for("auth.account", tab=tab, next=nxt) if nxt else url_for("auth.account", tab=tab))
+            except Exception:
+                pass
+            # fallback hard
+            q = f"?tab={tab}"
+            if nxt:
+                q += f"&next={nxt}"
+            return redirect("/auth/account" + q)
+
+        if p in {"/auth/login", "/login"}:
+            return _redir("login")
+        if p in {"/auth/register", "/register"}:
+            return _redir("register")
+        if p in {"/account/login", "/cuenta/login"}:
+            return _redir("login")
+        if p in {"/account/register", "/cuenta/register"}:
+            return _redir("register")
+        return None
+
+    # =============================================================================
     # Template globals (CSRF definitivo: generate_csrf desde Python)
     # =============================================================================
     @app.context_processor
@@ -530,6 +584,14 @@ def create_app() -> Flask:
         except Exception:
             csrf_value = ""
 
+        # ✅ Nonce opcional (solo si lo seteás en algún middleware/talisman)
+        # No lo inventamos: si no existe, queda ""
+        csp_nonce = ""
+        try:
+            csp_nonce = str(getattr(request, "csp_nonce", "") or "")
+        except Exception:
+            csp_nonce = ""
+
         return {
             "APP_NAME": app.config.get("APP_NAME", "Skyline Store"),
             "APP_URL": app.config.get("APP_URL", ""),
@@ -543,6 +605,7 @@ def create_app() -> Flask:
             "has_endpoint": (lambda ep: has_endpoint(app, ep)),
             # ✅ USAR EN base.html: <meta name="csrf-token" content="{{ csrf_token_value }}">
             "csrf_token_value": csrf_value,
+            "csp_nonce": csp_nonce,
         }
 
     # =============================================================================

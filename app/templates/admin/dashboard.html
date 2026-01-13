@@ -1,32 +1,16 @@
-{# app/templates/admin/dashboard.html — Skyline Admin Dashboard (ULTRA PRO v2) #}
+{# app/templates/admin/dashboard.html — Skyline Admin Dashboard (ULTRA PRO v3 FINAL / NO-500 / FAIL-SAFE) #}
 {% extends "admin/base_admin.html" %}
 {% block title %}Dashboard · Skyline Admin{% endblock %}
 
 {% block content %}
 <style>
 /* ==========================================================
-   SKYLINE ADMIN DASHBOARD — ULTRA PRO (Modern marketplace)
-   ✅ 20 mejoras nuevas:
-   1) UI moderna tipo marketplace (cards + glass + gradients)
-   2) KPIs responsivos (auto grid)
-   3) Acciones rápidas (Quick Actions)
-   4) Estado del sistema (conexión/CSRF/online)
-   5) Tabla “Recientes” (productos) con safe fallbacks
-   6) Widgets: Salud catálogo, Ofertas, Categorías, Media
-   7) Search interno (client-side) en recientes
-   8) Chips de filtros rápidos (All/Active/Draft/Sale)
-   9) Skeleton loading visual (no JS required)
-   10) A11y: aria-label, focus-visible pro, aria-live
-   11) Perf: DOM mínimo + dataset hooks
-   12) No rompe si faltan variables (default)
-   13) Links safe (fallback a paths si endpoint falta)
-   14) Badges dinámicos por estado
-   15) Empty state elegante si no hay recientes
-   16) Mobile-first con sticky actions
-   17) Soporta miles (layout estable)
-   18) Copy-to-clipboard para rutas útiles (media/uploads)
-   19) Toast hooks (si window.toast existe)
-   20) Respeta prefers-reduced-motion
+   SKYLINE ADMIN DASHBOARD — ULTRA PRO (Modern marketplace) — FINAL
+   ✅ mejoras clave (sin romper):
+   - NO usa current_app.* (evita UndefinedError si no lo pasás)
+   - URLs safe con view_functions (vienen desde inject_globals)
+   - data defaults a prueba de balas
+   - filtros + search + copy + estados online/csrf
 ========================================================== */
 
 :root{
@@ -51,17 +35,10 @@
   --ad-ease: cubic-bezier(.2,.9,.2,1);
 }
 
-/* layout */
-.ad-wrap{
-  display:flex;
-  flex-direction:column;
-  gap: 14px;
-  padding-bottom: 16px;
-}
+.ad-wrap{display:flex;flex-direction:column;gap:14px;padding-bottom:16px}
 
 .ad-hero{
-  position:relative;
-  overflow:hidden;
+  position:relative;overflow:hidden;
   border:1px solid var(--ad-stroke);
   border-radius: var(--ad-r2);
   background:
@@ -72,81 +49,34 @@
   box-shadow: var(--ad-shadow1);
   padding: 14px;
 }
-@media(min-width: 900px){
-  .ad-hero{ padding: 16px; }
-}
+@media(min-width: 900px){ .ad-hero{ padding: 16px; } }
 .ad-hero::after{
   content:"";
-  position:absolute; inset:0;
-  pointer-events:none;
-  opacity:.05;
+  position:absolute; inset:0; pointer-events:none; opacity:.05;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='260' height='260' filter='url(%23n)' opacity='.85'/%3E%3C/svg%3E");
   mix-blend-mode: overlay;
 }
 
-.ad-head{
-  position:relative;
-  display:flex;
-  flex-wrap:wrap;
-  align-items:flex-start;
-  justify-content:space-between;
-  gap: 12px;
-}
+.ad-head{position:relative;display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:12px}
+.ad-title{margin:0;font-weight:1000;letter-spacing:-.6px;font-size:clamp(1.25rem,2.4vw,1.8rem);color:var(--ad-ink)}
+.ad-sub{margin:.45rem 0 0;max-width:70ch;color:var(--ad-muted);line-height:1.5;font-weight:750}
 
-.ad-title{
-  margin:0;
-  font-weight: 1000;
-  letter-spacing:-.6px;
-  font-size: clamp(1.25rem, 2.4vw, 1.8rem);
-  color: var(--ad-ink);
-}
-.ad-sub{
-  margin:.45rem 0 0;
-  max-width: 70ch;
-  color: var(--ad-muted);
-  line-height: 1.5;
-  font-weight: 750;
-}
-
-.ad-badges{
-  display:flex;
-  gap:8px;
-  flex-wrap:wrap;
-  align-items:center;
-  margin-top: 10px;
-}
+.ad-badges{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
 .ad-pill{
-  display:inline-flex;
-  align-items:center;
-  gap:8px;
-  padding: 8px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--ad-stroke2);
+  display:inline-flex;align-items:center;gap:8px;
+  padding:8px 10px;border-radius:999px;
+  border:1px solid var(--ad-stroke2);
   background: rgba(255,255,255,.06);
   color: rgba(255,255,255,.86);
   font-weight: 900;
   font-size: .82rem;
 }
-.ad-dot{
-  width:10px;height:10px;border-radius:999px;
-  background: var(--ad-grad);
-  box-shadow: 0 12px 22px rgba(0,0,0,.25);
-}
+.ad-dot{width:10px;height:10px;border-radius:999px;background:var(--ad-grad);box-shadow:0 12px 22px rgba(0,0,0,.25)}
 
-.ad-actions{
-  display:flex;
-  gap:10px;
-  flex-wrap:wrap;
-  justify-content:flex-end;
-  align-items:center;
-}
+.ad-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;align-items:center}
 .ad-btn{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  gap:10px;
-  padding: 10px 12px;
-  border-radius: 999px;
+  display:inline-flex;align-items:center;justify-content:center;gap:10px;
+  padding:10px 12px;border-radius:999px;
   border:1px solid var(--ad-stroke2);
   background: rgba(255,255,255,.06);
   color: rgba(255,255,255,.92);
@@ -154,28 +84,13 @@
   font-weight: 950;
   transition: transform .18s var(--ad-ease), box-shadow .18s var(--ad-ease), background .18s var(--ad-ease);
 }
-.ad-btn:hover{
-  transform: translateY(-1px);
-  background: rgba(255,255,255,.08);
-  box-shadow: 0 18px 40px rgba(0,0,0,.20);
-}
-.ad-btn.primary{
-  background: var(--ad-grad);
-  border-color: transparent;
-  color: #0b1220;
-}
-.ad-btn.primary:hover{ filter:saturate(1.05); }
-.ad-btn svg{ width:18px;height:18px; opacity:.95; }
+.ad-btn:hover{transform:translateY(-1px);background:rgba(255,255,255,.08);box-shadow:0 18px 40px rgba(0,0,0,.20)}
+.ad-btn.primary{background:var(--ad-grad);border-color:transparent;color:#0b1220}
+.ad-btn.primary:hover{filter:saturate(1.05)}
+.ad-btn svg{width:18px;height:18px;opacity:.95}
 
-/* grid */
-.ad-grid{
-  display:grid;
-  grid-template-columns: 1fr;
-  gap: 14px;
-}
-@media(min-width: 980px){
-  .ad-grid{ grid-template-columns: 1.2fr .8fr; }
-}
+.ad-grid{display:grid;grid-template-columns:1fr;gap:14px}
+@media(min-width:980px){ .ad-grid{ grid-template-columns: 1.2fr .8fr; } }
 
 .ad-card{
   border:1px solid var(--ad-stroke);
@@ -185,38 +100,16 @@
   overflow:hidden;
 }
 .ad-card-h{
-  padding: 12px 14px;
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap: 10px;
+  padding:12px 14px;
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
   border-bottom: 1px solid rgba(148,163,184,.12);
 }
-.ad-card-h h2{
-  margin:0;
-  font-size: 1.02rem;
-  font-weight: 1000;
-  letter-spacing:-.3px;
-  color: rgba(255,255,255,.92);
-}
-.ad-card-h .hint{
-  color: var(--ad-muted2);
-  font-weight: 850;
-  font-size: .85rem;
-}
-.ad-card-b{
-  padding: 12px 14px 14px;
-}
+.ad-card-h h2{margin:0;font-size:1.02rem;font-weight:1000;letter-spacing:-.3px;color:rgba(255,255,255,.92)}
+.ad-card-h .hint{color:var(--ad-muted2);font-weight:850;font-size:.85rem}
+.ad-card-b{padding:12px 14px 14px}
 
-/* KPIs */
-.kpis{
-  display:grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-}
-@media(min-width: 600px){
-  .kpis{ grid-template-columns: repeat(4, 1fr); }
-}
+.kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+@media(min-width:600px){ .kpis{grid-template-columns:repeat(4,1fr)} }
 .kpi{
   border:1px solid rgba(148,163,184,.14);
   background: rgba(255,255,255,.05);
@@ -226,247 +119,135 @@
   overflow:hidden;
 }
 .kpi::after{
-  content:"";
-  position:absolute; inset:auto -40px -40px auto;
-  width:120px;height:120px;border-radius:999px;
-  background: rgba(47,123,255,.14);
-  filter: blur(0px);
+  content:"";position:absolute;inset:auto -40px -40px auto;
+  width:120px;height:120px;border-radius:999px;background:rgba(47,123,255,.14);
 }
-.kpi .label{
-  color: var(--ad-muted2);
-  font-weight: 900;
-  font-size: .80rem;
-  display:flex;
-  align-items:center;
-  gap:8px;
-}
-.kpi .value{
-  margin-top: 6px;
-  font-weight: 1000;
-  letter-spacing:-.4px;
-  font-size: 1.35rem;
-  color: rgba(255,255,255,.92);
-}
-.kpi .delta{
-  margin-top: 6px;
-  color: rgba(255,255,255,.72);
-  font-weight: 850;
-  font-size: .82rem;
-}
+.kpi .label{color:var(--ad-muted2);font-weight:900;font-size:.80rem;display:flex;align-items:center;gap:8px}
+.kpi .value{margin-top:6px;font-weight:1000;letter-spacing:-.4px;font-size:1.35rem;color:rgba(255,255,255,.92)}
+.kpi .delta{margin-top:6px;color:rgba(255,255,255,.72);font-weight:850;font-size:.82rem}
+
 .badge-mini{
-  display:inline-flex; align-items:center; justify-content:center;
-  padding: 2px 8px;
-  border-radius: 999px;
+  display:inline-flex;align-items:center;justify-content:center;
+  padding:2px 8px;border-radius:999px;
   border:1px solid rgba(255,255,255,.18);
   background: rgba(255,255,255,.08);
   color: rgba(255,255,255,.86);
   font-weight: 900;
   font-size: .74rem;
 }
-.badge-mini.ok{ border-color: rgba(34,197,94,.26); background: rgba(34,197,94,.12); }
-.badge-mini.warn{ border-color: rgba(255,181,71,.26); background: rgba(255,181,71,.12); }
-.badge-mini.bad{ border-color: rgba(239,68,68,.26); background: rgba(239,68,68,.12); }
+.badge-mini.ok{border-color:rgba(34,197,94,.26);background:rgba(34,197,94,.12)}
+.badge-mini.warn{border-color:rgba(255,181,71,.26);background:rgba(255,181,71,.12)}
+.badge-mini.bad{border-color:rgba(239,68,68,.26);background:rgba(239,68,68,.12)}
 
-/* Quick tools */
-.tools{
-  display:flex;
-  flex-wrap:wrap;
-  gap:10px;
-  margin-top: 10px;
-}
+.tools{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
 .tool{
-  flex: 1 1 180px;
-  min-width: 180px;
+  flex: 1 1 180px; min-width: 180px;
   border:1px solid rgba(148,163,184,.14);
   background: rgba(255,255,255,.05);
   border-radius: 18px;
   padding: 12px;
 }
-.tool .t{
-  font-weight: 1000;
-  color: rgba(255,255,255,.92);
-  letter-spacing:-.2px;
-}
-.tool .d{
-  margin-top: 6px;
-  color: var(--ad-muted);
-  font-weight: 780;
-  line-height: 1.35;
-  font-size: .88rem;
-}
-.tool .a{
-  margin-top: 10px;
-  display:flex;
-  gap:10px;
-  flex-wrap:wrap;
-}
+.tool .t{font-weight:1000;color:rgba(255,255,255,.92);letter-spacing:-.2px}
+.tool .d{margin-top:6px;color:var(--ad-muted);font-weight:780;line-height:1.35;font-size:.88rem}
+.tool .a{margin-top:10px;display:flex;gap:10px;flex-wrap:wrap}
 
-/* Recent table */
-.table-wrap{
-  border:1px solid rgba(148,163,184,.12);
-  border-radius: 18px;
-  overflow:hidden;
-  background: rgba(255,255,255,.03);
-}
+.table-wrap{border:1px solid rgba(148,163,184,.12);border-radius:18px;overflow:hidden;background:rgba(255,255,255,.03)}
 .table-top{
-  padding: 10px 12px;
-  display:flex;
-  flex-wrap:wrap;
-  gap:10px;
-  align-items:center;
-  justify-content:space-between;
-  border-bottom: 1px solid rgba(148,163,184,.10);
+  padding:10px 12px;display:flex;flex-wrap:wrap;gap:10px;
+  align-items:center;justify-content:space-between;
+  border-bottom:1px solid rgba(148,163,184,.10);
 }
 .search-mini{
-  display:flex;
-  align-items:center;
-  gap:10px;
-  padding: 10px 12px;
-  border-radius: 999px;
+  display:flex;align-items:center;gap:10px;
+  padding:10px 12px;border-radius:999px;
   border:1px solid rgba(148,163,184,.14);
   background: rgba(255,255,255,.06);
   min-width: min(420px, 100%);
 }
 .search-mini input{
-  border:0; outline:0;
-  background:transparent;
-  width:100%;
-  color: rgba(255,255,255,.92);
-  font-weight: 850;
+  border:0;outline:0;background:transparent;width:100%;
+  color: rgba(255,255,255,.92);font-weight:850;
 }
-.search-mini input::placeholder{ color: rgba(255,255,255,.55); font-weight: 800; }
-.chips{
-  display:flex;
-  gap:8px;
-  flex-wrap:wrap;
-}
+.search-mini input::placeholder{color:rgba(255,255,255,.55);font-weight:800}
+
+.chips{display:flex;gap:8px;flex-wrap:wrap}
 .chip{
-  border-radius:999px;
-  padding: 8px 10px;
+  border-radius:999px;padding:8px 10px;
   border:1px solid rgba(148,163,184,.14);
   background: rgba(255,255,255,.05);
   color: rgba(255,255,255,.84);
-  font-weight: 900;
-  font-size: .80rem;
-  cursor:pointer;
-  user-select:none;
+  font-weight: 900;font-size:.80rem;
+  cursor:pointer;user-select:none;
 }
-.chip[aria-pressed="true"]{
-  background: var(--ad-grad);
-  color:#0b1220;
-  border-color: transparent;
-}
+.chip[aria-pressed="true"]{background:var(--ad-grad);color:#0b1220;border-color:transparent}
 
-table{
-  width:100%;
-  border-collapse:collapse;
-}
-th,td{
-  padding: 10px 12px;
-  text-align:left;
-  border-bottom: 1px solid rgba(148,163,184,.10);
-}
-th{
-  font-size: .78rem;
-  letter-spacing:.12em;
-  text-transform:uppercase;
-  color: rgba(255,255,255,.65);
-  font-weight: 950;
-}
-td{
-  color: rgba(255,255,255,.86);
-  font-weight: 820;
-}
-.tr-muted{ color: rgba(255,255,255,.60); font-weight: 780; }
-.row-actions{
-  display:flex; gap:8px; flex-wrap:wrap;
-}
+table{width:100%;border-collapse:collapse}
+th,td{padding:10px 12px;text-align:left;border-bottom:1px solid rgba(148,163,184,.10)}
+th{font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.65);font-weight:950}
+td{color:rgba(255,255,255,.86);font-weight:820}
+.tr-muted{color:rgba(255,255,255,.60);font-weight:780}
+.row-actions{display:flex;gap:8px;flex-wrap:wrap}
 .a-link{
-  text-decoration:none;
-  color: rgba(255,255,255,.92);
-  font-weight: 950;
-  border:1px solid rgba(148,163,184,.14);
-  background: rgba(255,255,255,.05);
-  padding: 7px 10px;
-  border-radius: 999px;
+  text-decoration:none;color:rgba(255,255,255,.92);font-weight:950;
+  border:1px solid rgba(148,163,184,.14);background: rgba(255,255,255,.05);
+  padding:7px 10px;border-radius:999px;
 }
-.a-link:hover{ background: rgba(255,255,255,.08); }
+.a-link:hover{background:rgba(255,255,255,.08)}
 
-.empty-pro{
-  padding: 16px;
-  color: rgba(255,255,255,.72);
-  font-weight: 850;
-  line-height: 1.45;
-}
+.empty-pro{padding:16px;color:rgba(255,255,255,.72);font-weight:850;line-height:1.45}
 .codepath{
   display:inline-flex;align-items:center;gap:8px;
-  padding: 8px 10px;
-  border-radius: 999px;
+  padding:8px 10px;border-radius:999px;
   border:1px solid rgba(148,163,184,.16);
   background: rgba(255,255,255,.05);
   font-weight: 900;
   color: rgba(255,255,255,.82);
 }
 
-/* sticky actions on mobile */
-.sticky-actions{
-  position: sticky;
-  bottom: 10px;
-  z-index: 20;
-  display:flex;
-  justify-content:center;
-  margin-top: 10px;
-}
+.sticky-actions{position:sticky;bottom:10px;z-index:20;display:flex;justify-content:center;margin-top:10px}
 .sticky-actions .bar{
   width:min(860px, 100%);
-  display:flex;
-  gap:10px;
-  flex-wrap:wrap;
-  justify-content:space-between;
-  align-items:center;
-  padding: 10px 12px;
-  border-radius: 999px;
+  display:flex;gap:10px;flex-wrap:wrap;
+  justify-content:space-between;align-items:center;
+  padding:10px 12px;border-radius:999px;
   border:1px solid rgba(148,163,184,.14);
   background: rgba(10,14,25,.55);
   backdrop-filter: blur(10px);
   box-shadow: var(--ad-shadow2);
 }
-@media(min-width: 980px){
-  .sticky-actions{ display:none; }
-}
+@media(min-width:980px){ .sticky-actions{display:none} }
 
-:focus-visible{
-  outline:none;
-  box-shadow: 0 0 0 4px rgba(47,123,255,.22);
-  border-radius: 14px;
-}
-
-@media (prefers-reduced-motion: reduce){
-  *{transition:none!important; animation:none!important;}
-}
+:focus-visible{outline:none;box-shadow:0 0 0 4px rgba(47,123,255,.22);border-radius:14px}
+@media (prefers-reduced-motion: reduce){ *{transition:none!important;animation:none!important;} }
 </style>
 
 {# ------------------------------
-   SAFE ROUTES (no rompe)
+   SAFE URLs (NO usa current_app)
 ------------------------------ #}
-{% set has_admin_bp = (current_app.blueprints or {}).get('admin') %}
-{% set has_printful_bp = (current_app.blueprints or {}).get('printful') %}
+{% set _vf = (view_functions if view_functions is defined and view_functions else {}) %}
+{% macro safe_url(endpoint, fallback='#') -%}
+  {%- if endpoint and endpoint in _vf -%}
+    {{- url_for(endpoint) -}}
+  {%- else -%}
+    {{- fallback -}}
+  {%- endif -%}
+{%- endmacro %}
 
-{% set url_products_list = url_for('admin.products_list') if has_admin_bp else '/admin/products' %}
-{% set url_products_new  = url_for('admin.products_new')  if has_admin_bp else '/admin/products/new' %}
-{% set url_categories    = url_for('admin.categories')    if has_admin_bp else '/admin/categories' %}
-{% set url_offers        = url_for('admin.offers')        if has_admin_bp else '/admin/offers' %}
-{% set url_payments      = url_for('admin.payments')      if has_admin_bp and ('payments' in (current_app.view_functions|list)|join(' ')) else '/admin/payments' %}
-{% set url_printful      = (url_for('printful.products') if has_printful_bp else '/printful/productos') %}
+{% set url_products_list = safe_url('admin.products_list', '/admin/products') %}
+{% set url_products_new  = safe_url('admin.products_new',  '/admin/products/new') %}
+{% set url_categories    = safe_url('admin.categories',    '/admin/categories') %}
+{% set url_offers        = safe_url('admin.offers',        '/admin/offers') %}
+{% set url_payments      = safe_url('admin.payments',      '/admin/payments') %}
+{% set url_printful      = safe_url('printful.products',   '/printful/productos') %}
 
 {# ------------------------------
    SAFE DATA DEFAULTS
 ------------------------------ #}
-{% set prod_count  = prod_count|default(0) %}
-{% set cat_count   = cat_count|default(0) %}
-{% set offer_count = offer_count|default(0) %}
-{% set order_count = order_count|default(0) %}
-{% set recent_products = recent_products|default([]) %}
+{% set prod_count  = (prod_count|default(0)) %}
+{% set cat_count   = (cat_count|default(0)) %}
+{% set offer_count = (offer_count|default(0)) %}
+{% set order_count = (order_count|default(0)) %}
+{% set recent_products = (recent_products|default([])) %}
 
 <div class="ad-wrap">
 
@@ -475,7 +256,7 @@ td{
       <div>
         <h1 class="ad-title">Dashboard</h1>
         <p class="ad-sub">
-          Centro de control de Skyline Store: catálogo, categorías, ofertas, media y fuentes (Printful / dropship).
+          Centro de control de Skyline Store: catálogo, categorías, ofertas, media e integraciones (Printful / dropship).
         </p>
 
         <div class="ad-badges" aria-label="Estado del sistema">
@@ -537,6 +318,7 @@ td{
   </section>
 
   <div class="ad-grid">
+
     <!-- LEFT: Recent + Control -->
     <section class="ad-card" aria-label="Recientes">
       <div class="ad-card-h">
@@ -690,9 +472,7 @@ td{
 
         <div class="tool" style="margin-top:10px">
           <div class="t">✅ Salud del panel</div>
-          <div class="d">
-            Chequeo rápido: conexión, CSRF y UI. Si se cae algo, te avisa.
-          </div>
+          <div class="d">Chequeo rápido: conexión, CSRF y UI.</div>
           <div class="a">
             <span class="ad-pill">CSRF <span class="badge-mini ok" id="csrfState2">OK</span></span>
             <span class="ad-pill">NET <span class="badge-mini ok" id="netState2">Online</span></span>
@@ -701,15 +481,15 @@ td{
 
       </div>
     </section>
-  </div>
 
+  </div>
 </div>
 
 <script>
 (function(){
-  // ---- CSRF status ----
   const csrfMeta = document.querySelector('meta[name="csrf-token"]');
   const csrfOk = !!(csrfMeta && (csrfMeta.getAttribute('content')||'').trim().length > 10);
+
   const setBadge = (id, ok, txtOk, txtBad) => {
     const el = document.getElementById(id);
     if(!el) return;
@@ -720,7 +500,6 @@ td{
   setBadge('csrfState', csrfOk, 'OK', 'FALTA');
   setBadge('csrfState2', csrfOk, 'OK', 'FALTA');
 
-  // ---- Network status ----
   const setNet = () => {
     const online = navigator.onLine;
     setBadge('netState', online, 'Online', 'Offline');
@@ -730,12 +509,11 @@ td{
   window.addEventListener('offline', setNet);
   setNet();
 
-  // ---- Copy media path ----
   const btn = document.getElementById('copyMedia');
   const pathEl = document.getElementById('mediaPath');
   if(btn && pathEl){
     btn.addEventListener('click', async () => {
-      const text = pathEl.textContent || '/static/uploads/products';
+      const text = (pathEl.textContent || '/static/uploads/products').trim();
       try{
         await navigator.clipboard.writeText(text);
         if(window.toast) window.toast('Copiado', text);
@@ -745,7 +523,6 @@ td{
     });
   }
 
-  // ---- Recent search + chips ----
   const input = document.getElementById('recentSearch');
   const chips = Array.from(document.querySelectorAll('.chip[data-chip]'));
   const rows = Array.from(document.querySelectorAll('tr[data-row]'));
@@ -754,30 +531,25 @@ td{
   const setPressed = (m) => chips.forEach(c => c.setAttribute('aria-pressed', c.dataset.chip === m ? 'true':'false'));
 
   const matchesChip = (r) => {
+    const st = (r.dataset.status || '');
     if(mode === 'all') return true;
-    if(mode === 'active') return (r.dataset.status || '').includes('active') || (r.dataset.status||'').includes('published') || (r.dataset.status||'').includes('enabled');
-    if(mode === 'draft') return (r.dataset.status || '').includes('draft') || (r.dataset.status||'').includes('pending') || (r.dataset.status||'').includes('disabled');
-    if(mode === 'sale') return (r.dataset.sale || '0') === '1';
+    if(mode === 'active') return st.includes('active') || st.includes('published') || st.includes('enabled');
+    if(mode === 'draft')  return st.includes('draft') || st.includes('pending') || st.includes('disabled');
+    if(mode === 'sale')   return (r.dataset.sale || '0') === '1';
     return true;
   };
 
   const apply = () => {
     const q = (input && input.value ? input.value.trim().toLowerCase() : '');
-    let vis = 0;
     rows.forEach(r => {
       const hit = !q || (r.dataset.name||'').includes(q) || (r.dataset.cat||'').includes(q) || (r.dataset.status||'').includes(q);
-      const ok = hit && matchesChip(r);
-      r.style.display = ok ? '' : 'none';
-      if(ok) vis++;
+      r.style.display = (hit && matchesChip(r)) ? '' : 'none';
     });
   };
 
   if(input){
     let t = 0;
-    input.addEventListener('input', () => {
-      clearTimeout(t);
-      t = setTimeout(apply, 90);
-    }, {passive:true});
+    input.addEventListener('input', () => { clearTimeout(t); t = setTimeout(apply, 90); }, {passive:true});
   }
 
   chips.forEach(c => c.addEventListener('click', () => {

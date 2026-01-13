@@ -1,24 +1,30 @@
-{# app/templates/index.html — Skyline Store (PRO v9 · Premium · NO-500 · Connected) #}
+{# app/templates/index.html — Skyline Store (PRO v10 · Premium · NO-500 · Account Unified) #}
 {% extends "base.html" %}
 
 {# ============================================================
    SAFE RESOLVERS (NO-500 / Render-safe)
    - Nunca asume variables existentes
    - Endpoints safe + fallbacks
+   - ✅ Account unificado: /auth/account (tabs login/register)
 ============================================================= #}
 {% set _vf = (view_functions if view_functions is defined and view_functions else {}) %}
 {% set _env = (ENV if ENV is defined and ENV else (config.ENV if config is defined and config else 'production')) %}
 {% set _env = _env|string|lower %}
 
-{# URLs safe #}
+{# ---------- Assets ---------- #}
+{% set hero_img = url_for('static', filename='img/banners/hero_home.png') %}
+{% set og_img = (og_image if og_image is defined and og_image else url_for('static', filename='img/og.png', _external=True)) %}
+
+{# ---------- Shop URL safe ---------- #}
 {% set shop_url = '/shop' %}
 {% if 'shop.shop' in _vf %}
   {% set shop_url = url_for('shop.shop') %}
 {% endif %}
 
-{# account_url: elegí el PRIMER endpoint existente (no lo pises) #}
-{% set ns = namespace(account_url='/auth/login', found=false) %}
-{% for ep in ['account.account','account.login','auth.login'] %}
+{# ---------- Account URL: unified login/register ---------- #}
+{# Prefer /auth/account (o el endpoint que tengas), con fallbacks ordenados #}
+{% set ns = namespace(account_url='/auth/account', found=false) %}
+{% for ep in ['auth.account','account.account','auth.login','account.login'] %}
   {% if (not ns.found) and (ep in _vf) %}
     {% set ns.account_url = url_for(ep) %}
     {% set ns.found = true %}
@@ -26,9 +32,9 @@
 {% endfor %}
 {% set account_url = ns.account_url %}
 
-{# Assets #}
-{% set hero_img = url_for('static', filename='img/banners/hero_home.png') %}
-{% set og_img = (og_image if og_image is defined and og_image else url_for('static', filename='img/og.png', _external=True)) %}
+{# helpers para forzar tab desde Home (no rompe si el template no usa ?tab) #}
+{% set account_login_url = account_url ~ ('?tab=login' if '?' not in account_url else '&tab=login') %}
+{% set account_register_url = account_url ~ ('?tab=register' if '?' not in account_url else '&tab=register') %}
 
 {% block title %}{{ meta_title | default("Skyline Store · Tech + Streetwear premium", true) }}{% endblock %}
 
@@ -117,7 +123,8 @@
         <div class="hp-ctas" role="group" aria-label="Acciones principales">
           <a href="{{ shop_url }}" class="btn primary">Explorar tienda</a>
           <a href="{{ shop_url }}?q=oferta" class="btn ghost">Ver ofertas</a>
-          <a href="{{ account_url }}" class="btn soft">Mi cuenta</a>
+          {# ✅ Account unificado (default tab=login) #}
+          <a href="{{ account_login_url }}" class="btn soft">Mi cuenta</a>
         </div>
 
         <div class="hp-chips" aria-label="Garantías">
@@ -132,7 +139,7 @@
             <p>Tu navegador tiene JavaScript desactivado. Podés navegar igual:</p>
             <div class="hp-ctas">
               <a href="{{ shop_url }}" class="btn primary">Ir a la tienda</a>
-              <a href="{{ account_url }}" class="btn soft">Ingresar / Crear cuenta</a>
+              <a href="{{ account_login_url }}" class="btn soft">Ingresar / Crear cuenta</a>
             </div>
           </div>
         </noscript>
@@ -265,6 +272,7 @@
             <b>Sin destacados por ahora</b>
             <p>Podés explorar todo el catálogo y volver más tarde.</p>
             <a class="btn primary" href="{{ shop_url }}">Ir a la tienda</a>
+            <a class="btn soft" href="{{ account_register_url }}">Crear cuenta</a>
           </div>
         {% else %}
           {% for p in featured_list %}
@@ -311,7 +319,8 @@
       </div>
       <div class="hp-cta__btns">
         <a class="btn primary" href="{{ shop_url }}">Empezar ahora</a>
-        <a class="btn soft" href="{{ account_url }}">Crear cuenta</a>
+        {# ✅ va directo a register (tab) #}
+        <a class="btn soft" href="{{ account_register_url }}">Crear cuenta</a>
       </div>
     </div>
   </section>

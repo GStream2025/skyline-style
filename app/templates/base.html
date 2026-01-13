@@ -1,12 +1,13 @@
-{# app/templates/base.html — Skyline Store (ULTRA PRO ENTERPRISE · v4.5 FINAL)
-   ✅ NO 500 / FAIL-SAFE / FUTURE-PROOF
+{# app/templates/base.html — Skyline Store (ULTRA PRO ENTERPRISE · v5 FINAL)
+   ✅ NO 500 / FAIL-SAFE / FUTURE-PROOF / Account Unified
 
-   FIXES/MEJORAS:
-   1) Jinja: NO usa "is callable" (rompe en prod). CSRF robusto sin tests raros.
-   2) safe_url sin **kwargs (compatible) + fallback estable.
-   3) request-safe helpers (no revienta si request falta).
-   4) CSP compatible con Talisman (no duplicar / no pelear).
-   5) Fetch default añade CSRF header (para endpoints JSON protegidos).
+   FIXES/MEJORAS v5:
+   1) ✅ Account unificado: prioriza /auth/account (tabs login/register) + links con ?tab=
+   2) ✅ CSP nonce-friendly: soporte nonce para <style>/<script> inline (sin romper si no existe)
+   3) ✅ CSRF robusto: preferir csrf_token_value; fallback csrf_token() si existe
+   4) ✅ safe_url sin kwargs (Jinja compatible) + fallbacks estables
+   5) ✅ Fetch patch + CSRF hidden para forms non-GET (same-origin)
+   6) ✅ Pequeñas mejoras a11y / robustness (no reventar si faltan cosas)
 #}
 <!doctype html>
 <html lang="es">
@@ -20,6 +21,9 @@
   {% set _req = (request if request is defined and request else none) %}
   {% set _path = (_req.path if _req and _req.path else '') %}
   {% set _args = (_req.args if _req and _req.args else {}) %}
+
+  {# CSP nonce: compatible con varias configuraciones (Talisman / custom) #}
+  {% set _csp_nonce = csp_nonce|default(nonce|default(g.nonce|default('', true), true), true) %}
 
   {# ✅ Jinja compatible: sin **kwargs #}
   {% macro safe_url(endpoint, fallback='/') -%}
@@ -59,8 +63,8 @@
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
 
-  {# ✅ CSP: si Talisman mete CSP headers, este meta no molesta.
-     Pero si querés evitar duplicación: poné ENABLE_TALISMAN=True y removés este meta.
+  {# ✅ CSP meta (si Talisman mete headers, esto no debería usarse).
+     Si querés 100% nonce-strict: lo ideal es CSP en headers (Talisman) y sacar 'unsafe-inline'.
   #}
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'self';
@@ -77,19 +81,16 @@
   <meta name="color-scheme" content="light dark">
   <meta name="theme-color" content="#2563eb">
 
-  {# ✅ CSRF robusto (SIN 'is callable'):
+  {# ✅ CSRF robusto:
      Prioridad:
-       1) csrf_token_value (si lo inyectás desde Python, recomendado)
-       2) csrf_token() (Flask-WTF normal)
+       1) csrf_token_value (inyectado desde Python)
+       2) csrf_token() (Flask-WTF)
        3) vacío
   #}
   {% set _csrf_value = '' %}
   {% if csrf_token_value is defined and csrf_token_value %}
     {% set _csrf_value = csrf_token_value %}
   {% elif csrf_token is defined %}
-    {# Intentamos llamar; si no es callable, esto podría fallar.
-       Pero en Flask-WTF real, csrf_token ES callable.
-       Si te preocupa, mantené csrf_token_value desde Python y listo. #}
     {% set _csrf_value = csrf_token() %}
   {% endif %}
   <meta name="csrf-token" content="{{ _csrf_value }}">
@@ -118,7 +119,7 @@
   {# Página puede inyectar CSS extra aquí #}
   {% block extra_css %}{% endblock %}
 
-  <style>
+  <style{% if _csp_nonce %} nonce="{{ _csp_nonce|e }}"{% endif %}>
     html{background:#f7f9ff}
     .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
     .skip{position:absolute;left:12px;top:12px;z-index:9999;padding:10px 12px;border-radius:14px;background:#fff;border:1px solid rgba(8,16,34,.12);box-shadow:0 18px 50px rgba(8,16,34,.14);transform:translateY(-140%);transition:transform .18s ease}
@@ -131,7 +132,9 @@
 <body>
 <a class="skip" href="#main">Saltar al contenido</a>
 
-{# URLS dinámicas: jamás rompe aunque falte un blueprint #}
+{# =========================
+   URLS dinámicas: jamás rompe
+========================= #}
 {% set _home_href = safe_url('main.home', '/') %}
 {% if _home_href == '/' %}{% set _home_href = safe_url('main.index', '/') %}{% endif %}
 
@@ -141,12 +144,16 @@
 {% if _cart_href == '/cart' %}{% set _cart_href = safe_url('cart.cart', '/cart') %}{% endif %}
 {% if _cart_href == '/cart' %}{% set _cart_href = safe_url('cart.index', '/cart') %}{% endif %}
 
-{# Account: prioriza /account si existe, sino auth.login #}
-{% set _account_href = safe_url('account.account', '/account') %}
-{% if _account_href == '/account' %}{% set _account_href = safe_url('cuenta.account', '/account') %}{% endif %}
-{% if _account_href == '/account' %}{% set _account_href = safe_url('account.login', '/account') %}{% endif %}
-{% if _account_href == '/account' %}{% set _account_href = safe_url('cuenta.login', '/account') %}{% endif %}
-{% if _account_href == '/account' %}{% set _account_href = safe_url('auth.login', '/auth/login') %}{% endif %}
+{# ✅ Account unificado: prioriza /auth/account, luego viejos endpoints #}
+{% set _account_href = safe_url('auth.account', '/auth/account') %}
+{% if _account_href == '/auth/account' %}{% set _account_href = safe_url('account.account', '/auth/account') %}{% endif %}
+{% if _account_href == '/auth/account' %}{% set _account_href = safe_url('cuenta.account', '/auth/account') %}{% endif %}
+{% if _account_href == '/auth/account' %}{% set _account_href = safe_url('auth.login', '/auth/login') %}{% endif %}
+{% if _account_href == '/auth/account' %}{% set _account_href = safe_url('account.login', '/auth/login') %}{% endif %}
+
+{# helpers: links directos a tabs (no rompe aunque no los uses) #}
+{% set _acc_login = _account_href ~ ('?tab=login' if '?' not in _account_href else '&tab=login') %}
+{% set _acc_register = _account_href ~ ('?tab=register' if '?' not in _account_href else '&tab=register') %}
 
 {# current_user bulletproof #}
 {% set _user_ok = false %}
@@ -203,7 +210,8 @@
               style="display:none">0</span>
       </a>
 
-      <a href="{{ _account_href }}" class="account-chip" aria-label="Mi cuenta">
+      {# ✅ cuando no está logueado, te manda al tab login por defecto #}
+      <a href="{{ (_account_href if _user_ok else _acc_login) }}" class="account-chip" aria-label="Mi cuenta">
         <span class="avatar" aria-hidden="true"></span>
         <span class="account-txt">
           <span class="t1">
@@ -249,7 +257,8 @@
 
     <div>
       <strong>Cuenta</strong><br>
-      <a href="{{ _account_href }}">Mi cuenta</a><br>
+      <a href="{{ _acc_login }}">Ingresar</a><br>
+      <a href="{{ _acc_register }}">Crear cuenta</a><br>
       <a href="{{ _cart_href }}">Carrito</a>
     </div>
 
@@ -264,8 +273,10 @@
   <p class="small">© {{ _year }} {{ APP_NAME or "Skyline Store" }}</p>
 </footer>
 
-<script>
+<script{% if _csp_nonce %} nonce="{{ _csp_nonce|e }}"{% endif %}>
 (() => {
+  "use strict";
+
   const $ = (sel, root=document) => root.querySelector(sel);
   const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
   const token = $('meta[name="csrf-token"]')?.content || "";
@@ -365,4 +376,3 @@
 {% block extra_js %}{% endblock %}
 </body>
 </html>
- 
