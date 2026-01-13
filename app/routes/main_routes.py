@@ -1,4 +1,4 @@
-# app/routes/main_routes.py — Skyline Store (ULTRA PRO++ / NO BREAK / FAIL-SAFE v3.2)
+# app/routes/main_routes.py — Skyline Store (ULTRA PRO++ / NO BREAK / FAIL-SAFE v3.3 BULLETPROOF)
 from __future__ import annotations
 
 import hashlib
@@ -48,7 +48,15 @@ main_bp = Blueprint(
 # Config / Defaults
 # -----------------------------------------------------------------------------
 
-_TRUE = {"1", "true", "yes", "y", "on"}
+_TRUE = {"1", "true", "yes", "y", "on", "checked"}
+
+# ✅ Debe coincidir (aprox) con auth_routes.py (AUTH_FORM_NONCE_TTL)
+FORM_NONCE_TTL = int(os.getenv("AUTH_FORM_NONCE_TTL", "1200") or "1200")
+FORM_NONCE_TTL = max(30, min(FORM_NONCE_TTL, 3600))
+
+# Limpieza: cuántos nonces antiguos toleramos en sesión
+NONCE_CLEANUP_MAX = int(os.getenv("AUTH_NONCE_CLEANUP_MAX", "25") or "25")
+NONCE_CLEANUP_MAX = max(5, min(NONCE_CLEANUP_MAX, 200))
 
 
 def _env_bool(key: str, default: bool = False) -> bool:
@@ -79,7 +87,6 @@ SEO_DEFAULTS = SeoDefaults(
         "SEO_DESCRIPTION",
         "Comprá moda urbana, accesorios y tecnología en un solo lugar. Envíos rápidos y pagos seguros.",
     ),
-    # puede ser "img/og.png" (static filename) o URL absoluta
     og_image=os.getenv("OG_IMAGE", "img/og.png"),
 )
 
@@ -87,11 +94,9 @@ HOME_CACHE_TTL = int(os.getenv("HOME_CACHE_TTL", "120") or "120")
 HOME_CACHE_TTL = max(0, min(HOME_CACHE_TTL, 3600))  # 0 = sin cache
 ENABLE_HOME_CACHE = _env_bool("ENABLE_HOME_CACHE", True)
 
-# Respeta Render config
 FORCE_HTTPS = _env_bool("FORCE_HTTPS", False)
 PREFERRED_URL_SCHEME = (os.getenv("PREFERRED_URL_SCHEME") or "").strip().lower() or ("https" if FORCE_HTTPS else "")
 
-# cache simple en memoria (por proceso)
 _HOME_CACHE: Dict[str, Tuple[float, Dict[str, Any]]] = {}  # key -> (expires_at, payload)
 
 
@@ -165,6 +170,8 @@ def _etag_for(text: str) -> str:
 
 def _resp_no_store(resp):
     resp.headers["Cache-Control"] = "no-store"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Vary"] = "Cookie"
     return resp
 
 
@@ -192,14 +199,11 @@ def _safe_og_image(value: str) -> str:
     - URL absoluta: https://...
     - filename de static: "img/og.png" o "static/img/og.png"
     """
-    og = (value or "").strip()
-    if not og:
-        og = SEO_DEFAULTS.og_image
+    og = (value or "").strip() or SEO_DEFAULTS.og_image
 
     if og.startswith(("http://", "https://")):
         return og
 
-    # tolera "static/..."
     if og.startswith("static/"):
         og = og.replace("static/", "", 1)
 
@@ -216,30 +220,87 @@ def _render(template: str, *, status: int = 200, **ctx: Any):
     ctx["og_image"] = _safe_og_image(str(ctx.get("og_image") or SEO_DEFAULTS.og_image))
     ctx.setdefault("now_year", _now_year())
 
-    # Exponer ENV de forma segura (para robots/meta)
     env = (os.getenv("ENV") or os.getenv("FLASK_ENV") or "").strip().lower() or "production"
     ctx.setdefault("ENV", env)
 
-    # view_functions para templates “safe resolver”
     ctx.setdefault("view_functions", getattr(current_app, "view_functions", {}) or {})
-
-    # config para feature flags en templates
     ctx.setdefault("config", getattr(current_app, "config", {}) or {})
 
-    return make_response(render_template(template, **ctx), status)
+    try:
+        return make_response(render_template(template, **ctx), status)
+    except Exception:
+        # fallback ABSOLUTO: nunca debe romper (evita 500 por template missing)
+        log.exception("Template render failed: %s", template)
+        return make_response("Ocurrió un error cargando la página.", 500)
 
 
 # -----------------------------------------------------------------------------
 # Account unified helpers (NONCE compatible con auth_routes.py)
 # -----------------------------------------------------------------------------
 
-def _new_form_nonce(key: str) -> str:
+def _nonce_is_valid(raw: Any) -> bool:
+    if not isinstance(raw, dict):
+        return False
+    v = str(raw.get("v") or "").strip()
+    ts = raw.get("ts")
+    if not v:
+        return False
+    try:
+        ts_i = int(ts)
+    except Exception:
+        return False
+    return (int(time.time()) - ts_i) <= FORM_NONCE_TTL
+
+
+def _cleanup_old_nonces() -> None:
     """
-    ✅ Compatible con auth_routes._check_form_nonce():
-    session["nonce:<key>"] = {"v": <token>, "ts": <epoch>}
+    Limpia nonces viejos para no inflar la cookie de sesión.
     """
+    try:
+        keys = [k for k in session.keys() if isinstance(k, str) and k.startswith("nonce:")]
+        if len(keys) <= NONCE_CLEANUP_MAX:
+            # igual limpiamos los vencidos
+            for k in keys:
+                raw = session.get(k)
+                if not _nonce_is_valid(raw):
+                    session.pop(k, None)
+            return
+
+        # si hay demasiados, borramos vencidos primero
+        removed = 0
+        for k in keys:
+            raw = session.get(k)
+            if not _nonce_is_valid(raw):
+                session.pop(k, None)
+                removed += 1
+
+        # si sigue habiendo muchos, recortamos arbitrariamente
+        keys = [k for k in session.keys() if isinstance(k, str) and k.startswith("nonce:")]
+        if len(keys) > NONCE_CLEANUP_MAX:
+            # borramos extras (orden no garantizado, pero es suficiente)
+            for k in keys[: max(0, len(keys) - NONCE_CLEANUP_MAX)]:
+                session.pop(k, None)
+                removed += 1
+
+        if removed:
+            session.modified = True
+    except Exception:
+        # no rompe jamás
+        return
+
+
+def _ensure_form_nonce(key: str) -> str:
+    """
+    ✅ Devuelve un nonce válido para el key.
+    Si existe y no venció: reutiliza.
+    Si no existe o venció: crea nuevo (en formato compatible).
+    """
+    sk = f"nonce:{key}"
+    raw = session.get(sk)
+    if _nonce_is_valid(raw):
+        return str(raw.get("v") or "")
     tok = secrets.token_urlsafe(20)
-    session[f"nonce:{key}"] = {"v": tok, "ts": int(time.time())}
+    session[sk] = {"v": tok, "ts": int(time.time())}
     session.modified = True
     return tok
 
@@ -271,7 +332,6 @@ def _security_headers(resp):
 
     # Señal útil para debugging de proxies (no sensible)
     resp.headers.setdefault("X-Served-By", "skyline")
-
     return resp
 
 
@@ -281,14 +341,8 @@ def _security_headers(resp):
 
 @main_bp.get("/")
 def home():
-    """
-    ✅ HOME REAL
-    Renderiza templates/index.html
-    - Cache opcional con TTL
-    - ETag + 304
-    """
     lang = (request.headers.get("Accept-Language") or "es").split(",")[0].strip().lower()
-    key = f"home:v3:lang={lang}"
+    key = f"home:v3.3:lang={lang}"
 
     cached = _cache_get(key)
     if cached:
@@ -306,7 +360,6 @@ def home():
         "meta_title": SEO_DEFAULTS.title,
         "meta_description": SEO_DEFAULTS.description,
     }
-
     _cache_set(key, payload)
 
     etag = _etag_for(f"{payload.get('meta_title','')}-{payload.get('meta_description','')}-{lang}")
@@ -332,9 +385,9 @@ def account():
     nxt = _safe_next_from_args()
     active_tab = _account_active_tab()
 
-    # nonces para que auth_routes.py valide _check_form_nonce("login/register")
-    nonce_login = _new_form_nonce("login")
-    nonce_register = _new_form_nonce("register")
+    _cleanup_old_nonces()
+    nonce_login = _ensure_form_nonce("login")
+    nonce_register = _ensure_form_nonce("register")
 
     resp = _render(
         "auth/account.html",
@@ -349,9 +402,6 @@ def account():
 
 @main_bp.get("/cuenta")
 def cuenta_alias():
-    """
-    Alias por si en algún lado linkeaste /cuenta
-    """
     nxt = _safe_next_from_args()
     if nxt:
         return redirect(url_for("main.account", next=nxt), code=302)
@@ -365,11 +415,6 @@ def about():
 
 @main_bp.get("/health")
 def health():
-    """
-    Healthcheck para Render / uptime.
-    - DB ping si db + sql_text existen
-    - Nunca rompe
-    """
     ok = True
     db_ok: Optional[bool] = None
     db_err: Optional[str] = None
@@ -403,11 +448,7 @@ def robots():
     base = _absolute_url("main.home").rstrip("/")
 
     lines = ["User-agent: *"]
-    if env == "production":
-        lines += ["Allow: /"]
-    else:
-        lines += ["Disallow: /"]
-
+    lines += ["Allow: /"] if env == "production" else ["Disallow: /"]
     lines += [f"Sitemap: {base}/sitemap.xml", ""]
     txt = "\n".join(lines)
 
@@ -453,10 +494,9 @@ def sitemap():
     now = _utcnow().date().isoformat()
     items = []
     for u in urls:
-        u = str(u)
         items.append(
             "<url>"
-            f"<loc>{_xml_escape(u)}</loc>"
+            f"<loc>{_xml_escape(str(u))}</loc>"
             f"<lastmod>{now}</lastmod>"
             "<changefreq>daily</changefreq>"
             "<priority>0.8</priority>"
@@ -466,8 +506,8 @@ def sitemap():
     xml = (
         '<?xml version="1.0" encoding="UTF-8"?>'
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
-        + "".join(items) +
-        "</urlset>"
+        + "".join(items)
+        + "</urlset>"
     )
 
     etag = _etag_for(xml)
@@ -494,15 +534,10 @@ def go():
 @main_bp.get("/favicon.ico")
 def favicon():
     try:
-        url = url_for("static", filename="favicon.ico")
-        return redirect(url)
+        return redirect(url_for("static", filename="favicon.ico"))
     except Exception:
         return ("", 204)
 
-
-# -----------------------------------------------------------------------------
-# Error pages (sin romper)
-# -----------------------------------------------------------------------------
 
 @main_bp.app_errorhandler(404)
 def not_found(e):
