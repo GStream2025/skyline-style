@@ -4,27 +4,27 @@ import logging
 import os
 import sys
 import traceback
+from importlib import import_module
 from pathlib import Path
-from typing import Callable, Tuple
-
+from typing import Callable, Optional, Tuple
 
 # ==========================================================
-# Skyline Store — run.py ULTRA PRO / BULLETPROOF (FINAL)
+# Skyline Store — run.py (ULTRA PRO / BULLETPROOF · FINAL v2)
 #
 # ✅ Compatible:
 # - Local (Windows / Linux / Mac)
 # - Render / Railway / Fly / Heroku / Docker
-# - Gunicorn (wsgi import)
+# - Gunicorn (run:app)
 #
-# ✅ 5 mejoras NUEVAS (reales):
-# 1) Auto-fix de ENV local para evitar "production accidental"
-# 2) Preflight DB local (sqlite) y folders
-# 3) Diagnóstico claro (sin filtrar secretos)
-# 4) Strict prod real (SECRET_KEY + optional REQUIRE_POSTGRES)
-# 5) WSGI limpio (app export) + APP_FACTORY robusto
+# ✅ Metas:
+# - No "production accidental" local
+# - Preflight sqlite + folders
+# - Diagnóstico claro (sin secretos)
+# - Strict prod real (SECRET_KEY + optional REQUIRE_POSTGRES)
+# - WSGI export limpio
 # ==========================================================
 
-_TRUE = {"1", "true", "yes", "y", "on"}
+_TRUE = {"1", "true", "yes", "y", "on", "checked"}
 _FALSE = {"0", "false", "no", "n", "off"}
 
 
@@ -97,7 +97,7 @@ def _is_cloud() -> bool:
     # Docker/container
     if os.getenv("DOCKER") or os.path.exists("/.dockerenv"):
         return True
-    # Si hay PORT seteado por plataforma, casi seguro es cloud
+    # PORT seteado por plataforma => casi seguro cloud
     if os.getenv("PORT"):
         return True
     return False
@@ -120,18 +120,13 @@ def _normalize_env() -> str:
 
 def _auto_fix_local_env(env: str) -> str:
     """
-    ✅ Mejora nueva #1
     Si estás LOCAL (no cloud) y ENV quedó production por accidente, lo corrige
-    SOLO si el usuario no definió explícitamente ENV.
+    SOLO si el usuario no definió explícitamente ENV/FLASK_ENV.
     """
-    explicit_env = os.getenv("ENV") is not None or os.getenv("FLASK_ENV") is not None
+    explicit_env = (os.getenv("ENV") is not None) or (os.getenv("FLASK_ENV") is not None)
     if explicit_env:
         return env
-
-    if not _is_cloud():
-        # Local sin ENV explícito => development por defecto
-        return "development"
-    return env
+    return "development" if not _is_cloud() else env
 
 
 def _resolve_debug(env: str) -> bool:
@@ -145,10 +140,10 @@ def _resolve_debug(env: str) -> bool:
     return env == "development"
 
 
-def _resolve_host_port(env: str, debug: bool) -> Tuple[str, int]:
+def _resolve_host_port() -> Tuple[str, int]:
     cloud = _is_cloud()
 
-    host = (os.getenv("HOST") or "").strip()
+    host = (_str_env("HOST", "")).strip()
     if not host:
         host = "0.0.0.0" if cloud else "127.0.0.1"
 
@@ -172,20 +167,11 @@ def _validate_secret(env: str, log: logging.Logger) -> None:
         return
 
     if _bool_env("ALLOW_RUNTIME_SECRET", False):
-        log.warning(
-            "⚠️ ALLOW_RUNTIME_SECRET=1: permitido SECRET_KEY runtime (no recomendado)."
-        )
+        log.warning("⚠️ ALLOW_RUNTIME_SECRET=1: permitido SECRET_KEY runtime (no recomendado).")
         return
 
     secret = (_str_env("SECRET_KEY", "")).strip()
-    weak = {
-        "dev",
-        "dev-secret",
-        "dev-secret-change-me",
-        "change-me",
-        "secret",
-        "password",
-    }
+    weak = {"dev", "dev-secret", "dev-secret-change-me", "change-me", "secret", "password"}
     if (not secret) or (secret.lower() in weak) or (len(secret) < 24):
         raise RuntimeError(
             "Falta SECRET_KEY segura para producción. "
@@ -194,70 +180,48 @@ def _validate_secret(env: str, log: logging.Logger) -> None:
         )
 
 
-def _validate_prod_db_policy(env: str, log: logging.Logger) -> None:
+def _validate_prod_db_policy(env: str) -> None:
     """
-    ✅ Mejora nueva #4
     Si REQUIRE_POSTGRES=1 en prod, exige DATABASE_URL real (no sqlite).
     """
     if env != "production":
         return
-
     if not _bool_env("REQUIRE_POSTGRES", False):
         return
 
-    db_url = (
-        _str_env("DATABASE_URL", "") or _str_env("SQLALCHEMY_DATABASE_URI", "")
-    ).strip()
+    db_url = (_str_env("DATABASE_URL", "") or _str_env("SQLALCHEMY_DATABASE_URI", "")).strip()
     if not db_url:
-        raise RuntimeError(
-            "REQUIRE_POSTGRES=1 pero falta DATABASE_URL en producción (Render)."
-        )
+        raise RuntimeError("REQUIRE_POSTGRES=1 pero falta DATABASE_URL en producción (Render).")
     if db_url.startswith("sqlite"):
-        raise RuntimeError(
-            "REQUIRE_POSTGRES=1 pero estás usando sqlite en producción. Configurá Postgres en Render."
-        )
+        raise RuntimeError("REQUIRE_POSTGRES=1 pero estás usando sqlite en producción. Configurá Postgres en Render.")
 
 
 def _preflight_db_local(log: logging.Logger) -> None:
     """
-    ✅ Mejora nueva #2
-    Si estás en sqlite local, intenta preparar el path (sin romper).
+    Si estás en sqlite local, prepara el path (sin romper).
     """
-    db_url = (
-        _str_env("DATABASE_URL", "") or _str_env("SQLALCHEMY_DATABASE_URI", "")
-    ).strip()
-    if not db_url:
+    db_url = (_str_env("DATABASE_URL", "") or _str_env("SQLALCHEMY_DATABASE_URI", "")).strip()
+    if not db_url or not db_url.startswith("sqlite:///"):
         return
 
-    if not db_url.startswith("sqlite:///"):
-        return
-
-    # sqlite:///file.db -> file.db en cwd
     rel = db_url.replace("sqlite:///", "", 1).strip()
     if not rel:
         return
 
     try:
         p = Path(rel)
-        # Si viene con carpetas, crearlas
         if p.parent and str(p.parent) not in {".", ""}:
             p.parent.mkdir(parents=True, exist_ok=True)
-        # No creamos el archivo manualmente (sqlite lo crea), solo avisamos
         log.info("🗄️ SQLite local: %s", str(p))
     except Exception as e:
         log.warning("⚠️ No pude preparar path de SQLite (%s): %s", rel, e)
 
 
-def _diagnostics(
-    log: logging.Logger, env: str, debug: bool, host: str, port: int
-) -> None:
+def _diagnostics(log: logging.Logger, env: str, debug: bool, host: str, port: int) -> None:
     """
-    ✅ Mejora nueva #3
-    Diagnóstico sin filtrar secretos.
+    Diagnóstico sin exponer secretos.
     """
-    db_url = (
-        _str_env("DATABASE_URL", "") or _str_env("SQLALCHEMY_DATABASE_URI", "")
-    ).strip()
+    db_url = (_str_env("DATABASE_URL", "") or _str_env("SQLALCHEMY_DATABASE_URI", "")).strip()
     secret = (_str_env("SECRET_KEY", "")).strip()
 
     log.info("🚀 Skyline Store boot")
@@ -280,21 +244,14 @@ def _import_app_factory() -> Callable[[], object]:
     spec = (_str_env("APP_FACTORY", "") or _str_env("WSGI_APP", "")).strip()
     if not spec:
         from app import create_app  # noqa: WPS433
-
         return create_app
 
     if ":" not in spec:
-        raise RuntimeError(
-            f"APP_FACTORY/WSGI_APP inválido: {spec}. Usá 'modulo:funcion'"
-        )
+        raise RuntimeError(f"APP_FACTORY/WSGI_APP inválido: {spec}. Usá 'modulo:funcion'")
 
-    mod, sym = spec.split(":", 1)
-    mod = mod.strip()
-    sym = sym.strip()
+    mod, sym = [x.strip() for x in spec.split(":", 1)]
     if not mod or not sym:
         raise RuntimeError(f"APP_FACTORY/WSGI_APP inválido: {spec}")
-
-    from importlib import import_module
 
     m = import_module(mod)
     fn = getattr(m, sym, None)
@@ -303,26 +260,58 @@ def _import_app_factory() -> Callable[[], object]:
     return fn
 
 
+def _is_gunicorn_context() -> bool:
+    """
+    Detecta contexto WSGI real.
+    """
+    if _bool_env("GUNICORN", False):
+        return True
+    if os.getenv("GUNICORN_CMD_ARGS"):
+        return True
+    if (_str_env("SERVER_SOFTWARE", "").lower().find("gunicorn") >= 0):
+        return True
+    # fallback suave: a veces gunicorn aparece en argv
+    argv = " ".join(sys.argv).lower()
+    return "gunicorn" in argv
+
+
+def _create_app_for_export() -> object:
+    """
+    Crea la app para export WSGI (run:app) con logging y validaciones.
+    No corre server, solo construye app.
+    """
+    _load_dotenv_if_possible()
+
+    env = _auto_fix_local_env(_normalize_env())
+    debug = _resolve_debug(env)
+
+    _setup_logging(((_str_env("LOG_LEVEL", "") or ("DEBUG" if debug else "INFO"))).strip().upper())
+    log = logging.getLogger("skyline.wsgi")
+
+    _validate_secret(env, log)
+    _validate_prod_db_policy(env)
+
+    create_app = _import_app_factory()
+    return create_app()
+
+
 def main() -> int:
     _load_dotenv_if_possible()
 
-    env = _normalize_env()
-    env = _auto_fix_local_env(env)  # ✅ nueva mejora #1
+    env = _auto_fix_local_env(_normalize_env())
     debug = _resolve_debug(env)
 
-    log_level = (
-        (_str_env("LOG_LEVEL", "") or ("DEBUG" if debug else "INFO")).strip().upper()
-    )
+    log_level = ((_str_env("LOG_LEVEL", "") or ("DEBUG" if debug else "INFO")).strip().upper())
     _setup_logging(log_level)
     log = logging.getLogger("skyline.run")
 
-    host, port = _resolve_host_port(env, debug)
+    host, port = _resolve_host_port()
 
     _diagnostics(log, env, debug, host, port)
 
     # strict prod
     _validate_secret(env, log)
-    _validate_prod_db_policy(env, log)
+    _validate_prod_db_policy(env)
 
     # local preflight
     if env != "production":
@@ -336,7 +325,6 @@ def main() -> int:
         log.debug("Traceback:\n%s", traceback.format_exc())
         return 2
 
-    # Opciones run
     use_reloader = bool(debug) and _bool_env("RELOADER", True)
     threaded = _bool_env("THREADED", True)
 
@@ -364,29 +352,10 @@ def main() -> int:
 # ==========================================================
 # ✅ WSGI export limpio (gunicorn: run:app)
 # ==========================================================
-app = None
 try:
-    # Si se importa desde gunicorn o si forzás GUNICORN=1
-    if _bool_env("GUNICORN", False) or ("gunicorn" in " ".join(sys.argv).lower()):
-        _load_dotenv_if_possible()
-        env = _normalize_env()
-        env = _auto_fix_local_env(env)
-        debug = _resolve_debug(env)
-
-        _setup_logging(
-            (_str_env("LOG_LEVEL", "") or ("DEBUG" if debug else "INFO"))
-            .strip()
-            .upper()
-        )
-        log = logging.getLogger("skyline.wsgi")
-
-        _validate_secret(env, log)
-        _validate_prod_db_policy(env, log)
-
-        create_app = _import_app_factory()
-        app = create_app()
+    app = _create_app_for_export() if _is_gunicorn_context() else None
 except Exception:
-    # No rompemos el import
+    # no rompemos el import (gunicorn te lo mostrará en logs si aplica)
     app = None
 
 
