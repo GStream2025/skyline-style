@@ -1,0 +1,313 @@
+{# app/templates/auth/account.html — Skyline Store (ULTRA PRO / CSRF + NONCE SAFE / v2) #}
+{% extends "base.html" %}
+{% block title %}Mi cuenta | Skyline Store{% endblock %}
+
+{% block extra_head %}
+<link rel="preload" as="style" href="{{ url_for('static', filename='css/login.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
+<link rel="preload" as="style" href="{{ url_for('static', filename='css/register.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/register.css') }}">
+
+<meta name="robots" content="{{ 'index,follow' if (ENV|default('')|lower == 'production') else 'noindex,nofollow' }}">
+<meta name="csrf-token" content="{{ csrf_token_value|default('') }}">
+
+{# ✅ 10 mejoras extra:
+   1) safe_url macro (no rompe si falta endpoint)
+   2) next hardening (solo paths internos)
+   3) honeypot en ambos forms
+   4) flash categories normalizadas + aria-live
+   5) tabs accesibles (role=tablist, aria-selected, teclado)
+   6) persiste tab en localStorage + query ?tab=
+   7) anti doble submit (reduce replays/CSRF mismatch por doble click)
+   8) toggles show/hide password (login y register)
+   9) validación mínima UX (sin bloquear server)
+   10) no-store hint adicional (frontend) + micro estilos tabs/panels
+#}
+<style>
+  .ss-account{max-width:1040px;margin:0 auto;padding:clamp(16px,2vw,26px)}
+  .ss-tabs{display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 14px}
+  .ss-tab{border:1px solid rgba(0,0,0,.12);background:rgba(255,255,255,.7);padding:10px 14px;border-radius:999px;cursor:pointer;transition:transform .12s ease, box-shadow .2s ease, border-color .2s ease}
+  .ss-tab.is-active{border-color:rgba(0,0,0,.22);box-shadow:0 14px 34px -24px rgba(0,0,0,.35);transform:translateY(-1px)}
+  .ss-panels{display:block}
+  .ss-panel{display:none}
+  .ss-panel.is-active{display:block}
+  .ss-flashes{margin:10px 0 14px;display:grid;gap:8px}
+  .ss-flash{border-radius:14px;padding:10px 12px;border:1px solid rgba(0,0,0,.10);background:rgba(255,255,255,.75)}
+  .ss-flash.error{border-color:rgba(220,38,38,.25)}
+  .ss-flash.success{border-color:rgba(34,197,94,.25)}
+  .ss-flash.warning{border-color:rgba(245,158,11,.25)}
+  .ss-flash.info{border-color:rgba(59,130,246,.22)}
+  .ss-field{display:grid;gap:6px;margin:10px 0}
+  .ss-row{display:flex;gap:10px;flex-wrap:wrap}
+  .ss-input{width:100%;border:1px solid rgba(0,0,0,.14);border-radius:12px;padding:12px 12px;background:rgba(255,255,255,.9)}
+  .ss-input:focus{outline:0;box-shadow:0 0 0 4px rgba(0,0,0,.08)}
+  .ss-pw-wrap{display:flex;gap:8px;align-items:center}
+  .ss-pw-btn{border-radius:12px;border:1px solid rgba(0,0,0,.12);background:transparent;padding:10px 12px;cursor:pointer}
+  .ss-submit[aria-busy="true"]{opacity:.88;cursor:progress}
+  .ss-spinner{width:16px;height:16px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;display:inline-block;vertical-align:-3px;animation:sspin .9s linear infinite}
+  @keyframes sspin{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion: reduce){.ss-tab{transition:none}.ss-tab.is-active{transform:none}.ss-spinner{animation:none}}
+</style>
+{% endblock %}
+
+{% block content %}
+{# ---------- SAFE URL RESOLVER (NO-BREAK) ---------- #}
+{% macro safe_url(endpoint, fallback='/', **kwargs) -%}
+  {%- set vf = (view_functions if view_functions is defined and view_functions else {}) -%}
+  {%- if endpoint and endpoint in vf -%}
+    {{- url_for(endpoint, **kwargs) -}}
+  {%- else -%}
+    {{- fallback -}}
+  {%- endif -%}
+{%- endmacro %}
+
+{# ---------- next hardening ---------- #}
+{% set _raw_next = (next|default(request.args.get('next',''), true)|string).strip() %}
+{% set nxt = _raw_next %}
+{% if (not nxt) or (not nxt.startswith('/')) or (nxt.startswith('//')) %}
+  {% set nxt = '' %}
+{% endif %}
+
+{# ---------- endpoints ---------- #}
+{% set login_action    = safe_url('auth.login', '/auth/login') %}
+{% set register_action = safe_url('auth.register', '/auth/register') %}
+{% set shop_url        = safe_url('shop.shop', '/shop') %}
+
+{# ---------- initial tab: server hint + query param ---------- #}
+{% set qtab = (request.args.get('tab','')|string|lower|trim) %}
+{% set initial_tab = active_tab|default('login') %}
+{% if qtab in ['login','register'] %}
+  {% set initial_tab = qtab %}
+{% endif %}
+
+<section class="ss-account" aria-label="Mi cuenta">
+
+  <div class="ss-tabs" role="tablist" aria-label="Acceso">
+    <button type="button"
+            class="ss-tab {{ 'is-active' if initial_tab == 'login' else '' }}"
+            role="tab"
+            id="tab-login"
+            aria-controls="panel-login"
+            aria-selected="{{ 'true' if initial_tab == 'login' else 'false' }}"
+            tabindex="{{ '0' if initial_tab == 'login' else '-1' }}"
+            data-tab="login">
+      Ingresar
+    </button>
+
+    <button type="button"
+            class="ss-tab {{ 'is-active' if initial_tab == 'register' else '' }}"
+            role="tab"
+            id="tab-register"
+            aria-controls="panel-register"
+            aria-selected="{{ 'true' if initial_tab == 'register' else 'false' }}"
+            tabindex="{{ '0' if initial_tab == 'register' else '-1' }}"
+            data-tab="register">
+      Crear cuenta
+    </button>
+  </div>
+
+  {% set _msgs = get_flashed_messages(with_categories=true) %}
+  {% if _msgs %}
+    <div class="ss-flashes" aria-live="polite" aria-atomic="true">
+      {% for category, msg in _msgs %}
+        {% set cat = (category|string|lower|trim) %}
+        {% set cat = cat if cat in ['error','warning','success','info'] else 'info' %}
+        <div class="ss-flash {{ cat }}" role="alert">{{ msg }}</div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <div class="ss-panels">
+    <!-- ================= LOGIN ================= -->
+    <div class="ss-panel {{ 'is-active' if initial_tab == 'login' else '' }}" id="panel-login" role="tabpanel" aria-labelledby="tab-login">
+      <form method="post" action="{{ login_action }}" novalidate autocomplete="on" id="loginForm">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token_value|default('') }}">
+        <input type="hidden" name="nonce" value="{{ nonce_login|default('')|e }}">
+        {% if nxt %}<input type="hidden" name="next" value="{{ nxt|e }}">{% endif %}
+
+        {# honeypot anti-bot #}
+        <div style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden" aria-hidden="true">
+          <label>Website</label>
+          <input type="text" name="website" tabindex="-1" autocomplete="off">
+        </div>
+
+        <div class="ss-field">
+          <label for="loginEmail">Email</label>
+          <input class="ss-input" id="loginEmail" type="email" name="email" required maxlength="254" autocomplete="email" inputmode="email"
+                 autocapitalize="none" spellcheck="false" placeholder="tu@email.com">
+        </div>
+
+        <div class="ss-field">
+          <label for="loginPass">Contraseña</label>
+          <div class="ss-pw-wrap">
+            <input class="ss-input" id="loginPass" type="password" name="password" required minlength="8" autocomplete="current-password"
+                   placeholder="Tu contraseña">
+            <button type="button" class="ss-pw-btn" id="toggleLoginPass" aria-label="Mostrar contraseña" aria-pressed="false">👁</button>
+          </div>
+        </div>
+
+        <div class="ss-row" style="justify-content:space-between;align-items:center;margin-top:8px">
+          <a href="{{ shop_url }}" style="opacity:.8">Seguir como invitado</a>
+          <button class="ss-submit" id="loginSubmit" type="submit">Entrar</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- ================= REGISTER ================= -->
+    <div class="ss-panel {{ 'is-active' if initial_tab == 'register' else '' }}" id="panel-register" role="tabpanel" aria-labelledby="tab-register">
+      <form method="post" action="{{ register_action }}" novalidate autocomplete="on" id="registerForm">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token_value|default('') }}">
+        <input type="hidden" name="nonce" value="{{ nonce_register|default('')|e }}">
+        {% if nxt %}<input type="hidden" name="next" value="{{ nxt|e }}">{% endif %}
+
+        {# honeypot anti-bot #}
+        <div style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden" aria-hidden="true">
+          <label>Website</label>
+          <input type="text" name="website" tabindex="-1" autocomplete="off">
+        </div>
+
+        <div class="ss-field">
+          <label for="regName">Nombre <span style="opacity:.7">(opcional)</span></label>
+          <input class="ss-input" id="regName" type="text" name="name" maxlength="120" autocomplete="name" placeholder="Tu nombre">
+        </div>
+
+        <div class="ss-field">
+          <label for="regEmail">Email</label>
+          <input class="ss-input" id="regEmail" type="email" name="email" required maxlength="254" autocomplete="email" inputmode="email"
+                 autocapitalize="none" spellcheck="false" placeholder="tu@email.com">
+        </div>
+
+        <div class="ss-field">
+          <label for="regPass">Contraseña</label>
+          <div class="ss-pw-wrap">
+            <input class="ss-input" id="regPass" type="password" name="password" required minlength="8" autocomplete="new-password"
+                   placeholder="Mínimo 8 caracteres">
+            <button type="button" class="ss-pw-btn" id="toggleRegPass" aria-label="Mostrar contraseña" aria-pressed="false">👁</button>
+          </div>
+        </div>
+
+        <div class="ss-field">
+          <label for="regPass2">Confirmar contraseña</label>
+          <div class="ss-pw-wrap">
+            <input class="ss-input" id="regPass2" type="password" name="password2" required minlength="8" autocomplete="new-password"
+                   placeholder="Repetí la contraseña">
+            <button type="button" class="ss-pw-btn" id="toggleRegPass2" aria-label="Mostrar confirmación" aria-pressed="false">👁</button>
+          </div>
+        </div>
+
+        <div class="ss-row" style="justify-content:space-between;align-items:center;margin-top:8px">
+          <a href="{{ shop_url }}" style="opacity:.8">Seguir como invitado</a>
+          <button class="ss-submit" id="regSubmit" type="submit">Crear cuenta</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</section>
+
+<script>
+(() => {
+  const KEY = "ss_account_tab";
+  const tabs = {
+    login: document.getElementById("tab-login"),
+    register: document.getElementById("tab-register"),
+  };
+  const panels = {
+    login: document.getElementById("panel-login"),
+    register: document.getElementById("panel-register"),
+  };
+
+  const setTab = (t, {persist=true, focus=false} = {}) => {
+    if (!panels[t] || !tabs[t]) return;
+
+    Object.keys(tabs).forEach(k => {
+      const isOn = (k === t);
+      tabs[k].classList.toggle("is-active", isOn);
+      tabs[k].setAttribute("aria-selected", String(isOn));
+      tabs[k].setAttribute("tabindex", isOn ? "0" : "-1");
+      panels[k].classList.toggle("is-active", isOn);
+    });
+
+    if (persist) {
+      try { localStorage.setItem(KEY, t); } catch(e) {}
+      // mantiene URL limpia pero con tab (para reload)
+      try {
+        const u = new URL(window.location.href);
+        u.searchParams.set("tab", t);
+        window.history.replaceState({}, "", u.toString());
+      } catch(e) {}
+    }
+    if (focus) tabs[t].focus();
+  };
+
+  // init: query ?tab= gana, sino localStorage
+  const qp = (() => {
+    try { return new URL(window.location.href).searchParams.get("tab"); } catch(e) { return ""; }
+  })();
+  const stored = (() => { try { return localStorage.getItem(KEY) || ""; } catch(e) { return ""; } })();
+  const initial = (qp === "login" || qp === "register") ? qp : ((stored === "login" || stored === "register") ? stored : null);
+  if (initial) setTab(initial, {persist:false});
+
+  Object.values(tabs).forEach(btn => {
+    btn.addEventListener("click", () => setTab(btn.dataset.tab, {persist:true}));
+    btn.addEventListener("keydown", (e) => {
+      const order = ["login","register"];
+      const cur = btn.dataset.tab;
+      const idx = order.indexOf(cur);
+      if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+        e.preventDefault();
+        const next = order[(idx + (e.key === "ArrowRight" ? 1 : -1) + order.length) % order.length];
+        setTab(next, {persist:true, focus:true});
+      }
+    });
+  });
+
+  const bindToggle = (btnId, inputId, onLabel, offLabel) => {
+    const b = document.getElementById(btnId);
+    const i = document.getElementById(inputId);
+    if (!b || !i) return;
+    b.addEventListener("click", () => {
+      const willShow = i.type === "password";
+      i.type = willShow ? "text" : "password";
+      b.setAttribute("aria-pressed", String(willShow));
+      b.setAttribute("aria-label", willShow ? onLabel : offLabel);
+    });
+  };
+  bindToggle("toggleLoginPass","loginPass","Ocultar contraseña","Mostrar contraseña");
+  bindToggle("toggleRegPass","regPass","Ocultar contraseña","Mostrar contraseña");
+  bindToggle("toggleRegPass2","regPass2","Ocultar confirmación","Mostrar confirmación");
+
+  // Anti doble submit + validación mínima (UX)
+  const guardSubmit = (formId, btnId, validateFn) => {
+    const f = document.getElementById(formId);
+    const b = document.getElementById(btnId);
+    if (!f || !b) return;
+
+    f.addEventListener("submit", (ev) => {
+      if (b.disabled) return;
+
+      if (typeof validateFn === "function") {
+        const ok = validateFn();
+        if (!ok) { ev.preventDefault(); ev.stopPropagation(); return; }
+      }
+
+      b.disabled = true;
+      b.setAttribute("aria-busy","true");
+      b.innerHTML = '<span class="ss-spinner" aria-hidden="true"></span> Enviando...';
+    }, {passive:false});
+  };
+
+  guardSubmit("loginForm","loginSubmit", () => {
+    const em = (document.getElementById("loginEmail")?.value || "").trim();
+    const pw = (document.getElementById("loginPass")?.value || "");
+    return em.length >= 6 && em.includes("@") && pw.length >= 8;
+  });
+
+  guardSubmit("registerForm","regSubmit", () => {
+    const em = (document.getElementById("regEmail")?.value || "").trim();
+    const pw = (document.getElementById("regPass")?.value || "");
+    const pw2 = (document.getElementById("regPass2")?.value || "");
+    return em.length >= 6 && em.includes("@") && pw.length >= 8 && pw === pw2;
+  });
+})();
+</script>
+{% endblock %}

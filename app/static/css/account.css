@@ -155,3 +155,198 @@
 @media (prefers-reduced-motion: reduce){
   .ss-account .is-loading::after{ animation:none !important; }
 }
+/* ==========================================================
+   Skyline Store — Account (NEW account.html) (ULTRA PRO v5.0)
+   SAFE / NO BREAK — pegá al FINAL del archivo
+========================================================== */
+
+/* 0) Variables suaves */
+.ss-account{
+  --ss-ease: cubic-bezier(.2,.9,.2,1);
+  --ss-dur: .36s;
+  --ss-shadow-soft: 0 18px 40px rgba(2,6,23,.10);
+  --ss-border-soft: rgba(37,99,235,.18);
+  --ss-ring: 0 0 0 4px rgba(0,0,0,.08);
+}
+
+/* 1) Entrada premium (para tabs + panel activo + flashes) */
+.ss-account .ss-tabs,
+.ss-account .ss-flashes,
+.ss-account .ss-panel.is-active{
+  transform: translateY(8px);
+  opacity: 0;
+  animation: ssEnter var(--ss-dur) var(--ss-ease) forwards;
+  will-change: transform, opacity;
+}
+
+.ss-account .ss-flashes{ animation-delay: .04s; }
+.ss-account .ss-panel.is-active{ animation-delay: .06s; }
+
+@keyframes ssEnter{
+  to{ transform: translateY(0); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce){
+  .ss-account .ss-tabs,
+  .ss-account .ss-flashes,
+  .ss-account .ss-panel.is-active{
+    animation:none !important;
+    transform:none !important;
+    opacity:1 !important;
+  }
+}
+
+/* 2) Tabs (mejor tacto + focus accesible) */
+.ss-account .ss-tab{
+  transition:
+    transform .12s var(--ss-ease),
+    box-shadow .18s var(--ss-ease),
+    border-color .18s var(--ss-ease),
+    background-color .18s var(--ss-ease);
+}
+
+.ss-account .ss-tab:focus{
+  outline:0;
+  box-shadow: var(--ss-ring);
+}
+
+@media (hover:hover) and (pointer:fine){
+  .ss-account .ss-tab:hover{
+    transform: translateY(-1px);
+    box-shadow: var(--ss-shadow-soft);
+    border-color: var(--ss-border-soft);
+  }
+}
+
+/* 3) Panels (reemplaza .panel / .is-hidden del viejo) */
+.ss-account .ss-panel{
+  transform-origin: top;
+  transition:
+    opacity .18s var(--ss-ease),
+    transform .18s var(--ss-ease);
+}
+
+.ss-account .ss-panel:not(.is-active){
+  opacity: 0;
+  transform: translateY(8px) scale(.995);
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.ss-account .ss-panel.is-active{
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+  visibility: visible;
+}
+
+/* 4) Inputs + botones (premium + consistencia) */
+.ss-account .ss-input{
+  transition: box-shadow .2s var(--ss-ease), transform .2s var(--ss-ease), border-color .2s var(--ss-ease);
+}
+
+.ss-account .ss-input:focus{
+  outline:0;
+  box-shadow: var(--ss-ring);
+  transform: translateY(-1px);
+}
+
+.ss-account .ss-input[aria-invalid="true"]{
+  border-color: rgba(220,38,38,.35);
+}
+
+@media (prefers-reduced-motion: reduce){
+  .ss-account .ss-input:focus{ transform:none; }
+}
+
+/* 5) Botón show/hide password */
+.ss-account .ss-pw-btn{
+  transition: transform .12s var(--ss-ease), box-shadow .18s var(--ss-ease), border-color .18s var(--ss-ease);
+}
+.ss-account .ss-pw-btn:active{ transform: scale(.98); }
+.ss-account .ss-pw-btn:focus{ outline:0; box-shadow: var(--ss-ring); }
+
+/* 6) Submit con shimmer + loading */
+.ss-account .ss-submit{
+  position: relative;
+  overflow: hidden;
+  transition: transform .12s var(--ss-ease), box-shadow .18s var(--ss-ease), opacity .18s var(--ss-ease);
+}
+
+@media (hover:hover) and (pointer:fine){
+  .ss-account .ss-submit:hover{
+    transform: translateY(-1px);
+    box-shadow: var(--ss-shadow-soft);
+  }
+  .ss-account .ss-submit::after{
+    content:"";
+    position:absolute;
+    inset:0;
+    transform: translateX(-120%);
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.22), transparent);
+  }
+  .ss-account .ss-submit:hover::after{
+    animation: ssShine 1.05s var(--ss-ease);
+  }
+}
+
+@keyframes ssShine{
+  to{ transform: translateX(120%); }
+}
+
+.ss-account .ss-submit[aria-busy="true"]{
+  opacity:.88;
+  cursor:progress;
+}
+
+.ss-account .ss-spinner{
+  animation: sspin .9s linear infinite;
+}
+@keyframes sspin{ to{ transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce){
+  .ss-account .ss-submit:hover::after{ animation:none !important; }
+  .ss-account .ss-spinner{ animation:none !important; }
+}
+
+/* 7) Flashes (si querés más “card”) */
+.ss-account .ss-flash{
+  box-shadow: 0 10px 26px -20px rgba(2,6,23,.28);
+}
+
+/* 8) Dark-mode legibility boost (sin pisar todo) */
+@media (prefers-color-scheme: dark){
+  .ss-account .ss-tab{
+    background: rgba(10,14,28,.60);
+    border-color: rgba(148,163,184,.18);
+  }
+  .ss-account .ss-tab.is-active{
+    background: rgba(10,14,28,.72);
+    border-color: rgba(148,163,184,.26);
+  }
+  .ss-account .ss-input{
+    background: rgba(10,14,28,.62);
+    border-color: rgba(148,163,184,.18);
+    color: rgba(238,242,255,.92);
+  }
+  .ss-account .ss-flash{
+    background: rgba(10,14,28,.64);
+    border-color: rgba(148,163,184,.18);
+  }
+}
+
+/* 9) Fallback blur (por si tu layout usa blur en otro lado) */
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))){
+  .ss-account .ss-tab,
+  .ss-account .ss-input,
+  .ss-account .ss-flash{
+    background: rgba(255,255,255,.96);
+  }
+  @media (prefers-color-scheme: dark){
+    .ss-account .ss-tab,
+    .ss-account .ss-input,
+    .ss-account .ss-flash{
+      background: rgba(9,12,24,.90);
+    }
+  }
+}
