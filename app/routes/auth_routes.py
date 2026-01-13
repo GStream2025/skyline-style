@@ -1,4 +1,4 @@
-# app/routes/auth_routes.py — Skyline Store (ULTRA PRO / CSRF-SAFE / v4.1 FINAL)
+# app/routes/auth_routes.py — Skyline Store (ULTRA PRO / CSRF-SAFE / v5.0 FINAL)
 from __future__ import annotations
 
 import logging
@@ -23,7 +23,7 @@ from flask import (
     make_response,
 )
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
-from sqlalchemy import select
+from sqlalchemy import select, func
 from werkzeug.routing import BuildError
 
 from app.models import User, db
@@ -34,11 +34,13 @@ try:
 except Exception:
     AffiliateProfile = None  # type: ignore
 
+
 log = logging.getLogger("auth_routes")
-auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
+auth_bp = Blueprint("auth", __name__, url_prefix="/auth", template_folder="../templates")
 
 _TRUE: Set[str] = {"1", "true", "yes", "y", "on", "checked"}
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
 
 # =============================================================================
 # ENV helpers
@@ -75,13 +77,23 @@ def _env_float(name: str, default: float, *, min_v: float = 0.0, max_v: float = 
 
 
 AUTH_RATE_LIMIT_SECONDS = _env_float("AUTH_RATE_LIMIT_SECONDS", 2.0, min_v=0.1, max_v=30.0)
+
 VERIFY_EMAIL_REQUIRED = _env_flag("VERIFY_EMAIL_REQUIRED", True)
 VERIFY_ADMIN_TOO = _env_flag("VERIFY_ADMIN_TOO", False)
 VERIFY_TOKEN_MAX_AGE_SEC = _env_int("VERIFY_TOKEN_MAX_AGE_SEC", 60 * 60 * 24, min_v=60, max_v=60 * 60 * 24 * 14)
 RESEND_VERIFY_COOLDOWN_SEC = _env_int("RESEND_VERIFY_COOLDOWN_SEC", 60, min_v=10, max_v=3600)
 
 FORM_NONCE_TTL = _env_int("AUTH_FORM_NONCE_TTL", 20 * 60, min_v=30, max_v=60 * 60)
+
 CANONICAL_HOST_ENFORCE = _env_flag("CANONICAL_HOST_ENFORCE", True)
+
+# ✅ Admin bootstrap (si querés que siempre exista)
+BOOTSTRAP_ADMIN = _env_flag("BOOTSTRAP_ADMIN", True)
+ADMIN_EMAIL = _env_str("ADMIN_EMAIL", "")
+ADMIN_PASSWORD = _env_str("ADMIN_PASSWORD", "")
+ADMIN_NAME = _env_str("ADMIN_NAME", "Admin")
+ADMIN_ROLE = (_env_str("ADMIN_ROLE", "admin") or "admin").strip().lower()
+
 
 # =============================================================================
 # Helpers generales
@@ -126,6 +138,9 @@ def _wants_json() -> bool:
 
 
 def _json_or_redirect(message: str, category: str, endpoint: str, **kwargs):
+    """
+    Respuesta uniforme para HTML/JSON.
+    """
     if _wants_json():
         ok = category not in {"error", "warning"}
         status = 400 if not ok else 200
@@ -201,6 +216,22 @@ def _read_bool_field(name: str) -> bool:
 
 
 # =============================================================================
+# CSRF token (para tu template account.html)
+# =============================================================================
+
+def _csrf_token_value() -> str:
+    """
+    Si usás Flask-WTF CSRFProtect, esto genera el token.
+    Si no, devuelve "" y no rompe el template.
+    """
+    try:
+        from flask_wtf.csrf import generate_csrf
+        return generate_csrf()
+    except Exception:
+        return ""
+
+
+# =============================================================================
 # Canonical host (anti cookie split)
 # =============================================================================
 
@@ -228,11 +259,9 @@ def _canonical_redirect_if_needed() -> Optional[Any]:
         if not target.scheme or not target.netloc:
             return None
 
-        # ya coincide
         if cur.netloc == target.netloc and cur.scheme == target.scheme:
             return None
 
-        # SOLO GET/HEAD
         if request.method not in {"GET", "HEAD"}:
             return None
 
@@ -252,7 +281,7 @@ def _before_auth():
 
 @auth_bp.after_request
 def _after_auth(resp):
-    if request.path.startswith(("/auth/login", "/auth/register", "/auth/verify-notice")) and request.method == "GET":
+    if request.path.startswith(("/auth/login", "/auth/register", "/auth/account", "/auth/verify-notice")) and request.method == "GET":
         resp.headers["Cache-Control"] = "no-store"
         resp.headers["Pragma"] = "no-cache"
         resp.headers["Vary"] = "Cookie"
@@ -262,7 +291,7 @@ def _after_auth(resp):
 
 
 # =============================================================================
-# Nonce anti replay/doble submit
+# Nonce anti replay/doble submit (forms)
 # =============================================================================
 
 def _new_form_nonce(key: str) -> str:
@@ -349,6 +378,7 @@ def _rate_limit_email_ok(prefix: str, email: str, cooldown: int) -> Tuple[bool, 
 _SESSION_KEYS_OWNED = (
     "user_id",
     "user_email",
+    "user_role",
     "is_admin",
     "login_at",
 )
@@ -378,28 +408,43 @@ def _clear_auth_session_only() -> None:
     session.modified = True
 
 
-def _set_session_user(user: User) -> None:
-    # Evita fixation sin romper CSRF: limpiamos solo nuestras keys
-    _clear_auth_session_only()
+def _user_role(user: User) -> str:
+    # soporta role o is_admin
+    role = ""
+    try:
+        role = (getattr(user, "role", "") or "").strip().lower()
+    except Exception:
+        role = ""
+    if not role:
+        try:
+            if bool(getattr(user, "is_admin", False)) or bool(getattr(user, "is_owner", False)):
+                role = "admin"
+        except Exception:
+            pass
+    return role or "customer"
 
+
+def _set_session_user(user: User) -> None:
+    _clear_auth_session_only()
     session["user_id"] = int(getattr(user, "id"))
     session["user_email"] = (getattr(user, "email", "") or "").lower()
-    session["is_admin"] = bool(getattr(user, "is_admin", False))
+    role = _user_role(user)
+    session["user_role"] = role
+    session["is_admin"] = (role == "admin")
     session["login_at"] = int(time.time())
     session.permanent = True
     session.modified = True
 
 
 def _post_login_redirect(user: User) -> str:
-    try:
-        if bool(getattr(user, "is_admin", False)) or bool(getattr(user, "is_owner", False)):
-            u = _safe_url_for("admin.dashboard")
-            if u:
-                return u
-    except Exception:
-        pass
+    role = _user_role(user)
+    if role == "admin":
+        u = _safe_url_for("admin.dashboard")
+        if u:
+            return u
+        return "/admin"
 
-    for ep in ("account.account_home", "shop.shop", "main.index", "main.home"):
+    for ep in ("account.account_home", "main.account", "shop.shop", "main.index", "main.home"):
         u = _safe_url_for(ep)
         if u:
             return u
@@ -481,6 +526,7 @@ def _emails_enabled() -> bool:
 
 
 def _send_email_verify(user: User, *, force: bool = False) -> bool:
+    # No rompe si no hay email service
     if not _emails_enabled():
         return False
 
@@ -551,20 +597,24 @@ def _send_email_verify(user: User, *, force: bool = False) -> bool:
 def _needs_verify_gate(user: User) -> bool:
     if not VERIFY_EMAIL_REQUIRED:
         return False
-    is_admin = bool(getattr(user, "is_admin", False))
-    is_owner = bool(getattr(user, "is_owner", False))
-    if (is_admin or is_owner) and not VERIFY_ADMIN_TOO:
+    role = _user_role(user)
+    if role == "admin" and not VERIFY_ADMIN_TOO:
         return False
     return not _user_is_verified(user)
 
 
 # =============================================================================
-# DB helper
+# DB helpers (FIX: email case-insensitive)
 # =============================================================================
 
 def _get_user_by_email(email: str) -> Optional[User]:
+    email = (email or "").strip().lower()
+    if not email:
+        return None
     try:
-        return db.session.execute(select(User).where(User.email == email)).scalar_one_or_none()
+        return db.session.execute(
+            select(User).where(func.lower(User.email) == email)
+        ).scalar_one_or_none()
     except Exception:
         return None
 
@@ -578,11 +628,79 @@ def _check_password(user: User, password: str) -> bool:
 
 
 # =============================================================================
-# Routes
+# Admin bootstrap (FIX: asegura admin real desde ENV)
 # =============================================================================
 
-@auth_bp.route("/login", methods=["GET", "POST"])
-def login():
+def _ensure_admin_if_needed() -> None:
+    if not BOOTSTRAP_ADMIN:
+        return
+
+    email = _safe_email(ADMIN_EMAIL)
+    pwd = (ADMIN_PASSWORD or "").strip()
+    if not email or not pwd or not _valid_email(email):
+        return
+
+    try:
+        u = _get_user_by_email(email)
+        if u:
+            # asegura rol admin
+            try:
+                if hasattr(u, "role"):
+                    setattr(u, "role", "admin")
+                if hasattr(u, "is_admin"):
+                    setattr(u, "is_admin", True)
+                if hasattr(u, "is_active"):
+                    setattr(u, "is_active", True)
+            except Exception:
+                pass
+            _commit_safe()
+            return
+
+        # crear
+        user = User(email=email)  # type: ignore[call-arg]
+        try:
+            if hasattr(user, "name") and ADMIN_NAME:
+                setattr(user, "name", ADMIN_NAME)
+        except Exception:
+            pass
+
+        try:
+            if hasattr(user, "role"):
+                setattr(user, "role", "admin")
+            if hasattr(user, "is_admin"):
+                setattr(user, "is_admin", True)
+            if hasattr(user, "is_active"):
+                setattr(user, "is_active", True)
+        except Exception:
+            pass
+
+        # password
+        if hasattr(user, "set_password") and callable(getattr(user, "set_password")):
+            user.set_password(pwd)  # type: ignore[attr-defined]
+        else:
+            # si no existe set_password, no podemos garantizar
+            return
+
+        db.session.add(user)
+        _commit_safe()
+        log.warning("✅ Admin creado automáticamente: %s", email)
+    except Exception:
+        db.session.rollback()
+        log.exception("Admin bootstrap failed")
+
+
+# =============================================================================
+# ROUTES — Account unified (tabs)
+# =============================================================================
+
+@auth_bp.get("/account")
+def account():
+    # ✅ asegura admin (si envs están)
+    try:
+        _ensure_admin_if_needed()
+    except Exception:
+        pass
+
     u = _get_current_user()
     if u:
         return redirect(_post_login_redirect(u))
@@ -590,42 +708,80 @@ def login():
     default_next = _safe_url_for("shop.shop") or _safe_url_for("main.index") or _safe_url_for("main.home") or "/"
     nxt = _next_url(default_next)
 
-    if request.method == "GET":
-        nonce = _new_form_nonce("login")
-        resp = make_response(render_template("auth/login.html", next=nxt, nonce=nonce), 200)
-        resp.headers["Cache-Control"] = "no-store"
-        return resp
+    # Tab inicial
+    tab = (request.args.get("tab") or "login").strip().lower()
+    if tab not in {"login", "register"}:
+        tab = "login"
+
+    # ✅ nonces para evitar doble submit/replay (tu template ya manda nonce si lo agregás)
+    nonce_login = _new_form_nonce("login")
+    nonce_register = _new_form_nonce("register")
+
+    resp = make_response(
+        render_template(
+            "auth/account.html",
+            active_tab=tab,
+            next=nxt,
+            csrf_token_value=_csrf_token_value(),
+            nonce_login=nonce_login,
+            nonce_register=nonce_register,
+        ),
+        200,
+    )
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
+# =============================================================================
+# ROUTES — Login / Register (POST) desde account.html
+# =============================================================================
+
+@auth_bp.post("/login")
+def login():
+    # ✅ si ya está logueado
+    u = _get_current_user()
+    if u:
+        return redirect(_post_login_redirect(u))
+
+    default_next = _safe_url_for("shop.shop") or _safe_url_for("main.index") or _safe_url_for("main.home") or "/"
+    nxt = _next_url(default_next)
 
     # Honeypot
     if (request.form.get("website") or "").strip():
-        return _json_or_redirect("Solicitud inválida.", "error", "auth.login", next=nxt)
+        return _json_or_redirect("Solicitud inválida.", "error", "auth.account", tab="login", next=nxt)
 
     # Nonce (replay)
     if not _check_form_nonce("login"):
-        flash("Solicitud inválida. Recargá e intentá de nuevo.", "error")
-        return redirect(_safe_url_for("auth.login", next=nxt) or "/auth/login")
+        return _json_or_redirect("Solicitud inválida. Recargá e intentá de nuevo.", "error", "auth.account", tab="login", next=nxt)
 
+    # Rate-limit
     if not _rate_limit_ok("login", AUTH_RATE_LIMIT_SECONDS):
-        return _json_or_redirect("Demasiados intentos. Esperá un momento y reintentá.", "warning", "auth.login", next=nxt)
+        return _json_or_redirect("Demasiados intentos. Esperá un momento y reintentá.", "warning", "auth.account", tab="login", next=nxt)
 
     data = _safe_get_json()
     email = _safe_email(_safe_str_field("email", 255) or str(data.get("email") or ""))
     password = (_safe_str_field("password", 256) or str(data.get("password") or "")).strip()
+
+    # next preferido (del POST)
     nxt_safe = _next_url("")
 
     if not _valid_email(email) or not password:
-        return _json_or_redirect("Email o contraseña incorrectos.", "error", "auth.login", next=nxt_safe)
+        return _json_or_redirect("Email o contraseña incorrectos.", "error", "auth.account", tab="login", next=nxt_safe or "")
 
+    # ✅ FIX: buscar case-insensitive
     user = _get_user_by_email(email)
-    if not user or not _check_password(user, password):
-        return _json_or_redirect("Email o contraseña incorrectos.", "error", "auth.login", next=nxt_safe)
 
+    if not user or not _check_password(user, password):
+        return _json_or_redirect("Email o contraseña incorrectos.", "error", "auth.account", tab="login", next=nxt_safe or "")
+
+    # activo?
     try:
         if hasattr(user, "is_active") and not bool(getattr(user, "is_active")):
-            return _json_or_redirect("Tu cuenta está desactivada.", "error", "auth.login", next=nxt_safe)
+            return _json_or_redirect("Tu cuenta está desactivada.", "error", "auth.account", tab="login")
     except Exception:
         pass
 
+    # gate verify email
     if _needs_verify_gate(user):
         _send_email_verify(user, force=False)
         red = _safe_url_for("auth.verify_notice", email=getattr(user, "email", "")) or "/auth/verify-notice"
@@ -644,7 +800,7 @@ def login():
     return redirect(redir)
 
 
-@auth_bp.route("/register", methods=["GET", "POST"])
+@auth_bp.post("/register")
 def register():
     u = _get_current_user()
     if u:
@@ -653,43 +809,43 @@ def register():
     default_next = _safe_url_for("shop.shop") or _safe_url_for("main.index") or _safe_url_for("main.home") or "/"
     nxt = _next_url(default_next)
 
-    if request.method == "GET":
-        nonce = _new_form_nonce("register")
-        resp = make_response(render_template("auth/register.html", next=nxt, nonce=nonce), 200)
-        resp.headers["Cache-Control"] = "no-store"
-        return resp
-
+    # Honeypot
     if (request.form.get("website") or "").strip():
-        return _json_or_redirect("Solicitud inválida.", "error", "auth.register", next=nxt)
+        return _json_or_redirect("Solicitud inválida.", "error", "auth.account", tab="register", next=nxt)
 
+    # Nonce anti replay
     if not _check_form_nonce("register"):
-        flash("Solicitud inválida. Recargá e intentá de nuevo.", "error")
-        return redirect(_safe_url_for("auth.register", next=nxt) or "/auth/register")
+        return _json_or_redirect("Solicitud inválida. Recargá e intentá de nuevo.", "error", "auth.account", tab="register", next=nxt)
 
+    # Rate-limit
     if not _rate_limit_ok("register", AUTH_RATE_LIMIT_SECONDS):
-        return _json_or_redirect("Esperá un momento y reintentá.", "warning", "auth.register", next=nxt)
+        return _json_or_redirect("Esperá un momento y reintentá.", "warning", "auth.account", tab="register", next=nxt)
 
     data = _safe_get_json()
     email = _safe_email(_safe_str_field("email", 255) or str(data.get("email") or ""))
     password = (_safe_str_field("password", 256) or str(data.get("password") or "")).strip()
     password2 = (_safe_str_field("password2", 256) or str(data.get("password2") or "")).strip()
     name = (_safe_str_field("name", 120) or str(data.get("name") or "")).strip()
+
     nxt_safe = _next_url("")
 
     if not _valid_email(email):
-        return _json_or_redirect("Email inválido.", "warning", "auth.register", next=nxt_safe)
+        return _json_or_redirect("Email inválido.", "warning", "auth.account", tab="register", next=nxt_safe or "")
 
     if len(password) < 8:
-        return _json_or_redirect("La contraseña debe tener al menos 8 caracteres.", "warning", "auth.register", next=nxt_safe)
+        return _json_or_redirect("La contraseña debe tener al menos 8 caracteres.", "warning", "auth.account", tab="register", next=nxt_safe or "")
 
+    # confirm opcional: si viene, debe coincidir
     if password2 and password2 != password:
-        return _json_or_redirect("Las contraseñas no coinciden.", "warning", "auth.register", next=nxt_safe)
+        return _json_or_redirect("Las contraseñas no coinciden.", "warning", "auth.account", tab="register", next=nxt_safe or "")
 
     if _get_user_by_email(email):
-        return _json_or_redirect("Ese email ya está registrado. Iniciá sesión.", "info", "auth.login", next=nxt_safe)
+        # manda al login tab
+        return _json_or_redirect("Ese email ya está registrado. Iniciá sesión.", "info", "auth.account", tab="login", next=nxt_safe or "")
 
     want_affiliate = _read_bool_field("want_affiliate") or (str(data.get("want_affiliate") or "").strip().lower() in _TRUE)
 
+    # Crear user
     try:
         user = User(email=email)  # type: ignore[call-arg]
     except Exception:
@@ -697,14 +853,16 @@ def register():
         try:
             setattr(user, "email", email)
         except Exception:
-            return _json_or_redirect("No se pudo asignar el email al usuario.", "error", "auth.register", next=nxt_safe)
+            return _json_or_redirect("No se pudo crear la cuenta.", "error", "auth.account", tab="register", next=nxt_safe or "")
 
+    # nombre
     try:
         if hasattr(user, "name") and name:
             setattr(user, "name", name)
     except Exception:
         pass
 
+    # defaults seguros
     for attr, val in (("is_admin", False), ("is_active", True), ("email_verified", False)):
         try:
             if hasattr(user, attr):
@@ -712,6 +870,7 @@ def register():
         except Exception:
             pass
 
+    # role
     try:
         role = "affiliate" if want_affiliate else "customer"
         if hasattr(user, "set_role_safe") and callable(getattr(user, "set_role_safe")):
@@ -721,21 +880,24 @@ def register():
     except Exception:
         pass
 
+    # password
     try:
         if hasattr(user, "set_password") and callable(getattr(user, "set_password")):
             user.set_password(password)  # type: ignore[attr-defined]
         else:
-            return _json_or_redirect("El modelo User no tiene set_password().", "error", "auth.register", next=nxt_safe)
+            return _json_or_redirect("El modelo User no tiene set_password().", "error", "auth.account", tab="register", next=nxt_safe or "")
     except Exception:
-        return _json_or_redirect("No se pudo crear la cuenta (password inválida).", "error", "auth.register", next=nxt_safe)
+        return _json_or_redirect("No se pudo crear la cuenta (password inválida).", "error", "auth.account", tab="register", next=nxt_safe or "")
 
+    # persist
     try:
         db.session.add(user)
         db.session.flush()
     except Exception:
         db.session.rollback()
-        return _json_or_redirect("Error creando la cuenta. Probá de nuevo.", "error", "auth.register", next=nxt_safe)
+        return _json_or_redirect("Error creando la cuenta. Probá de nuevo.", "error", "auth.account", tab="register", next=nxt_safe or "")
 
+    # AffiliateProfile opcional
     if want_affiliate and AffiliateProfile is not None:
         try:
             display_name = (_safe_str_field("affiliate_display_name", 120) or str(data.get("affiliate_display_name") or "")).strip() or name
@@ -759,15 +921,18 @@ def register():
             log.exception("AffiliateProfile creation failed (ignored).")
 
     if not _commit_safe():
-        return _json_or_redirect("Error creando la cuenta. Probá de nuevo.", "error", "auth.register", next=nxt_safe)
+        return _json_or_redirect("Error creando la cuenta. Probá de nuevo.", "error", "auth.account", tab="register", next=nxt_safe or "")
 
-    if VERIFY_EMAIL_REQUIRED and not bool(getattr(user, "is_admin", False)) and not bool(getattr(user, "is_owner", False)):
+    # verify gate (no admin)
+    role = _user_role(user)
+    if VERIFY_EMAIL_REQUIRED and role != "admin":
         _send_email_verify(user, force=True)
         red = _safe_url_for("auth.verify_notice", email=getattr(user, "email", "")) or "/auth/verify-notice"
         if _wants_json():
             return jsonify({"ok": True, "redirect": red}), 200
         return redirect(red)
 
+    # auto login
     _set_session_user(user)
     redir = nxt_safe or _post_login_redirect(user)
 
@@ -777,6 +942,10 @@ def register():
     flash("Cuenta creada con éxito ✅", "success")
     return redirect(redir)
 
+
+# =============================================================================
+# Verify pages
+# =============================================================================
 
 @auth_bp.get("/verify-notice")
 def verify_notice():
@@ -809,7 +978,7 @@ def resend_verification():
         return _json_or_redirect("Si el email existe, te enviamos el enlace.", "info", "auth.verify_notice", email=email)
 
     if _user_is_verified(user):
-        return _json_or_redirect("Tu email ya está verificado ✅ Ya podés iniciar sesión.", "success", "auth.login")
+        return _json_or_redirect("Tu email ya está verificado ✅ Ya podés iniciar sesión.", "success", "auth.account", tab="login")
 
     ok = _send_email_verify(user, force=True)
     if not ok:
@@ -841,14 +1010,18 @@ def verify_email(token: str):
 
     if _user_is_verified(user):
         flash("Tu email ya estaba verificado ✅", "success")
-        return redirect(_safe_url_for("auth.login") or "/auth/login")
+        return redirect(_safe_url_for("auth.account", tab="login") or "/auth/account?tab=login")
 
     _set_user_verified(user)
     _commit_safe()
 
     flash("Email verificado ✅ Ya podés iniciar sesión.", "success")
-    return redirect(_safe_url_for("auth.login") or "/auth/login")
+    return redirect(_safe_url_for("auth.account", tab="login") or "/auth/account?tab=login")
 
+
+# =============================================================================
+# Logout
+# =============================================================================
 
 @auth_bp.get("/logout")
 def logout():

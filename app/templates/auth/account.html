@@ -1,4 +1,4 @@
-{# app/templates/auth/account.html — Skyline Store (ULTRA PRO / CSRF + CSP NONCE SAFE / vFINAL) #}
+{# app/templates/auth/account.html — Skyline Store (ULTRA PRO / CSRF SAFE / vFINAL) #}
 {% extends "base.html" %}
 {% block title %}Mi cuenta | Skyline Store{% endblock %}
 
@@ -11,18 +11,6 @@
 <meta name="robots" content="{{ 'index,follow' if (ENV|default('')|lower == 'production') else 'noindex,nofollow' }}">
 <meta name="csrf-token" content="{{ csrf_token_value|default('') }}">
 
-{# ✅ FINAL improvements:
-   1) CSP nonce support for inline <style> and <script> (works with Flask-Talisman)
-   2) Safe next hardening + keeps tab on server flashes
-   3) Honeypot in both forms
-   4) Tabs: full a11y + hidden/aria-hidden for inactive panels
-   5) Prevent double submit + auto-unlock fallback (network stall)
-   6) UX validation with tiny inline error message (no blocking server)
-   7) Preserve typed values on server re-render (optional fields)
-   8) Safer JS: null checks, dataset guards, consistent labels
-#}
-
-{# CSP nonce var (compatible with different setups) #}
 {% set _csp_nonce = csp_nonce|default(nonce|default(g.nonce|default('', true), true), true) %}
 
 <style{% if _csp_nonce %} nonce="{{ _csp_nonce|e }}"{% endif %}>
@@ -129,12 +117,10 @@
          role="tabpanel"
          aria-labelledby="tab-login"
          {% if initial_tab != 'login' %}hidden aria-hidden="true"{% else %}aria-hidden="false"{% endif %}>
-      <form method="post" action="{{ login_action }}" novalidate autocomplete="on" id="loginForm">
+      <form method="post" action="{{ login_action }}" novalidate autocomplete="off" id="loginForm">
         <input type="hidden" name="csrf_token" value="{{ csrf_token_value|default('') }}">
-        <input type="hidden" name="nonce" value="{{ nonce_login|default('')|e }}">
         {% if nxt %}<input type="hidden" name="next" value="{{ nxt|e }}">{% endif %}
 
-        {# honeypot anti-bot #}
         <div style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden" aria-hidden="true">
           <label>Website</label>
           <input type="text" name="website" tabindex="-1" autocomplete="off">
@@ -148,7 +134,7 @@
                  name="email"
                  value="{{ _login_email|e }}"
                  required maxlength="254"
-                 autocomplete="email"
+                 autocomplete="username"
                  inputmode="email"
                  autocapitalize="none"
                  spellcheck="false"
@@ -184,12 +170,10 @@
          role="tabpanel"
          aria-labelledby="tab-register"
          {% if initial_tab != 'register' %}hidden aria-hidden="true"{% else %}aria-hidden="false"{% endif %}>
-      <form method="post" action="{{ register_action }}" novalidate autocomplete="on" id="registerForm">
+      <form method="post" action="{{ register_action }}" novalidate autocomplete="off" id="registerForm">
         <input type="hidden" name="csrf_token" value="{{ csrf_token_value|default('') }}">
-        <input type="hidden" name="nonce" value="{{ nonce_register|default('')|e }}">
         {% if nxt %}<input type="hidden" name="next" value="{{ nxt|e }}">{% endif %}
 
-        {# honeypot anti-bot #}
         <div style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden" aria-hidden="true">
           <label>Website</label>
           <input type="text" name="website" tabindex="-1" autocomplete="off">
@@ -208,7 +192,7 @@
                  name="email"
                  value="{{ _reg_email|e }}"
                  required maxlength="254"
-                 autocomplete="email"
+                 autocomplete="username"
                  inputmode="email"
                  autocapitalize="none"
                  spellcheck="false"
@@ -303,13 +287,8 @@
     if (focus) tabs[t].focus();
   };
 
-  // init: query ?tab= wins, else localStorage
-  const qp = (() => {
-    try { return new URL(window.location.href).searchParams.get("tab") || ""; } catch (e) { return ""; }
-  })();
-  const stored = (() => {
-    try { return localStorage.getItem(KEY) || ""; } catch (e) { return ""; }
-  })();
+  const qp = (() => { try { return new URL(window.location.href).searchParams.get("tab") || ""; } catch (e) { return ""; } })();
+  const stored = (() => { try { return localStorage.getItem(KEY) || ""; } catch (e) { return ""; } })();
   const initial =
     (qp === "login" || qp === "register") ? qp :
     ((stored === "login" || stored === "register") ? stored : null);
@@ -364,7 +343,6 @@
     el.classList.add("is-on");
   };
 
-  // Anti doble submit + validación mínima (UX) + auto-unlock fallback
   const guardSubmit = (formId, btnId, errId, validateFn, restoreLabel) => {
     const f = document.getElementById(formId);
     const b = document.getElementById(btnId);
@@ -390,7 +368,6 @@
       b.dataset._label = b.textContent || restoreLabel || "Enviar";
       b.innerHTML = '<span class="ss-spinner" aria-hidden="true"></span> Enviando...';
 
-      // fallback: if network stalls, re-enable after 12s
       window.setTimeout(() => {
         if (!b.disabled) return;
         b.disabled = false;
