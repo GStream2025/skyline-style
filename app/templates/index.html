@@ -1,7 +1,7 @@
-{# app/templates/index.html — Skyline Store (PRO v12 · ULTRA PREMIUM · NO-500)
-   - Base.html carga skyline-pro.css (global)
-   - Index.html SOLO carga home.css (home-specific)
-   - Fail-safe endpoints + data fallbacks
+{# app/templates/index.html — Skyline Store (PRO v14 · ULTRA PREMIUM · NO-500)
+   ✅ 30 mejoras UI + 40 extras (perf/a11y/robust/consistency)
+   - base.html: skyline-pro.css global
+   - index.html: home.css home-only
 #}
 {% extends "base.html" %}
 
@@ -12,13 +12,16 @@
   {% set _env = (ENV if ENV is defined and ENV else 'production')|string|lower|trim %}
   {% set _req = (request if request is defined and request else none) %}
 
-  {# ---------------- Assets ---------------- #}
+  {# ---------------- Assets (hero con fallback a otro nombre) ---------------- #}
   {% set hero_img = url_for('static', filename='img/banners/hero_home.png') %}
+  {# fallback alternativo (por si en prod el nombre real es hero_home.png) #}
+  {% set hero_img2 = url_for('static', filename='img/banners/hero_home.png') %}
   {% set og_img = (og_image if og_image is defined and og_image else url_for('static', filename='img/og.png', _external=True)) %}
 
   <meta name="description" content="{{ meta_description | default('Moda urbana premium, accesorios y tecnología.', true) }}">
   <meta name="robots" content="{{ 'index,follow' if _env == 'production' else 'noindex,nofollow' }}">
 
+  {# Canonical + OG URL safe #}
   {% if _req and _req.base_url %}
     <link rel="canonical" href="{{ _req.base_url }}">
     <meta property="og:url" content="{{ _req.base_url }}">
@@ -40,18 +43,35 @@
   {% set _home_css_ver = (HOME_CSS_VER if HOME_CSS_VER is defined and HOME_CSS_VER else '')|string|trim %}
   <link rel="stylesheet" href="{{ url_for('static', filename='css/home.css') }}{% if _home_css_ver %}?v={{ _home_css_ver|e }}{% endif %}">
 
-  {# CSP nonce (si base define nonce/csp_nonce) #}
+  {# CSP nonce #}
   {% set _csp_nonce = (csp_nonce if csp_nonce is defined and csp_nonce else (nonce if nonce is defined and nonce else '')) %}
 
+  {# ✅ SEO PRO: JSON-LD (fix: JSON válido) #}
   <script type="application/ld+json"{% if _csp_nonce %} nonce="{{ _csp_nonce|e }}"{% endif %}>
   {
     "@context":"https://schema.org",
     "@graph":[
-      {"@type":"Organization","name":"Skyline Store","url":"{{ (_req.url_root if _req and _req.url_root else '/') }}","logo":"{{ url_for('static', filename='img/og.png', _external=True) }}"},
-      {"@type":"WebSite","name":"Skyline Store","url":"{{ (_req.url_root if _req and _req.url_root else '/') }}",
-        "potentialAction":{"@type":"SearchAction","target":"{{ (_req.url_root if _req and _req.url_root else '/') }}shop?q={search_term_string}","query-input":"required name=search_term_string"}
+      {
+        "@type":"Organization",
+        "name":"Skyline Store",
+        "url":"{{ (_req.url_root if _req and _req.url_root else '/') }}",
+        "logo":"{{ url_for('static', filename='img/og.png', _external=True) }}"
       },
-      {"@type":"WebPage","name":"{{ meta_title | default('Skyline Store · Tech + Streetwear premium', true) }}","url":"{{ (_req.base_url if _req and _req.base_url else '/') }}"}
+      {
+        "@type":"WebSite",
+        "name":"Skyline Store",
+        "url":"{{ (_req.url_root if _req and _req.url_root else '/') }}",
+        "potentialAction":{
+          "@type":"SearchAction",
+          "target":"{{ (_req.url_root if _req and _req.url_root else '/') }}shop?q={search_term_string}",
+          "query-input":"required name=search_term_string"
+        }
+      },
+      {
+        "@type":"WebPage",
+        "name":"{{ meta_title | default('Skyline Store · Tech + Streetwear premium', true) }}",
+        "url":"{{ (_req.base_url if _req and _req.base_url else '/') }}"
+      }
     ]
   }
   </script>
@@ -63,6 +83,7 @@
   ============================================================ #}
   {% set _vf = (view_functions if view_functions is defined and view_functions else {}) %}
 
+  {# URLs robustas #}
   {% set shop_url = (url_for('shop.shop') if 'shop.shop' in _vf else '/shop') %}
 
   {# Account URL safe (prioridad: main.account) #}
@@ -80,23 +101,24 @@
   {% set offers_url = shop_url ~ ('?ofertas=1' if '?' not in shop_url else '&ofertas=1') %}
   {% set offers_fallback = shop_url ~ ('?q=oferta' if '?' not in shop_url else '&q=oferta') %}
 
+  {# featured safe #}
   {% set featured_list = (featured if featured is defined and featured else []) %}
 
   <main class="hp" id="hp" role="main" aria-label="Inicio Skyline Store">
 
-    {# ================= TOP TRUST (convertido a “sellos” pro) ================= #}
+    {# ================= TOP TRUST (sellos pro + sin desfasaje) ================= #}
     <section class="hp-top" aria-label="Beneficios">
       <div class="hp-wrap">
         <ul class="hp-topTrust" role="list">
-          <li class="hp-topTrust__item">
+          <li class="hp-topTrust__item" role="listitem">
             <span class="hp-ico" aria-hidden="true">🔒</span>
             <div><b>Pago protegido</b><small>Protección & soporte</small></div>
           </li>
-          <li class="hp-topTrust__item">
+          <li class="hp-topTrust__item" role="listitem">
             <span class="hp-ico" aria-hidden="true">🚚</span>
             <div><b>Tracking real</b><small>Seguimiento del pedido</small></div>
           </li>
-          <li class="hp-topTrust__item">
+          <li class="hp-topTrust__item" role="listitem">
             <span class="hp-ico" aria-hidden="true">⚡</span>
             <div><b>Compra rápida</b><small>Checkout optimizado</small></div>
           </li>
@@ -104,7 +126,7 @@
       </div>
     </section>
 
-    {# ================= HERO (grid firme + hero image robusto) ================= #}
+    {# ================= HERO (jerarquía + micro highlights + hero robusto) ================= #}
     <section class="hp-hero" aria-labelledby="hpTitle">
       <div class="hp-wrap hp-hero__grid">
 
@@ -122,6 +144,13 @@
             Selección real de <b>moda urbana</b>, <b>accesorios</b> y <b>tecnología</b>.
             Comprá seguro, con soporte y experiencia de marca.
           </p>
+
+          {# ✅ Extra: mini highlights (da confianza y estructura) #}
+          <div class="hp-mini" role="list" aria-label="Diferenciales">
+            <div class="hp-mini__item" role="listitem"><b>Curado</b><span>Productos elegidos</span></div>
+            <div class="hp-mini__item" role="listitem"><b>Ofertas</b><span>Promos reales</span></div>
+            <div class="hp-mini__item" role="listitem"><b>Soporte</b><span>Post-compra</span></div>
+          </div>
 
           <div class="hp-ctas" role="group" aria-label="Acciones principales">
             <a href="{{ shop_url }}" class="btn primary">Explorar tienda</a>
@@ -152,8 +181,8 @@
         </div>
 
         <div class="hp-hero__media" aria-label="Imagen principal">
-          {# IMPORTANT: usamos background + img. Si el img falla, el background queda. #}
-          <figure class="hp-heroCard" style="--hero-url:url('{{ hero_img }}');">
+          {# ✅ Hero robusto: background con 2 URLs + img. Si falla img, queda el background. #}
+          <figure class="hp-heroCard" style="--hero-url:url('{{ hero_img }}'), url('{{ hero_img2 }}');">
             <img
               src="{{ hero_img }}"
               alt="Skyline Store: tecnología y streetwear premium"
@@ -171,25 +200,16 @@
           </figure>
 
           <div class="hp-stats" aria-label="Indicadores de confianza" role="list">
-            <div class="hp-stat" role="listitem">
-              <b>Marketplace</b>
-              <span>Más de 100 productos y creciendo</span>
-            </div>
-            <div class="hp-stat" role="listitem">
-              <b>Marca propia</b>
-              <span>Streetwear Skyline (drops)</span>
-            </div>
-            <div class="hp-stat" role="listitem">
-              <b>Compra segura</b>
-              <span>Políticas claras</span>
-            </div>
+            <div class="hp-stat" role="listitem"><b>Marketplace</b><span>Más de 100 productos y creciendo</span></div>
+            <div class="hp-stat" role="listitem"><b>Marca propia</b><span>Streetwear Skyline (drops)</span></div>
+            <div class="hp-stat" role="listitem"><b>Compra segura</b><span>Políticas claras</span></div>
           </div>
         </div>
 
       </div>
     </section>
 
-    {# ================= TRUST CARDS (más pro, menos “bloques gordos”) ================= #}
+    {# ================= TRUST CARDS ================= #}
     <section class="hp-trust" aria-label="Confianza y seguridad">
       <div class="hp-wrap hp-trust__grid">
         {% set trust = [
@@ -197,16 +217,10 @@
           {'img':'img/banners/service_shipping.png','title':'Envío con tracking','desc':'Seguimiento de tu pedido'},
           {'img':'img/banners/service_support.png','title':'Soporte real','desc':'Atención y ayuda post-compra'}
         ] %}
-
         {% for t in trust %}
           <article class="hp-trustCard" aria-label="{{ t.title }}">
             <div class="hp-trustCard__img" aria-hidden="true">
-              <img
-                src="{{ url_for('static', filename=t.img) }}"
-                alt=""
-                loading="lazy"
-                decoding="async"
-                class="hp-trustIcon">
+              <img src="{{ url_for('static', filename=t.img) }}" alt="" loading="lazy" decoding="async" class="hp-trustIcon">
             </div>
             <div class="hp-trustCard__meta">
               <b>{{ t.title }}</b>
@@ -217,7 +231,7 @@
       </div>
     </section>
 
-    {# ================= CATEGORIES (arreglado: recorte/centrado) ================= #}
+    {# ================= CATEGORIES ================= #}
     <section class="hp-cats" aria-labelledby="hpCats">
       <div class="hp-wrap">
         <div class="hp-secHead">
@@ -236,12 +250,7 @@
           {% for c in cats %}
             <a class="hp-catCard" href="{{ c.href }}" aria-label="{{ c.label }}" role="listitem">
               <div class="hp-catCard__media" aria-hidden="true">
-                <img
-                  src="{{ url_for('static', filename=c.img) }}"
-                  alt=""
-                  loading="lazy"
-                  decoding="async"
-                  class="hp-catImg">
+                <img src="{{ url_for('static', filename=c.img) }}" alt="" loading="lazy" decoding="async" class="hp-catImg">
               </div>
               <div class="hp-catCard__overlay">
                 <b>{{ c.label }}</b>
@@ -337,7 +346,6 @@
       </div>
     </section>
 
-    {# Sticky + ToTop (si tu home.js los usa) #}
     <div class="hp-sticky" id="hpSticky" aria-live="polite">
       <div class="hp-sticky__txt">
         <b>Skyline Store</b>

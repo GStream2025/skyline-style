@@ -230,4 +230,30 @@
 
 /* 10) Sections head (más pro) */
 .hp-secHead h2{ margin: 0 0 6px; font-weight: 950; letter-spacing:-.02em; }
-.hp-secHead p{ margin:0; opacity:.74; font-weight:650; }
+.hp-secHead p{ margin:0; opaci/* ===== PRO v14 extras (pegá al final) ===== */
+.hp-mini{
+  display:grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 12px 0 8px;
+}
+@media (max-width: 720px){
+  .hp-mini{ grid-template-columns: 1fr; }
+}
+.hp-mini__item{
+  border-radius: 18px;
+  padding: 12px 14px;
+  background: rgba(255,255,255,.70);
+  border: 1px solid rgba(15,23,42,.10);
+  box-shadow: 0 12px 26px rgba(2,6,23,.06);
+}
+.hp-mini__item b{ display:block; font-weight:950; }
+.hp-mini__item span{ display:block; opacity:.72; font-weight:750; margin-top:2px; }
+
+/* Hero background multi-url */
+.hp-heroCard::after{
+  background-image: var(--hero-url);
+  background-size: cover;
+  background-position: center;
+}
+ty:.74; font-weight:650; }
