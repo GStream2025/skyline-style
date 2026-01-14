@@ -1,19 +1,6 @@
-{# app/templates/base.html — Skyline Store (ULTRA PRO ENTERPRISE · v5.4 FINAL)
+{# app/templates/base.html — Skyline Store (ULTRA PRO ENTERPRISE · v5.4.1 FINAL)
    ✅ NO 500 / FAIL-SAFE / FUTURE-PROOF / Account Unified
-
-   MEJORAS v5.4 (10 extra):
-   1) ✅ FIX CRÍTICO: CSS real del proyecto -> skyline-pro.css (fallback a skyline.css si existiera)
-   2) ✅ safe_url robusto: usa url_for + try/catch (no depende de view_functions)
-   3) ✅ safe_static robusto: url_for static con fallback (no rompe)
-   4) ✅ Cache busting estable: ?v=... (sin usar kwargs en url_for)
-   5) ✅ CSP meta más compatible: no mete nonce en meta (nonce solo en <style>/<script>)
-   6) ✅ CSRF ultra safe: csrf_token() si callable, sino vacío
-   7) ✅ current_user bulletproof: evita AttributeError y None
-   8) ✅ Header activo más exacto: compara path limpio + ofertas
-   9) ✅ Cart badge: parse flexible + abort + no rompe si endpoint devuelve HTML
-   10) ✅ JS hardening: same-origin real + no pisa headers existentes + no rompe fetch init
-
-   NOTA: Carga 1 solo CSS global (el que exista): skyline-pro.css -> skyline.css fallback.
+   ✅ Jinja-compatible (sin try/except)
 #}
 <!doctype html>
 <html lang="es">
@@ -28,32 +15,32 @@
   {% set _args = (_req.args if _req and _req.args else {}) %}
 
   {# ---------- CSP nonce (solo para style/script) ---------- #}
-  {% set _csp_nonce = (csp_nonce if csp_nonce is defined and csp_nonce else (nonce if nonce is defined and nonce else '')) %}
+  {% set _csp_nonce = (csp_nonce if csp_nonce is defined and csp_nonce else '') %}
 
-  {# ---------- safe url_for wrappers (NO dependen de view_functions) ---------- #}
+  {# ---------- safe endpoint checks ---------- #}
+  {% set _has_ep = has_endpoint if has_endpoint is defined else none %}
+
+  {# ---------- safe url_for wrappers (Jinja-safe, sin try) ---------- #}
   {% macro safe_url(endpoint, fallback='/') -%}
     {%- if not endpoint -%}{{- fallback -}}
     {%- else -%}
-      {%- set _u = none -%}
-      {%- try -%}
-        {%- set _u = url_for(endpoint) -%}
-      {%- except -%}
-        {%- set _u = none -%}
-      {%- endtry -%}
-      {{- _u if _u else fallback -}}
+      {%- if _has_ep and _has_ep(endpoint) -%}
+        {{- url_for(endpoint) -}}
+      {%- else -%}
+        {{- fallback -}}
+      {%- endif -%}
     {%- endif -%}
   {%- endmacro %}
 
   {% macro safe_static(filename, fallback='') -%}
     {%- if not filename -%}{{- fallback -}}
     {%- else -%}
-      {%- set _u = none -%}
-      {%- try -%}
-        {%- set _u = url_for('static', filename=filename) -%}
-      {%- except -%}
-        {%- set _u = none -%}
-      {%- endtry -%}
-      {{- _u if _u else fallback -}}
+      {# static siempre debería existir, pero por seguridad #}
+      {%- if url_for is defined -%}
+        {{- url_for('static', filename=filename) -}}
+      {%- else -%}
+        {{- fallback -}}
+      {%- endif -%}
     {%- endif -%}
   {%- endmacro %}
 
@@ -65,10 +52,13 @@
   {% set _canonical = (_req.base_url if _req and _req.base_url else '/') %}
   <link rel="canonical" href="{{ _canonical }}">
 
-  {% set _og_img = (og_image if og_image is defined and og_image else url_for('static', filename='img/og.png', _external=True)) %}
+  {# OG image safe #}
+  {% set _og_img_local = safe_static('img/og.png', '') %}
+  {% set _og_img = (og_image if og_image is defined and og_image else (_og_img_local if _og_img_local else '')) %}
+
   <meta property="og:title" content="{{ meta_title or APP_NAME or 'Skyline Store' }}">
   <meta property="og:description" content="{{ meta_description or 'Marketplace premium de tecnología y streetwear.' }}">
-  <meta property="og:image" content="{{ _og_img }}">
+  {% if _og_img %}<meta property="og:image" content="{{ _og_img }}">{% endif %}
   <meta property="og:type" content="website">
   <meta property="og:locale" content="es_UY">
   <meta property="og:url" content="{{ _canonical }}">
@@ -79,7 +69,7 @@
   <meta name="color-scheme" content="light dark">
   <meta name="theme-color" content="#2563eb">
 
-  {# CSP meta (si Talisman mete headers, esto es secundario) #}
+  {# CSP meta (secundario si Talisman mete headers) #}
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'self';
                  base-uri 'self';
@@ -97,7 +87,6 @@
   {% if csrf_token_value is defined and csrf_token_value %}
     {% set _csrf_value = csrf_token_value %}
   {% elif csrf_token is defined and csrf_token %}
-    {# csrf_token puede ser callable o string #}
     {% if csrf_token is callable %}
       {% set _csrf_value = csrf_token() %}
     {% else %}
@@ -106,8 +95,11 @@
   {% endif %}
   <meta name="csrf-token" content="{{ _csrf_value }}">
 
-  <link rel="icon" href="{{ url_for('static', filename='img/favicon.png') }}">
-  <link rel="preload" as="image" href="{{ _og_img }}">
+  {# favicon safe #}
+  {% set _favicon = safe_static('img/favicon.png', '') %}
+  {% if _favicon %}<link rel="icon" href="{{ _favicon }}">{% endif %}
+
+  {% if _og_img %}<link rel="preload" as="image" href="{{ _og_img }}">{% endif %}
   {% if hero_image is defined and hero_image %}
     <link rel="preload" as="image" href="{{ hero_image }}">
   {% endif %}
@@ -119,10 +111,7 @@
 
   {# ---------- CSS GLOBAL REAL (tu proyecto) ---------- #}
   {% set _css_ver = (SKYLINE_CSS_VER if SKYLINE_CSS_VER is defined and SKYLINE_CSS_VER else '5') %}
-
-  {# ✅ Tu archivo existe: css/skyline-pro.css #}
   {% set _css_primary = safe_static('css/skyline-pro.css', '') %}
-  {# fallback opcional si algún día creás skyline.css #}
   {% set _css_fallback = safe_static('css/skyline.css', '') %}
   {% set _css_href = _css_primary if _css_primary else _css_fallback %}
 
@@ -131,7 +120,6 @@
     <link rel="stylesheet" href="{{ _css_href }}?v={{ _css_ver|e }}">
   {% endif %}
 
-  {# Page-specific CSS #}
   {% block extra_css %}{% endblock %}
 
   {# Minimal inline essentials only #}
@@ -205,9 +193,10 @@
     <form class="search" action="{{ _shop_href }}" method="get" role="search" aria-label="Buscar productos">
       <span aria-hidden="true" style="opacity:.65;font-weight:1000">⌕</span>
       <label class="sr-only" for="q">Buscar</label>
+      {% set _q = (_args.get('q','') if _args else '')|string %}
       <input id="q" type="search" name="q"
              placeholder="Buscar productos…"
-             value="{{ (_args.get('q','') if _args else '')|string }}"
+             value="{{ _q|trim|e }}"
              autocomplete="off" inputmode="search">
       <button class="btn ghost" type="submit">Buscar</button>
     </form>
@@ -230,11 +219,7 @@
             {% endif %}
           </span>
           <span class="t2">
-            {% if _user_ok %}
-              Panel / Salir
-            {% else %}
-              Entrar / Crear
-            {% endif %}
+            {% if _user_ok %}Panel / Salir{% else %}Entrar / Crear{% endif %}
           </span>
         </span>
       </a>
@@ -354,7 +339,7 @@
     const to = setTimeout(() => ctrl.abort(), 3500);
 
     const parseCount = (d) => {
-      const c = Number(d?.items_count ?? d?.count ?? d?.items ?? 0);
+      const c = Number(d?.items_count ?? d?.count ?? d?.items ?? d?.total_items ?? 0);
       return (Number.isFinite(c) && c > 0) ? c : 0;
     };
 
@@ -368,11 +353,10 @@
             signal: ctrl.signal,
           });
           if (!r || !r.ok) continue;
+
           const ct = (r.headers.get("content-type") || "").toLowerCase();
-          if (!ct.includes("application/json")) {
-            // si devolvió HTML, ignoramos
-            continue;
-          }
+          if (!ct.includes("application/json")) continue;
+
           const d = await r.json().catch(() => ({}));
           return d || {};
         } catch (_) {}
@@ -389,9 +373,7 @@
         badge.setAttribute("aria-label", c ? `${c} items en carrito` : "Carrito vacío");
       })
       .catch(() => {})
-      .finally(() => {
-        clearTimeout(to);
-      });
+      .finally(() => clearTimeout(to));
   }
 })();
 </script>
