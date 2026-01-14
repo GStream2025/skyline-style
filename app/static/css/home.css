@@ -698,3 +698,199 @@
     box-shadow: 0 0 0px 1000px rgba(9,12,24,.86) inset !important;
   }
 }
+/* ===========================
+   SKYLINE HOME — PRO FIX PACK
+   (alineación + confianza + pro)
+=========================== */
+
+.hp-hero{
+  max-width:1180px;
+  margin:0 auto;
+  padding: clamp(18px, 2.6vw, 30px);
+}
+
+.hp-hero__grid{
+  display:grid;
+  grid-template-columns: 1.25fr .75fr;
+  gap: clamp(14px, 2vw, 22px);
+  align-items:start;
+}
+
+@media (max-width: 980px){
+  .hp-hero__grid{ grid-template-columns:1fr; }
+}
+
+/* Card principal (izquierda) */
+.hp-heroCard{
+  border-radius: 26px;
+  border: 1px solid rgba(15,23,42,.10);
+  background: linear-gradient(135deg, rgba(255,255,255,.92), rgba(255,255,255,.78));
+  box-shadow:
+    0 18px 50px rgba(2,6,23,.10),
+    0 2px 10px rgba(2,6,23,.06);
+  padding: clamp(18px, 2.5vw, 30px);
+  position:relative;
+  overflow:hidden;
+}
+
+.hp-heroCard::before{
+  content:"";
+  position:absolute; inset:-2px;
+  background: radial-gradient(800px 360px at 20% 20%, rgba(37,99,235,.18), transparent 55%),
+              radial-gradient(700px 360px at 85% 25%, rgba(14,165,233,.14), transparent 55%),
+              radial-gradient(900px 500px at 50% 110%, rgba(245,158,11,.10), transparent 60%);
+  pointer-events:none;
+  filter: blur(0.2px);
+}
+
+/* Titulares */
+.hp-heroTitle{
+  letter-spacing:-.02em;
+  line-height:1.02;
+  font-weight: 900;
+  margin: 6px 0 10px;
+}
+
+.hp-heroTitle .accent{
+  background: linear-gradient(135deg, #2563eb, #0ea5e9);
+  -webkit-background-clip:text;
+  background-clip:text;
+  color:transparent;
+  text-shadow: 0 10px 30px rgba(37,99,235,.18);
+}
+
+.hp-heroSub{
+  max-width: 52ch;
+  color: rgba(15,23,42,.72);
+  font-weight: 600;
+  line-height: 1.45;
+  margin: 0 0 16px;
+}
+
+/* Botones PRO */
+.hp-actions{
+  display:flex;
+  gap: 10px;
+  flex-wrap:wrap;
+  align-items:center;
+  margin: 14px 0 14px;
+}
+
+.hp-btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  border-radius: 999px;
+  padding: 12px 16px;
+  min-height: 46px;
+  font-weight: 800;
+  border:1px solid rgba(15,23,42,.10);
+  text-decoration:none;
+  transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
+}
+
+.hp-btn:active{ transform: translateY(1px); }
+
+.hp-btn--primary{
+  background: linear-gradient(135deg, #2563eb, #0ea5e9);
+  color:white;
+  border-color: transparent;
+  box-shadow: 0 16px 36px rgba(37,99,235,.22);
+}
+.hp-btn--primary:hover{ filter: brightness(1.02); transform: translateY(-1px); }
+
+.hp-btn--outline{
+  background: rgba(255,255,255,.65);
+  color: rgba(15,23,42,.92);
+}
+.hp-btn--ghost{
+  background: transparent;
+  border-color: transparent;
+  color: rgba(15,23,42,.78);
+}
+.hp-btn--ghost:hover{ background: rgba(15,23,42,.04); }
+
+/* Chips confianza */
+.hp-trustRow{
+  display:flex;
+  flex-wrap:wrap;
+  gap: 10px;
+  margin-top: 10px;
+  position:relative;
+  z-index:1;
+}
+.hp-chip{
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  padding: 9px 12px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.70);
+  border: 1px solid rgba(15,23,42,.10);
+  color: rgba(15,23,42,.80);
+  font-weight: 800;
+  box-shadow: 0 10px 22px rgba(2,6,23,.06);
+}
+.hp-chip small{
+  display:block;
+  font-weight:700;
+  color: rgba(15,23,42,.55);
+  margin-top:-2px;
+}
+
+/* Columna derecha: 1 card premium + lista compacta */
+.hp-side{
+  display:flex;
+  flex-direction:column;
+  gap: 12px;
+}
+
+.hp-sideTop{
+  border-radius: 22px;
+  border: 1px solid rgba(15,23,42,.10);
+  background: rgba(255,255,255,.80);
+  box-shadow: 0 14px 34px rgba(2,6,23,.08);
+  padding: 16px 16px;
+}
+
+.hp-badge{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  font-weight:900;
+  font-size:12px;
+  padding: 6px 10px;
+  border-radius:999px;
+  background: rgba(16,185,129,.12);
+  color: rgba(5,120,87,.95);
+  border:1px solid rgba(16,185,129,.18);
+  margin-bottom: 10px;
+}
+
+.hp-sideList{
+  border-radius: 22px;
+  border: 1px solid rgba(15,23,42,.10);
+  background: rgba(255,255,255,.74);
+  overflow:hidden;
+}
+
+.hp-sideItem{
+  padding: 14px 16px;
+  display:flex;
+  gap:12px;
+  align-items:flex-start;
+}
+.hp-sideItem + .hp-sideItem{
+  border-top: 1px solid rgba(15,23,42,.08);
+}
+.hp-sideItem h4{
+  margin:0;
+  font-weight:900;
+  color: rgba(15,23,42,.92);
+}
+.hp-sideItem p{
+  margin:2px 0 0;
+  color: rgba(15,23,42,.62);
+  font-weight:700;
+}
