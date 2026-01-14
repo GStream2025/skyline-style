@@ -1,4 +1,4 @@
-﻿# app/__init__.py — Skyline Store (ULTRA PRO / NO BREAK / Render-safe) — vNEXT FIX
+﻿# app/__init__.py — Skyline Store (ULTRA PRO / NO BREAK / Render-safe) — vNEXT BULLETPROOF
 from __future__ import annotations
 
 import logging
@@ -15,7 +15,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from app.config import ProductionConfig, get_config
 from app.models import db, init_models
 
-# ✅ compat (no rompe si no existe)
+# compat (no rompe si no existe)
 try:
     from app.models import create_admin_if_missing  # type: ignore
 except Exception:  # pragma: no cover
@@ -65,6 +65,10 @@ def utcnow() -> datetime:
 
 
 def _env_name(app: Flask) -> str:
+    """
+    Nombre de entorno estable.
+    Flask 3 no recomienda ENV/FLASK_ENV, pero lo soportamos igual.
+    """
     candidates = [
         app.config.get("ENV"),
         app.config.get("ENVIRONMENT"),
@@ -79,6 +83,7 @@ def _env_name(app: Flask) -> str:
 
 
 def _is_prod(app: Flask) -> bool:
+    # Si DEBUG=True => NO prod (aunque ENV diga otra cosa)
     if bool(app.config.get("DEBUG")) or bool(getattr(app, "debug", False)):
         return False
     return _env_name(app) == "production"
@@ -86,7 +91,7 @@ def _is_prod(app: Flask) -> bool:
 
 def _want_verbose_logs(app: Flask) -> bool:
     """
-    ✅ Para poder depurar en Render sin prender DEBUG=True
+    Para depurar en Render sin prender DEBUG=True.
     Setear: VERBOSE_REQUEST_LOGS=1
     """
     if bool(getattr(app, "debug", False)):
@@ -95,6 +100,9 @@ def _want_verbose_logs(app: Flask) -> bool:
 
 
 def wants_json() -> bool:
+    """
+    Negociación JSON correcta (API / AJAX / Accept).
+    """
     p = (request.path or "").lower()
     if p.startswith("/api/") or p.startswith("/webhooks/") or p.startswith("/webhook"):
         return True
@@ -111,17 +119,21 @@ def wants_json() -> bool:
 
 
 def resp_error(status: int, code: str, message: str):
+    """
+    Respuesta de error única.
+    - JSON para API/AJAX
+    - HTML si hay templates
+    - fallback texto si faltan templates (nunca rompe)
+    """
     if wants_json():
         return jsonify({"ok": False, "error": code, "message": message, "status": status}), status
 
-    # ✅ Nunca rompas por templates faltantes
     for tpl in (f"errors/{status}.html", "error.html"):
         try:
             return render_template(tpl, message=message, status=status, code=code), status
         except Exception:
             continue
 
-    # ✅ Fallback ultra simple
     return (message or "Error"), status
 
 
@@ -144,26 +156,32 @@ def setup_logging(app: Flask) -> None:
 
 
 def safe_init(app: Flask, label: str, fn: Callable[[], Any]) -> Any:
+    """
+    Init opcional sin romper deploy.
+    ✅ FIX: sin emojis sueltos -> cero SyntaxError
+    """
     try:
         out = fn()
-        app.logger.info("✅ %s inicializado", label)
+        app.logger.info("OK %s inicializado", label)
         return out
     except Exception as e:
-        app.logger.warning(⚠️ %s omitido: %s", label, e, exc_info=_want_verbose_logs(app))
+        app.logger.warning("WARN %s omitido: %s", label, e, exc_info=_want_verbose_logs(app))
         return None
 
 
 def critical_init(app: Flask, label: str, fn: Callable[[], Any]) -> Any:
+    """Init crítico con log full."""
     try:
         out = fn()
-        app.logger.info("✅ %s inicializado", label)
+        app.logger.info("OK %s inicializado", label)
         return out
     except Exception as e:
-        app.logger.exception("🔥 %s falló (CRÍTICO): %s", label, e)
+        app.logger.exception("CRITICAL %s falló: %s", label, e)
         raise
 
 
 def has_endpoint(app: Flask, endpoint: str) -> bool:
+    """Helper para Jinja: evita romper templates si una ruta no existe."""
     try:
         return bool(endpoint) and (endpoint in app.view_functions)
     except Exception:
@@ -171,17 +189,19 @@ def has_endpoint(app: Flask, endpoint: str) -> bool:
 
 
 def current_user_from_session() -> Any:
+    """Fallback simple si todavía no estás usando Flask-Login para todo."""
     uid = session.get("user_id")
     if not uid:
         return None
     try:
-        from app.models import User  # lazy import
+        from app.models import User  # lazy import (no rompe)
         return db.session.get(User, int(uid))
     except Exception:
         return None
 
 
 def _require_secret_key_prod(app: Flask) -> None:
+    """Guard fuerte en prod (evita CSRF/session mismatch)."""
     if not _is_prod(app):
         return
     sk = (app.config.get("SECRET_KEY") or "").strip()
@@ -193,6 +213,9 @@ def _require_secret_key_prod(app: Flask) -> None:
 
 
 def _ensure_secret_key_dev(app: Flask) -> None:
+    """
+    En dev/testing, si falta SECRET_KEY, generamos una por proceso.
+    """
     if _is_prod(app):
         return
     if not (app.config.get("SECRET_KEY") or "").strip():
@@ -200,6 +223,7 @@ def _ensure_secret_key_dev(app: Flask) -> None:
 
 
 def _mask_db_url(uri: Any) -> str:
+    """No loguear la password real."""
     s = str(uri or "")
     if not s:
         return ""
@@ -219,6 +243,11 @@ def _mask_db_url(uri: Any) -> str:
 # =============================================================================
 
 def init_csrf(app: Flask) -> None:
+    """
+    CSRFProtect estable para Render.
+    ✅ Exime prefijos (webhooks) sin romper forms
+    ✅ Manejo de CSRFError uniforme
+    """
     from flask_wtf import CSRFProtect
     from flask_wtf.csrf import CSRFError
 
@@ -237,12 +266,14 @@ def init_csrf(app: Flask) -> None:
         for pref in [x.strip() for x in extra.split(",") if x.strip()]:
             exempt_prefixes.add(pref)
 
+    # cache para no estar eximiendo el mismo endpoint 1000 veces
     exempted_endpoints: Set[str] = set()
 
     @app.before_request
     def _csrf_exempt_by_prefix():
         if request.method in {"GET", "HEAD", "OPTIONS"}:
             return None
+
         p = (request.path or "")
         if not p:
             return None
@@ -299,6 +330,9 @@ def init_migrate(app: Flask) -> None:
 
 
 def init_limiter(app: Flask) -> None:
+    """
+    Limiter opcional: si no está instalado, safe_init lo omite.
+    """
     try:
         from flask_limiter import Limiter
         from flask_limiter.util import get_remote_address
@@ -336,6 +370,7 @@ def _configure_session_cookies(app: Flask) -> None:
     else:
         app.config.setdefault("SESSION_COOKIE_SECURE", False)
 
+    # Si SameSite=None => Secure obligado
     if app.config.get("SESSION_COOKIE_SAMESITE") == "None":
         app.config["SESSION_COOKIE_SECURE"] = True
 
@@ -352,7 +387,7 @@ def _configure_session_cookies(app: Flask) -> None:
 # =============================================================================
 
 def create_app() -> Flask:
-    cfg_cls: Type = get_config()  # ✅ CLASE
+    cfg_cls: Type = get_config()  # CLASE (no instancia)
 
     app = Flask(
         __name__,
@@ -371,7 +406,7 @@ def create_app() -> Flask:
     _ensure_secret_key_dev(app)
     _require_secret_key_prod(app)
 
-    # ✅ valida required en prod
+    # valida required en prod
     if isinstance(cfg_cls, type) and issubclass(cfg_cls, ProductionConfig):
         ProductionConfig.validate_required()
 
@@ -387,12 +422,12 @@ def create_app() -> Flask:
     app.config.setdefault("WTF_CSRF_SSL_STRICT", _env_bool("WTF_CSRF_SSL_STRICT", default=False))
     app.config.setdefault("WTF_CSRF_TIME_LIMIT", _env_int("WTF_CSRF_TIME_LIMIT", 3600, min_v=60, max_v=24 * 3600))
 
-    # ✅ Multi-worker: mantener secreto igual en todos los workers.
+    # Multi-worker: mantener secreto igual en todos los workers.
     if _is_prod(app):
         app.config.setdefault("WTF_CSRF_SECRET_KEY", app.config.get("SECRET_KEY"))
 
     app.logger.info(
-        "🚀 create_app ENV=%s DEBUG=%s DB=%s SECURE=%s SAMESITE=%s CSRF_TTL=%s COOKIE_DOMAIN=%s",
+        "create_app env=%s debug=%s db=%s secure=%s samesite=%s csrf_ttl=%s cookie_domain=%s",
         _env_name(app),
         bool(getattr(app, "debug", False)),
         _mask_db_url(app.config.get("SQLALCHEMY_DATABASE_URI")),
@@ -403,65 +438,38 @@ def create_app() -> Flask:
     )
 
     # =============================================================================
-    # ✅ Request logging (NO rompe) — te muestra el GET real en Render
+    # Mejora 1: request-id + timing en un solo lugar (sin duplicar hooks)
     # =============================================================================
-    @app.before_request
-    def _reqlog_in():
-        try:
-            request._t0 = time.time()  # type: ignore[attr-defined]
-        except Exception:
-            pass
-        if _want_verbose_logs(app):
-            app.logger.info("➡️ %s %s", request.method, request.full_path)
-
-    @app.after_request
-    def _reqlog_out(resp):
-        if _want_verbose_logs(app):
-            try:
-                dt = int((time.time() - getattr(request, "_t0", time.time())) * 1000)
-            except Exception:
-                dt = -1
-            app.logger.info("⬅️ %s %s -> %s (%sms)", request.method, request.path, resp.status_code, dt)
-        return resp
-
-    # =============================================================================
-    # Init extensiones (orden importante)
-    # =============================================================================
-    critical_init(app, "CSRFProtect", lambda: init_csrf(app))
-    safe_init(app, "Flask-Compress", lambda: init_compress(app) if app.config.get("ENABLE_COMPRESS", True) else None)
-    safe_init(app, "Flask-Talisman", lambda: init_talisman(app) if app.config.get("ENABLE_TALISMAN", False) else None)
-
-    # ✅ MODELS HUB (CRÍTICO)
-    critical_init(app, "Models hub", lambda: init_models(app, create_admin=True, log_loaded_models=True, ping_db=True))
-
-    # ✅ Migrate / Limiter DESPUÉS de DB lista
-    safe_init(app, "Flask-Migrate", lambda: init_migrate(app))
-    safe_init(app, "Flask-Limiter", lambda: init_limiter(app))
-
-    # =============================================================================
-    # Jinja Globals
-    # =============================================================================
-    app.jinja_env.globals["has_endpoint"] = (lambda ep: has_endpoint(app, ep))
-
-    # =============================================================================
-    # Un SOLO pipeline before_request / after_request (evita duplicados)
-    # =============================================================================
-    registered: List[str] = []
-
     @app.before_request
     def _pipeline_before_request():
+        # request-id
         rid = request.headers.get("X-Request-Id") or secrets.token_urlsafe(10)
         try:
             request._request_id = rid  # type: ignore[attr-defined]
         except Exception:
             pass
 
+        # timing
+        try:
+            request._t0 = time.time()  # type: ignore[attr-defined]
+        except Exception:
+            pass
+
+        # verbose request log
+        if _want_verbose_logs(app):
+            try:
+                app.logger.info("IN %s %s rid=%s", request.method, request.full_path, rid)
+            except Exception:
+                pass
+
+        # admin no-cache mark
         if _env_bool("ADMIN_NO_CACHE", True) and (request.path or "").startswith("/admin"):
             try:
                 request._admin_no_cache = True  # type: ignore[attr-defined]
             except Exception:
                 pass
 
+        # session permanent default
         if _env_bool("SESSION_PERMANENT_DEFAULT", True):
             try:
                 session.permanent = True
@@ -498,6 +506,7 @@ def create_app() -> Flask:
 
     @app.after_request
     def _pipeline_after_request(resp):
+        # request-id
         try:
             rid = getattr(request, "_request_id", None)
             if rid:
@@ -505,6 +514,18 @@ def create_app() -> Flask:
         except Exception:
             pass
 
+        # timing header (Mejora 2)
+        try:
+            t0 = getattr(request, "_t0", None)
+            if t0:
+                ms = int((time.time() - float(t0)) * 1000)
+                resp.headers.setdefault("X-Response-Time", f"{ms}ms")
+                if _want_verbose_logs(app):
+                    app.logger.info("OUT %s %s -> %s (%sms) rid=%s", request.method, request.path, resp.status_code, ms, getattr(request, "_request_id", "-"))
+        except Exception:
+            pass
+
+        # admin no-cache
         try:
             if getattr(request, "_admin_no_cache", False):
                 resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
@@ -512,6 +533,7 @@ def create_app() -> Flask:
         except Exception:
             pass
 
+        # Headers seguros mínimos
         resp.headers.setdefault("X-Content-Type-Options", "nosniff")
         resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
         resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
@@ -525,6 +547,25 @@ def create_app() -> Flask:
             resp.headers.setdefault("X-App-Release", rel)
 
         return resp
+
+    # =============================================================================
+    # Init extensiones (orden importante)
+    # =============================================================================
+    critical_init(app, "CSRFProtect", lambda: init_csrf(app))
+    safe_init(app, "Flask-Compress", lambda: init_compress(app) if app.config.get("ENABLE_COMPRESS", True) else None)
+    safe_init(app, "Flask-Talisman", lambda: init_talisman(app) if app.config.get("ENABLE_TALISMAN", False) else None)
+
+    # MODELS HUB (CRÍTICO)
+    critical_init(app, "Models hub", lambda: init_models(app, create_admin=True, log_loaded_models=True, ping_db=True))
+
+    # Migrate / Limiter DESPUÉS de DB lista
+    safe_init(app, "Flask-Migrate", lambda: init_migrate(app))
+    safe_init(app, "Flask-Limiter", lambda: init_limiter(app))
+
+    # =============================================================================
+    # Jinja Globals
+    # =============================================================================
+    app.jinja_env.globals["has_endpoint"] = (lambda ep: has_endpoint(app, ep))
 
     # =============================================================================
     # Template globals (CSRF definitivo)
@@ -565,7 +606,7 @@ def create_app() -> Flask:
             "is_logged_in": bool(getattr(cu, "id", None)) if cu else False,
             "is_admin": bool(getattr(cu, "is_admin", False)) if cu else bool(session.get("is_admin")),
             "view_functions": app.view_functions,
-            # ✅ USAR EN base.html: <meta name="csrf-token" content="{{ csrf_token_value }}">
+            # usar en base.html: <meta name="csrf-token" content="{{ csrf_token_value }}">
             "csrf_token_value": csrf_value,
             "csp_nonce": csp_nonce,
         }
@@ -573,36 +614,36 @@ def create_app() -> Flask:
     # =============================================================================
     # Blueprints
     # =============================================================================
+    registered: List[str] = []
+
     def _register_all_routes():
         from app.routes import register_blueprints
         register_blueprints(app)
         registered[:] = sorted(app.blueprints.keys())
         return True
 
+    # Mejora 3: si falla el registro en modo no-strict, lo loguea con stack si VERBOSE
     if _env_bool("ROUTES_STRICT", False):
         critical_init(app, "Register Blueprints", _register_all_routes)
     else:
         safe_init(app, "Register Blueprints", _register_all_routes)
 
     # =============================================================================
-    # ✅ ROOT SAFETY: que "/" nunca quede “huérfano”
+    # Mejora 4: ROOT SAFETY ("/" nunca huérfano)
     # =============================================================================
-    if "main.root" not in app.view_functions:
+    if "main.root" not in app.view_functions and "static" in app.view_functions:
         @app.get("/")
         def root_fallback():
-            # 1) si existe main.home -> redirect
             try:
                 if "main.home" in app.view_functions:
                     return redirect(url_for("main.home"))
             except Exception:
                 pass
-            # 2) si existe shop.shop -> redirect
             try:
                 if "shop.shop" in app.view_functions:
                     return redirect(url_for("shop.shop"))
             except Exception:
                 pass
-            # 3) fallback
             return resp_error(200, "ok", "Skyline Store — online")
 
     # =============================================================================
@@ -637,29 +678,27 @@ def create_app() -> Flask:
         ok_db, db_msg = _db_check()
         return jsonify({"ok": bool(ok_db), "db": db_msg}), (200 if ok_db else 503)
 
-    # ✅ Ping simple para aislar problemas de templates/rutas
     @app.get("/__ping")
     def __ping():
         return "ok", 200
 
     # =============================================================================
-    # Error handlers (con logs SIEMPRE)
+    # Error handlers
     # =============================================================================
     @app.errorhandler(HTTPException)
     def http_error(e: HTTPException):
         code = int(e.code or 500)
         name = (e.name or "http_error").lower().replace(" ", "_")
-        # ✅ log mínimo si es 4xx/5xx
         if _want_verbose_logs(app) or code >= 500:
-            app.logger.warning("HTTP %s %s: %s", code, request.path, name)
+            app.logger.warning("HTTP %s %s: %s rid=%s", code, request.path, name, getattr(request, "_request_id", "-"))
         return resp_error(code, name, e.description)
 
     @app.errorhandler(Exception)
     def unhandled_error(e: Exception):
         if isinstance(e, HTTPException):
             return e
-        # ✅ SIEMPRE stacktrace para 500
-        app.logger.exception("🔥 Unhandled error on %s %s: %s", request.method, request.path, e)
+        # Mejora 5: stacktrace SIEMPRE en 500 (y con request-id)
+        app.logger.exception("Unhandled error on %s %s rid=%s: %s", request.method, request.path, getattr(request, "_request_id", "-"), e)
         return resp_error(500, "server_error", "Error interno del servidor.")
 
     # =============================================================================
