@@ -1,700 +1,402 @@
-/* =========================================================
-   HOME — Skyline Store (PRO v10.4 FINAL)
-   ✅ SOLO INDEX (no global)
-   ✅ Conectado a tokens globales si existen (var(--p), --border, --sh1...)
-   ✅ Sin duplicados / sin reglas que se pisan
-   ✅ fallbacks blur + overflow clip
-   ✅ +5 mejoras extra (confianza real)
-========================================================= */
+{# app/templates/index.html — Skyline Store (PRO v11 · Premium · NO-500 · Global CSS + Home CSS)
+   - Base.html carga skyline-pro.css (global)
+   - Index.html SOLO carga home.css (home-specific)
+#}
+{% extends "base.html" %}
 
-/* -----------------------------
-   0) ROOT SCOPE + TOKENS
------------------------------ */
-.hp{
-  /* Conecta con global si existe, sino fallback local */
-  --hp-bg: var(--bg, #f6f8fc);
-  --hp-surface: rgba(255,255,255,.86);
-  --hp-surface2: rgba(255,255,255,.72);
+{% block title %}{{ meta_title | default("Skyline Store · Tech + Streetwear premium", true) }}{% endblock %}
 
-  --hp-ink: var(--ink, #0b1220);
-  --hp-muted: var(--muted, #5b6b82);
+{% block extra_head %}
+  {# ---------- SAFE env ---------- #}
+  {% set _env = (ENV if ENV is defined and ENV else 'production') %}
+  {% set _env = _env|string|lower|trim %}
 
-  --hp-border: var(--border, rgba(15,23,42,.12));
+  {# ---------- SAFE request ---------- #}
+  {% set _req = (request if request is defined and request else none) %}
 
-  --hp-p: var(--p, #2563eb);
-  --hp-p2: var(--p2, #0ea5e9);
-  --hp-acc: var(--acc, #f59e0b);
-  --hp-good: var(--good, #16a34a);
+  {# ---------- Assets ---------- #}
+  {% set hero_img = url_for('static', filename='img/banners/hero_home.png') %}
+  {% set og_img = (og_image if og_image is defined and og_image else url_for('static', filename='img/og.png', _external=True)) %}
 
-  --hp-r-sm: 14px;
-  --hp-r: 18px;
-  --hp-r-lg: 22px;
-  --hp-r-xl: 28px;
+  <meta name="description" content="{{ meta_description | default('Moda urbana premium, accesorios y tecnología.', true) }}">
+  <meta name="robots" content="{{ 'index,follow' if _env == 'production' else 'noindex,nofollow' }}">
 
-  /* sombras conectadas */
-  --hp-sh1: var(--sh1, 0 10px 24px rgba(2,6,23,.08));
-  --hp-sh2: var(--sh2, 0 18px 50px rgba(2,6,23,.12));
-  --hp-sh3: var(--sh3, 0 30px 80px rgba(2,6,23,.16));
+  {# Canonical + OG URL safe #}
+  {% if _req and _req.base_url %}
+    <link rel="canonical" href="{{ _req.base_url }}">
+    <meta property="og:url" content="{{ _req.base_url }}">
+  {% else %}
+    <link rel="canonical" href="/">
+    <meta property="og:url" content="/">
+  {% endif %}
 
-  --hp-t: .16s;
-  --hp-t2: .32s;
-  --hp-ease: cubic-bezier(.2,.8,.2,1);
+  <meta property="og:title" content="{{ meta_title | default('Skyline Store · Tech + Streetwear premium', true) }}">
+  <meta property="og:description" content="{{ meta_description | default('Comprá fácil, rápido y seguro.', true) }}">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="{{ og_img }}">
+  <meta name="twitter:card" content="summary_large_image">
 
-  padding: 18px 0 44px;
-  color: var(--hp-ink);
+  {# Perf #}
+  <link rel="preload" as="image" href="{{ hero_img }}" fetchpriority="high">
 
-  background:
-    radial-gradient(1200px 700px at 20% 0%, rgba(37,99,235,.12), transparent 60%),
-    radial-gradient(900px 600px at 90% 20%, rgba(14,165,233,.10), transparent 60%),
-    radial-gradient(1000px 600px at 60% 110%, rgba(245,158,11,.10), transparent 62%),
-    var(--hp-bg);
+  {# Home CSS (solo home). Cache-bust seguro. #}
+  {% set _home_css_ver = (HOME_CSS_VER if HOME_CSS_VER is defined and HOME_CSS_VER else '')|string|trim %}
+  {% if _home_css_ver %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/home.css') }}?v={{ _home_css_ver|e }}">
+  {% else %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/home.css') }}">
+  {% endif %}
 
-  font-kerning: normal;
-  font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
-  text-rendering: optimizeLegibility;
-  -webkit-tap-highlight-color: transparent;
+  {# CSP nonce (si base define nonce/csp_nonce) #}
+  {% set _csp_nonce = (csp_nonce if csp_nonce is defined and csp_nonce else (nonce if nonce is defined and nonce else '')) %}
 
-  overflow-x: clip; /* moderno */
-}
-@supports not (overflow: clip){
-  .hp{ overflow-x:hidden; } /* fallback */
-}
-
-/* Dark */
-@media (prefers-color-scheme: dark){
-  .hp{
-    --hp-bg:#07101f;
-    --hp-surface: rgba(12,16,34,.78);
-    --hp-surface2: rgba(12,16,34,.62);
-    --hp-ink: rgba(240,246,255,.95);
-    --hp-muted: rgba(240,246,255,.72);
-    --hp-border: rgba(240,246,255,.10);
-
-    background:
-      radial-gradient(1200px 700px at 20% 0%, rgba(37,99,235,.20), transparent 60%),
-      radial-gradient(900px 600px at 90% 20%, rgba(14,165,233,.16), transparent 60%),
-      radial-gradient(1000px 600px at 60% 110%, rgba(245,158,11,.10), transparent 62%),
-      var(--hp-bg);
+  {# ✅ SEO PRO: JSON-LD (Organization + WebSite + SearchAction + WebPage) #}
+  <script type="application/ld+json"{% if _csp_nonce %} nonce="{{ _csp_nonce|e }}"{% endif %}>
+  {
+    "@context":"https://schema.org",
+    "@graph":[
+      {
+        "@type":"Organization",
+        "name":"Skyline Store",
+        "url":"{{ (_req.url_root if _req and _req.url_root else '/') }}",
+        "logo":"{{ url_for('static', filename='img/og.png', _external=True) }}"
+      },
+      {
+        "@type":"WebSite",
+        "name":"Skyline Store",
+        "url":"{{ (_req.url_root if _req and _req.url_root else '/') }}",
+        "potentialAction":{
+          "@type":"SearchAction",
+          "target":"{{ (_req.url_root if _req and _req.url_root else '/') }}shop?q={search_term_string}",
+          "query-input":"required name=search_term_string"
+        }
+      },
+      {
+        "@type":"WebPage",
+        "name":"{{ meta_title | default('Skyline Store · Tech + Streetwear premium', true) }}",
+        "url":"{{ (_req.base_url if _req and _req.base_url else '/') }}"
+      }
+    ]
   }
-}
+  </script>
+{% endblock %}
 
-/* Reduce motion */
-@media (prefers-reduced-motion: reduce){
-  .hp *{ transition:none!important; animation:none!important; scroll-behavior:auto!important; }
-}
+{% block content %}
+  {# ============================================================
+     SAFE RESOLVERS (NO-500 / Render-safe)
+     - Nunca asume variables existentes
+     - Endpoints safe + fallbacks
+     - ✅ Account unificado REAL: main.account => /account
+  ============================================================= #}
+  {% set _vf = (view_functions if view_functions is defined and view_functions else {}) %}
 
-.hp, .hp *{ box-sizing:border-box; }
+  {# ---------- Home URL safe ---------- #}
+  {% set home_url = '/' %}
+  {% if 'main.home' in _vf %}
+    {% set home_url = url_for('main.home') %}
+  {% endif %}
 
-/* wrap */
-.hp .hp-wrap{
-  position:relative;
-  max-width: 1180px;
-  margin: 0 auto;
-  padding: 0 16px;
-}
+  {# ---------- Shop URL safe ---------- #}
+  {% set shop_url = '/shop' %}
+  {% if 'shop.shop' in _vf %}
+    {% set shop_url = url_for('shop.shop') %}
+  {% endif %}
 
-/* Focus */
-.hp :where(a,button,input,[tabindex]):focus-visible{
-  outline:none;
-  box-shadow: 0 0 0 6px rgba(37,99,235,.22);
-  border-radius: 16px;
-}
+  {# ---------- Account URL safe (prioridad: main.account) ---------- #}
+  {% set ns = namespace(account_url='/account', found=false) %}
+  {% for ep in ['main.account','account.account_home','auth.login','auth.register'] %}
+    {% if (not ns.found) and (ep in _vf) %}
+      {% set ns.account_url = url_for(ep) %}
+      {% set ns.found = true %}
+    {% endif %}
+  {% endfor %}
+  {% set account_url = ns.account_url %}
 
-/* ✅ Mejora extra 1: separador premium */
-.hp .hp-sep{
-  height:1px;
-  background: linear-gradient(90deg, transparent, rgba(37,99,235,.18), rgba(6,182,212,.14), transparent);
-  border-radius:999px;
-  margin: 16px 0;
-}
+  {# tabs helpers: no rompen si /account ignora tabs #}
+  {% set account_login_url = account_url ~ ('?tab=login' if '?' not in account_url else '&tab=login') %}
+  {% set account_register_url = account_url ~ ('?tab=register' if '?' not in account_url else '&tab=register') %}
 
-/* ---------------------------------------------------------
-   1) BOTONES (solo home)
---------------------------------------------------------- */
-.hp .btn{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  gap:10px;
-  user-select:none;
-  text-decoration:none;
-  font-weight:900;
-  letter-spacing:-.01em;
-  padding: 11px 14px;
-  min-height: 44px;
-  border-radius: 999px;
-  border: 1px solid var(--hp-border);
-  background: transparent;
-  transition:
-    transform var(--hp-t) var(--hp-ease),
-    box-shadow var(--hp-t) var(--hp-ease),
-    filter var(--hp-t) var(--hp-ease),
-    background var(--hp-t) var(--hp-ease),
-    border-color var(--hp-t) var(--hp-ease),
-    opacity var(--hp-t) var(--hp-ease);
-}
-.hp .btn:hover{ transform: translateY(-1px); }
-.hp .btn:active{ transform: translateY(0) scale(.99); filter:saturate(1.05); }
+  {# Ofertas URL (prefer ?ofertas=1) + fallback a q=oferta #}
+  {% set offers_url = shop_url ~ ('?ofertas=1' if '?' not in shop_url else '&ofertas=1') %}
+  {% set offers_fallback = shop_url ~ ('?q=oferta' if '?' not in shop_url else '&q=oferta') %}
 
-/* ✅ Mejora extra 2: disabled real */
-.hp .btn[disabled],
-.hp .btn[aria-disabled="true"]{
-  opacity:.62;
-  cursor:not-allowed;
-  pointer-events:none;
-  transform:none!important;
-  filter:none!important;
-}
+  {# featured safe #}
+  {% set featured_list = (featured if featured is defined and featured else []) %}
 
-.hp .btn.primary{
-  color:#fff;
-  background:linear-gradient(135deg, var(--hp-p), var(--hp-p2));
-  border:1px solid transparent;
-  box-shadow: 0 18px 44px rgba(37,99,235,.22);
-}
-.hp .btn.primary:hover{ box-shadow: 0 24px 64px rgba(37,99,235,.28); }
+  <main class="hp" id="hp" role="main" aria-label="Inicio Skyline Store">
 
-.hp .btn.ghost{
-  background: transparent;
-  border: 1px solid var(--hp-border);
-  color: var(--hp-ink);
-}
-@supports (backdrop-filter: blur(10px)){
-  .hp .btn.ghost{
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-  }
-}
-.hp .btn.ghost:hover{ box-shadow: var(--hp-sh1); }
+    {# ========= TOP TRUST PILLS ========= #}
+    <div class="hp-wrap" aria-label="Beneficios destacados">
+      <div class="hp-topTrust" role="list">
+        <div class="item" role="listitem"><span class="dot" aria-hidden="true"></span>Pago seguro <small>Protección & soporte</small></div>
+        <div class="item" role="listitem"><span class="dot" aria-hidden="true"></span>Envíos con tracking <small>Seguimiento real</small></div>
+        <div class="item" role="listitem"><span class="dot" aria-hidden="true"></span>Compra rápida <small>Checkout optimizado</small></div>
+      </div>
+    </div>
 
-.hp .btn.soft{
-  background: rgba(255,255,255,.86);
-  border: 1px solid var(--hp-border);
-  color: var(--hp-ink);
-}
-@media(prefers-color-scheme:dark){
-  .hp .btn.soft{ background: rgba(255,255,255,.06); }
-}
+    {# ========= HERO ========= #}
+    <section class="hp-hero" aria-labelledby="hpTitle">
+      <div class="hp-wrap hp-hero__grid">
 
-/* ---------------------------------------------------------
-   2) TOPBAR (chips superiores del hero)
---------------------------------------------------------- */
-.hp-topbar{ padding: 10px 0 14px; }
-.hp-topbar__inner{
-  display:flex;
-  gap:12px;
-  flex-wrap:wrap;
-  align-items:center;
-  justify-content:flex-start;
-}
-.hp-topbar__item{
-  display:inline-flex;
-  align-items:center;
-  gap:10px;
-  padding: 10px 12px;
-  border-radius: 999px;
-  background: var(--hp-surface);
-  border: 1px solid var(--hp-border);
-  box-shadow: var(--hp-sh1);
-  font-weight: 850;
-  color: rgba(10,16,32,.78);
-}
-@media(prefers-color-scheme:dark){
-  .hp-topbar__item{
-    color: rgba(238,242,255,.86);
-    background: rgba(255,255,255,.06);
-    box-shadow:none;
-  }
-}
-.hp-topbar__item b{ font-weight: 950; }
-.hp-ico{ filter:saturate(1.1); }
+        <div class="hp-hero__copy">
+          <p class="hp-kicker">Skyline Store</p>
 
-/* ---------------------------------------------------------
-   3) HERO
---------------------------------------------------------- */
-.hp-hero{ padding: 8px 0 18px; }
+          <h1 id="hpTitle" class="hp-title">
+            Tech + Streetwear <span class="hp-grad">premium</span>
+          </h1>
 
-.hp-hero__grid{
-  display:grid;
-  grid-template-columns: 1fr 420px;
-  gap: 18px;
-  align-items: stretch;
-}
-@media(max-width:1100px){ .hp-hero__grid{ grid-template-columns: 1fr 380px; } }
-@media(max-width:980px){ .hp-hero__grid{ grid-template-columns: 1fr; } }
+          <p class="hp-sub">
+            Una tienda moderna con selección real: moda urbana, accesorios y tecnología.
+            Comprá seguro, con soporte y experiencia de marca.
+          </p>
 
-.hp-hero__copy{
-  border-radius: var(--hp-r-xl);
-  border:1px solid var(--hp-border);
-  background: var(--hp-surface2);
-  box-shadow: var(--hp-sh3);
-  padding: clamp(18px, 2.8vw, 30px);
-  overflow:hidden;
-  position:relative;
-}
+          <div class="hp-ctas" role="group" aria-label="Acciones principales">
+            <a href="{{ shop_url }}" class="btn primary">Explorar tienda</a>
 
-/* ✅ Mejora extra 3: textura premium (muy sutil) */
-.hp-hero__copy::after{
-  content:"";
-  position:absolute; inset:0;
-  pointer-events:none;
-  opacity:.055;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)' opacity='.8'/%3E%3C/svg%3E");
-}
-@media(prefers-color-scheme:dark){
-  .hp-hero__copy{ background: rgba(9,12,24,.62); box-shadow:none; }
-}
+            {# si ofertas=1 no existe, igual te lleva y no rompe #}
+            <a href="{{ offers_url }}" class="btn ghost">Ver ofertas</a>
 
-.hp-kicker{
-  display:inline-flex;
-  align-items:center;
-  gap:10px;
-  padding:8px 12px;
-  border-radius:999px;
-  background: rgba(255,255,255,.88);
-  border:1px solid rgba(10,16,32,.10);
-  box-shadow: var(--hp-sh1);
-  font-weight:950;
-  letter-spacing:.16em;
-  text-transform:uppercase;
-  font-size:.70rem;
-  color:rgba(10,16,32,.70);
-  width:fit-content;
-  margin:0 0 10px;
-}
-@media(prefers-color-scheme:dark){
-  .hp-kicker{ background: rgba(255,255,255,.08); color: rgba(238,242,255,.80); box-shadow:none; }
-}
+            {# compat con tu sistema de botones: .btn.soft suele mapear a .btn.ghost via css legacy si lo tenés #}
+            <a href="{{ account_login_url }}" class="btn soft">Mi cuenta</a>
+          </div>
 
-.hp-title{
-  margin:0;
-  font-size: clamp(2.0rem, 3.6vw, 3.4rem);
-  line-height:1.02;
-  letter-spacing:-.05em;
-  font-weight:1000;
-  color: var(--hp-ink);
-  text-shadow: 0 22px 70px rgba(10,16,32,.10);
-}
-.hp-grad{
-  background:linear-gradient(135deg, var(--hp-p), var(--hp-p2));
-  -webkit-background-clip:text;
-  background-clip:text;
-  color:transparent;
-}
+          <div class="hp-chips" aria-label="Garantías">
+            <span class="hp-chip">✅ Soporte real</span>
+            <span class="hp-chip">✅ Envíos con tracking</span>
+            <span class="hp-chip">✅ Pagos protegidos</span>
+          </div>
 
-.hp-sub{
-  margin:10px 0 0;
-  max-width:62ch;
-  font-size: 1.04rem;
-  color: var(--hp-muted);
-  font-weight:750;
-  line-height: 1.6;
-}
+          <noscript>
+            <div class="hp-noscript">
+              <b>Modo básico</b>
+              <p>Tu navegador tiene JavaScript desactivado. Podés navegar igual:</p>
+              <div class="hp-ctas">
+                <a href="{{ shop_url }}" class="btn primary">Ir a la tienda</a>
+                <a href="{{ account_login_url }}" class="btn soft">Ingresar / Crear cuenta</a>
+              </div>
+              <p class="small" style="margin-top:.6rem;opacity:.8">
+                Si “Ofertas” no carga, probá este enlace alternativo:
+                <a href="{{ offers_fallback }}" class="btn ghost" style="display:inline-flex;margin-top:.4rem">Ofertas (alternativo)</a>
+              </p>
+            </div>
+          </noscript>
+        </div>
 
-/* ✅ mejora extra 4: CTAs más “tienda grande” */
-.hp-ctas{
-  display:flex;
-  gap:10px;
-  flex-wrap:wrap;
-  margin-top:14px;
-}
-.hp-ctas .btn{ min-width: 160px; }
+        <div class="hp-hero__media" aria-label="Imagen principal">
+          <figure class="hp-heroCard">
+            <img
+              src="{{ hero_img }}"
+              alt="Skyline Store: tecnología y streetwear premium"
+              width="1600"
+              height="900"
+              loading="eager"
+              decoding="async"
+              fetchpriority="high"
+              class="hp-heroImg"
+              onerror="this.style.display='none'">
+            <figcaption class="hp-heroCap">
+              <b>Curado por calidad</b>
+              <span>Productos elegidos + ofertas reales</span>
+            </figcaption>
+          </figure>
 
-.hp-chips{ display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; }
-.hp-chip{
-  display:inline-flex;
-  align-items:center;
-  gap:8px;
-  padding: 9px 11px;
-  border-radius:999px;
-  background: var(--hp-surface);
-  border:1px solid rgba(10,16,32,.10);
-  box-shadow: var(--hp-sh1);
-  font-weight:900;
-  font-size:.86rem;
-  color:rgba(10,16,32,.78);
-}
-@media(prefers-color-scheme:dark){
-  .hp-chip{
-    background: rgba(255,255,255,.06);
-    box-shadow:none;
-    color: rgba(238,242,255,.82);
-    border-color: rgba(148,163,184,.18);
-  }
-}
+          <div class="hp-stats" aria-label="Indicadores de confianza" role="list">
+            <div class="hp-stat" role="listitem">
+              <b>Marketplace</b>
+              <span>Más de 100 productos y creciendo</span>
+            </div>
+            <div class="hp-stat" role="listitem">
+              <b>Marca propia</b>
+              <span>Streetwear Skyline (drops)</span>
+            </div>
+            <div class="hp-stat" role="listitem">
+              <b>Compra segura</b>
+              <span>Políticas claras</span>
+            </div>
+          </div>
+        </div>
 
-/* hero media card */
-.hp-hero__media{ display:grid; gap: 12px; }
+      </div>
+    </section>
 
-.hp-heroCard{
-  margin:0;
-  border-radius: var(--hp-r-xl);
-  overflow:hidden;
-  border:1px solid var(--hp-border);
-  background: var(--hp-surface);
-  box-shadow: var(--hp-sh2);
-  position:relative;
-}
-@media(prefers-color-scheme:dark){
-  .hp-heroCard{ background: rgba(9,12,24,.62); box-shadow:none; }
-}
+    {# ========= TRUST CARDS ========= #}
+    <section class="hp-trust" aria-label="Confianza y seguridad">
+      <div class="hp-wrap hp-trust__grid">
 
-.hp-heroImg{
-  width:100%;
-  height: 260px;
-  object-fit: cover;
-  display:block;
-  filter: saturate(1.04) contrast(1.05) brightness(.99);
-}
-@media(max-width:980px){ .hp-heroImg{ height: 300px; } }
-@media(max-width:520px){ .hp-heroImg{ height: 220px; } }
+        {% set trust = [
+          {'img':'img/banners/service_payment.png','title':'Pago seguro','desc':'Transacciones protegidas y soporte'},
+          {'img':'img/banners/service_shipping.png','title':'Envío con tracking','desc':'Seguimiento de tu pedido'},
+          {'img':'img/banners/service_support.png','title':'Soporte real','desc':'Atención y ayuda post-compra'}
+        ] %}
 
-.hp-heroCap{
-  position:absolute;
-  left: 12px;
-  right: 12px;
-  bottom: 12px;
-  padding: 12px 12px;
-  border-radius: 18px;
-  background: rgba(255,255,255,.78);
-  border: 1px solid rgba(15,23,42,.12);
-  box-shadow: var(--hp-sh1);
-}
-@supports (backdrop-filter: blur(10px)){
-  .hp-heroCap{ backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
-}
-@media(prefers-color-scheme:dark){
-  .hp-heroCap{ background: rgba(9,12,24,.72); border-color: rgba(240,246,255,.12); box-shadow:none; }
-}
-.hp-heroCap b{ display:block; font-weight:1000; }
-.hp-heroCap span{ color: var(--hp-muted); font-weight:800; }
+        {% for t in trust %}
+          <article class="hp-trustCard" aria-label="{{ t.title }}">
+            <div class="hp-trustCard__img" aria-hidden="true">
+              <img
+                src="{{ url_for('static', filename=t.img) }}"
+                alt=""
+                loading="lazy"
+                decoding="async"
+                class="hp-trustIcon"
+                onerror="this.style.display='none'">
+            </div>
+            <div class="hp-trustCard__meta">
+              <b>{{ t.title }}</b>
+              <span>{{ t.desc }}</span>
+            </div>
+          </article>
+        {% endfor %}
 
-/* stats */
-.hp-stats{ display:grid; gap: 10px; grid-template-columns: 1fr; }
-.hp-stat{
-  border-radius: 18px;
-  border:1px solid var(--hp-border);
-  background: var(--hp-surface);
-  box-shadow: var(--hp-sh1);
-  padding: 12px;
-}
-@media(prefers-color-scheme:dark){
-  .hp-stat{ background: rgba(255,255,255,.06); box-shadow:none; }
-}
-.hp-stat b{ display:block; font-weight:1000; }
-.hp-stat span{ color: var(--hp-muted); font-weight:800; }
+      </div>
+    </section>
 
-/* ---------------------------------------------------------
-   4) SECTIONS HEAD
---------------------------------------------------------- */
-.hp-secHead{
-  margin: 14px 0 10px;
-  display:grid;
-  gap:6px;
-}
-.hp-secHead h2{
-  margin:0;
-  font-weight:1000;
-  letter-spacing:-.03em;
-  font-size: clamp(1.35rem, 2.2vw, 1.8rem);
-}
-.hp-secHead p{ margin:0; color: var(--hp-muted); font-weight:800; }
+    {# ========= CATEGORIES ========= #}
+    <section class="hp-cats" aria-labelledby="hpCats">
+      <div class="hp-wrap">
+        <div class="hp-secHead">
+          <h2 id="hpCats">Categorías</h2>
+          <p>Encontrá rápido lo que buscás con accesos directos.</p>
+        </div>
 
-/* ---------------------------------------------------------
-   5) TRUST STRIP
---------------------------------------------------------- */
-.hp-trust{ padding: 10px 0 18px; }
-.hp-trust__grid{
-  display:grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-}
-@media(max-width:980px){ .hp-trust__grid{ grid-template-columns: 1fr; } }
+        {# Podés reemplazar esto por categorias reales si las pasás desde backend #}
+        {% set cats = [
+          {'label':'Ropa urbana','img':'img/banners/cat_women.png','href': shop_url ~ ('?categoria=ropa' if '?' not in shop_url else '&categoria=ropa')},
+          {'label':'Accesorios','img':'img/banners/cat_accessories.png','href': shop_url ~ ('?categoria=accesorios' if '?' not in shop_url else '&categoria=accesorios')},
+          {'label':'Tecnología','img':'img/banners/cat_tech.png','href': shop_url ~ ('?categoria=tecnologia' if '?' not in shop_url else '&categoria=tecnologia')},
+          {'label':'Ofertas','img':'img/banners/promo_week.png','href': offers_url}
+        ] %}
 
-.hp-trustCard{
-  border-radius: var(--hp-r-lg);
-  border:1px solid var(--hp-border);
-  background: var(--hp-surface);
-  box-shadow: var(--hp-sh2);
-  padding: 14px;
-  display:flex;
-  gap: 12px;
-  align-items:center;
-}
-@media(prefers-color-scheme:dark){
-  .hp-trustCard{ background: rgba(255,255,255,.06); box-shadow:none; }
-}
-.hp-trustCard__img{
-  width: 52px;
-  height: 52px;
-  border-radius: 16px;
-  border: 1px solid rgba(37,99,235,.14);
-  background: linear-gradient(135deg, rgba(37,99,235,.14), rgba(6,182,212,.10));
-  display:grid;
-  place-items:center;
-  overflow:hidden;
-}
-.hp-trustIcon{ width: 100%; height: 100%; object-fit: cover; display:block; }
-.hp-trustCard__meta b{ display:block; font-weight:1000; }
-.hp-trustCard__meta span{ color: var(--hp-muted); font-weight:800; }
+        <div class="hp-catsGrid" role="list">
+          {% for c in cats %}
+            <a class="hp-catCard" href="{{ c.href }}" aria-label="{{ c.label }}" role="listitem">
+              <div class="hp-catCard__media" aria-hidden="true">
+                <img
+                  src="{{ url_for('static', filename=c.img) }}"
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                  class="hp-catImg"
+                  onerror="this.style.display='none'">
+              </div>
+              <div class="hp-catCard__overlay">
+                <b>{{ c.label }}</b>
+                <span>Explorar →</span>
+              </div>
+            </a>
+          {% endfor %}
+        </div>
+      </div>
+    </section>
 
-/* ---------------------------------------------------------
-   6) CATS
---------------------------------------------------------- */
-.hp-cats{ padding: 8px 0 18px; }
-.hp-catsGrid{
-  display:grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 14px;
-  margin-top: 12px;
-}
-@media(max-width:980px){ .hp-catsGrid{ grid-template-columns: repeat(2, 1fr); } }
-@media(max-width:520px){ .hp-catsGrid{ grid-template-columns: 1fr; } }
+    {# ========= FEATURED ========= #}
+    <section class="hp-featured" aria-labelledby="hpFeat">
+      <div class="hp-wrap">
+        <div class="hp-secHead">
+          <h2 id="hpFeat">Destacados</h2>
+          <p>Selección recomendada. Lo mejor para empezar.</p>
+        </div>
 
-.hp-catCard{
-  border-radius: var(--hp-r-xl);
-  border:1px solid var(--hp-border);
-  background: var(--hp-surface);
-  box-shadow: var(--hp-sh2);
-  overflow:hidden;
-  text-decoration:none;
-  color: inherit;
-  position:relative;
-  min-height: 160px;
-  transition: transform var(--hp-t) var(--hp-ease), box-shadow var(--hp-t) var(--hp-ease), filter var(--hp-t) var(--hp-ease);
-}
-@media(prefers-color-scheme:dark){
-  .hp-catCard{ background: rgba(255,255,255,.06); box-shadow:none; }
-}
-.hp-catCard:hover{ transform: translateY(-6px); box-shadow: var(--hp-sh3); filter: saturate(1.05); }
+        <div class="hp-products">
+          {% if featured_list|length == 0 %}
+            <div class="hp-empty card" aria-live="polite">
+              <b>Sin destacados por ahora</b>
+              <p>Podés explorar todo el catálogo y volver más tarde.</p>
+              <div class="hp-empty__actions" role="group" aria-label="Acciones recomendadas">
+                <a class="btn primary" href="{{ shop_url }}">Ir a la tienda</a>
+                <a class="btn soft" href="{{ account_register_url }}">Crear cuenta</a>
+              </div>
+            </div>
+          {% else %}
+            {% for p in featured_list %}
+              {# ---- SAFE fields (funciona con dict u objeto) ---- #}
+              {% set p_title = (p.title if p is defined and p and p.title is defined and p.title else (p.get('title') if p is mapping and p.get('title') else 'Producto')) %}
+              {% set p_href  = (p.href  if p is defined and p and p.href  is defined and p.href  else (p.get('href')  if p is mapping and p.get('href')  else shop_url)) %}
+              {% set p_img   = (p.img   if p is defined and p and p.img   is defined and p.img   else (p.get('img')   if p is mapping and p.get('img')   else hero_img)) %}
+              {% set p_tag   = (p.tag   if p is defined and p and p.tag   is defined and p.tag   else (p.get('tag')   if p is mapping and p.get('tag')   else '')) %}
+              {% set p_badge = (p.badge if p is defined and p and p.badge is defined and p.badge else (p.get('badge') if p is mapping and p.get('badge') else '')) %}
+              {% set p_rating = (p.rating if p is defined and p and p.rating is defined and p.rating else (p.get('rating') if p is mapping and p.get('rating') else '')) %}
 
-.hp-catCard__media{ position:absolute; inset:0; background: linear-gradient(135deg, rgba(37,99,235,.12), rgba(6,182,212,.10)); }
-.hp-catImg{
-  width:100%;
-  height:100%;
-  object-fit:cover;
-  display:block;
-  filter: saturate(1.04) contrast(1.03);
-  transform: scale(1.02);
-}
+              <article class="hp-prod" aria-label="{{ p_title }}">
+                {% if p_badge or p_tag %}
+                  <div class="hp-badges" aria-hidden="true">
+                    {% if p_badge %}<span class="hp-badge hp-badge--sale">{{ p_badge }}</span>{% endif %}
+                    {% if p_tag %}<span class="hp-badge">{{ p_tag }}</span>{% endif %}
+                  </div>
+                {% endif %}
 
-.hp-catCard__overlay{
-  position:absolute;
-  inset:auto 12px 12px 12px;
-  padding: 12px 12px;
-  border-radius: 18px;
-  background: rgba(255,255,255,.78);
-  border: 1px solid rgba(15,23,42,.12);
-  box-shadow: var(--hp-sh1);
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap: 12px;
-}
-@supports (backdrop-filter: blur(10px)){
-  .hp-catCard__overlay{ backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
-}
-@media(prefers-color-scheme:dark){
-  .hp-catCard__overlay{ background: rgba(9,12,24,.72); border-color: rgba(240,246,255,.12); box-shadow:none; }
-}
-.hp-catCard__overlay b{ font-weight:1000; }
-.hp-catCard__overlay span{ color: var(--hp-muted); font-weight:900; }
+                <a class="hp-prod__img" href="{{ p_href }}" aria-label="{{ p_title }}">
+                  <img
+                    src="{{ p_img }}"
+                    alt="{{ p_title }}"
+                    loading="lazy"
+                    decoding="async"
+                    class="hp-prodImg"
+                    onerror="this.style.display='none'">
+                </a>
 
-/* ---------------------------------------------------------
-   7) FEATURED PRODUCTS
---------------------------------------------------------- */
-.hp-featured{ padding: 8px 0 22px; }
+                <div class="hp-prod__meta">
+                  <div class="hp-prod__top">
+                    <b class="hp-prod__title">{{ p_title }}</b>
 
-.hp-products{
-  display:grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
-  margin-top: 12px;
-}
-@media(max-width:980px){ .hp-products{ grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media(max-width:520px){ .hp-products{ grid-template-columns: 1fr; } }
+                    {% if p_rating %}
+                      <span class="hp-rating" aria-label="Rating {{ p_rating }}">
+                        <i aria-hidden="true">★</i> {{ p_rating }}
+                      </span>
+                    {% endif %}
+                  </div>
 
-.hp-prod{
-  border-radius: 24px;
-  border: 1px solid rgba(10,16,32,.10);
-  background: linear-gradient(180deg, rgba(255,255,255,.96), rgba(255,255,255,.86));
-  box-shadow: var(--hp-sh1);
-  overflow:hidden;
-  transition: transform var(--hp-t) var(--hp-ease), box-shadow var(--hp-t) var(--hp-ease), filter var(--hp-t) var(--hp-ease);
-  position:relative;
-  transform: translateZ(0);
-}
-@media(prefers-color-scheme:dark){
-  .hp-prod{
-    border-color: rgba(148,163,184,.18);
-    background: linear-gradient(180deg, rgba(12,16,34,.88), rgba(12,16,34,.78));
-    box-shadow:none;
-  }
-}
-.hp-prod:hover{ transform: translateY(-8px); box-shadow: var(--hp-sh2); filter: saturate(1.06); }
+                  <div class="hp-prod__price" aria-label="Precio">
+                    {% with product=p %}
+                      {% include "components/price.html" ignore missing %}
+                    {% endwith %}
+                  </div>
 
-.hp-prod__img{
-  display:block;
-  aspect-ratio: 1 / 1;
-  background: rgba(255,255,255,.55);
-  overflow:hidden;
-}
-@media(prefers-color-scheme:dark){ .hp-prod__img{ background: rgba(255,255,255,.04); } }
+                  <div class="hp-prod__micro" aria-label="Beneficios del producto">
+                    <span class="hp-microChip">⚡ Envío rápido</span>
+                    <span class="hp-microChip">🔒 Pago seguro</span>
+                  </div>
+                </div>
 
-.hp-prodImg{
-  width:100%;
-  height:100%;
-  object-fit:cover;
-  display:block;
-  opacity:1;
-  transition: transform .65s var(--hp-ease);
-}
-.hp-prod:hover .hp-prodImg{ transform: scale(1.06); }
+                <div class="hp-prod__actions" role="group" aria-label="Acciones del producto">
+                  <a class="btn primary" href="{{ p_href }}">Ver</a>
+                  <a class="btn ghost" href="{{ shop_url }}">Más</a>
+                </div>
+              </article>
+            {% endfor %}
+          {% endif %}
+        </div>
+      </div>
+    </section>
 
-.hp-prod__meta{ padding: 12px 12px 10px; display:grid; gap:8px; }
-.hp-prod__title{
-  font-weight:1000;
-  line-height:1.15;
-  display:-webkit-box;
-  -webkit-line-clamp:2;
-  -webkit-box-orient:vertical;
-  overflow:hidden;
-}
-.hp-prod__price{ font-weight:1000; color: var(--hp-ink); }
+    {# ========= FINAL CTA ========= #}
+    <section class="hp-cta" aria-label="Llamado a la acción final">
+      <div class="hp-wrap hp-cta__inner">
+        <div>
+          <h2 class="hp-cta__title">Comprá con confianza</h2>
+          <p class="hp-cta__sub">Marketplace + marca propia. Envíos con seguimiento y soporte real.</p>
+        </div>
+        <div class="hp-cta__btns" role="group" aria-label="Acciones finales">
+          <a class="btn primary" href="{{ shop_url }}">Empezar ahora</a>
+          <a class="btn soft" href="{{ account_register_url }}">Crear cuenta</a>
+        </div>
+      </div>
+    </section>
 
-.hp-prod__actions{ display:flex; gap:10px; padding: 0 12px 14px; }
-.hp-prod__actions .btn{ flex:1; border-radius:16px; padding:11px 12px; font-weight:1000; }
+    {# ========= STICKY MOBILE CTA ========= #}
+    <div class="hp-sticky" id="hpSticky" aria-live="polite">
+      <div class="hp-sticky__txt">
+        <b>Skyline Store</b>
+        <span>Explorá ofertas premium</span>
+      </div>
+      <a href="{{ offers_url }}" class="hp-sticky__btn">Comprar</a>
+    </div>
 
-.hp-empty.card{
-  grid-column: 1 / -1;
-  border-radius: var(--hp-r-xl);
-  border:1px solid var(--hp-border);
-  background: var(--hp-surface);
-  box-shadow: var(--hp-sh2);
-  padding: 16px;
-}
-@media(prefers-color-scheme:dark){
-  .hp-empty.card{ background: rgba(255,255,255,.06); box-shadow:none; }
-}
-.hp-empty.card b{ font-weight:1000; }
-.hp-empty.card p{ color: var(--hp-muted); font-weight:800; }
+    {# ========= TO TOP ========= #}
+    <button id="toTop" type="button" class="to-top" aria-label="Volver arriba">↑</button>
 
-/* ---------------------------------------------------------
-   8) CTA FINAL
---------------------------------------------------------- */
-.hp-cta{ padding: 10px 0 10px; }
-.hp-cta__inner{
-  border-radius: var(--hp-r-xl);
-  border:1px solid var(--hp-border);
-  background: var(--hp-surface);
-  box-shadow: var(--hp-sh2);
-  padding: 18px;
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap: 14px;
-}
-@media(max-width:720px){ .hp-cta__inner{ flex-direction:column; align-items:flex-start; } }
-@media(prefers-color-scheme:dark){
-  .hp-cta__inner{ background: rgba(255,255,255,.06); box-shadow:none; }
-}
-.hp-cta__title{ margin:0; font-weight:1000; letter-spacing:-.03em; }
-.hp-cta__sub{ margin:6px 0 0; color: var(--hp-muted); font-weight:800; }
-.hp-cta__btns{ display:flex; gap:10px; flex-wrap:wrap; }
+  </main>
+{% endblock %}
 
-/* ---------------------------------------------------------
-   9) STICKY MOBILE — FIX CRÍTICO (sin duplicados)
---------------------------------------------------------- */
-/* wrapper: controla mostrar/ocultar */
-.hp-stickyWrap{
-  position: fixed;
-  left: 12px;
-  right: 12px;
-  bottom: 12px;
-  z-index: 70;
-  display:none;
-  padding-bottom: env(safe-area-inset-bottom);
-}
-@media (max-width: 720px){
-  .hp-stickyWrap{ display:block; }
-}
-
-/* panel: estilos visuales */
-.hp-sticky{
-  border-radius: 20px;
-  border: 1px solid var(--hp-border);
-  background: rgba(255,255,255,.78);
-  box-shadow: var(--hp-sh2);
-  padding: 12px 14px;
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap: 12px;
-}
-@supports (backdrop-filter: blur(10px)){
-  .hp-sticky{ backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
-}
-@media(prefers-color-scheme:dark){
-  .hp-sticky{ background: rgba(9,12,24,.72); box-shadow:none; }
-}
-.hp-sticky__txt b{ font-weight:1000; display:block; }
-.hp-sticky__txt span{ color: var(--hp-muted); font-weight:800; }
-.hp-sticky__btn{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  padding: 10px 14px;
-  border-radius: 999px;
-  text-decoration:none;
-  font-weight: 1000;
-  color: #fff;
-  background: linear-gradient(135deg, var(--hp-p), var(--hp-p2));
-  box-shadow: 0 18px 44px rgba(37,99,235,.22);
-  border: 1px solid transparent;
-}
-
-/* ---------------------------------------------------------
-   10) TO TOP
---------------------------------------------------------- */
-.to-top{
-  position:fixed;
-  right:18px;
-  bottom: calc(18px + env(safe-area-inset-bottom));
-  width:46px;height:46px;border-radius:16px;
-  border:1px solid rgba(10,16,32,.12);
-  background:rgba(255,255,255,.78);
-  box-shadow: var(--hp-sh2);
-  cursor:pointer;
-  display:none;
-  font-weight:1000;
-  z-index:80;
-  opacity: 0;
-  transition: opacity var(--hp-t2) var(--hp-ease), transform var(--hp-t) var(--hp-ease);
-}
-@supports (backdrop-filter: blur(10px)){
-  .to-top{ backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
-}
-@media(prefers-color-scheme:dark){
-  .to-top{ background: rgba(9,12,24,.62); box-shadow:none; border-color: rgba(240,246,255,.12); }
-}
-.to-top:hover{ transform: translateY(-2px); }
-.to-top.is-on{ display:block; opacity:1; }
-
-/* ---------------------------------------------------------
-   11) AUTOFILL (Chrome)
---------------------------------------------------------- */
-.hp input:-webkit-autofill,
-.hp input:-webkit-autofill:hover,
-.hp input:-webkit-autofill:focus{
-  -webkit-text-fill-color: var(--hp-ink);
-  transition: background-color 5000s ease-in-out 0s;
-  box-shadow: 0 0 0px 1000px rgba(255,255,255,.92) inset !important;
-}
-@media(prefers-color-scheme:dark){
-  .hp input:-webkit-autofill,
-  .hp input:-webkit-autofill:hover,
-  .hp input:-webkit-autofill:focus{
-    -webkit-text-fill-color: rgba(240,246,255,.95);
-    box-shadow: 0 0 0px 1000px rgba(9,12,24,.86) inset !important;
-  }
-}
+{% block extra_js %}
+  <script src="{{ url_for('static', filename='js/home.js') }}" defer></script>
+{% endblock %}

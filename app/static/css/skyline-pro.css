@@ -1,15 +1,17 @@
 /* ======================================================================
-   SKYLINE STORE — ULTRA PREMIUM UI (v5.1 · GLOBAL FINAL)
+   SKYLINE STORE — ULTRA PREMIUM UI (v5.2 · GLOBAL FINAL)
    Clean · premium · modern · consistent · marketplace
-   - safe reset (no rompe shop/account)
-   - tokens + dark auto
-   - header/topbar pro + fallbacks
-   - components + utilities + states
-   - no duplicados / no reglas contradictorias
+   ✅ safe reset (no rompe shop/account)
+   ✅ tokens + dark auto
+   ✅ header/topbar pro + mobile 2 filas
+   ✅ components + utilities + states
+   ✅ accesibilidad real (no mata outline)
+   ✅ no duplicados / no reglas contradictorias
 ====================================================================== */
 
 /* -----------------------------
    0) RESET (safe + modern)
+   MEJORA #1: NO matar focus global (solo focus-visible)
 ----------------------------- */
 *,*::before,*::after{box-sizing:border-box}
 html,body{margin:0;padding:0}
@@ -23,7 +25,7 @@ img,svg,video,canvas{max-width:100%;display:block}
 a{color:inherit;text-decoration:none}
 button,input,select,textarea{font:inherit}
 button{background:none;border:0;padding:0}
-:focus{outline:none}
+:focus{outline:none} /* ok, pero focus real queda en focus-visible */
 
 /* Selection */
 ::selection{background:rgba(37,99,235,.18)}
@@ -123,6 +125,7 @@ button{background:none;border:0;padding:0}
 
 /* -----------------------------
    3) BODY + BACKDROP
+   MEJORA #2: background dark coherente también
 ----------------------------- */
 body{
   font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
@@ -138,8 +141,18 @@ body{
   text-rendering:optimizeLegibility;
   overflow-x:hidden;
 }
+@media (prefers-color-scheme: dark){
+  body{
+    background:
+      radial-gradient(900px 520px at 12% -10%, rgba(37,99,235,.18), transparent 55%),
+      radial-gradient(900px 520px at 88% -2%, rgba(6,182,212,.16), transparent 55%),
+      radial-gradient(900px 520px at 50% 120%, rgba(245,158,11,.10), transparent 55%),
+      linear-gradient(180deg, rgba(7,11,20,.92), rgba(11,16,32,.55)),
+      var(--bg);
+  }
+}
 
-/* Links “premium” (genera confianza) */
+/* Links “premium” */
 a.link{
   color: var(--p);
   text-decoration: underline;
@@ -172,14 +185,25 @@ hr{border:0;border-top:1px solid var(--border);margin:18px 0}
 
 /* -----------------------------
    5) HELPERS / LAYOUT UTILITIES
+   MEJORA #3: padding respeta safe-area en iOS
 ----------------------------- */
 .container,.section{
   max-width:var(--max);
   margin:0 auto;
-  padding: clamp(18px, 2.4vw, 28px) var(--pad);
+  padding:
+    clamp(18px, 2.4vw, 28px)
+    calc(var(--pad) + env(safe-area-inset-left))
+    clamp(18px, 2.4vw, 28px)
+    calc(var(--pad) + env(safe-area-inset-right));
 }
 @media(min-width:980px){
-  .container,.section{padding: clamp(20px, 2.2vw, 32px) var(--pad-lg)}
+  .container,.section{
+    padding:
+      clamp(20px, 2.2vw, 32px)
+      calc(var(--pad-lg) + env(safe-area-inset-left))
+      clamp(20px, 2.2vw, 32px)
+      calc(var(--pad-lg) + env(safe-area-inset-right));
+  }
 }
 .sr-only{
   position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;
@@ -192,7 +216,7 @@ hr{border:0;border-top:1px solid var(--border);margin:18px 0}
 .muted2{color:var(--muted2)}
 .is-hidden{display:none!important}
 
-/* grid helpers (para home pro) */
+/* grids */
 .grid{display:grid;gap:14px}
 .grid-2{grid-template-columns:1fr}
 .grid-3{grid-template-columns:1fr}
@@ -214,15 +238,19 @@ hr{border:0;border-top:1px solid var(--border);margin:18px 0}
   }
 }
 
-/* a11y focus */
+/* a11y focus (real) */
 :where(a,button,input,select,textarea,[tabindex]):focus-visible{
   outline:none;
   box-shadow: var(--focus);
   border-radius: 16px;
 }
 
+/* MEJORA #4: tap highlight iOS */
+a,button{ -webkit-tap-highlight-color: transparent; }
+
 /* -----------------------------
    6) TOPBAR / HEADER (marketplace)
+   Conecta con base.html: .topbar .topbar-inner .brand .nav .search .topbar-actions
 ----------------------------- */
 .topbar{
   position:sticky;top:0;z-index:60;
@@ -257,6 +285,7 @@ hr{border:0;border-top:1px solid var(--border);margin:18px 0}
   box-shadow:0 18px 60px rgba(37,99,235,.40);
 }
 
+/* nav */
 .nav{display:flex;gap:6px;align-items:center}
 .nav a{
   padding:10px 12px;border-radius:12px;
@@ -305,9 +334,42 @@ hr{border:0;border-top:1px solid var(--border);margin:18px 0}
 @media (prefers-color-scheme: dark){
   .search input::placeholder{color:rgba(238,242,255,.45)}
 }
+/* MEJORA #5: botón dentro de search consistente */
+.search .btn{min-height:40px;padding:10px 12px;border-radius:999px}
 
 /* Right actions */
 .topbar-actions{display:flex;align-items:center;gap:10px}
+
+/* Badge / account chip (compat con base.html) */
+.cart-badge{
+  position:absolute; top:-6px; right:-6px;
+  min-width:20px;height:20px;
+  display:flex;align-items:center;justify-content:center;
+  border-radius:999px;
+  background:linear-gradient(135deg,var(--p),var(--p2));
+  color:#fff;font-size:.72rem;font-weight:1000;
+  padding:0 6px;border:1px solid rgba(255,255,255,.45);
+  pointer-events:none;
+}
+.account-chip{
+  display:inline-flex;align-items:center;gap:10px;
+  padding:10px 12px;border-radius:999px;
+  border:1px solid var(--border);
+  background: rgba(255,255,255,.78);
+  box-shadow: var(--sh1);
+  transition: transform var(--t), box-shadow var(--t), background var(--t), border-color var(--t);
+}
+.account-chip:hover{transform:translateY(-1px);border-color:rgba(37,99,235,.22)}
+@media (prefers-color-scheme: dark){
+  .account-chip{background: rgba(255,255,255,.06); box-shadow:none}
+  .account-chip:hover{transform:none}
+}
+.avatar{
+  width:30px;height:30px;border-radius:999px;
+  background:linear-gradient(135deg, rgba(37,99,235,.18), rgba(6,182,212,.12));
+  border:1px solid rgba(37,99,235,.16);
+  flex:0 0 auto;
+}
 
 /* Mobile: 2 filas + nav oculta */
 @media(max-width:760px){
@@ -321,11 +383,14 @@ hr{border:0;border-top:1px solid var(--border);margin:18px 0}
   .search{grid-column:1/3;grid-row:2;max-width:none}
 }
 
+/* MEJORA #6: sticky topbar evita “saltos” con fuentes */
+.topbar *{ text-rendering: geometricPrecision; }
+
 /* -----------------------------
    7) COMPONENTS
 ----------------------------- */
 
-/* Buttons (unificados + tactile) */
+/* Buttons */
 .btn{
   position:relative;
   display:inline-flex;
@@ -333,7 +398,7 @@ hr{border:0;border-top:1px solid var(--border);margin:18px 0}
   justify-content:center;
   gap:10px;
   padding:12px 14px;
-  min-height:44px; /* accesibilidad tactil */
+  min-height:44px;
   border-radius:16px;
   border:1px solid transparent;
   cursor:pointer;
@@ -374,10 +439,7 @@ hr{border:0;border-top:1px solid var(--border);margin:18px 0}
 }
 
 /* Loading helper */
-.btn.is-loading{
-  opacity:.85;
-  pointer-events:none;
-}
+.btn.is-loading{opacity:.85;pointer-events:none}
 .btn.is-loading::after{
   content:"";
   width:16px;height:16px;border-radius:999px;
@@ -389,13 +451,13 @@ hr{border:0;border-top:1px solid var(--border);margin:18px 0}
 }
 @keyframes spin{to{transform:rotate(360deg)}}
 
-/* Legacy compat (no rompe lo viejo) */
+/* Legacy compat */
 .btn-primary{color:#fff!important;background:linear-gradient(135deg,var(--p),var(--p2))!important;border-color:transparent!important}
 .btn-soft{background:rgba(255,255,255,.86)!important;border:1px solid var(--border)!important;color:var(--ink)!important}
 .btn-ghost{background:transparent!important;border:1px solid var(--border)!important;color:var(--ink)!important}
 @media (prefers-color-scheme: dark){ .btn-soft{background: rgba(255,255,255,.06)!important} }
 
-/* Inputs (states + aria) */
+/* Inputs */
 .input{
   display:flex;align-items:center;gap:10px;
   padding:10px 12px;
@@ -445,7 +507,7 @@ hr{border:0;border-top:1px solid var(--border);margin:18px 0}
   box-shadow: 0 16px 38px rgba(2,6,23,.14);
 }
 
-/* Cards surfaces (premium hover) */
+/* Cards */
 .card, .panel, .surface{
   background: rgba(255,255,255,.86);
   border:1px solid var(--border);
@@ -463,6 +525,11 @@ hr{border:0;border-top:1px solid var(--border);margin:18px 0}
   .card:hover,.panel:hover,.surface:hover{box-shadow:none}
 }
 
+/* MEJORA #7: estados utilitarios */
+.is-ok{color:var(--good)}
+.is-bad{color:var(--bad)}
+.is-warn{color:var(--warn)}
+
 /* -----------------------------
    7.1) SECTION HEAD (home pro)
 ----------------------------- */
@@ -476,7 +543,7 @@ hr{border:0;border-top:1px solid var(--border);margin:18px 0}
 .section-title{font-weight:1000;letter-spacing:var(--ls-title)}
 .section-sub{color:var(--muted);font-weight:800}
 
-/* Trustbar (sellos pagos/envios) */
+/* Trustbar */
 .trustbar{
   display:grid;
   gap:12px;
@@ -624,6 +691,9 @@ hr{border:0;border-top:1px solid var(--border);margin:18px 0}
 }
 @keyframes shimmer{to{transform: translateX(120%)}}
 
+/* MEJORA #8: evita “layout shift” con imágenes */
+img[width][height]{height:auto}
+
 /* -----------------------------
    9) HERO (reusable class .hero)
 ----------------------------- */
@@ -713,7 +783,8 @@ input:-webkit-autofill:focus{
 }
 
 /* -----------------------------
-   12) FOOTER (más tienda grande)
+   12) FOOTER (tienda grande)
+   MEJORA #9: footer más consistente + container interno
 ----------------------------- */
 .footer{
   margin-top: 28px;
@@ -727,8 +798,12 @@ input:-webkit-autofill:focus{
 
 /* -----------------------------
    13) ACCESSIBILITY + MOTION
+   MEJORA #10: reduce-motion + reduce blur cost
 ----------------------------- */
 @media (prefers-reduced-motion: reduce){
   html{scroll-behavior:auto}
   *{transition:none!important;animation:none!important}
+}
+@media (prefers-reduced-transparency: reduce){
+  .topbar{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
 }

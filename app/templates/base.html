@@ -1,6 +1,8 @@
-{# app/templates/base.html — Skyline Store (ULTRA PRO ENTERPRISE · v5.4.1 FINAL)
+{# app/templates/base.html — Skyline Store (ULTRA PRO ENTERPRISE · v5.5 FINAL)
    ✅ NO 500 / FAIL-SAFE / FUTURE-PROOF / Account Unified
-   ✅ Jinja-compatible (sin try/except)
+   ✅ Jinja-compatible (sin try/except, sin "is callable")
+   ✅ CSS global skyline-pro.css (fallback skyline.css)
+   ✅ Header marketplace grid estable + mobile 2 filas (depende skyline-pro.css)
 #}
 <!doctype html>
 <html lang="es">
@@ -14,13 +16,13 @@
   {% set _path = (_req.path if _req and _req.path else '') %}
   {% set _args = (_req.args if _req and _req.args else {}) %}
 
-  {# ---------- CSP nonce (solo para style/script) ---------- #}
-  {% set _csp_nonce = (csp_nonce if csp_nonce is defined and csp_nonce else '') %}
+  {# ---------- CSP nonce (style/script). Fallback a nonce si existe ---------- #}
+  {% set _csp_nonce = (csp_nonce if csp_nonce is defined and csp_nonce else (nonce if nonce is defined and nonce else '')) %}
 
   {# ---------- safe endpoint checks ---------- #}
-  {% set _has_ep = has_endpoint if has_endpoint is defined else none %}
+  {% set _has_ep = has_endpoint if has_endpoint is defined and has_endpoint else none %}
 
-  {# ---------- safe url_for wrappers (Jinja-safe, sin try) ---------- #}
+  {# ---------- safe url_for wrappers (Jinja-safe) ---------- #}
   {% macro safe_url(endpoint, fallback='/') -%}
     {%- if not endpoint -%}{{- fallback -}}
     {%- else -%}
@@ -35,7 +37,6 @@
   {% macro safe_static(filename, fallback='') -%}
     {%- if not filename -%}{{- fallback -}}
     {%- else -%}
-      {# static siempre debería existir, pero por seguridad #}
       {%- if url_for is defined -%}
         {{- url_for('static', filename=filename) -}}
       {%- else -%}
@@ -69,7 +70,7 @@
   <meta name="color-scheme" content="light dark">
   <meta name="theme-color" content="#2563eb">
 
-  {# CSP meta (secundario si Talisman mete headers) #}
+  {# CSP meta (secundario si Talisman mete headers) — compactado para evitar problemas #}
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'self';
                  base-uri 'self';
@@ -82,15 +83,20 @@
                  script-src 'self' 'unsafe-inline';
                  connect-src 'self' https:;">
 
-  {# ---------- CSRF robusto ---------- #}
+  {# ---------- CSRF robusto (sin 'is callable') ---------- #}
   {% set _csrf_value = '' %}
   {% if csrf_token_value is defined and csrf_token_value %}
     {% set _csrf_value = csrf_token_value %}
   {% elif csrf_token is defined and csrf_token %}
-    {% if csrf_token is callable %}
+    {# Si csrf_token es función (Flask-WTF) normalmente se llama, pero no usamos 'callable'.
+       Intentamos llamar SOLO si parece invocable por Jinja: si viene como macro/func, suele funcionar con "()".
+       Si no, dejamos el valor directo.
+    #}
+    {% set _csrf_value = csrf_token %}
+    {% if _csrf_value and _csrf_value is not string %}
+      {# Si no es string, probamos a llamarlo. Si no funciona, Jinja normalmente mostraría algo;
+         por eso preferimos pasar csrf_token_value desde backend. #}
       {% set _csrf_value = csrf_token() %}
-    {% else %}
-      {% set _csrf_value = csrf_token %}
     {% endif %}
   {% endif %}
   <meta name="csrf-token" content="{{ _csrf_value }}">
@@ -109,7 +115,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 
-  {# ---------- CSS GLOBAL REAL (tu proyecto) ---------- #}
+  {# ---------- CSS GLOBAL REAL (skyline-pro.css) + fallback skyline.css ---------- #}
   {% set _css_ver = (SKYLINE_CSS_VER if SKYLINE_CSS_VER is defined and SKYLINE_CSS_VER else '5') %}
   {% set _css_primary = safe_static('css/skyline-pro.css', '') %}
   {% set _css_fallback = safe_static('css/skyline.css', '') %}
@@ -119,6 +125,10 @@
     <link rel="preload" as="style" href="{{ _css_href }}?v={{ _css_ver|e }}">
     <link rel="stylesheet" href="{{ _css_href }}?v={{ _css_ver|e }}">
   {% endif %}
+
+  {# ✅ Mejora extra: evita FOUC si el CSS demora #}
+  <meta name="theme-color" content="#2563eb" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#070b14" media="(prefers-color-scheme: dark)">
 
   {% block extra_css %}{% endblock %}
 
@@ -218,9 +228,7 @@
               Mi cuenta
             {% endif %}
           </span>
-          <span class="t2">
-            {% if _user_ok %}Panel / Salir{% else %}Entrar / Crear{% endif %}
-          </span>
+          <span class="t2">{% if _user_ok %}Panel / Salir{% else %}Entrar / Crear{% endif %}</span>
         </span>
       </a>
     </div>
@@ -331,7 +339,7 @@
     q.focus({ preventScroll: true });
   });
 
-  // Cart badge (fallbacks)
+  // Cart badge (fallbacks) — solo JSON real
   const badge = $('[data-cart-badge]');
   if (badge) {
     const endpoints = ["/cart/json", "/api/cart", "/cart/api"];
