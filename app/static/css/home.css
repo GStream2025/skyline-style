@@ -1,259 +1,686 @@
 /* ==========================================================
-   HOME — Skyline Store (PRO PATCH v12)
-   ✅ FIX hero image + cats centering
+   HOME — Skyline Store (ULTRA PATCH v15 FINAL)
+   ✅ FIX hero fallback real + cats centering
    ✅ Premium spacing + hierarchy + contrast
+   ✅ Dark mode coherente + a11y real + perf
+   ✅ No reglas contradictorias / low-specificity (menos guerras)
 ========================================================== */
 
 .hp{
-  --hp-max:1180px;
-  --hp-gap:clamp(14px,2vw,22px);
+  /* layout */
+  --hp-max: clamp(1040px, 86vw, 1220px);
+  --hp-gap: clamp(12px, 1.8vw, 20px);
+  --hp-r: 18px;
+  --hp-r2: 22px;
+
+  /* surfaces */
+  --hp-border: rgba(15,23,42,.10);
+  --hp-ink: rgba(15,23,42,.92);
+  --hp-muted: rgba(15,23,42,.74);
+  --hp-soft: rgba(15,23,42,.58);
+  --hp-surface: rgba(255,255,255,.74);
+  --hp-surface2: rgba(255,255,255,.68);
+
+  /* accents */
+  --hp-p: #2563eb;
+  --hp-p2:#0ea5e9;
+  --hp-acc:#f59e0b;
+  --hp-good:#10b981;
+  --hp-bad:#ef4444;
+
+  /* shadows */
+  --hp-sh1: 0 12px 26px rgba(2,6,23,.06);
+  --hp-sh2: 0 18px 44px rgba(2,6,23,.10);
+  --hp-sh3: 0 22px 60px rgba(2,6,23,.12);
+
+  /* motion */
+  --hp-ease: cubic-bezier(.2,.9,.2,1);
+  --hp-t-fast: .14s var(--hp-ease);
+  --hp-t: .22s var(--hp-ease);
+  --hp-t-slow: .42s var(--hp-ease);
+
+  /* focus */
+  --hp-focus: 0 0 0 6px rgba(37,99,235,.30);
+
+  /* hero img fallback (se setea inline en el HTML) */
+  --hero-url: none;
+
+  color-scheme: light;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* wrapper consistente */
-.hp-wrap{ max-width:var(--hp-max); margin:0 auto; }
+@media (prefers-color-scheme: dark){
+  .hp{ color-scheme: dark; }
+}
 
-/* 1) TOP TRUST como “sellos” (más confianza) */
-.hp-top{ padding: 6px 0 8px; }
+.hp :where(a,button){ -webkit-tap-highlight-color: transparent; }
+.hp :where(a, button, input, select, textarea, [role="button"]){ scroll-margin-top: 96px; }
+
+/* wrapper consistente + safe-area iOS */
+.hp-wrap{
+  max-width: var(--hp-max);
+  margin: 0 auto;
+  padding:
+    0
+    calc(clamp(14px, 2.2vw, 22px) + env(safe-area-inset-left))
+    0
+    calc(clamp(14px, 2.2vw, 22px) + env(safe-area-inset-right));
+}
+
+/* focus accesible (no mata outline) */
+.hp :where(a, button, [role="button"], input, select, textarea):focus-visible{
+  outline: none;
+  box-shadow: var(--hp-focus);
+  border-radius: 14px;
+}
+
+/* selection suave */
+.hp ::selection{ background: rgba(37,99,235,.18); }
+
+/* reduce motion (no destruye UX) */
+@media (prefers-reduced-motion: reduce){
+  .hp :where(*){
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* reduce transparency */
+@media (prefers-reduced-transparency: reduce){
+  .hp :where(.hp-heroCap,.hp-catCard__overlay){ backdrop-filter:none !important; }
+}
+
+/* high contrast */
+@media (prefers-contrast: more){
+  .hp{ --hp-border: rgba(15,23,42,.18); }
+  @media (prefers-color-scheme: dark){
+    .hp{ --hp-border: rgba(148,163,184,.30); }
+  }
+}
+
+/* ==========================================================
+   1) TOP TRUST — sellos compactos
+========================================================== */
+.hp-top{ padding: 6px 0 10px; }
+
 .hp-topTrust{
-  display:flex; gap:12px; flex-wrap:wrap;
+  display:flex; gap:10px; flex-wrap:wrap;
   padding:0; margin:0;
   list-style:none;
 }
+
 .hp-topTrust__item{
   display:flex; align-items:center; gap:10px;
   padding:10px 12px;
-  border-radius:14px;
-  border:1px solid rgba(15,23,42,.10);
-  background: rgba(255,255,255,.68);
-  box-shadow: 0 10px 24px rgba(2,6,23,.06);
-}
-.hp-topTrust__item b{ display:block; font-weight:900; line-height:1.1; }
-.hp-topTrust__item small{ display:block; opacity:.72; font-weight:700; margin-top:2px; }
-.hp-ico{ width:30px; height:30px; display:grid; place-items:center; border-radius:10px;
-  background: rgba(37,99,235,.10); border:1px solid rgba(37,99,235,.16);
+  border-radius: 14px;
+  border: 1px solid var(--hp-border);
+  background: var(--hp-surface2);
+  box-shadow: var(--hp-sh1);
+  min-height: 46px;
 }
 
-/* 2) HERO grid firme */
-.hp-hero{ padding: 12px 0 6px; }
+.hp-topTrust__item b{
+  display:block;
+  font-weight: 950;
+  line-height:1.05;
+  color: var(--hp-ink);
+}
+
+.hp-topTrust__item small{
+  display:block;
+  opacity:.72;
+  font-weight: 800;
+  margin-top:2px;
+  color: var(--hp-soft);
+}
+
+.hp-ico{
+  width:32px; height:32px;
+  display:grid; place-items:center;
+  border-radius: 12px;
+  background: rgba(37,99,235,.10);
+  border: 1px solid rgba(37,99,235,.16);
+  flex: 0 0 auto;
+}
+
+@media (max-width: 520px){
+  .hp-topTrust__item{ padding: 9px 10px; }
+  .hp-ico{ width:30px; height:30px; border-radius: 11px; }
+}
+
+/* ==========================================================
+   2) HERO grid
+========================================================== */
+.hp-hero{ padding: 12px 0 10px; }
+
 .hp-hero__grid{
   display:grid;
-  grid-template-columns: 1.18fr .82fr;
+  grid-template-columns: 1.12fr .88fr;
   gap: var(--hp-gap);
-  align-items:start;
-}
-@media (max-width: 980px){
-  .hp-hero__grid{ grid-template-columns: 1fr; }
+  align-items:center;
 }
 
-/* 3) Copy jerarquía */
-.hp-kickerRow{ display:flex; gap:10px; align-items:center; margin-bottom:10px; }
+@media (max-width: 980px){
+  .hp-hero__grid{ grid-template-columns: 1fr; align-items: start; }
+}
+
+/* ==========================================================
+   3) Copy jerarquía
+========================================================== */
+.hp-kickerRow{
+  display:flex;
+  gap:10px;
+  align-items:center;
+  flex-wrap:wrap;
+  margin-bottom: 10px;
+}
+
 .hp-kicker{
   display:inline-flex;
-  font-weight:900;
-  letter-spacing:.16em;
-  font-size:12px;
-  opacity:.75;
-  padding:8px 12px;
-  border-radius:999px;
+  font-weight: 950;
+  letter-spacing: .16em;
+  font-size: 12px;
+  opacity: .86;
+  padding: 8px 12px;
+  border-radius: 999px;
   background: rgba(255,255,255,.62);
-  border:1px solid rgba(15,23,42,.10);
+  border: 1px solid var(--hp-border);
 }
+
 .hp-verified{
   display:inline-flex;
-  font-weight:900;
-  font-size:12px;
-  padding:8px 12px;
-  border-radius:999px;
+  font-weight: 950;
+  font-size: 12px;
+  padding: 8px 12px;
+  border-radius: 999px;
   background: rgba(16,185,129,.12);
-  border:1px solid rgba(16,185,129,.18);
-  color: rgba(5,120,87,.96);
+  border: 1px solid rgba(16,185,129,.20);
+  color: rgba(5,120,87,.98);
 }
 
-.hp-title{ margin:0 0 10px; font-weight:950; letter-spacing:-.03em; line-height:1.02; }
+.hp-title{
+  margin: 0 0 10px;
+  font-weight: 950;
+  letter-spacing: -0.04em;
+  line-height: 1.02;
+  font-size: clamp(36px, 4.8vw, 58px);
+  color: var(--hp-ink);
+  overflow-wrap: anywhere;
+  hyphens: auto;
+}
+
+@supports (text-wrap: balance){
+  .hp-title{ text-wrap: balance; }
+}
+
 .hp-grad{
-  background: linear-gradient(135deg, #2563eb, #0ea5e9);
-  -webkit-background-clip:text; background-clip:text; color:transparent;
+  background: linear-gradient(135deg, var(--hp-p), var(--hp-p2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
   text-shadow: 0 14px 40px rgba(37,99,235,.20);
 }
+
 .hp-sub{
-  margin:0 0 16px;
-  color: rgba(15,23,42,.74);
-  font-weight:650;
-  max-width: 54ch;
+  margin: 0 0 16px;
+  color: var(--hp-muted);
+  font-weight: 700;
+  max-width: 58ch;
+  overflow-wrap: anywhere;
 }
 
-/* 4) Botones más pro (sin “bootstrap vibe”) */
-.hp-ctas{ display:flex; gap:10px; flex-wrap:wrap; margin: 14px 0; }
-.hp .btn{ border-radius:999px; min-height:46px; font-weight:900; }
-.hp .btn.primary{
-  box-shadow: 0 16px 42px rgba(37,99,235,.22);
-  transform: translateZ(0);
-}
-.hp .btn.primary:hover{ transform: translateY(-1px); }
-.hp .btn.ghost, .hp .btn.soft{ background: rgba(255,255,255,.66); }
-
-/* 5) Chips más finos */
-.hp-chips{ display:flex; gap:10px; flex-wrap:wrap; margin-top: 6px; }
-.hp-chip{
-  padding: 9px 12px;
-  border-radius:999px;
-  background: rgba(255,255,255,.70);
-  border: 1px solid rgba(15,23,42,.10);
-  box-shadow: 0 10px 22px rgba(2,6,23,.06);
-  font-weight:850;
-}
-
-/* 6) HERO CARD con imagen robusta (background fallback) */
-.hp-heroCard{
-  border-radius: 26px;
-  border:1px solid rgba(15,23,42,.10);
-  background:
-    radial-gradient(900px 420px at 18% 18%, rgba(37,99,235,.18), transparent 55%),
-    radial-gradient(800px 420px at 86% 22%, rgba(14,165,233,.14), transparent 55%),
-    linear-gradient(135deg, rgba(255,255,255,.92), rgba(255,255,255,.78));
-  box-shadow: 0 18px 50px rgba(2,6,23,.10), 0 2px 10px rgba(2,6,23,.06);
-  overflow:hidden;
-  position:relative;
-  min-height: 320px;
-}
-
-/* background real (si el <img> no carga, esto queda) */
-.hp-heroCard::after{
-  content:"";
-  position:absolute; inset:0;
-  background-image: var(--hero-url);
-  background-size: cover;
-  background-position: center;
-  opacity: .22;              /* sutil, no “foto fuerte” */
-  filter: saturate(1.02) contrast(1.02);
-  pointer-events:none;
-}
-
-/* la imagen arriba (si carga) */
-.hp-heroImg{
-  width:100%;
-  height: 320px;
-  object-fit: cover;
-  object-position: center;
-  display:block;
-  position:relative;
-  z-index:1;
-  filter: saturate(1.02) contrast(1.02);
-}
-
-/* caption */
-.hp-heroCap{
-  position:absolute; left:14px; right:14px; bottom:14px;
-  z-index:2;
-  padding: 12px 14px;
-  border-radius: 18px;
-  background: rgba(255,255,255,.78);
-  border:1px solid rgba(15,23,42,.10);
-  backdrop-filter: blur(14px);
-}
-.hp-heroCap b{ display:block; font-weight:950; }
-.hp-heroCap span{ display:block; opacity:.72; font-weight:750; margin-top:2px; }
-
-/* 7) Stats más “editorial” */
-.hp-stats{ display:grid; gap:12px; margin-top: 12px; }
-.hp-stat{
-  border-radius: 20px;
-  border:1px solid rgba(15,23,42,.10);
-  background: rgba(255,255,255,.74);
-  padding: 14px 16px;
-  box-shadow: 0 14px 34px rgba(2,6,23,.08);
-}
-.hp-stat b{ display:block; font-weight:950; }
-.hp-stat span{ display:block; opacity:.72; font-weight:750; margin-top:2px; }
-
-/* 8) TRUST cards: alineación + tamaño icono + menos “bloque” */
-.hp-trust__grid{ display:grid; grid-template-columns: repeat(3,1fr); gap: var(--hp-gap); }
-@media (max-width: 980px){ .hp-trust__grid{ grid-template-columns:1fr; } }
-.hp-trustCard{
-  border-radius: 22px;
-  border:1px solid rgba(15,23,42,.10);
-  background: rgba(255,255,255,.74);
-  box-shadow: 0 14px 34px rgba(2,6,23,.08);
-  padding: 14px 16px;
-  display:flex; gap:12px; align-items:center;
-}
-.hp-trustCard__img{
-  width:44px; height:44px; border-radius:14px;
-  display:grid; place-items:center;
-  background: rgba(37,99,235,.10);
-  border:1px solid rgba(37,99,235,.16);
-  overflow:hidden;
-}
-.hp-trustIcon{ width:28px; height:28px; object-fit:contain; display:block; }
-.hp-trustCard__meta b{ display:block; font-weight:950; }
-.hp-trustCard__meta span{ display:block; opacity:.72; font-weight:750; margin-top:2px; }
-
-/* 9) CATEGORIES: FIX centrado/recorte (tu problema) */
-.hp-catsGrid{ display:grid; grid-template-columns: repeat(4, 1fr); gap: var(--hp-gap); }
-@media (max-width: 980px){ .hp-catsGrid{ grid-template-columns: repeat(2,1fr); } }
-@media (max-width: 520px){ .hp-catsGrid{ grid-template-columns: 1fr; } }
-
-.hp-catCard{
-  border-radius: 22px;
-  overflow:hidden;
-  border:1px solid rgba(15,23,42,.10);
-  background: rgba(255,255,255,.72);
-  box-shadow: 0 18px 44px rgba(2,6,23,.10);
-  position:relative;
-  display:block;
-  text-decoration:none;
-}
-.hp-catCard__media{
-  height: 150px;             /* fijo para consistencia */
-  overflow:hidden;
-  position:relative;
-}
-.hp-catImg{
-  width:100%;
-  height:100%;
-  display:block;
-  object-fit: cover;          /* 🔥 esto centra y recorta bien */
-  object-position: center;    /* 🔥 */
-  transform: scale(1.02);
-}
-.hp-catCard__overlay{
-  position:absolute; left:12px; right:12px; bottom:12px;
-  border-radius: 16px;
-  padding: 12px 14px;
-  background: rgba(255,255,255,.80);
-  border:1px solid rgba(15,23,42,.10);
-  backdrop-filter: blur(14px);
-  display:flex; align-items:center; justify-content:space-between; gap:10px;
-}
-.hp-catCard__overlay b{ font-weight:950; color: rgba(15,23,42,.92); }
-.hp-catCard__overlay span{ font-weight:900; opacity:.70; }
-
-/* 10) Sections head (más pro) */
-.hp-secHead h2{ margin: 0 0 6px; font-weight: 950; letter-spacing:-.02em; }
-.hp-secHead p{ margin:0; opaci/* ===== PRO v14 extras (pegá al final) ===== */
+/* ==========================================================
+   4) MINI highlights (si existen en HTML)
+========================================================== */
 .hp-mini{
   display:grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   margin: 12px 0 8px;
 }
+
 @media (max-width: 720px){
   .hp-mini{ grid-template-columns: 1fr; }
 }
+
 .hp-mini__item{
   border-radius: 18px;
   padding: 12px 14px;
   background: rgba(255,255,255,.70);
-  border: 1px solid rgba(15,23,42,.10);
-  box-shadow: 0 12px 26px rgba(2,6,23,.06);
+  border: 1px solid var(--hp-border);
+  box-shadow: var(--hp-sh1);
 }
-.hp-mini__item b{ display:block; font-weight:950; }
-.hp-mini__item span{ display:block; opacity:.72; font-weight:750; margin-top:2px; }
 
-/* Hero background multi-url */
+.hp-mini__item b{ display:block; font-weight: 950; color: var(--hp-ink); }
+.hp-mini__item span{ display:block; opacity:.72; font-weight: 800; margin-top:2px; color: var(--hp-soft); }
+
+/* ==========================================================
+   5) CTAs — jerarquía clara
+========================================================== */
+.hp-ctas{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  margin: 14px 0 10px;
+}
+
+/* sólo efectos hover en mouse */
+@media (pointer:fine){
+  .hp .btn{ transition: transform var(--hp-t), box-shadow var(--hp-t), filter var(--hp-t); }
+  .hp .btn:hover{ transform: translateY(-1px); }
+}
+
+.hp .btn{
+  border-radius: 999px;
+  min-height: 46px;
+  font-weight: 950;
+  padding: 12px 16px;
+  user-select: none;
+}
+
+.hp .btn.primary{
+  box-shadow: 0 16px 42px rgba(37,99,235,.22);
+  transform: translateZ(0);
+}
+
+.hp .btn.primary:active{ transform: translateY(0px) scale(.99); }
+
+.hp .btn.ghost,
+.hp .btn.soft{
+  background: rgba(255,255,255,.66);
+  border: 1px solid var(--hp-border);
+  box-shadow: var(--hp-sh1);
+}
+
+/* ==========================================================
+   6) Chips — menos ruido visual
+========================================================== */
+.hp-chips{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  margin-top: 6px;
+}
+
+.hp-chip{
+  padding: 9px 12px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.70);
+  border: 1px solid var(--hp-border);
+  box-shadow: var(--hp-sh1);
+  font-weight: 900;
+  color: var(--hp-ink);
+}
+
+/* ==========================================================
+   7) HERO CARD — imagen robusta + fallback
+========================================================== */
+.hp-heroCard{
+  border-radius: 26px;
+  border: 1px solid var(--hp-border);
+  background:
+    radial-gradient(900px 420px at 18% 18%, rgba(37,99,235,.18), transparent 55%),
+    radial-gradient(800px 420px at 86% 22%, rgba(14,165,233,.14), transparent 55%),
+    linear-gradient(135deg, rgba(255,255,255,.92), rgba(255,255,255,.78));
+  box-shadow: var(--hp-sh3), 0 2px 10px rgba(2,6,23,.06);
+  overflow: hidden;
+  position: relative;
+  min-height: 320px;
+  contain: paint;
+}
+
+@media (max-width: 520px){
+  .hp-heroCard{ min-height: 280px; }
+}
+
 .hp-heroCard::after{
+  content:"";
+  position:absolute; inset:0;
   background-image: var(--hero-url);
   background-size: cover;
   background-position: center;
+  opacity: .22;
+  filter: saturate(1.02) contrast(1.02);
+  pointer-events:none;
 }
-ty:.74; font-weight:650; }
+
+.hp-heroCard.is-fallback::after{
+  opacity: .34; /* si se cayó la img, levantamos el fondo */
+}
+
+.hp-heroImg{
+  width:100%;
+  height: clamp(260px, 30vw, 340px);
+  object-fit: cover;
+  object-position: center;
+  display:block;
+  position: relative;
+  z-index: 1;
+  filter: saturate(1.02) contrast(1.02);
+}
+
+.hp-heroCap{
+  position:absolute;
+  left:14px; right:14px; bottom:14px;
+  z-index: 2;
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: rgba(255,255,255,.78);
+  border: 1px solid var(--hp-border);
+  box-shadow: 0 12px 26px rgba(2,6,23,.10);
+}
+
+@supports (backdrop-filter: blur(10px)){
+  .hp-heroCap{ backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+}
+
+.hp-heroCap b{ display:block; font-weight: 950; color: var(--hp-ink); }
+.hp-heroCap span{ display:block; opacity:.72; font-weight: 800; margin-top:2px; color: var(--hp-soft); }
+
+/* ==========================================================
+   8) Stats — responsive perfecto
+========================================================== */
+.hp-stats{
+  display:grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-top: 12px;
+  content-visibility: auto;
+  contain-intrinsic-size: 220px;
+}
+
+.hp-stat{
+  border-radius: 20px;
+  border: 1px solid var(--hp-border);
+  background: rgba(255,255,255,.74);
+  padding: 14px 16px;
+  box-shadow: var(--hp-sh1);
+  transition: transform var(--hp-t), box-shadow var(--hp-t);
+  overflow: clip;
+}
+
+@media (pointer:fine){
+  .hp-stat:hover{
+    transform: translateY(-1px);
+    box-shadow: var(--hp-sh2);
+  }
+}
+
+.hp-stat b{ display:block; font-weight: 950; color: var(--hp-ink); }
+.hp-stat span{ display:block; opacity:.72; font-weight: 800; margin-top:2px; color: var(--hp-soft); }
+
+/* ==========================================================
+   9) TRUST cards
+========================================================== */
+.hp-trust{ padding: 10px 0 6px; }
+
+.hp-trust__grid{
+  display:grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--hp-gap);
+}
+
+@media (max-width: 980px){
+  .hp-trust__grid{ grid-template-columns: 1fr; }
+}
+
+.hp-trustCard{
+  border-radius: 22px;
+  border: 1px solid var(--hp-border);
+  background: rgba(255,255,255,.74);
+  box-shadow: var(--hp-sh1);
+  padding: 14px 16px;
+  display:flex;
+  gap: 12px;
+  align-items:center;
+  transition: transform var(--hp-t), box-shadow var(--hp-t);
+  content-visibility: auto;
+  contain-intrinsic-size: 80px;
+}
+
+@media (pointer:fine){
+  .hp-trustCard:hover{
+    transform: translateY(-1px);
+    box-shadow: var(--hp-sh2);
+  }
+}
+
+.hp-trustCard__img{
+  width: 44px; height: 44px;
+  border-radius: 14px;
+  display:grid; place-items:center;
+  background: rgba(37,99,235,.10);
+  border: 1px solid rgba(37,99,235,.16);
+  overflow:hidden;
+  flex: 0 0 auto;
+}
+
+.hp-trustIcon{
+  width: 28px; height: 28px;
+  object-fit: contain;
+  display:block;
+}
+
+.hp-trustCard__meta b{ display:block; font-weight: 950; color: var(--hp-ink); }
+.hp-trustCard__meta span{ display:block; opacity:.72; font-weight: 800; margin-top:2px; color: var(--hp-soft); }
+
+/* ==========================================================
+   10) CATEGORIES — FIX centrado/recorte
+========================================================== */
+.hp-cats{ padding: 10px 0 6px; }
+
+.hp-catsGrid{
+  display:grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--hp-gap);
+}
+
+@media (max-width: 980px){
+  .hp-catsGrid{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 520px){
+  .hp-catsGrid{ grid-template-columns: 1fr; }
+}
+
+.hp-catCard{
+  border-radius: 22px;
+  overflow: hidden;
+  border: 1px solid var(--hp-border);
+  background: rgba(255,255,255,.72);
+  box-shadow: var(--hp-sh2);
+  position: relative;
+  display:block;
+  text-decoration:none;
+  transition: transform var(--hp-t), box-shadow var(--hp-t);
+  contain: paint;
+}
+
+@media (pointer:fine){
+  .hp-catCard:hover{
+    transform: translateY(-2px);
+    box-shadow: var(--hp-sh3);
+  }
+}
+
+.hp-catCard__media{
+  height: 150px;
+  overflow:hidden;
+  position: relative;
+}
+
+.hp-catImg{
+  width:100%;
+  height:100%;
+  display:block;
+  object-fit: cover;
+  object-position: center;
+  transform: scale(1.02);
+}
+
+.hp-catCard__overlay{
+  position:absolute;
+  left:12px; right:12px; bottom:12px;
+  border-radius: 16px;
+  padding: 12px 14px;
+  background: rgba(255,255,255,.80);
+  border: 1px solid var(--hp-border);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 10px;
+  box-shadow: 0 12px 26px rgba(2,6,23,.10);
+}
+
+@supports (backdrop-filter: blur(10px)){
+  .hp-catCard__overlay{ backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+}
+
+.hp-catCard__overlay b{
+  font-weight: 950;
+  color: var(--hp-ink);
+}
+
+.hp-catCard__overlay span{
+  font-weight: 900;
+  opacity: .74;
+  color: var(--hp-muted);
+}
+
+/* ==========================================================
+   11) Section head — FIX completo
+========================================================== */
+.hp-secHead{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap: 10px;
+  margin: 8px 0 12px;
+}
+
+.hp-secHead h2{
+  margin: 0 0 6px;
+  font-weight: 950;
+  letter-spacing: -0.02em;
+  color: var(--hp-ink);
+}
+
+.hp-secHead p{
+  margin: 0;
+  opacity: .74;
+  font-weight: 700;
+  color: var(--hp-muted);
+}
+
+/* ==========================================================
+   12) Sticky + ToTop (tu HTML los usa)
+========================================================== */
+.hp-sticky{
+  position: fixed;
+  left: 14px; right: 14px;
+  bottom: calc(14px + env(safe-area-inset-bottom));
+  z-index: 60;
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--hp-border);
+  background: rgba(255,255,255,.72);
+  box-shadow: var(--hp-sh3);
+}
+
+.hp-sticky.is-on{ display:flex; }
+
+@supports (backdrop-filter: blur(10px)){
+  .hp-sticky{ backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+}
+
+.hp-sticky__txt b{ font-weight: 950; color: var(--hp-ink); display:block; line-height:1.05; }
+.hp-sticky__txt span{ font-weight: 800; opacity:.74; color: var(--hp-muted); display:block; font-size:.92rem; }
+
+.hp-sticky__btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding: 10px 14px;
+  border-radius: 999px;
+  font-weight: 950;
+  color: #fff;
+  background: linear-gradient(135deg, var(--hp-p), var(--hp-p2));
+}
+
+.to-top{
+  position: fixed;
+  right: 14px;
+  bottom: calc(86px + env(safe-area-inset-bottom));
+  z-index: 60;
+  display: none;
+  width: 44px; height: 44px;
+  border-radius: 999px;
+  border: 1px solid var(--hp-border);
+  background: rgba(255,255,255,.72);
+  box-shadow: var(--hp-sh2);
+  font-weight: 950;
+  line-height: 1;
+}
+
+/* ==========================================================
+   DARK MODE
+========================================================== */
+@media (prefers-color-scheme: dark){
+  .hp{
+    --hp-border: rgba(148,163,184,.18);
+    --hp-ink: rgba(248,250,252,.92);
+    --hp-muted: rgba(226,232,240,.76);
+    --hp-soft: rgba(226,232,240,.62);
+    --hp-surface: rgba(15,23,42,.68);
+    --hp-surface2: rgba(15,23,42,.60);
+
+    --hp-sh1: 0 12px 26px rgba(0,0,0,.35);
+    --hp-sh2: 0 18px 44px rgba(0,0,0,.42);
+    --hp-sh3: 0 22px 60px rgba(0,0,0,.48);
+
+    --hp-focus: 0 0 0 6px rgba(14,165,233,.26);
+  }
+
+  .hp-topTrust__item,
+  .hp-stat,
+  .hp-trustCard,
+  .hp-mini__item,
+  .hp-catCard,
+  .hp-sticky,
+  .to-top{
+    background: rgba(15,23,42,.62);
+    border-color: rgba(148,163,184,.18);
+  }
+
+  .hp-kicker{
+    background: rgba(15,23,42,.55);
+    border-color: rgba(148,163,184,.18);
+  }
+
+  .hp-verified{
+    background: rgba(16,185,129,.14);
+    border-color: rgba(16,185,129,.22);
+    color: rgba(167,243,208,.96);
+  }
+
+  .hp-heroCap,
+  .hp-catCard__overlay{
+    background: rgba(15,23,42,.62);
+    border-color: rgba(148,163,184,.18);
+  }
+
+  .hp-heroCap span,
+  .hp-mini__item span,
+  .hp-stat span,
+  .hp-topTrust__item small,
+  .hp-trustCard__meta span{
+    color: var(--hp-muted);
+  }
+}

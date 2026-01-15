@@ -807,3 +807,260 @@ input:-webkit-autofill:focus{
 @media (prefers-reduced-transparency: reduce){
   .topbar{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
 }
+/* ==========================================================
+   SKYLINE STORE — ULTRA PREMIUM UI (v5.3 · GLOBAL PATCH)
+   ✅ 40 mejoras: a11y + spacing + header + search + perf + dark
+   Pegar al FINAL del global.css
+========================================================== */
+
+/* 1) A11Y FIX: NO matar focus global */
+:focus{ outline: revert; }
+:where(a,button,input,select,textarea,[tabindex]):focus{ outline: none; }
+:where(a,button,input,select,textarea,[tabindex]):focus-visible{
+  outline: none;
+  box-shadow: var(--focus);
+  border-radius: 16px;
+}
+
+/* 2) Smooth scroll solo si no reduce-motion */
+@media (prefers-reduced-motion: reduce){
+  html{ scroll-behavior: auto !important; }
+}
+
+/* 3) Tokens extra (no rompe) */
+:root{
+  --max: clamp(1120px, 88vw, 1280px);
+  --pad: clamp(16px, 2vw, 20px);
+  --pad-lg: clamp(20px, 2.2vw, 28px);
+
+  --surface3: rgba(255,255,255,.92);
+  --shadow-inset: inset 0 1px 0 rgba(255,255,255,.7);
+
+  --ring: 0 0 0 6px rgba(37,99,235,.16);
+  --ring2: 0 0 0 3px rgba(37,99,235,.22);
+}
+
+@media (prefers-color-scheme: dark){
+  :root{
+    --surface3: rgba(10,14,28,.92);
+    --shadow-inset: inset 0 1px 0 rgba(255,255,255,.06);
+    --ring: 0 0 0 6px rgba(6,182,212,.16);
+    --ring2: 0 0 0 3px rgba(6,182,212,.22);
+  }
+}
+
+/* 4) Body microfixes */
+body{
+  overscroll-behavior-x: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 5) Titles más pro */
+h1,h2{ text-wrap: balance; }
+p{ text-wrap: pretty; }
+
+/* ==========================================================
+   HEADER/TOPBAR — compact + premium
+========================================================== */
+.topbar{
+  background: var(--glass);
+  border-bottom: 1px solid var(--border);
+}
+
+.topbar-inner{
+  padding:
+    10px calc(var(--pad) + env(safe-area-inset-left))
+    10px calc(var(--pad) + env(safe-area-inset-right));
+  gap: 10px;
+}
+
+@media(min-width:980px){
+  .topbar-inner{
+    padding:
+      10px calc(var(--pad-lg) + env(safe-area-inset-left))
+      10px calc(var(--pad-lg) + env(safe-area-inset-right));
+  }
+}
+
+/* nav: hover más fino */
+.nav a{
+  border-radius: 14px;
+}
+.nav a:hover{
+  transform: translateY(-1px);
+  box-shadow: var(--sh1);
+}
+@media (pointer:coarse){
+  .nav a:hover{ transform:none; box-shadow:none; }
+}
+
+/* active más claro */
+.nav a.active{
+  background: rgba(37,99,235,.10);
+  border: 1px solid rgba(37,99,235,.20);
+  color: var(--p);
+}
+
+/* search: menos “globo” */
+.search{
+  min-height: 46px;
+  padding: 10px 12px;
+  box-shadow: var(--shadow-inset), 0 12px 26px rgba(10,16,32,.06);
+}
+.search:focus-within{ box-shadow: var(--ring); border-color: rgba(37,99,235,.20); }
+@media (prefers-color-scheme: dark){
+  .search{ box-shadow: none; }
+  .search:focus-within{ box-shadow: var(--ring); }
+}
+.search input{
+  line-height: 1.2;
+}
+
+/* account chip: hover sutil */
+.account-chip{
+  box-shadow: 0 10px 22px rgba(10,16,32,.06);
+}
+.account-chip:hover{
+  transform: translateY(-1px);
+  border-color: rgba(37,99,235,.22);
+}
+@media (pointer:coarse){
+  .account-chip:hover{ transform:none; }
+}
+
+/* badge: legible */
+.cart-badge{
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Mobile 2 filas: más compacto */
+@media(max-width:760px){
+  .topbar-inner{ gap: 8px; }
+  .search{ padding: 10px 12px; }
+}
+
+/* ==========================================================
+   BUTTONS — premium microinteractions
+========================================================== */
+.btn{
+  isolation: isolate;
+  will-change: transform;
+}
+.btn:hover{ transform: translateY(-1px); }
+@media (pointer:coarse){
+  .btn:hover{ transform:none; }
+}
+
+.btn.primary{
+  box-shadow: 0 18px 55px rgba(37,99,235,.20);
+}
+.btn.primary:hover{
+  filter: saturate(1.04) brightness(1.02);
+}
+
+.btn.ghost{
+  background: rgba(255,255,255,.82);
+}
+@media (prefers-color-scheme: dark){
+  .btn.ghost{ background: rgba(255,255,255,.06); }
+}
+
+/* ==========================================================
+   INPUTS — focus consistente + estados suaves
+========================================================== */
+.input{
+  box-shadow: var(--shadow-inset), 0 12px 26px rgba(10,16,32,.06);
+}
+.input:focus-within{
+  box-shadow: var(--ring);
+  border-color: rgba(37,99,235,.22);
+}
+.input[aria-invalid="true"], .input.is-error{
+  border-color: rgba(220,38,38,.28);
+  box-shadow: var(--ring2);
+}
+.input.is-ok{
+  border-color: rgba(22,163,74,.24);
+}
+
+/* Autofill más robusto */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus{
+  -webkit-text-fill-color: var(--ink);
+  box-shadow: 0 0 0 1000px rgba(255,255,255,.92) inset !important;
+}
+@media (prefers-color-scheme: dark){
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus{
+    box-shadow: 0 0 0 1000px rgba(9,12,24,.86) inset !important;
+  }
+}
+
+/* ==========================================================
+   CARDS — hover pro sin mareo
+========================================================== */
+.card, .panel, .surface{
+  background: rgba(255,255,255,.86);
+  border-color: var(--border);
+}
+.card:hover, .panel:hover, .surface:hover{
+  transform: translateY(-2px);
+}
+@media (pointer:coarse){
+  .card:hover, .panel:hover, .surface:hover{ transform:none; }
+}
+
+/* PRODUCT GRID perf */
+.gridP{
+  content-visibility: auto;
+  contain-intrinsic-size: 700px;
+}
+
+/* Product card lift menos agresivo */
+.cardP:hover{
+  transform: translateY(-6px);
+}
+
+/* blur cost control */
+@supports (backdrop-filter: blur(10px)){
+  .badgeP, .chipP{
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+}
+
+/* CLS helpers */
+img[width][height]{ height:auto; }
+.mediaP img{ display:block; }
+
+/* ==========================================================
+   HERO noise overlay más liviano
+========================================================== */
+.hero::after{ opacity: .045; }
+
+/* ==========================================================
+   Footer contraste
+========================================================== */
+.footer{
+  background: rgba(255,255,255,.36);
+}
+@media (prefers-color-scheme: dark){
+  .footer{ background: rgba(255,255,255,.03); }
+}
+
+/* ==========================================================
+   Preferencias de usuario
+========================================================== */
+@media (prefers-reduced-transparency: reduce){
+  .topbar{ backdrop-filter:none!important; -webkit-backdrop-filter:none!important; }
+}
+
+@media (prefers-contrast: more){
+  :root{ --border: rgba(10,16,32,.18); --border2: rgba(10,16,32,.24); }
+  @media (prefers-color-scheme: dark){
+    :root{ --border: rgba(148,163,184,.28); --border2: rgba(148,163,184,.36); }
+  }
+}

@@ -1,8 +1,8 @@
-{# app/templates/base.html — Skyline Store (ULTRA PRO ENTERPRISE · v5.5 FINAL)
+{# app/templates/base.html — Skyline Store (ULTRA PRO ENTERPRISE · v5.6 FINAL)
    ✅ NO 500 / FAIL-SAFE / FUTURE-PROOF / Account Unified
-   ✅ Jinja-compatible (sin try/except, sin "is callable")
+   ✅ Jinja-safe (sin try/except, sin callable checks)
    ✅ CSS global skyline-pro.css (fallback skyline.css)
-   ✅ Header marketplace grid estable + mobile 2 filas (depende skyline-pro.css)
+   ✅ Header marketplace estable + mobile 2 filas
 #}
 <!doctype html>
 <html lang="es">
@@ -15,21 +15,20 @@
   {% set _req = request if request is defined and request else none %}
   {% set _path = (_req.path if _req and _req.path else '') %}
   {% set _args = (_req.args if _req and _req.args else {}) %}
+  {% set _base_url = (_req.base_url if _req and _req.base_url else '/') %}
 
-  {# ---------- CSP nonce (style/script). Fallback a nonce si existe ---------- #}
+  {# ---------- CSP nonce (style/script) ---------- #}
   {% set _csp_nonce = (csp_nonce if csp_nonce is defined and csp_nonce else (nonce if nonce is defined and nonce else '')) %}
 
-  {# ---------- safe endpoint checks ---------- #}
+  {# ---------- endpoint checks ---------- #}
   {% set _has_ep = has_endpoint if has_endpoint is defined and has_endpoint else none %}
 
-  {# ---------- safe url_for wrappers (Jinja-safe) ---------- #}
+  {# ---------- safe url_for wrappers ---------- #}
   {% macro safe_url(endpoint, fallback='/') -%}
     {%- if not endpoint -%}{{- fallback -}}
     {%- else -%}
-      {%- if _has_ep and _has_ep(endpoint) -%}
-        {{- url_for(endpoint) -}}
-      {%- else -%}
-        {{- fallback -}}
+      {%- if _has_ep and _has_ep(endpoint) -%}{{- url_for(endpoint) -}}
+      {%- else -%}{{- fallback -}}
       {%- endif -%}
     {%- endif -%}
   {%- endmacro %}
@@ -37,40 +36,41 @@
   {% macro safe_static(filename, fallback='') -%}
     {%- if not filename -%}{{- fallback -}}
     {%- else -%}
-      {%- if url_for is defined -%}
-        {{- url_for('static', filename=filename) -}}
-      {%- else -%}
-        {{- fallback -}}
+      {%- if url_for is defined -%}{{- url_for('static', filename=filename) -}}
+      {%- else -%}{{- fallback -}}
       {%- endif -%}
     {%- endif -%}
   {%- endmacro %}
 
   {# ---------- SEO ---------- #}
-  <title>{% block title %}{{ meta_title or APP_NAME or "Skyline Store" }}{% endblock %}</title>
-  <meta name="description" content="{{ meta_description or 'Skyline Store — marketplace premium de tecnología y streetwear.' }}">
-  <meta name="robots" content="{{ meta_robots or 'index,follow' }}">
+  {% set _title = (meta_title or APP_NAME or "Skyline Store")|string %}
+  {% set _desc = (meta_description or "Skyline Store — marketplace premium de tecnología y streetwear.")|string %}
+  {% set _robots = (meta_robots or "index,follow")|string %}
 
-  {% set _canonical = (_req.base_url if _req and _req.base_url else '/') %}
-  <link rel="canonical" href="{{ _canonical }}">
+  <title>{% block title %}{{ _title }}{% endblock %}</title>
+  <meta name="description" content="{{ _desc|trim|e }}">
+  <meta name="robots" content="{{ _robots|trim|e }}">
+  <link rel="canonical" href="{{ _base_url }}">
 
   {# OG image safe #}
   {% set _og_img_local = safe_static('img/og.png', '') %}
   {% set _og_img = (og_image if og_image is defined and og_image else (_og_img_local if _og_img_local else '')) %}
 
-  <meta property="og:title" content="{{ meta_title or APP_NAME or 'Skyline Store' }}">
-  <meta property="og:description" content="{{ meta_description or 'Marketplace premium de tecnología y streetwear.' }}">
+  <meta property="og:title" content="{{ _title|e }}">
+  <meta property="og:description" content="{{ _desc|trim|e }}">
   {% if _og_img %}<meta property="og:image" content="{{ _og_img }}">{% endif %}
   <meta property="og:type" content="website">
   <meta property="og:locale" content="es_UY">
-  <meta property="og:url" content="{{ _canonical }}">
+  <meta property="og:url" content="{{ _base_url }}">
   <meta name="twitter:card" content="summary_large_image">
 
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
   <meta name="color-scheme" content="light dark">
-  <meta name="theme-color" content="#2563eb">
+  <meta name="theme-color" content="#2563eb" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#070b14" media="(prefers-color-scheme: dark)">
 
-  {# CSP meta (secundario si Talisman mete headers) — compactado para evitar problemas #}
+  {# CSP meta (secundario si Talisman mete headers) #}
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'self';
                  base-uri 'self';
@@ -79,43 +79,33 @@
                  object-src 'none';
                  img-src 'self' data: https:;
                  style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
-                 font-src https://fonts.gstatic.com;
+                 font-src 'self' https://fonts.gstatic.com data:;
                  script-src 'self' 'unsafe-inline';
                  connect-src 'self' https:;">
 
-  {# ---------- CSRF robusto (sin 'is callable') ---------- #}
+  {# ---------- CSRF robusto ---------- #}
   {% set _csrf_value = '' %}
   {% if csrf_token_value is defined and csrf_token_value %}
     {% set _csrf_value = csrf_token_value %}
   {% elif csrf_token is defined and csrf_token %}
-    {# Si csrf_token es función (Flask-WTF) normalmente se llama, pero no usamos 'callable'.
-       Intentamos llamar SOLO si parece invocable por Jinja: si viene como macro/func, suele funcionar con "()".
-       Si no, dejamos el valor directo.
-    #}
-    {% set _csrf_value = csrf_token %}
-    {% if _csrf_value and _csrf_value is not string %}
-      {# Si no es string, probamos a llamarlo. Si no funciona, Jinja normalmente mostraría algo;
-         por eso preferimos pasar csrf_token_value desde backend. #}
-      {% set _csrf_value = csrf_token() %}
-    {% endif %}
+    {# En Flask-WTF suele ser función, pero si fuera string no rompe #}
+    {% set _csrf_value = csrf_token() %}
   {% endif %}
-  <meta name="csrf-token" content="{{ _csrf_value }}">
+  <meta name="csrf-token" content="{{ (_csrf_value|string)|e }}">
 
   {# favicon safe #}
   {% set _favicon = safe_static('img/favicon.png', '') %}
   {% if _favicon %}<link rel="icon" href="{{ _favicon }}">{% endif %}
 
   {% if _og_img %}<link rel="preload" as="image" href="{{ _og_img }}">{% endif %}
-  {% if hero_image is defined and hero_image %}
-    <link rel="preload" as="image" href="{{ hero_image }}">
-  {% endif %}
+  {% if hero_image is defined and hero_image %}<link rel="preload" as="image" href="{{ hero_image }}">{% endif %}
 
   {# Fonts #}
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 
-  {# ---------- CSS GLOBAL REAL (skyline-pro.css) + fallback skyline.css ---------- #}
+  {# ---------- CSS GLOBAL (skyline-pro.css) + fallback ---------- #}
   {% set _css_ver = (SKYLINE_CSS_VER if SKYLINE_CSS_VER is defined and SKYLINE_CSS_VER else '5') %}
   {% set _css_primary = safe_static('css/skyline-pro.css', '') %}
   {% set _css_fallback = safe_static('css/skyline.css', '') %}
@@ -124,34 +114,70 @@
   {% if _css_href %}
     <link rel="preload" as="style" href="{{ _css_href }}?v={{ _css_ver|e }}">
     <link rel="stylesheet" href="{{ _css_href }}?v={{ _css_ver|e }}">
+    <noscript><link rel="stylesheet" href="{{ _css_href }}?v={{ _css_ver|e }}"></noscript>
   {% endif %}
-
-  {# ✅ Mejora extra: evita FOUC si el CSS demora #}
-  <meta name="theme-color" content="#2563eb" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#070b14" media="(prefers-color-scheme: dark)">
 
   {% block extra_css %}{% endblock %}
 
   {# Minimal inline essentials only #}
   <style{% if _csp_nonce %} nonce="{{ _csp_nonce|e }}"{% endif %}>
     .sr-only{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
-    .skip{position:absolute;left:12px;top:12px;z-index:9999;padding:10px 12px;border-radius:14px;background:rgba(255,255,255,.92);border:1px solid rgba(8,16,34,.12);box-shadow:0 18px 50px rgba(8,16,34,.14);transform:translateY(-140%);transition:transform .18s ease}
+
+    .skip{
+      position:absolute;left:12px;top:12px;z-index:9999;
+      padding:10px 12px;border-radius:14px;
+      background:rgba(255,255,255,.92);
+      border:1px solid rgba(8,16,34,.12);
+      box-shadow:0 18px 50px rgba(8,16,34,.14);
+      transform:translateY(-140%);
+      transition:transform .18s ease;
+    }
     .skip:focus{transform:translateY(0)}
+
     .brand-txt{display:flex;flex-direction:column;line-height:1.05}
     .brand-name{font-weight:1000}
     .brand-sub{font-size:.85rem;opacity:.72;font-weight:800}
-    .cart-badge{position:absolute;top:-6px;right:-6px;min-width:20px;height:20px;display:flex;align-items:center;justify-content:center;border-radius:999px;background:linear-gradient(135deg,#2563eb,#06b6d4);color:#fff;font-size:.72rem;font-weight:1000;padding:0 6px;border:1px solid rgba(255,255,255,.45);pointer-events:none}
-    .avatar{width:30px;height:30px;border-radius:999px;background:linear-gradient(135deg, rgba(37,99,235,.18), rgba(6,182,212,.12));border:1px solid rgba(37,99,235,.16);flex:0 0 auto}
-    .account-chip{display:inline-flex;align-items:center;gap:10px;padding:10px 12px;border-radius:999px;border:1px solid var(--border);background:rgba(255,255,255,.78);box-shadow:var(--sh1)}
-    @media (prefers-color-scheme: dark){.account-chip{background:rgba(255,255,255,.06);box-shadow:none}}
+
+    .cart-badge{
+      position:absolute;top:-6px;right:-6px;
+      min-width:20px;height:20px;
+      display:flex;align-items:center;justify-content:center;
+      border-radius:999px;
+      background:linear-gradient(135deg,#2563eb,#06b6d4);
+      color:#fff;font-size:.72rem;font-weight:1000;
+      padding:0 6px;border:1px solid rgba(255,255,255,.45);
+      pointer-events:none;
+      line-height:1;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .avatar{
+      width:30px;height:30px;border-radius:999px;
+      background:linear-gradient(135deg, rgba(37,99,235,.18), rgba(6,182,212,.12));
+      border:1px solid rgba(37,99,235,.16);
+      flex:0 0 auto;
+    }
+
+    .account-chip{
+      display:inline-flex;align-items:center;gap:10px;
+      padding:10px 12px;border-radius:999px;
+      border:1px solid var(--border, rgba(10,16,32,.10));
+      background:rgba(255,255,255,.78);
+      box-shadow:var(--sh1, 0 12px 30px rgba(10,16,32,.08));
+      transition: transform .18s ease, border-color .18s ease;
+    }
+    .account-chip:hover{transform:translateY(-1px);border-color:rgba(37,99,235,.22)}
+    @media (prefers-color-scheme: dark){
+      .account-chip{background:rgba(255,255,255,.06);box-shadow:none}
+      .account-chip:hover{transform:none}
+    }
+
     .account-txt{display:flex;flex-direction:column;line-height:1.05}
     .account-txt .t1{font-weight:1000}
     .account-txt .t2{font-weight:900;opacity:.72;font-size:.86rem}
-    .footer{margin-top:28px;padding:22px 0;border-top:1px solid var(--border);background:rgba(255,255,255,.40)}
+
+    .footer{margin-top:28px;padding:22px 0;border-top:1px solid var(--border, rgba(10,16,32,.10));background:rgba(255,255,255,.40)}
     @media (prefers-color-scheme: dark){.footer{background:rgba(255,255,255,.03)}}
-    .grid{display:grid;gap:14px}
-    .grid-4{grid-template-columns:1fr}
-    @media(min-width:980px){.grid-4{grid-template-columns:repeat(4,1fr)}}
     .footer a{opacity:.86}
     .footer a:hover{opacity:1;text-decoration:underline}
   </style>
@@ -172,10 +198,8 @@
 
 {# current_user bulletproof #}
 {% set _user_ok = false %}
-{% if current_user is defined and current_user %}
-  {% if current_user.is_authenticated is defined and current_user.is_authenticated %}
-    {% set _user_ok = true %}
-  {% endif %}
+{% if current_user is defined and current_user and current_user.is_authenticated is defined and current_user.is_authenticated %}
+  {% set _user_ok = true %}
 {% endif %}
 
 <header class="topbar" role="banner">
@@ -184,20 +208,15 @@
     <a href="{{ _home_href }}" class="brand" aria-label="Ir a inicio">
       <span class="brand-dot" aria-hidden="true"></span>
       <div class="brand-txt">
-        <span class="brand-name">{{ APP_NAME or "Skyline Store" }}</span>
+        <span class="brand-name">{{ (APP_NAME or "Skyline Store")|e }}</span>
         <span class="brand-sub">Tech + Streetwear premium</span>
       </div>
     </a>
 
     <nav class="nav" aria-label="Navegación principal">
-      <a href="{{ _home_href }}"
-         {% if _path == "/" %}class="active" aria-current="page"{% endif %}>Inicio</a>
-
-      <a href="{{ _shop_href }}"
-         {% if _path.startswith("/shop") and not (_args and _args.get('ofertas')) %}class="active" aria-current="page"{% endif %}>Tienda</a>
-
-      <a href="{{ _shop_href }}?ofertas=1"
-         {% if _args and _args.get('ofertas') %}class="active" aria-current="page"{% endif %}>Ofertas</a>
+      <a href="{{ _home_href }}" {% if _path == "/" %}class="active" aria-current="page"{% endif %}>Inicio</a>
+      <a href="{{ _shop_href }}" {% if _path.startswith("/shop") and not (_args and _args.get('ofertas')) %}class="active" aria-current="page"{% endif %}>Tienda</a>
+      <a href="{{ _shop_href }}?ofertas=1" {% if _args and _args.get('ofertas') %}class="active" aria-current="page"{% endif %}>Ofertas</a>
     </nav>
 
     <form class="search" action="{{ _shop_href }}" method="get" role="search" aria-label="Buscar productos">
@@ -207,15 +226,16 @@
       <input id="q" type="search" name="q"
              placeholder="Buscar productos…"
              value="{{ _q|trim|e }}"
-             autocomplete="off" inputmode="search">
-      <button class="btn ghost" type="submit">Buscar</button>
+             autocomplete="off" autocapitalize="none" spellcheck="false"
+             inputmode="search" enterkeyhint="search">
+      <button class="btn ghost" type="submit" aria-label="Buscar">Buscar</button>
     </form>
 
     <div class="topbar-actions" aria-label="Acciones rápidas">
       <a href="{{ _cart_href }}" class="btn ghost" aria-label="Carrito"
          style="padding:10px 12px;border-radius:999px;position:relative">
         <span aria-hidden="true">🛒</span>
-        <span class="cart-badge" data-cart-badge role="status" aria-live="polite" aria-atomic="true" style="display:none">0</span>
+        <span class="cart-badge" data-cart-badge role="status" aria-live="polite" aria-atomic="true" hidden>0</span>
       </a>
 
       <a href="{{ (_account_href if _user_ok else _acc_login) }}" class="account-chip" aria-label="Mi cuenta">
@@ -223,7 +243,9 @@
         <span class="account-txt">
           <span class="t1">
             {% if _user_ok %}
-              Hola, {{ (current_user.name if current_user.name is defined and current_user.name else "👋") }}
+              {# limita el nombre para que no rompa layout #}
+              {% set _nm = (current_user.name if current_user.name is defined and current_user.name else "👋")|string %}
+              Hola, {{ _nm[:18]|e }}
             {% else %}
               Mi cuenta
             {% endif %}
@@ -247,7 +269,7 @@
 <footer class="footer" role="contentinfo">
   <div class="container grid grid-4">
     <div>
-      <strong>{{ APP_NAME or "Skyline Store" }}</strong>
+      <strong>{{ (APP_NAME or "Skyline Store")|e }}</strong>
       <p class="small">Marketplace premium de tecnología y streetwear.</p>
     </div>
 
@@ -267,13 +289,13 @@
 
     <div>
       <strong>Legal</strong><br>
-      <a href="/terms">Términos</a><br>
-      <a href="/privacy">Privacidad</a>
+      <a href="{{ safe_url('main.terms', '/terms') }}">Términos</a><br>
+      <a href="{{ safe_url('main.privacy', '/privacy') }}">Privacidad</a>
     </div>
   </div>
 
-  {% set _year = (now_utc.year if now_utc is defined and now_utc else 2026) %}
-  <p class="small container" style="padding-top:0">© {{ _year }} {{ APP_NAME or "Skyline Store" }}</p>
+  {% set _year = (now_utc.year if now_utc is defined and now_utc else (current_year if current_year is defined and current_year else 2026)) %}
+  <p class="small container" style="padding-top:0">© {{ _year }} {{ (APP_NAME or "Skyline Store")|e }}</p>
 </footer>
 
 <script{% if _csp_nonce %} nonce="{{ _csp_nonce|e }}"{% endif %}>
@@ -291,7 +313,11 @@
 
     window.fetch = (input, init = {}) => {
       try {
-        const url = (typeof input === "string") ? input : (input?.url || "");
+        const url =
+          (typeof input === "string") ? input :
+          (input && typeof input.url === "string") ? input.url :
+          "";
+
         const abs = /^https?:\/\//i.test(url);
         const sameOrigin = !abs || url.startsWith(location.origin);
 
@@ -325,6 +351,7 @@
   if (q) {
     const trim = () => { q.value = (q.value || "").trim(); };
     q.addEventListener("change", trim);
+    q.addEventListener("keydown", (e) => { if (e.key === "Enter") trim(); });
     q.closest("form")?.addEventListener("submit", trim);
   }
 
@@ -374,9 +401,10 @@
 
     tryFetch()
       .then((d) => {
-        if (!d) { badge.style.display = "none"; return; }
+        if (!d) { badge.hidden = true; return; }
         const c = parseCount(d);
         badge.textContent = String(c);
+        badge.hidden = !c;
         badge.style.display = c ? "flex" : "none";
         badge.setAttribute("aria-label", c ? `${c} items en carrito` : "Carrito vacío");
       })
