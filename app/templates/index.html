@@ -1,7 +1,9 @@
-{# app/templates/index.html — Skyline Store (PRO v15.1 · +10 mejoras · NO-500)
-   ✅ VISIBLES: hero full overlay tipo referencia, topTrust 4, badges, CTA, cards, grid, separadores, sticky, toTop
-   ✅ NO-500: safe urls / safe vars / safe fallbacks
-   ✅ Cache-bust real: HOME_CSS_VER con fallback a "15"
+{# app/templates/index.html — Skyline Store (PRO v15.2 · +5 mejoras · NO-500)
+   ✅ Hero FULL overlay tipo referencia
+   ✅ TopTrust 4
+   ✅ Fallbacks robustos (Jinja + IMG)
+   ✅ JS pills/sticky/toTop sin romper home.js
+   ✅ SEO extra (og:image:alt + twitter tags)
 #}
 {% extends "base.html" %}
 
@@ -33,9 +35,13 @@
   <meta property="og:description" content="{{ (meta_description | default('Comprá fácil, rápido y seguro.', true))|string|trim|e }}">
   <meta property="og:type" content="website">
   <meta property="og:image" content="{{ og_img }}">
+  <meta property="og:image:alt" content="Skyline Store · Tech + Streetwear premium">
   <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{ _t|e }}">
+  <meta name="twitter:description" content="{{ _desc|trim|e }}">
 
   <link rel="preload" as="image" href="{{ hero_img }}" fetchpriority="high">
+  <link rel="preconnect" href="{{ _root|e }}">
 
   {# ✅ Cache-bust REAL (si no definís HOME_CSS_VER, usa 15) #}
   {% set _home_css_ver = (HOME_CSS_VER if HOME_CSS_VER is defined and HOME_CSS_VER else '15')|string|trim %}
@@ -67,15 +73,22 @@
   {% set shop_url = (url_for('shop.shop') if 'shop.shop' in _vf else '/shop') %}
   {% set offers_url = shop_url ~ ('?ofertas=1' if '?' not in shop_url else '&ofertas=1') %}
 
-  {% set account_url = (url_for('main.account') if 'main.account' in _vf else ('/account' if '/account' else '/auth/account')) %}
+  {# ✅ FIX real: antes era siempre true por "/account" literal #}
+  {% set account_url =
+      (url_for('main.account') if 'main.account' in _vf
+        else (url_for('account.account') if 'account.account' in _vf
+          else '/account'))
+  %}
   {% set account_login_url = account_url ~ ('?tab=login' if '?' not in account_url else '&tab=login') %}
   {% set account_register_url = account_url ~ ('?tab=register' if '?' not in account_url else '&tab=register') %}
 
-  {# si tu base tiene un buscador en header, esto al menos baja a tienda/categorías #}
   {% set search_anchor = '#hpCats' %}
-
   {% set featured_list = (featured if featured is defined and featured else []) %}
-  {% set _hero_overlay = "linear-gradient(90deg, rgba(255,255,255,.92) 0%, rgba(255,255,255,.82) 46%, rgba(255,255,255,.35) 72%, rgba(255,255,255,0) 100%)" %}
+
+  {# overlay tipo referencia (texto a la izquierda + imagen fuerte) #}
+  {% set _hero_overlay =
+    "linear-gradient(90deg, rgba(255,255,255,.94) 0%, rgba(255,255,255,.86) 46%, rgba(255,255,255,.42) 72%, rgba(255,255,255,0) 100%)"
+  %}
 
   <div class="hp hp-v15" id="hp" role="main" aria-label="Inicio Skyline Store">
 
@@ -94,7 +107,7 @@
     </section>
 
     {# ==========================================================
-       HERO — replicando referencia (overlay + imagen grande)
+       HERO FULL — replica referencia (fondo grande + overlay)
     ========================================================== #}
     <section class="hp-hero hp-heroFull" aria-labelledby="hpTitle"
       style="--hero-url:url('{{ hero_img }}'); --hero-overlay: {{ _hero_overlay }};">
@@ -136,6 +149,8 @@
           </div>
         </div>
 
+        {# en hero full, este bloque puede quedar vacío visualmente porque el fondo es el hero_url
+           pero lo dejamos por compat con tu CSS/JS y para figcaption como la referencia #}
         <div class="hp-hero__media" aria-label="Imagen principal">
           <figure class="hp-heroCard is-heroFull" data-reveal style="--hero-url:url('{{ hero_img }}');">
             <div class="hp-heroGlow" aria-hidden="true"></div>
@@ -149,7 +164,7 @@
               decoding="async"
               fetchpriority="high"
               class="hp-heroImg"
-              onerror="this.onerror=null; this.src='{{ hero_img }}'; this.style.opacity='.01'; this.closest('.hp-heroCard')?.classList.add('is-fallback');">
+              onerror="this.onerror=null; this.style.display='none'; this.closest('.hp-heroCard')?.classList.add('is-fallback');">
 
             <figcaption class="hp-heroCap">
               <b>Curado por calidad</b>
@@ -332,7 +347,9 @@
       const go = () => {
         const sel = el.getAttribute("data-target");
         if(!sel) return;
-        const node = document.querySelector(sel);
+
+        // si viene "#algo", se usa directo; si no, intentamos querySelector
+        const node = sel.startsWith("#") ? document.getElementById(sel.slice(1)) : document.querySelector(sel);
         if(node) node.scrollIntoView({behavior:"smooth", block:"start"});
         else window.location.href = "{{ shop_url|e }}";
       };
@@ -342,10 +359,11 @@
       });
     });
 
-    // sticky + toTop: activa cuando el hero sale
+    // sticky + toTop
     const sticky = document.getElementById("hpSticky");
     const toTop = document.getElementById("toTop");
     const hero = root.querySelector(".hp-hero");
+
     const setOn = (on)=>{
       if(sticky) sticky.classList.toggle("is-on", !!on);
       if(toTop){
@@ -362,13 +380,10 @@
       const io = new IntersectionObserver((entries)=>{
         const e = entries[0];
         setOn(!e.isIntersecting);
-      }, {threshold: 0.15});
+      }, {threshold: 0.12});
       io.observe(hero);
     } else {
-      // fallback básico
-      window.addEventListener("scroll", ()=>{
-        setOn(window.scrollY > 420);
-      }, {passive:true});
+      window.addEventListener("scroll", ()=> setOn(window.scrollY > 420), {passive:true});
     }
   })();
   </script>
