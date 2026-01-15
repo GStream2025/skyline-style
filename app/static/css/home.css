@@ -1,12 +1,10 @@
 /* ==========================================================
-   HOME — Skyline Store (ULTRA PATCH v15.9 FINAL)
-   ✅ Unificado: NO duplicados (antes tenías 2 v15)
-   ✅ Se nota sí o sí: separadores + sombras + hover + jerarquía
-   ✅ FIX: sticky + toTop coherentes con tu JS (is-on)
-   ✅ FIX: hero fallback real (is-fallback)
-   ✅ FIX: cats centering + image crop consistente
-   ✅ A11y: focus visible real + reduce motion/transparency/contrast
-   ✅ Perf: content-visibility + contain + transiciones solo pointer:fine
+   HOME — Skyline Store (ULTRA v16 · REPLICA EJEMPLO · NO-ERROR)
+   ✅ Replica hero full tipo banner + overlay + look marketplace
+   ✅ FIX: clases faltantes (hp-pill, hp-linkMore, hp-empty, hp-cta)
+   ✅ FIX: hover solo pointer:fine + mejor mobile
+   ✅ FIX: sticky + toTop coherentes con JS (is-on)
+   ✅ Perf + A11y + fallbacks
 ========================================================== */
 
 .hp.hp-v15{
@@ -45,8 +43,17 @@
   /* focus */
   --hp-focus: 0 0 0 6px rgba(37,99,235,.30);
 
-  /* hero img fallback (se setea inline en HTML) */
+  /* hero background (se setea inline en HTML) */
   --hero-url: none;
+
+  /* overlay del hero tipo referencia (texto a la izquierda) */
+  --hero-overlay: linear-gradient(
+    90deg,
+    rgba(255,255,255,.94) 0%,
+    rgba(255,255,255,.86) 46%,
+    rgba(255,255,255,.42) 72%,
+    rgba(255,255,255,0) 100%
+  );
 
   color-scheme: light;
   text-rendering: optimizeLegibility;
@@ -54,13 +61,14 @@
 }
 
 @media (prefers-color-scheme: dark){
-  .hp.hp-v15{ color-scheme: dark; }
+  .hp.hp-v15{
+    color-scheme: dark;
+  }
 }
 
 /* base helpers */
 .hp.hp-v15 :where(a,button){ -webkit-tap-highlight-color: transparent; }
 .hp.hp-v15 :where(a, button, input, select, textarea, [role="button"]){ scroll-margin-top: 96px; }
-
 .hp.hp-v15 ::selection{ background: rgba(37,99,235,.18); }
 
 /* wrapper consistente + safe-area iOS */
@@ -83,12 +91,7 @@
 
 /* reduce motion */
 @media (prefers-reduced-motion: reduce){
-  .hp.hp-v15 :where(*){
-    animation-duration: 1ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 1ms !important;
-    scroll-behavior: auto !important;
-  }
+  .hp.hp-v15 :where(*){ animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; scroll-behavior: auto !important; }
 }
 
 /* reduce transparency */
@@ -105,7 +108,7 @@
 }
 
 /* ==========================================================
-   0) Separadores visuales (se nota sí o sí)
+   0) Separadores + glow de sección (más “pro”)
 ========================================================== */
 .hp.hp-v15 section{ position: relative; }
 .hp.hp-v15 section::after{
@@ -116,9 +119,20 @@
   pointer-events:none;
   opacity:.95;
 }
+.hp.hp-v15 section::before{
+  content:"";
+  position:absolute; left:0; right:0; top:-18px;
+  height:18px;
+  background: radial-gradient(1200px 18px at 50% 0%, rgba(37,99,235,.10), transparent 70%);
+  pointer-events:none;
+  opacity:.9;
+}
 @media (prefers-color-scheme: dark){
   .hp.hp-v15 section::after{
     background: linear-gradient(90deg, transparent, rgba(148,163,184,.14), transparent);
+  }
+  .hp.hp-v15 section::before{
+    background: radial-gradient(1200px 18px at 50% 0%, rgba(14,165,233,.10), transparent 70%);
   }
 }
 
@@ -143,12 +157,8 @@
   min-height: 46px;
 }
 
-.hp.hp-v15 .hp-topTrust__item b{
-  display:block; font-weight: 950; line-height:1.05; color: var(--hp-ink);
-}
-.hp.hp-v15 .hp-topTrust__item small{
-  display:block; opacity:.74; font-weight: 800; margin-top:2px; color: var(--hp-soft);
-}
+.hp.hp-v15 .hp-topTrust__item b{ display:block; font-weight: 950; line-height:1.05; color: var(--hp-ink); }
+.hp.hp-v15 .hp-topTrust__item small{ display:block; opacity:.74; font-weight: 800; margin-top:2px; color: var(--hp-soft); }
 
 .hp.hp-v15 .hp-ico{
   width:34px; height:34px;
@@ -165,22 +175,56 @@
 }
 
 /* ==========================================================
-   2) HERO grid
+   2) HERO — REPLICA (full banner + overlay tipo ejemplo)
 ========================================================== */
-.hp.hp-v15 .hp-hero{ padding: 14px 0 12px; }
+.hp.hp-v15 .hp-hero{
+  padding: 14px 0 12px;
+}
 
+/* si en HTML usás .hp-heroFull: lo hacemos full tipo banner */
+.hp.hp-v15 .hp-heroFull{
+  position: relative;
+  border-radius: 28px;
+  overflow: hidden;
+  border: 1px solid var(--hp-border);
+  box-shadow: var(--hp-sh3);
+  background:
+    var(--hero-overlay),
+    var(--hero-url);
+  background-size: cover;
+  background-position: center;
+}
+
+/* overlay extra suave (como captura) */
+.hp.hp-v15 .hp-heroFull::after{
+  content:"";
+  position:absolute; inset:0;
+  background:
+    radial-gradient(900px 420px at 22% 30%, rgba(37,99,235,.14), transparent 60%),
+    radial-gradient(900px 520px at 86% 22%, rgba(14,165,233,.12), transparent 62%);
+  pointer-events:none;
+  opacity:.95;
+}
+
+/* grid hero */
 .hp.hp-v15 .hp-hero__grid{
+  position: relative;
+  z-index: 1;
   display:grid;
   grid-template-columns: 1.12fr .88fr;
   gap: var(--hp-gap);
   align-items:center;
+  padding: clamp(14px, 2.4vw, 22px);
 }
 @media (max-width: 980px){
-  .hp.hp-v15 .hp-hero__grid{ grid-template-columns: 1fr; align-items: start; }
+  .hp.hp-v15 .hp-hero__grid{
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
 }
 
 /* ==========================================================
-   3) Copy jerarquía
+   3) Copy jerarquía + pill
 ========================================================== */
 .hp.hp-v15 .hp-kickerRow{
   display:flex; gap:10px; align-items:center; flex-wrap:wrap;
@@ -209,12 +253,33 @@
   color: rgba(5,120,87,.98);
 }
 
+/* ✅ pill faltante (tu HTML lo usa) */
+.hp.hp-v15 .hp-pill{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-weight: 950;
+  font-size: 12px;
+  border: 1px solid rgba(37,99,235,.22);
+  background: rgba(37,99,235,.10);
+  color: rgba(30,64,175,.98);
+  cursor: pointer;
+  user-select: none;
+}
+@media (pointer:fine){
+  .hp.hp-v15 .hp-pill{ transition: transform var(--hp-t), box-shadow var(--hp-t), filter var(--hp-t); }
+  .hp.hp-v15 .hp-pill:hover{ transform: translateY(-1px); box-shadow: 0 14px 34px rgba(37,99,235,.18); }
+}
+.hp.hp-v15 .hp-pill:active{ transform: translateY(0) scale(.99); }
+
 .hp.hp-v15 .hp-title{
   margin:0 0 10px;
   font-weight: 1000;
   letter-spacing: -0.05em;
   line-height: 1.02;
-  font-size: clamp(38px, 4.9vw, 60px);
+  font-size: clamp(38px, 4.9vw, 62px);
   color: var(--hp-ink);
   overflow-wrap:anywhere;
   hyphens:auto;
@@ -262,7 +327,7 @@
 .hp.hp-v15 .hp-mini__item span{ display:block; opacity:.74; font-weight:850; color:var(--hp-soft); margin-top:2px; }
 
 /* ==========================================================
-   5) CTAs (más premium y notorio)
+   5) CTAs
 ========================================================== */
 .hp.hp-v15 .hp-ctas{ display:flex; gap:10px; flex-wrap:wrap; margin: 14px 0 10px; }
 
@@ -306,7 +371,7 @@
 }
 
 /* ==========================================================
-   7) HERO CARD — fallback real + glow (se nota)
+   7) HERO CARD (si lo usás aparte del heroFull)
 ========================================================== */
 .hp.hp-v15 .hp-heroCard{
   border-radius: 28px;
@@ -375,7 +440,7 @@
 .hp.hp-v15 .hp-heroCap span{ display:block; opacity:.76; font-weight:850; color:var(--hp-soft); margin-top:2px; }
 
 /* ==========================================================
-   8) Stats
+   8) Stats (cards tipo ejemplo)
 ========================================================== */
 .hp.hp-v15 .hp-stats{
   display:grid;
@@ -386,9 +451,9 @@
   contain-intrinsic-size: 220px;
 }
 .hp.hp-v15 .hp-stat{
-  border-radius: 20px;
+  border-radius: 22px;
   border: 1px solid var(--hp-border);
-  background: rgba(255,255,255,.80);
+  background: rgba(255,255,255,.82);
   padding: 14px 16px;
   box-shadow: var(--hp-sh1);
   transition: transform var(--hp-t), box-shadow var(--hp-t);
@@ -418,7 +483,7 @@
 .hp.hp-v15 .hp-trustCard{
   border-radius: 22px;
   border: 1px solid var(--hp-border);
-  background: rgba(255,255,255,.78);
+  background: rgba(255,255,255,.82);
   box-shadow: var(--hp-sh1);
   padding: 14px 16px;
   display:flex;
@@ -446,7 +511,7 @@
 .hp.hp-v15 .hp-trustCard__meta span{ display:block; opacity:.74; font-weight: 850; color: var(--hp-soft); margin-top:2px; }
 
 /* ==========================================================
-   10) Section head
+   10) Section head (faltaba hp-linkMore)
 ========================================================== */
 .hp.hp-v15 .hp-secHead{
   display:flex;
@@ -466,6 +531,19 @@
   opacity:.78;
   font-weight: 780;
   color: var(--hp-muted);
+}
+.hp.hp-v15 .hp-linkMore{
+  text-decoration:none;
+  font-weight: 1000;
+  color: rgba(30,64,175,.98);
+  padding: 10px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(37,99,235,.18);
+  background: rgba(37,99,235,.08);
+}
+@media (pointer:fine){
+  .hp.hp-v15 .hp-linkMore{ transition: transform var(--hp-t), box-shadow var(--hp-t); }
+  .hp.hp-v15 .hp-linkMore:hover{ transform: translateY(-1px); box-shadow: 0 14px 34px rgba(37,99,235,.16); }
 }
 
 /* ==========================================================
@@ -489,7 +567,7 @@
   border-radius: 22px;
   overflow:hidden;
   border: 1px solid var(--hp-border);
-  background: rgba(255,255,255,.76);
+  background: rgba(255,255,255,.82);
   box-shadow: var(--hp-sh2);
   position:relative;
   display:block;
@@ -501,7 +579,7 @@
   .hp.hp-v15 .hp-catCard:hover{ transform: translateY(-3px); box-shadow: var(--hp-sh3); }
 }
 
-.hp.hp-v15 .hp-catCard__media{ height: 160px; overflow:hidden; position:relative; }
+.hp.hp-v15 .hp-catCard__media{ height: 160px; overflow:hidden; position:relative; background: rgba(2,6,23,.03); }
 .hp.hp-v15 .hp-catImg{
   width:100%; height:100%;
   object-fit:cover;
@@ -518,7 +596,7 @@
   position:absolute; left:12px; right:12px; bottom:12px;
   border-radius: 16px;
   padding: 12px 14px;
-  background: rgba(255,255,255,.84);
+  background: rgba(255,255,255,.86);
   border: 1px solid var(--hp-border);
   display:flex;
   align-items:center;
@@ -533,7 +611,7 @@
 .hp.hp-v15 .hp-catCard__overlay span{ font-weight:900; opacity:.78; color: var(--hp-soft); }
 
 /* ==========================================================
-   12) Featured products (si existen en tu HTML)
+   12) Featured products
 ========================================================== */
 .hp.hp-v15 .hp-products{
   display:grid;
@@ -554,7 +632,7 @@
 .hp.hp-v15 .hp-prod{
   border-radius: 22px;
   border: 1px solid var(--hp-border);
-  background: rgba(255,255,255,.82);
+  background: rgba(255,255,255,.84);
   box-shadow: var(--hp-sh1);
   overflow:hidden;
   transition: transform var(--hp-t), box-shadow var(--hp-t);
@@ -584,8 +662,47 @@
   margin-top:auto;
 }
 
+/* ✅ hp-empty faltante (cuando no hay destacados) */
+.hp.hp-v15 .hp-empty{
+  border-radius: 22px;
+  border: 1px solid var(--hp-border);
+  background: rgba(255,255,255,.84);
+  box-shadow: var(--hp-sh1);
+  padding: 16px;
+  display:grid;
+  gap: 10px;
+}
+.hp.hp-v15 .hp-empty b{ font-weight:1000; color: var(--hp-ink); }
+.hp.hp-v15 .hp-empty p{ margin:0; font-weight:800; color: var(--hp-muted); }
+.hp.hp-v15 .hp-empty__actions{ display:flex; gap:10px; flex-wrap:wrap; }
+
 /* ==========================================================
-   13) Sticky + ToTop (alineado con tu JS: .is-on y hidden)
+   13) CTA FINAL (faltaba hp-cta)
+========================================================== */
+.hp.hp-v15 .hp-cta{ padding: 14px 0 18px; }
+.hp.hp-v15 .hp-cta__inner{
+  border-radius: 26px;
+  border: 1px solid rgba(37,99,235,.18);
+  background:
+    radial-gradient(900px 360px at 15% 15%, rgba(37,99,235,.16), transparent 60%),
+    radial-gradient(900px 360px at 85% 40%, rgba(14,165,233,.12), transparent 62%),
+    rgba(255,255,255,.84);
+  box-shadow: var(--hp-sh2);
+  padding: clamp(14px, 2.2vw, 20px);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 12px;
+}
+@media (max-width: 820px){
+  .hp.hp-v15 .hp-cta__inner{ flex-direction:column; align-items:flex-start; }
+}
+.hp.hp-v15 .hp-cta__title{ margin:0 0 6px; font-weight:1000; color: var(--hp-ink); }
+.hp.hp-v15 .hp-cta__sub{ margin:0; font-weight:850; color: var(--hp-muted); }
+.hp.hp-v15 .hp-cta__btns{ display:flex; gap:10px; flex-wrap:wrap; }
+
+/* ==========================================================
+   14) Sticky + ToTop (alineado con tu JS: .is-on y hidden)
 ========================================================== */
 .hp.hp-v15 .hp-sticky{
   position: fixed;
@@ -599,7 +716,7 @@
   padding: 12px 12px;
   border-radius: 999px;
   border: 1px solid rgba(37,99,235,.22);
-  background: rgba(255,255,255,.86);
+  background: rgba(255,255,255,.88);
   box-shadow: var(--hp-sh3);
 }
 .hp.hp-v15 .hp-sticky.is-on{ display:flex; }
@@ -629,7 +746,7 @@
   height: 46px;
   border-radius: 999px;
   border: 1px solid rgba(15,23,42,.16);
-  background: rgba(255,255,255,.86);
+  background: rgba(255,255,255,.88);
   box-shadow: var(--hp-sh2);
   align-items:center;
   justify-content:center;
@@ -637,12 +754,13 @@
 }
 
 /* ==========================================================
-   14) Reveal (tu JS agrega .is-in)
+   15) Reveal (tu JS agrega .is-in)
 ========================================================== */
 .hp.hp-v15 [data-reveal]{
   opacity: 0;
   transform: translateY(10px);
   transition: opacity .38s ease, transform .38s ease;
+  will-change: opacity, transform;
 }
 .hp.hp-v15 [data-reveal].is-in{
   opacity: 1;
@@ -666,9 +784,17 @@
     --hp-sh3: 0 24px 70px rgba(0,0,0,.52);
 
     --hp-focus: 0 0 0 6px rgba(14,165,233,.26);
+
+    --hero-overlay: linear-gradient(
+      90deg,
+      rgba(15,23,42,.88) 0%,
+      rgba(15,23,42,.76) 46%,
+      rgba(15,23,42,.35) 72%,
+      rgba(15,23,42,0) 100%
+    );
   }
 
-  .hp.hp-v15 :where(.hp-topTrust__item,.hp-stat,.hp-trustCard,.hp-mini__item,.hp-catCard,.hp-prod,.hp-sticky,.to-top){
+  .hp.hp-v15 :where(.hp-topTrust__item,.hp-stat,.hp-trustCard,.hp-mini__item,.hp-catCard,.hp-prod,.hp-sticky,.to-top,.hp-empty,.hp-cta__inner){
     background: rgba(15,23,42,.64);
     border-color: rgba(148,163,184,.18);
   }
@@ -676,6 +802,13 @@
   .hp.hp-v15 .hp-kicker{
     background: rgba(15,23,42,.52);
     border-color: rgba(148,163,184,.18);
+    color: rgba(226,232,240,.86);
+  }
+
+  .hp.hp-v15 .hp-pill{
+    background: rgba(14,165,233,.14);
+    border-color: rgba(14,165,233,.22);
+    color: rgba(186,230,253,.96);
   }
 
   .hp.hp-v15 .hp-verified{
@@ -687,5 +820,11 @@
   .hp.hp-v15 :where(.hp-heroCap,.hp-catCard__overlay){
     background: rgba(15,23,42,.66);
     border-color: rgba(148,163,184,.18);
+  }
+
+  .hp.hp-v15 .hp-linkMore{
+    background: rgba(14,165,233,.12);
+    border-color: rgba(14,165,233,.20);
+    color: rgba(186,230,253,.96);
   }
 }
