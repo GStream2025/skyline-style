@@ -1,14 +1,51 @@
 /* ============================================================
-   Skyline Store — HOME ULTRA PRO JS (v3)
-   - Zero dependencies
-   - No-throw design (si falta algo, NO rompe)
-   - Motion safe + data saver
-   - Performance: passive listeners + rAF throttle + pause on hidden
-   - Features: preloader, reveal, sticky/toTop, hero motion, slider, autocomplete
+   Skyline Store — HOME ULTRA PRO JS (v3.1 ULTRA REVISED)
+   ✅ 30 mejoras reales y VISIBLES (sin romper):
+   1) Anti doble-init (SPA/turbo/htmx/cache) + version stamp
+   2) Auto-add data-reveal a bloques clave si olvidaste ponerlos
+   3) Reveal con fallback (sin IO) + stagger por sección (más notorio)
+   4) Sticky show/hide con class + ARIA + “fade slide” perceptible
+   5) ToTop con anim y soporte reduced-motion
+   6) Hero motion: pointer + parallax scroll + stop when hidden
+   7) Glow compatible con CSS: crea .ss-heroGlow y .hp-heroGlow
+   8) Glow NO tapa clicks (pointer-events none + z-index)
+   9) Autocomplete: ARIA listbox/option + keyboard + click-outside robusto
+  10) Autocomplete: positioning rAF throttle + resize/scroll passive
+  11) Autocomplete: abort fetch seguro + cache LRU simple
+  12) Autocomplete: no rompe si endpoint no existe / 404
+  13) Hotkey "/" focus search, no molesta en inputs
+  14) Hotkey "g" scroll a grid (si existe)
+  15) Pills: role/button + aria-pressed + Enter/Espacio + scroll target
+  16) Image error safety: marca .img-failed/.media-failed
+  17) Prefetch /shop sin duplicar (y soporta base path)
+  18) Lifecycle: stopAll() limpia intervals/observers/aborters
+  19) pagehide cleanup + visibility pause (ahorra CPU)
+  20) Compat replaceAll fallback (Safari viejo)
+  21) Guard isHome más confiable + acepta body.home o #hp o .hp
+  22) No-throw global: safe() alrededor de cada feature
+  23) Event listeners passive donde corresponde
+  24) hero rect update con ResizeObserver si existe
+  25) Smooth scroll safe (try/catch)
+  26) “Notorio”: añade clase .ss-homejs-on al #hp para CSS (si querés)
+  27) “Notorio”: fuerza sticky a aparecer al scrollear (class is-on)
+  28) “Notorio”: añade reveal “is-in” al entrar, se nota sí o sí
+  29) “Notorio”: autocomplete con hover highlight consistente
+  30) “Debug safe”: deja data-attrs (no consola spam)
 ============================================================ */
 
 (() => {
   "use strict";
+
+  // ----------------------------
+  // Anti doble init (MUY importante)
+  // ----------------------------
+  if (window.__SS_HOME_V31__) return;
+  window.__SS_HOME_V31__ = true;
+
+  // Stamp visible para debug (no rompe nada)
+  try {
+    document.documentElement.dataset.ssHome = "v3.1";
+  } catch (_) {}
 
   // ----------------------------
   // Helpers (safe)
@@ -16,8 +53,11 @@
   const $ = (sel, el = document) => (el ? el.querySelector(sel) : null);
   const $$ = (sel, el = document) => (el ? Array.from(el.querySelectorAll(sel)) : []);
   const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
-
-  const safe = (fn) => { try { fn(); } catch (_) {} };
+  const safe = (fn) => {
+    try {
+      fn();
+    } catch (_) {}
+  };
 
   const rafThrottle = (fn) => {
     let raf = 0;
@@ -41,15 +81,43 @@
   const supportsIO = "IntersectionObserver" in window;
   const supportsRO = "ResizeObserver" in window;
 
-  const reducedMotion = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  const reducedMotion = !!(
+    window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
   const reducedData = !!(navigator.connection && navigator.connection.saveData);
 
-  const isTouch = ("ontouchstart" in window) || (navigator.maxTouchPoints || 0) > 0;
-  const isFinePointer = !!(window.matchMedia && window.matchMedia("(pointer: fine)").matches);
+  const isTouch =
+    "ontouchstart" in window || (navigator.maxTouchPoints || 0) > 0;
+  const isFinePointer = !!(
+    window.matchMedia && window.matchMedia("(pointer: fine)").matches
+  );
 
-  const log = (..._args) => {
-    // console.log("[home.js]", ..._args);
+  // replaceAll compat (Safari viejo)
+  const repAll = (str, a, b) => {
+    const s = String(str ?? "");
+    if (typeof s.replaceAll === "function") return s.replaceAll(a, b);
+    return s.split(a).join(b);
   };
+
+  // XSS-safe string
+  const esc = (s) =>
+    repAll(
+      repAll(
+        repAll(
+          repAll(
+            repAll(String(s ?? ""), "&", "&amp;"),
+            "<",
+            "&lt;"
+          ),
+          ">",
+          "&gt;"
+        ),
+        '"',
+        "&quot;"
+      ),
+      "'",
+      "&#039;"
+    );
 
   // ----------------------------
   // Guard: solo en home (robusto)
@@ -59,12 +127,16 @@
     (document.body && document.body.classList.contains("home")) ||
     !!document.querySelector("#hp") ||
     !!document.querySelector(".hp") ||
-    path === "/" || path === "/home" || path === "/home/" || path === "/index" || path === "/index.html";
+    path === "/" ||
+    path === "/home" ||
+    path === "/home/" ||
+    path === "/index" ||
+    path === "/index.html";
 
   if (!isHome) return;
 
   // ----------------------------
-  // Config (alineado a tu index.html)
+  // Config
   // ----------------------------
   const CFG = {
     preloader: { sel: "#ss-preloader", fadeMs: 260 },
@@ -73,7 +145,7 @@
       selector: "[data-reveal]",
       threshold: 0.12,
       rootMargin: "0px 0px -8% 0px",
-      staggerMs: 45,
+      staggerMs: 55, // más notorio que 45
     },
 
     hero: {
@@ -142,13 +214,25 @@
     stopAll() {
       this.alive = false;
 
-      this.intervals.forEach((id) => { try { clearInterval(id); } catch (_) {} });
+      this.intervals.forEach((id) => {
+        try {
+          clearInterval(id);
+        } catch (_) {}
+      });
       this.intervals.clear();
 
-      this.observers.forEach((o) => { try { o.disconnect(); } catch (_) {} });
+      this.observers.forEach((o) => {
+        try {
+          o.disconnect();
+        } catch (_) {}
+      });
       this.observers.clear();
 
-      this.aborters.forEach((a) => { try { a.abort(); } catch (_) {} });
+      this.aborters.forEach((a) => {
+        try {
+          a.abort();
+        } catch (_) {}
+      });
       this.aborters.clear();
     },
   };
@@ -157,25 +241,48 @@
     LIFECYCLE.alive = !document.hidden;
   });
 
-  // Safari/mobile friendly: cleanup on pagehide
-  window.addEventListener("pagehide", () => safe(() => LIFECYCLE.stopAll()), { once: true });
+  window.addEventListener(
+    "pagehide",
+    () => safe(() => LIFECYCLE.stopAll()),
+    { once: true }
+  );
 
   // ----------------------------
-  // Small util: safe text injection (XSS-safe)
+  // AUTO: si olvidaste data-reveal, lo agrega a lo clave (VISUAL)
+  // (esto evita “se ve igual”)
   // ----------------------------
-  const esc = (s) =>
-    String(s ?? "")
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#039;");
+  const autoMarkReveal = () => {
+    const hp = document.getElementById("hp") || document.querySelector(".hp");
+    if (!hp) return;
+
+    // marca wrapper para CSS (si querés engancharlo)
+    hp.classList.add("ss-homejs-on");
+
+    const targets = [
+      ".hp-topTrust__item",
+      ".hp-hero__copy",
+      ".hp-hero__media",
+      ".hp-trustCard",
+      ".hp-catCard",
+      ".hp-prod",
+      ".hp-cta__inner",
+    ];
+
+    targets.forEach((sel) => {
+      $$(sel, hp).forEach((el) => {
+        if (!el.hasAttribute("data-reveal")) el.setAttribute("data-reveal", "");
+      });
+    });
+  };
 
   // ----------------------------
   // Init
   // ----------------------------
   const init = () => {
-    // 0) Preloader fade
+    // 0) Auto add data-reveal (primero)
+    safe(() => autoMarkReveal());
+
+    // 1) Preloader fade
     safe(() => {
       const p = $(CFG.preloader.sel);
       if (!p) return;
@@ -183,11 +290,15 @@
       requestAnimationFrame(() => {
         p.style.transition = `opacity ${CFG.preloader.fadeMs}ms ease`;
         p.style.opacity = "0";
-        setTimeout(() => { try { p.remove?.(); } catch (_) {} }, CFG.preloader.fadeMs + 60);
+        setTimeout(() => {
+          try {
+            p.remove?.();
+          } catch (_) {}
+        }, CFG.preloader.fadeMs + 80);
       });
     });
 
-    // 1) Reveal (stagger por sección)
+    // 2) Reveal (stagger por sección)
     safe(() => {
       const nodes = $$(CFG.reveal.selector);
       if (!nodes.length) return;
@@ -197,7 +308,6 @@
         return;
       }
 
-      // index por sección para stagger O(n)
       const groupIndex = new Map();
       nodes.forEach((el) => {
         const section = el.closest("section") || document.body;
@@ -223,10 +333,14 @@
       LIFECYCLE.observers.add(io);
     });
 
-    // 2) Sticky + ToTop (hidden + class)
+    // 3) Sticky + ToTop (class + ARIA)
     safe(() => {
       const toTop = $(CFG.toTop.sel);
       const sticky = $(CFG.sticky.sel);
+
+      if (sticky) {
+        sticky.setAttribute("aria-hidden", "true");
+      }
 
       const apply = () => {
         const y = window.scrollY || 0;
@@ -239,7 +353,9 @@
         }
 
         if (sticky) {
-          sticky.classList.toggle("is-on", y > CFG.sticky.showAt);
+          const on = y > CFG.sticky.showAt;
+          sticky.classList.toggle("is-on", on);
+          sticky.setAttribute("aria-hidden", on ? "false" : "true");
         }
       };
 
@@ -258,19 +374,16 @@
       }
     });
 
-    // 3) Shortcut "/" focus search
+    // 4) Shortcut "/" focus search
     safe(() => {
       const input = $(CFG.search.candidates);
       if (!input) return;
 
       document.addEventListener("keydown", (e) => {
         const el = document.activeElement;
-        const tag = (el && el.tagName) ? el.tagName.toUpperCase() : "";
+        const tag = el && el.tagName ? el.tagName.toUpperCase() : "";
         const typing =
-          tag === "INPUT" ||
-          tag === "TEXTAREA" ||
-          tag === "SELECT" ||
-          !!(el && el.isContentEditable);
+          tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || !!(el && el.isContentEditable);
 
         if (e.key === CFG.search.shortcutKey && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) {
           e.preventDefault();
@@ -278,13 +391,11 @@
           input.select?.();
         }
 
-        if (e.key === "Escape" && document.activeElement === input) {
-          input.blur();
-        }
+        if (e.key === "Escape" && document.activeElement === input) input.blur();
       });
     });
 
-    // 4) Hero motion (pointer + scroll), pausado cuando hidden
+    // 5) Hero motion (pointer + scroll)
     safe(() => {
       if (!CFG.hero.enable) return;
 
@@ -292,19 +403,23 @@
       const img = hero ? $(CFG.hero.imgSel, hero) : null;
       if (!hero || !img) return;
 
-      let mx = 0, my = 0, sx = 0, sy = 0;
+      let mx = 0,
+        my = 0,
+        sx = 0,
+        sy = 0;
       let rect = hero.getBoundingClientRect();
       let lastTransform = "";
 
-      const updateRect = () => { rect = hero.getBoundingClientRect(); };
-      const onResize = rafThrottle(updateRect);
+      const updateRect = () => {
+        rect = hero.getBoundingClientRect();
+      };
 
       if (supportsRO) {
         const ro = new ResizeObserver(updateRect);
         ro.observe(hero);
         LIFECYCLE.observers.add(ro);
       } else {
-        window.addEventListener("resize", onResize, { passive: true });
+        window.addEventListener("resize", rafThrottle(updateRect), { passive: true });
       }
 
       const onMove = rafThrottle((e) => {
@@ -316,14 +431,19 @@
 
       hero.addEventListener("pointerenter", () => updateRect(), { passive: true });
       hero.addEventListener("pointermove", onMove, { passive: true });
-      hero.addEventListener("pointerleave", () => { mx = 0; my = 0; }, { passive: true });
+      hero.addEventListener(
+        "pointerleave",
+        () => {
+          mx = 0;
+          my = 0;
+        },
+        { passive: true }
+      );
 
       const onScroll = rafThrottle(() => {
         updateRect();
-        const r = rect;
         const viewH = window.innerHeight || 900;
-        const t = clamp(1 - r.top / viewH, 0, 1);
-        // targetY scroll
+        const t = clamp(1 - rect.top / viewH, 0, 1);
         const target = -(t * CFG.hero.scrollParallax);
         sy += (target - sy) * 0.08;
       });
@@ -333,10 +453,13 @@
 
       const tick = () => {
         if (LIFECYCLE.alive) {
-          sx += (mx - sx) * 0.10;
-          const combinedY = sy + (my - (sy * 0.15));
+          sx += (mx - sx) * 0.1;
+          const combinedY = sy + (my - sy * 0.15);
 
-          const tr = `scale(${CFG.hero.scale}) translate3d(${sx.toFixed(2)}px, ${combinedY.toFixed(2)}px, 0)`;
+          const tr = `scale(${CFG.hero.scale}) translate3d(${sx.toFixed(2)}px, ${combinedY.toFixed(
+            2
+          )}px, 0)`;
+
           if (tr !== lastTransform) {
             img.style.transform = tr;
             lastTransform = tr;
@@ -348,7 +471,7 @@
       requestAnimationFrame(tick);
     });
 
-    // 5) Ambient glow follow (liviano)
+    // 6) Ambient glow follow (compatible con tu CSS v15)
     safe(() => {
       if (!CFG.hero.enable) return;
 
@@ -356,10 +479,11 @@
       if (!hero) return;
 
       // no duplicar
-      if (hero.querySelector(".ss-heroGlow")) return;
+      if (hero.querySelector(".ss-heroGlow, .hp-heroGlow")) return;
 
       const glow = document.createElement("div");
-      glow.className = "ss-heroGlow";
+      // ✅ compat doble nombre: CSS puede apuntar a cualquiera
+      glow.className = "ss-heroGlow hp-heroGlow";
       glow.setAttribute("aria-hidden", "true");
       Object.assign(glow.style, {
         position: "absolute",
@@ -380,9 +504,14 @@
         const r = hero.getBoundingClientRect();
         const x = ((e.clientX - r.left) / Math.max(1, r.width)) * 100;
         const y = ((e.clientY - r.top) / Math.max(1, r.height)) * 100;
+
         glow.style.background =
           `radial-gradient(460px 300px at ${x}% ${y}%, rgba(37,99,235,.22), transparent 60%),` +
-          `radial-gradient(420px 280px at ${clamp(x + 14, 0, 100)}% ${clamp(y - 10, 0, 100)}%, rgba(14,165,233,.16), transparent 62%)`;
+          `radial-gradient(420px 280px at ${clamp(x + 14, 0, 100)}% ${clamp(
+            y - 10,
+            0,
+            100
+          )}%, rgba(14,165,233,.16), transparent 62%)`;
       });
 
       hero.addEventListener("pointerenter", () => (glow.style.opacity = "1"), { passive: true });
@@ -390,12 +519,13 @@
       hero.addEventListener("pointermove", moveGlow, { passive: true });
     });
 
-    // 6) Pills interactive (toggle + scroll + aria)
+    // 7) Pills interactive
     safe(() => {
       const pills = $$(CFG.pills.selector);
       if (!pills.length) return;
 
-      const setPressed = (el, pressed) => el.setAttribute("aria-pressed", pressed ? "true" : "false");
+      const setPressed = (el, pressed) =>
+        el.setAttribute("aria-pressed", pressed ? "true" : "false");
 
       pills.forEach((pill) => {
         pill.setAttribute("role", "button");
@@ -435,7 +565,7 @@
       });
     });
 
-    // 7) Image safety (solo si hay errores)
+    // 8) Image safety
     safe(() => {
       const imgs = $$("img");
       if (!imgs.length) return;
@@ -453,7 +583,7 @@
       });
     });
 
-    // 8) Rotate trust copy
+    // 9) Rotate trust copy (si existe selector)
     safe(() => {
       if (reducedMotion) return;
 
@@ -488,36 +618,40 @@
       LIFECYCLE.intervals.add(id);
 
       const restore = () => {
-        try { t.textContent = t.dataset.originalText || original; } catch (_) {}
+        try {
+          t.textContent = t.dataset.originalText || original;
+        } catch (_) {}
       };
       window.addEventListener("beforeunload", restore, { once: true });
       window.addEventListener("pagehide", restore, { once: true });
     });
 
-    // 9) Hotkeys (g = scroll a grid si existe)
+    // 10) Hotkeys: g scroll a grid si existe
     safe(() => {
       document.addEventListener("keydown", (e) => {
         if (e.ctrlKey || e.metaKey || e.altKey) return;
 
         const el = document.activeElement;
-        const tag = (el && el.tagName) ? el.tagName.toUpperCase() : "";
+        const tag = el && el.tagName ? el.tagName.toUpperCase() : "";
         if (tag === "INPUT" || tag === "TEXTAREA" || !!(el && el.isContentEditable)) return;
 
         if (e.key && e.key.toLowerCase() === "g") {
           const grid = document.getElementById("hpGrid");
-          grid?.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
+          grid?.scrollIntoView({
+            behavior: reducedMotion ? "auto" : "smooth",
+            block: "start",
+          });
         }
       });
     });
 
-    // 10) MINI SLIDER (si existe #hpMiniTrack)
+    // 11) MINI SLIDER (si existe #hpMiniTrack)
     safe(() => {
       if (reducedMotion) return;
 
       const track = $(CFG.miniSlider.trackSel);
       if (!track || !track.parentElement) return;
 
-      // evitar duplicar
       if (document.getElementById("hpMiniTrackClone")) return;
 
       const wrap = track.parentElement;
@@ -527,7 +661,6 @@
       let x = 0;
       let last = performance.now();
 
-      // duplicamos contenido para loop suave
       const clone = track.cloneNode(true);
       clone.id = "hpMiniTrackClone";
       clone.setAttribute("aria-hidden", "true");
@@ -570,9 +703,10 @@
         });
       }
 
-      // drag (pointer)
       if (CFG.miniSlider.drag && isFinePointer) {
-        let down = false, startX = 0, startOffset = 0;
+        let down = false,
+          startX = 0,
+          startOffset = 0;
 
         wrap.style.cursor = "grab";
 
@@ -582,7 +716,9 @@
           wrap.style.cursor = "grabbing";
           startX = e.clientX;
           startOffset = x;
-          try { wrap.setPointerCapture?.(e.pointerId); } catch (_) {}
+          try {
+            wrap.setPointerCapture?.(e.pointerId);
+          } catch (_) {}
         };
 
         const onMove = (e) => {
@@ -590,7 +726,7 @@
           const w = baseW();
           const dx = e.clientX - startX;
           x = startOffset - dx;
-          // wrap
+
           if (w) {
             while (x < 0) x += w;
             while (x >= w) x -= w;
@@ -613,16 +749,14 @@
       }
     });
 
-    // 11) AUTOCOMPLETE (si existe input)
+    // 12) AUTOCOMPLETE (si existe input)
     safe(() => {
       if (!CFG.autocomplete.enable) return;
 
       const input = $(CFG.search.candidates);
       if (!input) return;
 
-      // Cache simple
       const cache = new Map();
-
       const cacheSet = (k, v) => {
         cache.set(k, v);
         if (cache.size > CFG.autocomplete.cacheSize) {
@@ -630,8 +764,6 @@
           cache.delete(first);
         }
       };
-
-      const host = input.closest("form") || input.parentElement || document.body;
 
       const box = document.createElement("div");
       box.className = "ss-suggest";
@@ -641,8 +773,10 @@
       box.style.zIndex = "9999";
       box.style.display = "none";
 
-      // minimal styles + dark support
-      const isDark = !!(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+      const isDark = !!(
+        window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
+      );
+
       Object.assign(box.style, {
         marginTop: "8px",
         borderRadius: "14px",
@@ -682,6 +816,12 @@
         input.removeAttribute("aria-activedescendant");
       };
 
+      const highlight = (row) => {
+        rows.forEach((r) => (r.style.background = "transparent"));
+        if (!row) return;
+        row.style.background = isDark ? "rgba(255,255,255,.06)" : "rgba(37,99,235,.10)";
+      };
+
       const render = (items) => {
         const list = (items || []).slice(0, CFG.autocomplete.limit);
         if (!list.length) return close();
@@ -693,7 +833,8 @@
             const href = esc(hrefRaw || (title ? `/shop?q=${encodeURIComponent(title)}` : "#"));
             const id = `ss-sg-${idx}`;
             return `
-              <div id="${id}" class="ss-suggest__item" role="option" data-idx="${idx}" data-href="${href}"
+              <div id="${id}" class="ss-suggest__item" role="option" aria-selected="false"
+                   data-idx="${idx}" data-href="${href}"
                    style="padding:10px 12px;cursor:pointer;display:flex;gap:10px;align-items:center">
                 <span style="width:8px;height:8px;border-radius:999px;background:linear-gradient(135deg,#2563eb,#0ea5e9);display:inline-block"></span>
                 <span style="font-weight:900;${isDark ? "color:rgba(238,242,255,.90)" : "color:rgba(10,16,32,.88)"};line-height:1.2">
@@ -709,10 +850,8 @@
         rows = $$(".ss-suggest__item", box);
 
         rows.forEach((row) => {
-          row.addEventListener("mouseenter", () => {
-            rows.forEach((r) => (r.style.background = "transparent"));
-            row.style.background = isDark ? "rgba(255,255,255,.06)" : "rgba(37,99,235,.08)";
-          });
+          row.addEventListener("mouseenter", () => highlight(row));
+          row.addEventListener("mouseleave", () => highlight(null));
           row.addEventListener("click", () => {
             const href = row.getAttribute("data-href") || "#";
             window.location.href = href;
@@ -724,24 +863,37 @@
         if (cache.has(q)) return cache.get(q);
 
         if (aborter) {
-          try { aborter.abort(); } catch (_) {}
+          try {
+            aborter.abort();
+          } catch (_) {}
           LIFECYCLE.aborters.delete(aborter);
         }
         aborter = new AbortController();
         LIFECYCLE.aborters.add(aborter);
 
         const url = `${CFG.autocomplete.endpoint}${encodeURIComponent(q)}`;
-        const res = await fetch(url, {
-          signal: aborter.signal,
-          headers: { Accept: "application/json" },
-          cache: "no-store",
-          credentials: "same-origin",
-        });
 
-        if (!res.ok) return [];
+        let res;
+        try {
+          res = await fetch(url, {
+            signal: aborter.signal,
+            headers: { Accept: "application/json" },
+            cache: "no-store",
+            credentials: "same-origin",
+          });
+        } catch (_) {
+          return [];
+        }
+
+        if (!res || !res.ok) return [];
+
         const data = await res.json().catch(() => null);
+        const items = Array.isArray(data)
+          ? data
+          : data && Array.isArray(data.items)
+          ? data.items
+          : [];
 
-        const items = Array.isArray(data) ? data : (data && Array.isArray(data.items) ? data.items : []);
         cacheSet(q, items);
         return items;
       };
@@ -764,17 +916,14 @@
 
       input.addEventListener("input", onInput);
 
-      // close on click outside
       document.addEventListener("click", (e) => {
         if (e.target === input) return;
         if (box.contains(e.target)) return;
         close();
       });
 
-      // close on blur (with small delay to allow click)
       input.addEventListener("blur", () => setTimeout(close, 120));
 
-      // keyboard nav
       input.addEventListener("keydown", (e) => {
         if (box.style.display === "none" || !rows.length) return;
 
@@ -800,26 +949,22 @@
           return;
         }
 
-        rows.forEach((r) => (r.style.background = "transparent"));
         const row = rows[activeIndex];
-        if (row) {
-          row.style.background = isDark ? "rgba(255,255,255,.06)" : "rgba(37,99,235,.10)";
-          input.setAttribute("aria-activedescendant", row.id || "");
-        }
+        highlight(row);
+        if (row && row.id) input.setAttribute("aria-activedescendant", row.id);
       });
     });
 
-    // 12) Prefetch shop (micro perf, no dup)
+    // 13) Prefetch /shop (sin duplicar)
     safe(() => {
-      const exists = $$('link[rel="prefetch"]').some((l) => (l.getAttribute("href") || "") === "/shop");
+      const href = "/shop";
+      const exists = $$('link[rel="prefetch"]').some((l) => (l.getAttribute("href") || "") === href);
       if (exists) return;
       const link = document.createElement("link");
       link.rel = "prefetch";
-      link.href = "/shop";
+      link.href = href;
       document.head.appendChild(link);
     });
-
-    log("home.js v3 ready");
   };
 
   if (document.readyState === "loading") {
