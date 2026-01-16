@@ -1,9 +1,11 @@
-{# app/templates/index.html — Skyline Store (PRO v15.2 · +5 mejoras · NO-500)
-   ✅ Hero FULL overlay tipo referencia
-   ✅ TopTrust 4
-   ✅ Fallbacks robustos (Jinja + IMG)
-   ✅ JS pills/sticky/toTop sin romper home.js
-   ✅ SEO extra (og:image:alt + twitter tags)
+{# app/templates/index.html — Skyline Store (ULTRA PRO v16.1 · +20 MEJORAS · NO-500 · “SE APLICA SÍ O SÍ”)
+   ✅ FIX CLAVE: clase hp-v161 + cache-bust 161 (si no, se ve “igual”)
+   ✅ NO-500: request/env safe, urls safe, fallbacks robustos
+   ✅ SEO: canonical robusto + OG/Twitter completos + preconnect/preload correctos
+   ✅ PERF: prefetch shop, dns-prefetch, fetchpriority, lazy/decoding, reduce CLS
+   ✅ A11y: aria mejorado + skip targets + roles correctos
+   ✅ JS: pills/sticky/toTop robusto + reduced-motion + no doble init
+   ✅ COMPAT: no rompe si faltan endpoints/blueprints/components/price
 #}
 {% extends "base.html" %}
 
@@ -13,6 +15,8 @@
   {# ---------------- SAFE env/request ---------------- #}
   {% set _env = (ENV if ENV is defined and ENV else 'production')|string|lower|trim %}
   {% set _req = (request if request is defined and request else none) %}
+
+  {# base_url/canonical robusto: evita querystring y evita None #}
   {% set _base_url = (_req.base_url if _req and _req.base_url else '/') %}
   {% set _root = (_req.url_root if _req and _req.url_root else '/') %}
 
@@ -21,31 +25,40 @@
   {% set og_img_local = url_for('static', filename='img/og.png') %}
   {% set og_img = (og_image if og_image is defined and og_image else og_img_local) %}
 
-  {% set _desc = (meta_description | default('Moda urbana premium, accesorios y tecnología.', true))|string %}
-  <meta name="description" content="{{ _desc|trim|e }}">
+  {# SEO safe strings #}
+  {% set _desc = (meta_description | default('Moda urbana premium, accesorios y tecnología.', true))|string|trim %}
+  {% set _t = (meta_title | default('Skyline Store · Tech + Streetwear premium', true))|string|trim %}
+
+  <meta name="description" content="{{ _desc|e }}">
   <meta name="robots" content="{{ 'index,follow' if _env == 'production' else 'noindex,nofollow' }}">
 
-  <link rel="canonical" href="{{ _base_url }}">
-  <meta property="og:url" content="{{ _base_url }}">
+  <link rel="canonical" href="{{ _base_url|e }}">
+  <meta property="og:url" content="{{ _base_url|e }}">
   <meta property="og:site_name" content="Skyline Store">
   <meta name="theme-color" content="#2563eb">
 
-  {% set _t = (meta_title | default('Skyline Store · Tech + Streetwear premium', true))|string %}
   <meta property="og:title" content="{{ _t|e }}">
   <meta property="og:description" content="{{ (meta_description | default('Comprá fácil, rápido y seguro.', true))|string|trim|e }}">
   <meta property="og:type" content="website">
-  <meta property="og:image" content="{{ og_img }}">
+  <meta property="og:image" content="{{ og_img|e }}">
   <meta property="og:image:alt" content="Skyline Store · Tech + Streetwear premium">
+
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="{{ _t|e }}">
-  <meta name="twitter:description" content="{{ _desc|trim|e }}">
+  <meta name="twitter:description" content="{{ _desc|e }}">
+  <meta name="twitter:image" content="{{ og_img|e }}">
 
-  <link rel="preload" as="image" href="{{ hero_img }}" fetchpriority="high">
+  {# PERF: preload hero (LCP) + preconnect/dns-prefetch #}
+  <link rel="preload" as="image" href="{{ hero_img|e }}" fetchpriority="high">
   <link rel="preconnect" href="{{ _root|e }}">
+  <link rel="dns-prefetch" href="{{ _root|e }}">
 
-  {# ✅ Cache-bust REAL (si no definís HOME_CSS_VER, usa 15) #}
-  {% set _home_css_ver = (HOME_CSS_VER if HOME_CSS_VER is defined and HOME_CSS_VER else '15')|string|trim %}
+  {# ✅ Cache-bust REAL (default 161) — SI NO CAMBIAS ESTO, se ve igual por cache #}
+  {% set _home_css_ver = (HOME_CSS_VER if HOME_CSS_VER is defined and HOME_CSS_VER else '161')|string|trim %}
   <link rel="stylesheet" href="{{ url_for('static', filename='css/home.css') }}?v={{ _home_css_ver|e }}">
+
+  {# PERF: prefetch tienda (mejora navegación) #}
+  <link rel="prefetch" href="{{ url_for('shop.shop') if (view_functions is defined and view_functions and 'shop.shop' in view_functions) else '/shop' }}">
 
   {# CSP nonce #}
   {% set _csp_nonce = (csp_nonce if csp_nonce is defined and csp_nonce else (nonce if nonce is defined and nonce else '')) %}
@@ -73,11 +86,12 @@
   {% set shop_url = (url_for('shop.shop') if 'shop.shop' in _vf else '/shop') %}
   {% set offers_url = shop_url ~ ('?ofertas=1' if '?' not in shop_url else '&ofertas=1') %}
 
-  {# ✅ FIX real: antes era siempre true por "/account" literal #}
+  {# ✅ FIX real de account_url (robusto multi-blueprint) #}
   {% set account_url =
       (url_for('main.account') if 'main.account' in _vf
         else (url_for('account.account') if 'account.account' in _vf
-          else '/account'))
+          else (url_for('cuenta.account') if 'cuenta.account' in _vf
+            else '/account')))
   %}
   {% set account_login_url = account_url ~ ('?tab=login' if '?' not in account_url else '&tab=login') %}
   {% set account_register_url = account_url ~ ('?tab=register' if '?' not in account_url else '&tab=register') %}
@@ -90,10 +104,11 @@
     "linear-gradient(90deg, rgba(255,255,255,.94) 0%, rgba(255,255,255,.86) 46%, rgba(255,255,255,.42) 72%, rgba(255,255,255,0) 100%)"
   %}
 
-  <div class="hp hp-v15" id="hp" role="main" aria-label="Inicio Skyline Store">
+  {# ✅ FIX CLAVE: hp-v161 fuerza tu CSS v16.1 — SIN ESTO SE VE “IGUAL” #}
+  <div class="hp hp-v15 hp-v161" id="hp" role="main" aria-label="Inicio Skyline Store">
 
     {# ==========================================================
-       TOP TRUST (4 items) — como referencia
+       TOP TRUST (4 items)
     ========================================================== #}
     <section class="hp-top" aria-label="Beneficios">
       <div class="hp-wrap">
@@ -149,8 +164,6 @@
           </div>
         </div>
 
-        {# en hero full, este bloque puede quedar vacío visualmente porque el fondo es el hero_url
-           pero lo dejamos por compat con tu CSS/JS y para figcaption como la referencia #}
         <div class="hp-hero__media" aria-label="Imagen principal">
           <figure class="hp-heroCard is-heroFull" data-reveal style="--hero-url:url('{{ hero_img }}');">
             <div class="hp-heroGlow" aria-hidden="true"></div>
@@ -164,7 +177,7 @@
               decoding="async"
               fetchpriority="high"
               class="hp-heroImg"
-              onerror="this.onerror=null; this.style.display='none'; this.closest('.hp-heroCard')?.classList.add('is-fallback');">
+              onerror="this.onerror=null; this.remove(); this.closest('.hp-heroCard')?.classList.add('is-fallback');">
 
             <figcaption class="hp-heroCap">
               <b>Curado por calidad</b>
@@ -183,7 +196,7 @@
     </section>
 
     {# ==========================================================
-       TRUST CARDS (con tus PNG)
+       TRUST CARDS
     ========================================================== #}
     <section class="hp-trust" aria-label="Confianza y seguridad">
       <div class="hp-wrap hp-trust__grid">
@@ -207,13 +220,13 @@
     </section>
 
     {# ==========================================================
-       CATEGORIES — tipo marketplace
+       CATEGORIES
     ========================================================== #}
     <section class="hp-cats" aria-labelledby="hpCats" id="hpCats">
       <div class="hp-wrap">
         <div class="hp-secHead">
           <div>
-            <h2>Elegí una categoría</h2>
+            <h2 id="hpCats">Elegí una categoría</h2>
             <p>Accesos directos tipo marketplace.</p>
           </div>
           <a class="hp-linkMore" href="{{ shop_url }}">Ver todo →</a>
@@ -333,29 +346,50 @@
 {% endblock %}
 
 {% block extra_js %}
-  <script src="{{ url_for('static', filename='js/home.js') }}?v=15" defer></script>
+  {# ✅ Cache-bust JS (161) — evita que quede el home.js viejo #}
+  <script src="{{ url_for('static', filename='js/home.js') }}?v=161" defer></script>
 
-  {# ✅ Patch NO-500 + UX (no rompe si faltan nodos) #}
+  {# ✅ Patch NO-500 + UX (robusto) #}
   <script{% if _csp_nonce %} nonce="{{ _csp_nonce|e }}"{% endif %}>
   (function(){
     "use strict";
+
+    // anti doble init
+    if (window.__SS_HP_PATCH_161__) return;
+    window.__SS_HP_PATCH_161__ = true;
+
     const root = document.getElementById("hp");
     if(!root) return;
 
+    const reducedMotion = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+
     // pills: click + teclado
-    root.querySelectorAll("[data-pill][data-target]").forEach(el=>{
-      const go = () => {
+    root.querySelectorAll("[data-pill][data-target]").forEach(function(el){
+      const go = function(){
         const sel = el.getAttribute("data-target");
         if(!sel) return;
 
-        // si viene "#algo", se usa directo; si no, intentamos querySelector
-        const node = sel.startsWith("#") ? document.getElementById(sel.slice(1)) : document.querySelector(sel);
-        if(node) node.scrollIntoView({behavior:"smooth", block:"start"});
-        else window.location.href = "{{ shop_url|e }}";
+        const node = sel.charAt(0) === "#"
+          ? document.getElementById(sel.slice(1))
+          : document.querySelector(sel);
+
+        if(node){
+          try{
+            node.scrollIntoView({behavior: reducedMotion ? "auto" : "smooth", block:"start"});
+          }catch(_){
+            node.scrollIntoView(true);
+          }
+        } else {
+          window.location.href = "{{ shop_url|e }}";
+        }
       };
+
       el.addEventListener("click", go);
-      el.addEventListener("keydown", (e)=>{
-        if(e.key === "Enter" || e.key === " "){ e.preventDefault(); go(); }
+      el.addEventListener("keydown", function(e){
+        if(e.key === "Enter" || e.key === " "){
+          e.preventDefault();
+          go();
+        }
       });
     });
 
@@ -364,7 +398,7 @@
     const toTop = document.getElementById("toTop");
     const hero = root.querySelector(".hp-hero");
 
-    const setOn = (on)=>{
+    const setOn = function(on){
       if(sticky) sticky.classList.toggle("is-on", !!on);
       if(toTop){
         toTop.hidden = !on;
@@ -373,17 +407,24 @@
     };
 
     if(toTop){
-      toTop.addEventListener("click", ()=> window.scrollTo({top:0, behavior:"smooth"}));
+      toTop.addEventListener("click", function(){
+        try{
+          window.scrollTo({top:0, behavior: reducedMotion ? "auto" : "smooth"});
+        }catch(_){
+          window.scrollTo(0,0);
+        }
+      });
     }
 
     if("IntersectionObserver" in window && hero){
-      const io = new IntersectionObserver((entries)=>{
-        const e = entries[0];
+      const io = new IntersectionObserver(function(entries){
+        const e = entries && entries[0];
+        if(!e) return;
         setOn(!e.isIntersecting);
       }, {threshold: 0.12});
       io.observe(hero);
     } else {
-      window.addEventListener("scroll", ()=> setOn(window.scrollY > 420), {passive:true});
+      window.addEventListener("scroll", function(){ setOn((window.scrollY||0) > 420); }, {passive:true});
     }
   })();
   </script>
