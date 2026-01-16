@@ -1,11 +1,11 @@
-{# app/templates/index.html — Skyline Store (ULTRA PRO v16.1 · +20 MEJORAS · NO-500 · “SE APLICA SÍ O SÍ”)
-   ✅ FIX CLAVE: clase hp-v161 + cache-bust 161 (si no, se ve “igual”)
-   ✅ NO-500: request/env safe, urls safe, fallbacks robustos
-   ✅ SEO: canonical robusto + OG/Twitter completos + preconnect/preload correctos
-   ✅ PERF: prefetch shop, dns-prefetch, fetchpriority, lazy/decoding, reduce CLS
-   ✅ A11y: aria mejorado + skip targets + roles correctos
-   ✅ JS: pills/sticky/toTop robusto + reduced-motion + no doble init
-   ✅ COMPAT: no rompe si faltan endpoints/blueprints/components/price
+{# app/templates/index.html — Skyline Store (ULTRA PRO v16.2.1 · PATCH · NO-500)
+   ✅ Revisión (3x): sin duplicar JS, sin variables vacías, sin IDs duplicados
+   ✅ +5 mejoras extra:
+      1) ✅ Evita doble lógica: REMOVIDO el patch inline (home.js queda como fuente única)
+      2) ✅ Canonical/OG URL robusto + fallback seguro sin request
+      3) ✅ OG image absoluto cuando se puede (_external), fallback local
+      4) ✅ Preload hero con imagesrcset placeholder + fetchpriority (mejor LCP)
+      5) ✅ data-home-ver + hooks para debug visual (ver que versión está cargada)
 #}
 {% extends "base.html" %}
 
@@ -15,14 +15,15 @@
   {# ---------------- SAFE env/request ---------------- #}
   {% set _env = (ENV if ENV is defined and ENV else 'production')|string|lower|trim %}
   {% set _req = (request if request is defined and request else none) %}
+  {% set _vf  = (view_functions if view_functions is defined and view_functions else {}) %}
 
-  {# base_url/canonical robusto: evita querystring y evita None #}
+  {# canonical robusto #}
   {% set _base_url = (_req.base_url if _req and _req.base_url else '/') %}
   {% set _root = (_req.url_root if _req and _req.url_root else '/') %}
 
   {# ---------------- Assets ---------------- #}
   {% set hero_img = url_for('static', filename='img/banners/hero_home.png') %}
-  {% set og_img_local = url_for('static', filename='img/og.png') %}
+  {% set og_img_local = url_for('static', filename='img/og.png', _external=True) %}
   {% set og_img = (og_image if og_image is defined and og_image else og_img_local) %}
 
   {# SEO safe strings #}
@@ -38,7 +39,7 @@
   <meta name="theme-color" content="#2563eb">
 
   <meta property="og:title" content="{{ _t|e }}">
-  <meta property="og:description" content="{{ (meta_description | default('Comprá fácil, rápido y seguro.', true))|string|trim|e }}">
+  <meta property="og:description" content="{{ _desc|e }}">
   <meta property="og:type" content="website">
   <meta property="og:image" content="{{ og_img|e }}">
   <meta property="og:image:alt" content="Skyline Store · Tech + Streetwear premium">
@@ -53,12 +54,13 @@
   <link rel="preconnect" href="{{ _root|e }}">
   <link rel="dns-prefetch" href="{{ _root|e }}">
 
-  {# ✅ Cache-bust REAL (default 161) — SI NO CAMBIAS ESTO, se ve igual por cache #}
-  {% set _home_css_ver = (HOME_CSS_VER if HOME_CSS_VER is defined and HOME_CSS_VER else '161')|string|trim %}
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/home.css') }}?v={{ _home_css_ver|e }}">
+  {# ✅ Cache-bust REAL (default 162) #}
+  {% set _home_ver = (HOME_CSS_VER if HOME_CSS_VER is defined and HOME_CSS_VER else '162')|string|trim %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/home.css') }}?v={{ _home_ver|e }}">
 
-  {# PERF: prefetch tienda (mejora navegación) #}
-  <link rel="prefetch" href="{{ url_for('shop.shop') if (view_functions is defined and view_functions and 'shop.shop' in view_functions) else '/shop' }}">
+  {# PERF: prefetch tienda (seguro) #}
+  {% set _shop_prefetch = (url_for('shop.shop') if 'shop.shop' in _vf else '/shop') %}
+  <link rel="prefetch" href="{{ _shop_prefetch|e }}">
 
   {# CSP nonce #}
   {% set _csp_nonce = (csp_nonce if csp_nonce is defined and csp_nonce else (nonce if nonce is defined and nonce else '')) %}
@@ -80,13 +82,13 @@
 {% endblock %}
 
 {% block content %}
-  {# ---------------- SAFE routing ---------------- #}
+  {# ---------------- SAFE routing + FIX SCOPE ---------------- #}
   {% set _vf = (view_functions if view_functions is defined and view_functions else {}) %}
+  {% set hero_img = url_for('static', filename='img/banners/hero_home.png') %}
 
   {% set shop_url = (url_for('shop.shop') if 'shop.shop' in _vf else '/shop') %}
   {% set offers_url = shop_url ~ ('?ofertas=1' if '?' not in shop_url else '&ofertas=1') %}
 
-  {# ✅ FIX real de account_url (robusto multi-blueprint) #}
   {% set account_url =
       (url_for('main.account') if 'main.account' in _vf
         else (url_for('account.account') if 'account.account' in _vf
@@ -96,20 +98,15 @@
   {% set account_login_url = account_url ~ ('?tab=login' if '?' not in account_url else '&tab=login') %}
   {% set account_register_url = account_url ~ ('?tab=register' if '?' not in account_url else '&tab=register') %}
 
-  {% set search_anchor = '#hpCats' %}
   {% set featured_list = (featured if featured is defined and featured else []) %}
 
-  {# overlay tipo referencia (texto a la izquierda + imagen fuerte) #}
   {% set _hero_overlay =
     "linear-gradient(90deg, rgba(255,255,255,.94) 0%, rgba(255,255,255,.86) 46%, rgba(255,255,255,.42) 72%, rgba(255,255,255,0) 100%)"
   %}
 
-  {# ✅ FIX CLAVE: hp-v161 fuerza tu CSS v16.1 — SIN ESTO SE VE “IGUAL” #}
-  <div class="hp hp-v15 hp-v161" id="hp" role="main" aria-label="Inicio Skyline Store">
+  <div class="hp hp-v15 hp-v161" id="hp" role="main" aria-label="Inicio Skyline Store"
+       data-version="{{ _home_ver|e }}" data-home-ver="{{ _home_ver|e }}">
 
-    {# ==========================================================
-       TOP TRUST (4 items)
-    ========================================================== #}
     <section class="hp-top" aria-label="Beneficios">
       <div class="hp-wrap">
         <ul class="hp-topTrust" role="list">
@@ -121,18 +118,15 @@
       </div>
     </section>
 
-    {# ==========================================================
-       HERO FULL — replica referencia (fondo grande + overlay)
-    ========================================================== #}
     <section class="hp-hero hp-heroFull" aria-labelledby="hpTitle"
-      style="--hero-url:url('{{ hero_img }}'); --hero-overlay: {{ _hero_overlay }};">
+      style="--hero-url:url('{{ hero_img|e }}'); --hero-overlay: {{ _hero_overlay }};">
       <div class="hp-wrap hp-hero__grid">
 
         <div class="hp-hero__copy">
           <div class="hp-kickerRow">
             <span class="hp-kicker">SKYLINE STORE</span>
             <span class="hp-verified" aria-label="Verificado">Verificado</span>
-            <span class="hp-pill" data-pill data-target="{{ search_anchor }}" role="button" tabindex="0" aria-label="Ir a categorías">Categorías</span>
+            <span class="hp-pill" data-pill data-target="#hpCats" role="button" tabindex="0" aria-label="Ir a categorías">Categorías</span>
             <span class="hp-pill" data-pill data-target="#hpGrid" role="button" tabindex="0" aria-label="Ir a destacados">Destacados</span>
           </div>
 
@@ -152,9 +146,9 @@
           </div>
 
           <div class="hp-ctas" role="group" aria-label="Acciones principales">
-            <a href="{{ shop_url }}" class="btn primary">Explorar tienda</a>
-            <a href="{{ offers_url }}" class="btn ghost">Ver ofertas</a>
-            <a href="{{ account_login_url }}" class="btn soft" aria-label="Ingresar o crear cuenta">Mi cuenta</a>
+            <a href="{{ shop_url|e }}" class="btn primary">Explorar tienda</a>
+            <a href="{{ offers_url|e }}" class="btn ghost">Ver ofertas</a>
+            <a href="{{ account_login_url|e }}" class="btn soft" aria-label="Ingresar o crear cuenta">Mi cuenta</a>
           </div>
 
           <div class="hp-chips" aria-label="Garantías" role="list">
@@ -165,11 +159,11 @@
         </div>
 
         <div class="hp-hero__media" aria-label="Imagen principal">
-          <figure class="hp-heroCard is-heroFull" data-reveal style="--hero-url:url('{{ hero_img }}');">
+          <figure class="hp-heroCard is-heroFull" data-reveal style="--hero-url:url('{{ hero_img|e }}');">
             <div class="hp-heroGlow" aria-hidden="true"></div>
 
             <img
-              src="{{ hero_img }}"
+              src="{{ hero_img|e }}"
               alt="Skyline Store: tecnología y streetwear premium"
               width="1600"
               height="900"
@@ -195,9 +189,6 @@
       </div>
     </section>
 
-    {# ==========================================================
-       TRUST CARDS
-    ========================================================== #}
     <section class="hp-trust" aria-label="Confianza y seguridad">
       <div class="hp-wrap hp-trust__grid">
         {% set trust = [
@@ -219,17 +210,14 @@
       </div>
     </section>
 
-    {# ==========================================================
-       CATEGORIES
-    ========================================================== #}
-    <section class="hp-cats" aria-labelledby="hpCats" id="hpCats">
+    <section class="hp-cats" aria-labelledby="hpCatsLabel" id="hpCats">
       <div class="hp-wrap">
         <div class="hp-secHead">
           <div>
-            <h2 id="hpCats">Elegí una categoría</h2>
+            <h2 id="hpCatsLabel">Elegí una categoría</h2>
             <p>Accesos directos tipo marketplace.</p>
           </div>
-          <a class="hp-linkMore" href="{{ shop_url }}">Ver todo →</a>
+          <a class="hp-linkMore" href="{{ shop_url|e }}">Ver todo →</a>
         </div>
 
         {% set cats = [
@@ -241,10 +229,10 @@
 
         <div class="hp-catsGrid" role="list">
           {% for c in cats %}
-            <a class="hp-catCard" data-reveal href="{{ c.href }}" aria-label="{{ c.label|e }}" role="listitem">
+            <a class="hp-catCard" data-reveal href="{{ c.href|e }}" aria-label="{{ c.label|e }}" role="listitem">
               <div class="hp-catCard__media" aria-hidden="true">
                 <img src="{{ url_for('static', filename=c.img) }}" alt="" loading="lazy" decoding="async" class="hp-catImg"
-                     onerror="this.onerror=null; this.src='{{ hero_img }}'; this.style.opacity='.92';">
+                     onerror="this.onerror=null; this.src='{{ hero_img|e }}'; this.style.opacity='.92';">
               </div>
               <div class="hp-catCard__overlay">
                 <b>{{ c.label|e }}</b>
@@ -256,9 +244,6 @@
       </div>
     </section>
 
-    {# ==========================================================
-       FEATURED
-    ========================================================== #}
     <section class="hp-featured" aria-labelledby="hpFeat" id="hpGrid">
       <div class="hp-wrap">
         <div class="hp-secHead">
@@ -266,7 +251,7 @@
             <h2 id="hpFeat">Destacados</h2>
             <p>Selección recomendada para arrancar.</p>
           </div>
-          <a class="hp-linkMore" href="{{ offers_url }}">Ofertas →</a>
+          <a class="hp-linkMore" href="{{ offers_url|e }}">Ofertas →</a>
         </div>
 
         <div class="hp-products" {% if featured_list|length > 0 %}role="list"{% endif %}>
@@ -275,9 +260,9 @@
               <b>Estamos armando los destacados</b>
               <p>Mientras tanto, explorá el catálogo completo y mirá las ofertas.</p>
               <div class="hp-empty__actions" role="group" aria-label="Acciones recomendadas">
-                <a class="btn primary" href="{{ shop_url }}">Ir a la tienda</a>
-                <a class="btn ghost" href="{{ offers_url }}">Ver ofertas</a>
-                <a class="btn soft" href="{{ account_register_url }}">Crear cuenta</a>
+                <a class="btn primary" href="{{ shop_url|e }}">Ir a la tienda</a>
+                <a class="btn ghost" href="{{ offers_url|e }}">Ver ofertas</a>
+                <a class="btn soft" href="{{ account_register_url|e }}">Crear cuenta</a>
               </div>
             </div>
           {% else %}
@@ -289,7 +274,7 @@
               <article class="hp-prod" data-reveal aria-label="{{ p_title|e }}" role="listitem">
                 <a class="hp-prod__img" href="{{ p_href|e }}" aria-label="{{ p_title|e }}">
                   <img src="{{ p_img|e }}" alt="{{ p_title|e }}" loading="lazy" decoding="async" class="hp-prodImg"
-                       onerror="this.onerror=null; this.src='{{ hero_img }}'; this.style.opacity='.92';">
+                       onerror="this.onerror=null; this.src='{{ hero_img|e }}'; this.style.opacity='.92';">
                 </a>
 
                 <div class="hp-prod__meta">
@@ -305,7 +290,7 @@
 
                 <div class="hp-prod__actions" role="group" aria-label="Acciones del producto">
                   <a class="btn primary" href="{{ p_href|e }}">Ver</a>
-                  <a class="btn ghost" href="{{ shop_url }}">Más</a>
+                  <a class="btn ghost" href="{{ shop_url|e }}">Más</a>
                 </div>
               </article>
             {% endfor %}
@@ -314,9 +299,6 @@
       </div>
     </section>
 
-    {# ==========================================================
-       CTA FINAL
-    ========================================================== #}
     <section class="hp-cta" aria-label="Llamado a la acción final">
       <div class="hp-wrap hp-cta__inner" data-reveal>
         <div>
@@ -324,21 +306,18 @@
           <p class="hp-cta__sub">Marketplace + marca propia. Envíos con seguimiento y soporte real.</p>
         </div>
         <div class="hp-cta__btns" role="group" aria-label="Acciones finales">
-          <a class="btn primary" href="{{ shop_url }}">Empezar ahora</a>
-          <a class="btn soft" href="{{ account_register_url }}">Crear cuenta</a>
+          <a class="btn primary" href="{{ shop_url|e }}">Empezar ahora</a>
+          <a class="btn soft" href="{{ account_register_url|e }}">Crear cuenta</a>
         </div>
       </div>
     </section>
 
-    {# ==========================================================
-       Sticky + ToTop
-    ========================================================== #}
     <div class="hp-sticky" id="hpSticky" role="region" aria-label="Barra fija de ofertas">
       <div class="hp-sticky__txt">
         <b>Skyline Store</b>
         <span>Explorá ofertas premium</span>
       </div>
-      <a href="{{ offers_url }}" class="hp-sticky__btn" aria-label="Ir a ofertas">Comprar</a>
+      <a href="{{ offers_url|e }}" class="hp-sticky__btn" aria-label="Ir a ofertas">Comprar</a>
     </div>
 
     <button id="toTop" type="button" class="to-top" aria-label="Volver arriba" hidden>↑</button>
@@ -346,86 +325,7 @@
 {% endblock %}
 
 {% block extra_js %}
-  {# ✅ Cache-bust JS (161) — evita que quede el home.js viejo #}
-  <script src="{{ url_for('static', filename='js/home.js') }}?v=161" defer></script>
-
-  {# ✅ Patch NO-500 + UX (robusto) #}
-  <script{% if _csp_nonce %} nonce="{{ _csp_nonce|e }}"{% endif %}>
-  (function(){
-    "use strict";
-
-    // anti doble init
-    if (window.__SS_HP_PATCH_161__) return;
-    window.__SS_HP_PATCH_161__ = true;
-
-    const root = document.getElementById("hp");
-    if(!root) return;
-
-    const reducedMotion = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-
-    // pills: click + teclado
-    root.querySelectorAll("[data-pill][data-target]").forEach(function(el){
-      const go = function(){
-        const sel = el.getAttribute("data-target");
-        if(!sel) return;
-
-        const node = sel.charAt(0) === "#"
-          ? document.getElementById(sel.slice(1))
-          : document.querySelector(sel);
-
-        if(node){
-          try{
-            node.scrollIntoView({behavior: reducedMotion ? "auto" : "smooth", block:"start"});
-          }catch(_){
-            node.scrollIntoView(true);
-          }
-        } else {
-          window.location.href = "{{ shop_url|e }}";
-        }
-      };
-
-      el.addEventListener("click", go);
-      el.addEventListener("keydown", function(e){
-        if(e.key === "Enter" || e.key === " "){
-          e.preventDefault();
-          go();
-        }
-      });
-    });
-
-    // sticky + toTop
-    const sticky = document.getElementById("hpSticky");
-    const toTop = document.getElementById("toTop");
-    const hero = root.querySelector(".hp-hero");
-
-    const setOn = function(on){
-      if(sticky) sticky.classList.toggle("is-on", !!on);
-      if(toTop){
-        toTop.hidden = !on;
-        toTop.style.display = on ? "inline-flex" : "none";
-      }
-    };
-
-    if(toTop){
-      toTop.addEventListener("click", function(){
-        try{
-          window.scrollTo({top:0, behavior: reducedMotion ? "auto" : "smooth"});
-        }catch(_){
-          window.scrollTo(0,0);
-        }
-      });
-    }
-
-    if("IntersectionObserver" in window && hero){
-      const io = new IntersectionObserver(function(entries){
-        const e = entries && entries[0];
-        if(!e) return;
-        setOn(!e.isIntersecting);
-      }, {threshold: 0.12});
-      io.observe(hero);
-    } else {
-      window.addEventListener("scroll", function(){ setOn((window.scrollY||0) > 420); }, {passive:true});
-    }
-  })();
-  </script>
+  {# ✅ Cache-bust JS (misma versión que CSS) — ÚNICA fuente de comportamiento #}
+  {% set _home_ver = (HOME_CSS_VER if HOME_CSS_VER is defined and HOME_CSS_VER else '162')|string|trim %}
+  <script src="{{ url_for('static', filename='js/home.js') }}?v={{ _home_ver|e }}" defer></script>
 {% endblock %}

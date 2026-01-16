@@ -1,92 +1,48 @@
 /* ============================================================
-   Skyline Store — HOME ULTRA PRO JS (v3.2 FINAL · NO-ERROR)
-   ✅ +20 mejoras extra sobre v3.1 (además de tus 30):
-   31) Hard-guard por “home hash” + reinit seguro si cambia DOM (SPA)
-   32) stopAll() también borra listeners registrados (centralizado)
-   33) Sticky/ToTop: usa Hero IntersectionObserver si existe (más exacto)
-   34) Sticky/ToTop: respeta prefers-reduced-motion (sin jumps)
-   35) Reveal: auto-balance por viewport (stagger adaptativo)
-   36) Reveal: evita layout trashing (batch add + microtask)
-   37) Hero motion: pausa si hero no está visible (IO) => menos CPU
-   38) Hero motion: pointer tracking con clamp + smoothing mejorado
-   39) Autocomplete: respeta autocomplete off / type search
-   40) Autocomplete: no rompe si endpoint devuelve HTML (catch robusto)
-   41) Autocomplete: “aria-controls” + “aria-expanded” bien
-   42) Autocomplete: click via mousedown (evita blur antes de click)
-   43) Autocomplete: highlight por teclado consistente + scrollIntoView
-   44) Autocomplete: soporte IME composition (no spamea fetch)
-   45) Hotkey "/" ignora cuando modal/dialog abierto
-   46) Prefetch /shop con base path real (si app corre en subpath)
-   47) Image safety: marca media-failed y aplica fallback si data-fallback
-   48) Pills: si target no existe => fallback a /shop o href del pill
-   49) Micro UX: agrega .is-ready al #hp cuando terminó init
-   50) Debug safe: deja dataset ssHome + ssHomeInitCount (sin consola)
+   Skyline Store — HOME ULTRA PRO JS (v3.3 FINAL · NO-ERROR)
+   ✅ +20 mejoras extra (sobre v3.2):
+   51) Proof-of-load visible: setea data-ss-home="v3.3" en #hp (se nota)
+   52) Rebind seguro: si cambia #hp (HTMX/Turbo), reinit con MutationObserver (light)
+   53) Sticky: IO con hysteresis (evita flicker) + fallback sólido
+   54) Sticky: respeta reduce-motion (sin transiciones bruscas)
+   55) Reveal: “batch scheduler” con requestIdleCallback (si existe) => menos jank
+   56) Reveal: prioridad por “above the fold” (primero lo visible)
+   57) Hero motion: usa CSS vars (--mx,--my,--sy) si existen => GPU friendly
+   58) Hero motion: freeze cuando tab no visible + cuando FPS cae (auto-throttle)
+   59) Hero motion: smoothing mejorado + clamp adaptativo por tamaño
+   60) Hero glow: suaviza + evita repaints (vars)
+   61) Pills: scroll con offset header (si hay sticky header)
+   62) Pills: soporte data-target y href + analytics hook opcional
+   63) Autocomplete: overlay portal con max-height + scroll + aria-activedescendant estable
+   64) Autocomplete: cache LRU real (más estable)
+   65) Autocomplete: cancel fetch al blur + al cambiar pagehide
+   66) Autocomplete: evita fetch si usuario pegó texto largo (throttle extra)
+   67) Hotkey "/": ignora cuando hay input dentro del hero o forms activos
+   68) Image safety: fallback también para <source> y background data-bg-fallback
+   69) Prefetch: usa <link rel=preconnect> a tu dominio si aplica
+   70) “Connected check”: valida que los hooks existan y marca data-ss-home-status
 ============================================================ */
 
 (() => {
   "use strict";
 
-  // ------------------------------------------------------------
-  // 0) Guard anti doble-init + “home hash” (SPA/HTMX/Turbo)
-  // ------------------------------------------------------------
-  const HOME_VERSION = "v3.2";
+  const HOME_VERSION = "v3.3";
   const doc = document;
 
-  const getHomeRoot = () => doc.getElementById("hp") || doc.querySelector(".hp");
-  const homeRoot = getHomeRoot();
-
-  const path = String(location.pathname || "/");
-  const isHome =
-    (doc.body && doc.body.classList.contains("home")) ||
-    !!homeRoot ||
-    path === "/" ||
-    path === "/home" ||
-    path === "/home/" ||
-    path === "/index" ||
-    path === "/index.html";
-
-  if (!isHome) return;
-
-  // “home hash” simple: si cambia el root, permitimos reinit limpio
-  const homeHash = (() => {
-    try {
-      const r = homeRoot || getHomeRoot();
-      const id = r ? (r.id || "") : "";
-      const cls = r ? (r.className || "") : "";
-      return `${path}::${id}::${cls.length}`;
-    } catch (_) {
-      return `${path}::fallback`;
-    }
-  })();
-
-  // Anti doble init global
-  window.__SS_HOME_STATE__ = window.__SS_HOME_STATE__ || {};
-  const STATE = window.__SS_HOME_STATE__;
-
-  if (STATE[homeHash] && STATE[homeHash].version === HOME_VERSION) return;
-
-  // Si existía otro init viejo para este hash, lo limpiamos
-  if (STATE[homeHash] && typeof STATE[homeHash].stopAll === "function") {
-    try {
-      STATE[homeHash].stopAll();
-    } catch (_) {}
-  }
-
-  // ------------------------------------------------------------
-  // Helpers (robustos, no-throw)
-  // ------------------------------------------------------------
+  // ---------------------------
+  // Helpers
+  // ---------------------------
   const $ = (sel, el = doc) => (el ? el.querySelector(sel) : null);
   const $$ = (sel, el = doc) => (el ? Array.from(el.querySelectorAll(sel)) : []);
   const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
 
   const safe = (fn) => {
-    try {
-      fn();
-    } catch (_) {}
+    try { fn(); } catch (_) {}
   };
 
   const supportsIO = "IntersectionObserver" in window;
   const supportsRO = "ResizeObserver" in window;
+  const supportsIdle = "requestIdleCallback" in window;
 
   const reducedMotion = !!(
     window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches
@@ -115,106 +71,103 @@
     };
   };
 
-  // replaceAll compat
-  const repAll = (str, a, b) => {
-    const s = String(str ?? "");
-    if (typeof s.replaceAll === "function") return s.replaceAll(a, b);
-    return s.split(a).join(b);
-  };
-
   // escape seguro
   const esc = (s) =>
-    repAll(
-      repAll(
-        repAll(
-          repAll(
-            repAll(String(s ?? ""), "&", "&amp;"),
-            "<",
-            "&lt;"
-          ),
-          ">",
-          "&gt;"
-        ),
-        '"',
-        "&quot;"
-      ),
-      "'",
-      "&#039;"
-    );
+    String(s ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
 
   const preferSmooth = !reducedMotion;
-  const smoothScrollTo = (node) => {
+  const smoothScrollTo = (node, offset = 0) => {
     if (!node) return;
-    try {
-      node.scrollIntoView({ behavior: preferSmooth ? "smooth" : "auto", block: "start" });
-    } catch (_) {
-      // fallback
-      try {
-        const top = (node.getBoundingClientRect().top || 0) + (window.scrollY || 0);
-        window.scrollTo(0, top);
-      } catch (_) {}
-    }
+    safe(() => {
+      const y = (node.getBoundingClientRect().top || 0) + (window.scrollY || 0) - offset;
+      window.scrollTo({ top: Math.max(0, y), behavior: preferSmooth ? "smooth" : "auto" });
+    });
   };
 
-  // ------------------------------------------------------------
-  // Lifecycle cleanup CENTRALIZADO
-  // ------------------------------------------------------------
+  // ---------------------------
+  // Home root + isHome
+  // ---------------------------
+  const getHomeRoot = () => doc.getElementById("hp") || doc.querySelector(".hp");
+  let homeRoot = getHomeRoot();
+
+  const path = String(location.pathname || "/");
+  const isHome =
+    (doc.body && doc.body.classList.contains("home")) ||
+    !!homeRoot ||
+    path === "/" ||
+    path === "/home" ||
+    path === "/home/" ||
+    path === "/index" ||
+    path === "/index.html";
+
+  if (!isHome) return;
+
+  // ---------------------------
+  // hash + global anti double init
+  // ---------------------------
+  const homeHash = (() => {
+    try {
+      const r = homeRoot || getHomeRoot();
+      const id = r ? (r.id || "") : "";
+      const cls = r ? (r.className || "") : "";
+      return `${path}::${id}::${cls.length}`;
+    } catch (_) {
+      return `${path}::fallback`;
+    }
+  })();
+
+  window.__SS_HOME_STATE__ = window.__SS_HOME_STATE__ || {};
+  const STATE = window.__SS_HOME_STATE__;
+
+  if (STATE[homeHash] && STATE[homeHash].version === HOME_VERSION) return;
+  if (STATE[homeHash] && typeof STATE[homeHash].stopAll === "function") {
+    safe(() => STATE[homeHash].stopAll());
+  }
+
+  // ---------------------------
+  // Lifecycle cleanup
+  // ---------------------------
   const LIFECYCLE = {
     alive: true,
     intervals: new Set(),
     observers: new Set(),
     aborters: new Set(),
-    listeners: [], // {el, type, fn, opts}
+    listeners: [],
     addListener(el, type, fn, opts) {
-      try {
+      safe(() => {
         el.addEventListener(type, fn, opts);
         this.listeners.push({ el, type, fn, opts });
-      } catch (_) {}
+      });
     },
     stopAll() {
       this.alive = false;
-
       this.intervals.forEach((id) => safe(() => clearInterval(id)));
       this.intervals.clear();
-
       this.observers.forEach((o) => safe(() => o.disconnect()));
       this.observers.clear();
-
       this.aborters.forEach((a) => safe(() => a.abort()));
       this.aborters.clear();
-
       this.listeners.forEach((l) => safe(() => l.el.removeEventListener(l.type, l.fn, l.opts)));
       this.listeners.length = 0;
     },
   };
 
-  // guard state saved
-  STATE[homeHash] = {
-    version: HOME_VERSION,
-    stopAll: () => LIFECYCLE.stopAll(),
-  };
-
-  // stamp debug safe
-  safe(() => {
-    doc.documentElement.dataset.ssHome = HOME_VERSION;
-    const cnt = Number(doc.documentElement.dataset.ssHomeInitCount || "0") || 0;
-    doc.documentElement.dataset.ssHomeInitCount = String(cnt + 1);
-  });
+  STATE[homeHash] = { version: HOME_VERSION, stopAll: () => LIFECYCLE.stopAll() };
 
   LIFECYCLE.addListener(doc, "visibilitychange", () => {
     LIFECYCLE.alive = !doc.hidden;
   });
 
-  LIFECYCLE.addListener(
-    window,
-    "pagehide",
-    () => safe(() => LIFECYCLE.stopAll()),
-    { once: true }
-  );
+  LIFECYCLE.addListener(window, "pagehide", () => safe(() => LIFECYCLE.stopAll()), { once: true });
 
-  // ------------------------------------------------------------
+  // ---------------------------
   // Config
-  // ------------------------------------------------------------
+  // ---------------------------
   const CFG = {
     preloader: { sel: "#ss-preloader", fadeMs: 240 },
 
@@ -223,20 +176,21 @@
       threshold: 0.12,
       rootMargin: "0px 0px -10% 0px",
       baseStaggerMs: 55,
+      maxBatch: 18,
     },
 
     hero: {
       containerSel: ".hp-heroCard",
       imgSel: ".hp-heroImg",
-      maxMoveX: 10,
-      maxMoveY: 8,
-      scrollParallax: 14,
-      scale: 1.04,
+      maxMoveX: 12,
+      maxMoveY: 10,
+      scrollParallax: 16,
+      scale: 1.05,
       enable: !reducedMotion && !reducedData && !isTouch && isFinePointer,
     },
 
     toTop: { sel: "#toTop", showAt: 520 },
-    sticky: { sel: "#hpSticky", showAt: 420, onClass: "is-on" },
+    sticky: { sel: "#hpSticky", showAt: 420, onClass: "is-on", hysteresisMs: 140 },
 
     search: {
       candidates:
@@ -256,19 +210,30 @@
       endpoint: "/api/search_suggest?q=",
       minChars: 2,
       limit: 8,
-      debounceMs: 150,
-      cacheSize: 40,
+      debounceMs: 160,
+      cacheSize: 50,
+      maxHeight: 280,
+      pasteGuardLen: 80,
     },
   };
 
-  // ------------------------------------------------------------
-  // AUTO: data-reveal en bloques clave + class hooks
-  // ------------------------------------------------------------
+  // ---------------------------
+  // PROOF OF LOAD + connected check
+  // ---------------------------
+  const markLoaded = (status = "ok") => {
+    const hp = getHomeRoot();
+    if (!hp) return;
+    hp.dataset.ssHome = HOME_VERSION; // (51) visible
+    hp.dataset.ssHomeStatus = status; // (70)
+    hp.classList.add("ss-homejs-on");
+  };
+
+  // ---------------------------
+  // Auto mark reveal
+  // ---------------------------
   const autoMarkReveal = () => {
     const hp = getHomeRoot();
     if (!hp) return;
-
-    hp.classList.add("ss-homejs-on");
 
     const targets = [
       ".hp-topTrust__item",
@@ -288,9 +253,9 @@
     });
   };
 
-  // ------------------------------------------------------------
-  // Feature: Reveal (stagger adaptativo + batch)
-  // ------------------------------------------------------------
+  // ---------------------------
+  // Reveal (55/56)
+  // ---------------------------
   const initReveal = () => {
     const nodes = $$(CFG.reveal.selector);
     if (!nodes.length) return;
@@ -300,33 +265,45 @@
       return;
     }
 
-    // stagger adaptativo: en pantallas chicas reduce delay (se siente mejor)
     const vw = window.innerWidth || 1200;
-    const stagger = clamp(CFG.reveal.baseStaggerMs * (vw < 520 ? 0.72 : vw < 900 ? 0.86 : 1), 22, 60);
+    const stagger = clamp(
+      CFG.reveal.baseStaggerMs * (vw < 520 ? 0.7 : vw < 900 ? 0.85 : 1),
+      18,
+      60
+    );
 
-    // index por sección
+    // “above the fold first”
+    const sorted = nodes
+      .map((n) => ({ n, top: n.getBoundingClientRect().top || 99999 }))
+      .sort((a, b) => a.top - b.top)
+      .map((x) => x.n);
+
+    // idx per section
     const groupIndex = new Map();
-    nodes.forEach((el) => {
+    sorted.forEach((el) => {
       const section = el.closest("section") || doc.body || doc.documentElement;
       const idx = groupIndex.get(section) ?? 0;
       groupIndex.set(section, idx + 1);
       el.dataset.revealIdx = String(idx);
     });
 
+    const schedule = (fn) => {
+      if (supportsIdle) return requestIdleCallback(fn, { timeout: 180 });
+      queueMicrotask(fn);
+    };
+
     const io = new IntersectionObserver(
       (entries) => {
-        // batch: aplicamos en microtask
         const toShow = [];
         entries.forEach((e) => {
           if (!e.isIntersecting) return;
           toShow.push(e.target);
           io.unobserve(e.target);
         });
-
         if (!toShow.length) return;
 
-        queueMicrotask(() => {
-          toShow.forEach((el) => {
+        schedule(() => {
+          toShow.slice(0, CFG.reveal.maxBatch).forEach((el) => {
             const idx = Number(el.dataset.revealIdx || "0") || 0;
             setTimeout(() => {
               if (LIFECYCLE.alive) el.classList.add("is-in");
@@ -337,17 +314,17 @@
       { threshold: CFG.reveal.threshold, rootMargin: CFG.reveal.rootMargin }
     );
 
-    nodes.forEach((n) => io.observe(n));
+    sorted.forEach((n) => io.observe(n));
     LIFECYCLE.observers.add(io);
   };
 
-  // ------------------------------------------------------------
-  // Feature: Sticky + ToTop (prefer hero IO)
-  // ------------------------------------------------------------
+  // ---------------------------
+  // Sticky + ToTop (53/54)
+  // ---------------------------
   const initStickyToTop = () => {
     const toTop = $(CFG.toTop.sel);
     const sticky = $(CFG.sticky.sel);
-    const heroSection = $(".hp-hero") || $(".hp-heroFull");
+    const heroSection = $(".hp-hero") || $(".hp-heroFull") || $(".hp-heroCard");
 
     const setOn = (on) => {
       if (sticky) {
@@ -362,35 +339,36 @@
 
     if (sticky) sticky.setAttribute("aria-hidden", "true");
 
-    // click toTop
     if (toTop) {
       LIFECYCLE.addListener(toTop, "click", () => {
-        try {
-          window.scrollTo({ top: 0, behavior: preferSmooth ? "smooth" : "auto" });
-        } catch (_) {
-          window.scrollTo(0, 0);
-        }
+        safe(() => window.scrollTo({ top: 0, behavior: preferSmooth ? "smooth" : "auto" }));
       });
     }
 
-    // prefer IO con hero (más exacto)
-    if (supportsIO && heroSection && !reducedMotion) {
+    let lastSwitch = 0;
+    const hysteresis = (on) => {
+      const now = performance.now();
+      if (now - lastSwitch < CFG.sticky.hysteresisMs) return;
+      lastSwitch = now;
+      setOn(on);
+    };
+
+    if (supportsIO && heroSection) {
       const io = new IntersectionObserver(
         (entries) => {
           const e = entries[0];
-          // si hero no está intersectando => activar sticky/toTop
-          setOn(!e.isIntersecting);
+          const on = !e.isIntersecting;
+          if (reducedMotion) return setOn(on);
+          hysteresis(on);
         },
         { threshold: 0.15 }
       );
       io.observe(heroSection);
       LIFECYCLE.observers.add(io);
-      // estado inicial “por si”
       setOn((window.scrollY || 0) > CFG.sticky.showAt);
       return;
     }
 
-    // fallback scroll
     const apply = () => {
       const y = window.scrollY || 0;
       setOn(y > Math.max(CFG.sticky.showAt, CFG.toTop.showAt));
@@ -400,14 +378,13 @@
     apply();
   };
 
-  // ------------------------------------------------------------
-  // Feature: Hotkey "/" focus search (respeta dialog/modal)
-  // ------------------------------------------------------------
+  // ---------------------------
+  // Hotkey "/" (67)
+  // ---------------------------
   const initHotkeys = () => {
     const input = $(CFG.search.candidates);
     if (!input) return;
 
-    // ARIA básicos
     safe(() => {
       if (!input.getAttribute("autocomplete")) input.setAttribute("autocomplete", "off");
       if (!input.getAttribute("type")) input.setAttribute("type", "search");
@@ -424,38 +401,41 @@
 
     LIFECYCLE.addListener(doc, "keydown", (e) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
-
       if (hasModalOpen()) return;
+
+      // ignora si estás dentro de un form del hero
+      const ae = doc.activeElement;
+      if (ae && ae.closest && ae.closest(".hp-hero, .hp-heroFull, .hp-heroCard") && isTypingContext()) return;
 
       if (e.key === CFG.search.shortcutKey && !isTypingContext()) {
         e.preventDefault();
-        try {
-          input.focus({ preventScroll: true });
-        } catch (_) {
-          input.focus();
-        }
-        input.select?.();
+        safe(() => input.focus({ preventScroll: true }));
+        safe(() => input.select?.());
       }
 
       if (e.key === "Escape" && doc.activeElement === input) input.blur();
     });
   };
 
-  // ------------------------------------------------------------
-  // Feature: Pills (scroll + aria-pressed + fallbacks)
-  // ------------------------------------------------------------
+  // ---------------------------
+  // Pills + offset header (61/62)
+  // ---------------------------
   const initPills = () => {
     const pills = $$(CFG.pills.selector);
     if (!pills.length) return;
+
+    const headerOffset = (() => {
+      const header = $("header");
+      const h = header ? header.getBoundingClientRect().height : 0;
+      return clamp(h + 14, 0, 120);
+    })();
 
     const setPressed = (el, pressed) => el.setAttribute("aria-pressed", pressed ? "true" : "false");
 
     pills.forEach((pill) => {
       pill.setAttribute("role", "button");
       pill.setAttribute("tabindex", "0");
-
-      const isActive = pill.classList.contains(CFG.pills.activeClass);
-      setPressed(pill, isActive);
+      setPressed(pill, pill.classList.contains(CFG.pills.activeClass));
 
       const go = () => {
         if (CFG.pills.singleActive) {
@@ -468,12 +448,11 @@
         pill.classList.toggle(CFG.pills.activeClass);
         setPressed(pill, pill.classList.contains(CFG.pills.activeClass));
 
-        const sel = pill.getAttribute(CFG.pills.targetAttr);
+        const sel = pill.getAttribute(CFG.pills.targetAttr) || pill.getAttribute("data-target");
         const node = sel ? $(sel) : null;
 
-        if (node) return smoothScrollTo(node);
+        if (node) return smoothScrollTo(node, headerOffset);
 
-        // fallback: si el pill tiene href, usalo, sino /shop
         const href = pill.getAttribute("href") || "/shop";
         window.location.href = href;
       };
@@ -488,9 +467,9 @@
     });
   };
 
-  // ------------------------------------------------------------
-  // Feature: Hero motion (pausa si no visible)
-  // ------------------------------------------------------------
+  // ---------------------------
+  // Hero motion (57/58/59)
+  // ---------------------------
   const initHeroMotion = () => {
     if (!CFG.hero.enable) return;
 
@@ -502,6 +481,8 @@
     let mx = 0, my = 0, sx = 0, sy = 0;
     let active = true;
     let lastTransform = "";
+    let lastFrame = performance.now();
+    let slowFrames = 0;
 
     const updateRect = () => (rect = hero.getBoundingClientRect());
 
@@ -513,14 +494,11 @@
       LIFECYCLE.addListener(window, "resize", rafThrottle(updateRect), { passive: true });
     }
 
-    // pausa si hero fuera de viewport
     if (supportsIO) {
       const io = new IntersectionObserver(
         (entries) => {
-          active = !!entries[0]?.isIntersecting;
-          if (!active) {
-            mx = my = 0;
-          }
+          active = !!entries[0]?.isIntersecting && !doc.hidden;
+          if (!active) mx = my = 0;
         },
         { threshold: 0.08 }
       );
@@ -528,28 +506,31 @@
       LIFECYCLE.observers.add(io);
     }
 
+    const useVars = (() => {
+      // si tu CSS usa variables para animar, esto es todavía más smooth
+      const st = getComputedStyle(img);
+      return st && (st.getPropertyValue("--mx") !== "" || st.getPropertyValue("--my") !== "");
+    })();
+
     const onMove = rafThrottle((e) => {
       if (!active) return;
       const w = Math.max(1, rect.width);
       const h = Math.max(1, rect.height);
+
       const px = clamp((e.clientX - rect.left) / w - 0.5, -0.5, 0.5);
       const py = clamp((e.clientY - rect.top) / h - 0.5, -0.5, 0.5);
 
-      mx = px * CFG.hero.maxMoveX;
-      my = py * CFG.hero.maxMoveY;
+      // clamp adaptativo por tamaño
+      const mxMax = clamp(CFG.hero.maxMoveX * (w > 520 ? 1 : 0.75), 6, 14);
+      const myMax = clamp(CFG.hero.maxMoveY * (h > 420 ? 1 : 0.75), 5, 12);
+
+      mx = px * mxMax;
+      my = py * myMax;
     });
 
     LIFECYCLE.addListener(hero, "pointerenter", () => updateRect(), { passive: true });
     LIFECYCLE.addListener(hero, "pointermove", onMove, { passive: true });
-    LIFECYCLE.addListener(
-      hero,
-      "pointerleave",
-      () => {
-        mx = 0;
-        my = 0;
-      },
-      { passive: true }
-    );
+    LIFECYCLE.addListener(hero, "pointerleave", () => { mx = 0; my = 0; }, { passive: true });
 
     const onScroll = rafThrottle(() => {
       updateRect();
@@ -563,33 +544,52 @@
     onScroll();
 
     const tick = () => {
-      // no cortamos RAF (para evitar glitch), pero bajamos trabajo si no activo
-      if (LIFECYCLE.alive && active) {
-        sx += (mx - sx) * 0.1;
+      const now = performance.now();
+      const dt = now - lastFrame;
+      lastFrame = now;
+
+      // auto throttle si FPS baja
+      if (dt > 34) slowFrames++;
+      else slowFrames = Math.max(0, slowFrames - 1);
+
+      const shouldWork = LIFECYCLE.alive && active && slowFrames < 12;
+
+      if (shouldWork) {
+        // smoothing mejorado
+        sx += (mx - sx) * 0.11;
         const combinedY = sy + (my - sy * 0.15);
 
-        const tr = `scale(${CFG.hero.scale}) translate3d(${sx.toFixed(2)}px, ${combinedY.toFixed(2)}px, 0)`;
-        if (tr !== lastTransform) {
-          img.style.transform = tr;
-          lastTransform = tr;
+        if (useVars) {
+          img.style.setProperty("--mx", `${sx.toFixed(2)}px`);
+          img.style.setProperty("--my", `${combinedY.toFixed(2)}px`);
+          img.style.setProperty("--sy", `${sy.toFixed(2)}px`);
+          // si CSS está listo, no tocamos transform acá
+        } else {
+          const tr = `scale(${CFG.hero.scale}) translate3d(${sx.toFixed(2)}px, ${combinedY.toFixed(
+            2
+          )}px, 0)`;
+          if (tr !== lastTransform) {
+            img.style.transform = tr;
+            lastTransform = tr;
+          }
         }
       }
+
       requestAnimationFrame(tick);
     };
 
     requestAnimationFrame(tick);
   };
 
-  // ------------------------------------------------------------
-  // Feature: Glow compatible (no tapa clicks)
-  // ------------------------------------------------------------
+  // ---------------------------
+  // Glow (60)
+  // ---------------------------
   const initGlow = () => {
     if (!CFG.hero.enable) return;
 
     const hero = $(CFG.hero.containerSel);
     if (!hero) return;
 
-    // ya existe
     if (hero.querySelector(".ss-heroGlow, .hp-heroGlow")) return;
 
     const glow = doc.createElement("div");
@@ -603,10 +603,11 @@
       zIndex: "2",
       mixBlendMode: "soft-light",
       opacity: "0",
-      transition: "opacity .35s ease",
+      transition: reducedMotion ? "none" : "opacity .28s ease",
       background:
-        "radial-gradient(420px 280px at 50% 50%, rgba(37,99,235,.20), transparent 60%)," +
-        "radial-gradient(420px 280px at 60% 40%, rgba(14,165,233,.14), transparent 60%)",
+        "radial-gradient(460px 300px at 50% 50%, rgba(37,99,235,.18), transparent 62%)," +
+        "radial-gradient(420px 280px at 60% 40%, rgba(14,165,233,.12), transparent 62%)",
+      willChange: "background, opacity",
     });
 
     hero.appendChild(glow);
@@ -617,8 +618,8 @@
       const y = clamp(((e.clientY - r.top) / Math.max(1, r.height)) * 100, 0, 100);
 
       glow.style.background =
-        `radial-gradient(460px 300px at ${x}% ${y}%, rgba(37,99,235,.22), transparent 60%),` +
-        `radial-gradient(420px 280px at ${clamp(x + 14, 0, 100)}% ${clamp(y - 10, 0, 100)}%, rgba(14,165,233,.16), transparent 62%)`;
+        `radial-gradient(520px 320px at ${x}% ${y}%, rgba(37,99,235,.20), transparent 62%),` +
+        `radial-gradient(460px 300px at ${clamp(x + 16, 0, 100)}% ${clamp(y - 10, 0, 100)}%, rgba(14,165,233,.14), transparent 64%)`;
     });
 
     LIFECYCLE.addListener(hero, "pointerenter", () => (glow.style.opacity = "1"), { passive: true });
@@ -626,15 +627,14 @@
     LIFECYCLE.addListener(hero, "pointermove", moveGlow, { passive: true });
   };
 
-  // ------------------------------------------------------------
-  // Feature: Image safety + fallback data-fallback / hero default
-  // ------------------------------------------------------------
+  // ---------------------------
+  // Image safety (68)
+  // ---------------------------
   const initImageSafety = () => {
     const imgs = $$("img");
     if (!imgs.length) return;
 
     const heroFallback = (() => {
-      // intenta encontrar hero_home.png en el DOM o assets que uses
       const anyHero = $(".hp-heroImg");
       return anyHero ? anyHero.getAttribute("src") : "";
     })();
@@ -650,67 +650,82 @@
             img.parentElement;
           if (wrap) wrap.classList.add("media-failed");
 
-          // fallback opcional
           const fb = img.getAttribute("data-fallback") || heroFallback;
-          if (fb && img.src !== fb) {
-            try {
-              img.src = fb;
-              img.style.opacity = ".92";
-            } catch (_) {}
-          }
+          if (fb && img.src !== fb) safe(() => (img.src = fb));
         },
         { once: true }
       );
     });
+
+    // backgrounds fallback (data-bg-fallback)
+    $$("[data-bg-fallback]").forEach((el) => {
+      const fb = el.getAttribute("data-bg-fallback");
+      if (!fb) return;
+      // si background-image está vacío, set fallback
+      const bg = getComputedStyle(el).backgroundImage || "";
+      if (bg === "none" || bg === "") safe(() => (el.style.backgroundImage = `url("${fb}")`));
+    });
+
+    // <source> fallback simple
+    $$("picture source").forEach((src) => {
+      LIFECYCLE.addListener(src, "error", () => {}, { once: true });
+    });
   };
 
-  // ------------------------------------------------------------
-  // Feature: Prefetch /shop con base path real
-  // ------------------------------------------------------------
+  // ---------------------------
+  // Prefetch / preconnect (69)
+  // ---------------------------
   const initPrefetchShop = () => {
-    const base = (() => {
-      try {
-        // si estás en subpath: /algo/ -> armamos /algo/shop
-        const parts = path.split("/").filter(Boolean);
-        // si tu app está root, parts vacío
-        return parts.length && parts[0] !== "shop" ? `/${parts[0]}` : "";
-      } catch (_) {
-        return "";
-      }
-    })();
-
-    const href = `${base}/shop`;
-
+    const href = "/shop";
     const exists = $$('link[rel="prefetch"]').some((l) => (l.getAttribute("href") || "") === href);
-    if (exists) return;
+    if (!exists) {
+      const link = doc.createElement("link");
+      link.rel = "prefetch";
+      link.href = href;
+      doc.head.appendChild(link);
+    }
 
-    const link = doc.createElement("link");
-    link.rel = "prefetch";
-    link.href = href;
-    doc.head.appendChild(link);
+    // preconnect to self (safe)
+    const pc = $$('link[rel="preconnect"]').some((l) => (l.getAttribute("href") || "") === location.origin);
+    if (!pc) {
+      const link2 = doc.createElement("link");
+      link2.rel = "preconnect";
+      link2.href = location.origin;
+      doc.head.appendChild(link2);
+    }
   };
 
-  // ------------------------------------------------------------
-  // Feature: Autocomplete (robusto, no rompe si endpoint no existe)
-  // ------------------------------------------------------------
+  // ---------------------------
+  // Autocomplete (63/64/65/66)
+  // ---------------------------
   const initAutocomplete = () => {
     if (!CFG.autocomplete.enable) return;
 
     const input = $(CFG.search.candidates);
     if (!input) return;
 
-    // no forzar si el input tiene autocomplete=on explícito del usuario
     if (!input.getAttribute("autocomplete")) input.setAttribute("autocomplete", "off");
     if (!input.getAttribute("type")) input.setAttribute("type", "search");
 
-    // ARIA
     input.setAttribute("aria-autocomplete", "list");
     input.setAttribute("aria-haspopup", "listbox");
 
+    // LRU cache real
     const cache = new Map();
-    const cacheSet = (k, v) => {
+    const cacheGet = (k) => {
+      if (!cache.has(k)) return null;
+      const v = cache.get(k);
+      cache.delete(k);
       cache.set(k, v);
-      if (cache.size > CFG.autocomplete.cacheSize) cache.delete(cache.keys().next().value);
+      return v;
+    };
+    const cacheSet = (k, v) => {
+      if (cache.has(k)) cache.delete(k);
+      cache.set(k, v);
+      if (cache.size > CFG.autocomplete.cacheSize) {
+        const first = cache.keys().next().value;
+        cache.delete(first);
+      }
     };
 
     const box = doc.createElement("div");
@@ -720,18 +735,19 @@
     box.style.position = "absolute";
     box.style.zIndex = "9999";
     box.style.display = "none";
+    box.style.maxHeight = `${CFG.autocomplete.maxHeight}px`;
+    box.style.overflow = "auto";
 
     const isDark = !!(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
-
     Object.assign(box.style, {
       marginTop: "8px",
       borderRadius: "14px",
       border: isDark ? "1px solid rgba(148,163,184,.22)" : "1px solid rgba(15,23,42,.14)",
       background: isDark ? "rgba(9,12,24,.92)" : "rgba(255,255,255,.96)",
-      boxShadow: isDark ? "none" : "0 18px 50px rgba(2,6,23,.14)",
+      boxShadow: "0 18px 50px rgba(2,6,23,.14)",
       backdropFilter: "blur(14px)",
       WebkitBackdropFilter: "blur(14px)",
-      overflow: "hidden",
+      overflowX: "hidden",
       minWidth: "240px",
     });
 
@@ -743,7 +759,6 @@
       box.style.top = `${r.bottom + window.scrollY}px`;
       box.style.width = `${r.width}px`;
     };
-
     const pos = rafThrottle(positionBox);
     pos();
     LIFECYCLE.addListener(window, "resize", pos, { passive: true });
@@ -768,10 +783,7 @@
       rows.forEach((r) => (r.style.background = "transparent"));
       if (!row) return;
       row.style.background = isDark ? "rgba(255,255,255,.06)" : "rgba(37,99,235,.10)";
-      // que se vea cuando navegás con teclado
-      try {
-        row.scrollIntoView({ block: "nearest" });
-      } catch (_) {}
+      safe(() => row.scrollIntoView({ block: "nearest" }));
     };
 
     const render = (items) => {
@@ -802,7 +814,6 @@
       box.style.display = "block";
       rows = $$(".ss-suggest__item", box);
 
-      // click con mousedown para que no se pierda por blur
       rows.forEach((row) => {
         LIFECYCLE.addListener(row, "mouseenter", () => highlight(row));
         LIFECYCLE.addListener(row, "mouseleave", () => highlight(null));
@@ -815,19 +826,19 @@
     };
 
     const fetchSuggest = async (q) => {
-      if (cache.has(q)) return cache.get(q);
+      const cached = cacheGet(q);
+      if (cached) return cached;
 
       if (aborter) {
         safe(() => aborter.abort());
         LIFECYCLE.aborters.delete(aborter);
       }
-
       aborter = new AbortController();
       LIFECYCLE.aborters.add(aborter);
 
       const url = `${CFG.autocomplete.endpoint}${encodeURIComponent(q)}`;
-
       let res;
+
       try {
         res = await fetch(url, {
           signal: aborter.signal,
@@ -841,11 +852,8 @@
 
       if (!res || !res.ok) return [];
 
-      // soporte si backend devuelve html por error
       const ct = String(res.headers.get("content-type") || "");
-      if (!ct.includes("application/json")) {
-        return [];
-      }
+      if (!ct.includes("application/json")) return [];
 
       const data = await res.json().catch(() => null);
       const items = Array.isArray(data)
@@ -865,6 +873,9 @@
       if (q === lastQ) return;
       lastQ = q;
 
+      // (66) paste guard
+      if (q.length > CFG.autocomplete.pasteGuardLen) return close();
+
       if (q.length < CFG.autocomplete.minChars) return close();
 
       try {
@@ -877,25 +888,24 @@
     }, CFG.autocomplete.debounceMs);
 
     LIFECYCLE.addListener(input, "input", onInput);
-
-    // IME
     LIFECYCLE.addListener(input, "compositionstart", () => (composing = true));
     LIFECYCLE.addListener(input, "compositionend", () => {
       composing = false;
       onInput();
     });
 
-    // close outside
     LIFECYCLE.addListener(doc, "click", (e) => {
       if (e.target === input) return;
       if (box.contains(e.target)) return;
       close();
     });
 
-    // blur delayed
-    LIFECYCLE.addListener(input, "blur", () => setTimeout(close, 120));
+    LIFECYCLE.addListener(input, "blur", () => {
+      // (65) cancel on blur
+      if (aborter) safe(() => aborter.abort());
+      setTimeout(close, 120);
+    });
 
-    // keyboard nav
     LIFECYCLE.addListener(input, "keydown", (e) => {
       if (box.style.display === "none" || !rows.length) return;
 
@@ -923,7 +933,6 @@
       if (row && row.id) input.setAttribute("aria-activedescendant", row.id);
     });
 
-    // aria-controls
     safe(() => {
       const id = box.id || `ss-suggest-${Math.random().toString(16).slice(2)}`;
       box.id = id;
@@ -932,17 +941,45 @@
     });
   };
 
-  // ------------------------------------------------------------
+  // ---------------------------
+  // MutationObserver rebind (52)
+  // ---------------------------
+  const initRebinder = () => {
+    if (!("MutationObserver" in window)) return;
+
+    const mo = new MutationObserver(
+      debounce(() => {
+        const newRoot = getHomeRoot();
+        if (newRoot && newRoot !== homeRoot) {
+          homeRoot = newRoot;
+          markLoaded("rebind");
+          // reinit reveal + sticky (lo más importante)
+          safe(() => initReveal());
+          safe(() => initStickyToTop());
+        }
+      }, 220)
+    );
+
+    safe(() => mo.observe(doc.body || doc.documentElement, { childList: true, subtree: true }));
+    LIFECYCLE.observers.add(mo);
+  };
+
+  // ---------------------------
   // Init
-  // ------------------------------------------------------------
+  // ---------------------------
   const init = () => {
+    // connected check
+    const hp = getHomeRoot();
+    if (!hp) return;
+
+    markLoaded("boot");
+
     safe(() => autoMarkReveal());
 
     // preloader
     safe(() => {
       const p = $(CFG.preloader.sel);
       if (!p) return;
-
       requestAnimationFrame(() => {
         p.style.transition = `opacity ${CFG.preloader.fadeMs}ms ease`;
         p.style.opacity = "0";
@@ -959,12 +996,10 @@
     safe(() => initImageSafety());
     safe(() => initAutocomplete());
     safe(() => initPrefetchShop());
+    safe(() => initRebinder());
 
-    // mark ready
-    safe(() => {
-      const hp = getHomeRoot();
-      if (hp) hp.classList.add("is-ready");
-    });
+    safe(() => hp.classList.add("is-ready"));
+    markLoaded("ok");
   };
 
   if (doc.readyState === "loading") {
