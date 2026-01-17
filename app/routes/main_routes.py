@@ -1,4 +1,4 @@
-# app/routes/main_routes.py — Skyline Store (ULTRA PRO++ / NO BREAK / FAIL-SAFE v3.3 BULLETPROOF)
+# app/routes/main_routes.py — Skyline Store (ULTRA PRO++ / NO BREAK / FAIL-SAFE v3.4 BULLETPROOF)
 from __future__ import annotations
 
 import hashlib
@@ -35,7 +35,6 @@ try:
 except Exception:  # pragma: no cover
     db = None  # type: ignore
 
-
 log = logging.getLogger("main_routes")
 
 main_bp = Blueprint(
@@ -59,8 +58,26 @@ FORM_NONCE_TTL = max(30, min(FORM_NONCE_TTL, 3600))
 NONCE_CLEANUP_MAX = int(os.getenv("AUTH_NONCE_CLEANUP_MAX", "25") or "25")
 NONCE_CLEANUP_MAX = max(5, min(NONCE_CLEANUP_MAX, 200))
 
-# ✅ Podés forzar que "/" redirija a la tienda (evita choque si existe shop.root "/")
+# ✅ Podés forzar que "/" redirija a shop. (por defecto: NO)
 HOME_REDIRECT_TO_SHOP = str(os.getenv("HOME_REDIRECT_TO_SHOP", "") or "").strip().lower() in _TRUE
+
+# ✅ NUEVO: ruta “home real” (si tu app decide redirigir, al menos queda consistente)
+HOME_CANONICAL_PATH = (os.getenv("HOME_CANONICAL_PATH") or "/").strip() or "/"
+
+# Cache home
+HOME_CACHE_TTL = int(os.getenv("HOME_CACHE_TTL", "120") or "120")
+HOME_CACHE_TTL = max(0, min(HOME_CACHE_TTL, 3600))  # 0 = sin cache
+ENABLE_HOME_CACHE = (str(os.getenv("ENABLE_HOME_CACHE", "1")).strip().lower() in _TRUE)
+
+# Seguridad URL / scheme
+FORCE_HTTPS = (str(os.getenv("FORCE_HTTPS", "0")).strip().lower() in _TRUE)
+PREFERRED_URL_SCHEME = (os.getenv("PREFERRED_URL_SCHEME") or "").strip().lower() or ("https" if FORCE_HTTPS else "")
+
+# ✅ NUEVO: versionado cache-bust (mismo que index.html usa HOME_CSS_VER)
+HOME_ASSET_VER = (os.getenv("HOME_CSS_VER") or os.getenv("HOME_ASSET_VER") or "162").strip() or "162"
+
+_HOME_CACHE: Dict[str, Tuple[float, Dict[str, Any]]] = {}  # key -> (expires_at, payload)
+
 
 def _env_bool(key: str, default: bool = False) -> bool:
     v = os.getenv(key)
@@ -98,14 +115,14 @@ SEO_DEFAULTS = SeoDefaults(
     og_image=os.getenv("OG_IMAGE", "img/og.png"),
 )
 
-HOME_CACHE_TTL = int(os.getenv("HOME_CACHE_TTL", "120") or "120")
-HOME_CACHE_TTL = max(0, min(HOME_CACHE_TTL, 3600))  # 0 = sin cache
-ENABLE_HOME_CACHE = _env_bool("ENABLE_HOME_CACHE", True)
 
-FORCE_HTTPS = _env_bool("FORCE_HTTPS", False)
-PREFERRED_URL_SCHEME = (os.getenv("PREFERRED_URL_SCHEME") or "").strip().lower() or ("https" if FORCE_HTTPS else "")
+# -----------------------------------------------------------------------------
+# Cache helpers (con limpieza y size cap)
+# -----------------------------------------------------------------------------
 
-_HOME_CACHE: Dict[str, Tuple[float, Dict[str, Any]]] = {}  # key -> (expires_at, payload)
+# ✅ NUEVO: cap para evitar crecer infinito en worker (cache por proceso)
+_HOME_CACHE_MAX_KEYS = int(os.getenv("HOME_CACHE_MAX_KEYS", "32") or "32")
+_HOME_CACHE_MAX_KEYS = max(8, min(_HOME_CACHE_MAX_KEYS, 256))
 
 
 def _cache_get(key: str) -> Optional[Dict[str, Any]]:
@@ -124,8 +141,25 @@ def _cache_get(key: str) -> Optional[Dict[str, Any]]:
 def _cache_set(key: str, payload: Dict[str, Any]) -> None:
     if not (ENABLE_HOME_CACHE and HOME_CACHE_TTL > 0):
         return
-    _HOME_CACHE[key] = (time.time() + HOME_CACHE_TTL, payload)
 
+    # ✅ NUEVO: limpieza de expirados + cap simple
+    now = time.time()
+    if len(_HOME_CACHE) >= _HOME_CACHE_MAX_KEYS:
+        # borra expirados primero
+        for k in list(_HOME_CACHE.keys()):
+            exp, _ = _HOME_CACHE[k]
+            if now > exp:
+                _HOME_CACHE.pop(k, None)
+        # si sigue grande, borra algunos arbitrarios
+        while len(_HOME_CACHE) >= _HOME_CACHE_MAX_KEYS:
+            _HOME_CACHE.pop(next(iter(_HOME_CACHE)), None)
+
+    _HOME_CACHE[key] = (now + HOME_CACHE_TTL, payload)
+
+
+# -----------------------------------------------------------------------------
+# URL safety
+# -----------------------------------------------------------------------------
 
 def _is_safe_next(url: str) -> bool:
     """
@@ -176,20 +210,6 @@ def _etag_for(text: str) -> str:
     return f'W/"{h[:32]}"'
 
 
-def _resp_no_store(resp, *, vary_cookie: bool = True):
-    # no-store para formularios / áreas sensibles
-    resp.headers["Cache-Control"] = "no-store"
-    resp.headers["Pragma"] = "no-cache"
-    if vary_cookie:
-        resp.headers.setdefault("Vary", "Cookie")
-    return resp
-
-
-def _resp_cache_public(resp, seconds: int):
-    resp.headers["Cache-Control"] = f"public, max-age={max(0, int(seconds))}"
-    return resp
-
-
 def _maybe_304(req_etag: Optional[str], etag: str):
     """
     Conditional GET (ETag):
@@ -198,13 +218,28 @@ def _maybe_304(req_etag: Optional[str], etag: str):
     if not req_etag:
         return None
     try:
-        # If-None-Match puede traer lista: W/"xxx", W/"yyy"
         inm = req_etag.strip()
         if inm == etag or etag in {x.strip() for x in inm.split(",")}:
-            return make_response("", 304)
+            resp = make_response("", 304)
+            return resp
         return None
     except Exception:
         return None
+
+
+def _resp_no_store(resp, *, vary_cookie: bool = True):
+    resp.headers["Cache-Control"] = "no-store"
+    resp.headers["Pragma"] = "no-cache"
+    if vary_cookie:
+        resp.headers.setdefault("Vary", "Cookie")
+    return resp
+
+
+def _resp_cache_public(resp, seconds: int):
+    # ✅ NUEVO: agrega stale-while-revalidate para UX sin romper
+    s = max(0, int(seconds))
+    resp.headers["Cache-Control"] = f"public, max-age={s}, stale-while-revalidate=30"
+    return resp
 
 
 def _safe_og_image(value: str) -> str:
@@ -240,14 +275,23 @@ def _render(template: str, *, status: int = 200, **ctx: Any):
     ctx.setdefault("view_functions", getattr(current_app, "view_functions", {}) or {})
     ctx.setdefault("config", getattr(current_app, "config", {}) or {})
 
+    # ✅ NUEVO: inyecta HOME_CSS_VER para que index.html cache-bust funcione sí o sí
+    ctx.setdefault("HOME_CSS_VER", HOME_ASSET_VER)
+
     try:
         return make_response(render_template(template, **ctx), status)
     except Exception:
-        # fallback ABSOLUTO: nunca debe romper (evita 500 por template missing)
         log.exception("Template render failed: %s", template)
-        # intentamos usar un error.html si existe; si no, texto simple
         try:
-            return make_response(render_template("error.html", error_code=500, error_title="Error", error_message="Ocurrió un error."), 500)
+            return make_response(
+                render_template(
+                    "error.html",
+                    error_code=500,
+                    error_title="Error",
+                    error_message="Ocurrió un error.",
+                ),
+                500,
+            )
         except Exception:
             return make_response("Ocurrió un error cargando la página.", 500)
 
@@ -276,7 +320,8 @@ def _cleanup_old_nonces() -> None:
     """
     try:
         keys = [k for k in session.keys() if isinstance(k, str) and k.startswith("nonce:")]
-        # primero limpiamos vencidos siempre
+
+        # primero limpiamos vencidos
         for k in keys:
             raw = session.get(k)
             if not _nonce_is_valid(raw):
@@ -286,7 +331,7 @@ def _cleanup_old_nonces() -> None:
         if len(keys) <= NONCE_CLEANUP_MAX:
             return
 
-        # si sigue habiendo demasiados, recortamos arbitrariamente
+        # si sigue habiendo demasiados, recortamos
         extras = len(keys) - NONCE_CLEANUP_MAX
         for k in keys[: max(0, extras)]:
             session.pop(k, None)
@@ -334,6 +379,9 @@ def _security_headers(resp):
     resp.headers.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
     resp.headers.setdefault("X-Served-By", "skyline")
 
+    # ✅ NUEVO: ayuda a debug de caché/versión sin exponer info sensible
+    resp.headers.setdefault("X-Home-Asset-Ver", str(HOME_ASSET_VER))
+
     # No cachear pantallas sensibles
     if request.path.startswith(("/auth", "/admin", "/account", "/checkout", "/cart")):
         resp.headers.setdefault("Cache-Control", "no-store")
@@ -348,6 +396,12 @@ def _security_headers(resp):
 
 @main_bp.get("/")
 def home():
+    """
+    Home real:
+    - por defecto renderiza index.html
+    - opcional: redirige a shop si HOME_REDIRECT_TO_SHOP=1
+    - cache por lang + ETag correcto + cache-control
+    """
     # ✅ Si querés que la tienda sea el home y evitar choques con shop.root
     if HOME_REDIRECT_TO_SHOP:
         try:
@@ -355,35 +409,53 @@ def home():
         except Exception:
             return redirect("/shop", code=302)
 
+    # ✅ NUEVO: Canonical redirect solo si la URL no coincide (evita 302 sorpresa)
+    try:
+        if HOME_CANONICAL_PATH and request.path != HOME_CANONICAL_PATH and request.path == "/":
+            # solo si lo configurás distinto a "/"
+            if HOME_CANONICAL_PATH != "/":
+                return redirect(HOME_CANONICAL_PATH, code=302)
+    except Exception:
+        pass
+
     lang = (request.headers.get("Accept-Language") or "es").split(",")[0].strip().lower()
-    key = f"home:v3.3:lang={lang}"
+    lang = (lang or "es")[:12]  # ✅ NUEVO: cap para evitar keys raras
+
+    # ✅ NUEVO: versiona la cache con asset ver (si cambiás HOME_CSS_VER, invalida cache)
+    key = f"home:v3.4:lang={lang}:ver={HOME_ASSET_VER}"
 
     cached = _cache_get(key)
     if cached:
-        etag = _etag_for(f"{cached.get('meta_title','')}-{cached.get('meta_description','')}-{lang}")
+        etag = _etag_for(f"{cached.get('meta_title','')}|{cached.get('meta_description','')}|{lang}|{HOME_ASSET_VER}")
         maybe = _maybe_304(request.headers.get("If-None-Match"), etag)
         if maybe is not None:
             maybe.headers["ETag"] = etag
+            maybe.headers.setdefault("Vary", "Accept-Language")
             return _resp_cache_public(maybe, HOME_CACHE_TTL)
 
         resp = _render("index.html", **cached)
         resp.headers["ETag"] = etag
+        resp.headers.setdefault("Vary", "Accept-Language")
         return _resp_cache_public(resp, HOME_CACHE_TTL)
 
     payload: Dict[str, Any] = {
         "meta_title": SEO_DEFAULTS.title,
         "meta_description": SEO_DEFAULTS.description,
+        # ✅ NUEVO: fuerza esta var (tu index.html ya la usa)
+        "HOME_CSS_VER": HOME_ASSET_VER,
     }
     _cache_set(key, payload)
 
-    etag = _etag_for(f"{payload.get('meta_title','')}-{payload.get('meta_description','')}-{lang}")
+    etag = _etag_for(f"{payload.get('meta_title','')}|{payload.get('meta_description','')}|{lang}|{HOME_ASSET_VER}")
     maybe = _maybe_304(request.headers.get("If-None-Match"), etag)
     if maybe is not None:
         maybe.headers["ETag"] = etag
+        maybe.headers.setdefault("Vary", "Accept-Language")
         return _resp_cache_public(maybe, HOME_CACHE_TTL if ENABLE_HOME_CACHE else 0)
 
     resp = _render("index.html", **payload)
     resp.headers["ETag"] = etag
+    resp.headers.setdefault("Vary", "Accept-Language")
     return _resp_cache_public(resp, HOME_CACHE_TTL if ENABLE_HOME_CACHE else 0)
 
 
