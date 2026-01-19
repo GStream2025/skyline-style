@@ -1,12 +1,12 @@
 # ============================================================
 # Skyline Store — Development / Testing Requirements
-# ULTRA PRO · FINAL · NO BREAK · + mejoras
+# ULTRA PRO · FINAL · NO BREAK · v2.1
 # ============================================================
 # ✔ Hereda TODO de producción
 # ✔ Testing rápido, estable y reproducible
-# ✔ Lint/format/typecheck PRO
-# ✔ Debug UX y calidad sin afectar prod
-# ✔ Compatible Flask 3 + SQLAlchemy 2
+# ✔ Lint / Format / Types PRO
+# ✔ Debug UX sin afectar prod
+# ✔ CI-friendly (Linux / Windows / Render)
 # ============================================================
 
 
@@ -24,50 +24,47 @@ pytest-cov==6.0.0
 pytest-mock==3.14.0
 pytest-env==1.1.5
 
-# ✅ Mejora 1: tests en paralelo
+# ✅ Mejora 1: tests en paralelo (seguro con pytest>=7)
 pytest-xdist==3.6.1
 
-# ✅ Mejora 2: orden aleatorio (detecta tests frágiles)
+# ✅ Mejora 2: orden aleatorio (detecta dependencias ocultas)
 pytest-randomly==3.16.0
 
-# ✅ Mejora 3: tiempo/fechas (locks, expiraciones, promos)
+# ✅ Mejora 3: control de tiempo (tokens, expiraciones, promos)
 freezegun==1.5.1
 
-# ✅ Mejora 4: timeouts para que no se “cuelgue” CI/local
+# ✅ Mejora 4: evita cuelgues en CI/local
 pytest-timeout==2.3.1
 
-# ✅ (opcional) output más lindo (no afecta tests)
+# ⚠️ opcional visual (no rompe)
 # pytest-sugar==1.0.0
-
-# ⚠️ (opcional) puede fallar según entorno; activalo si ya te funciona bien
-# pytest-clarity==1.0.1
 
 
 # =========================
-# Coverage / reportes
+# Coverage / Reportes
 # =========================
 coverage[toml]==7.6.9
 
-# ✅ reporte HTML local
+# ✅ reporte HTML local (no afecta CI)
 pytest-html==4.1.1
 
 
 # =========================
-# Lint / Format / Types (calidad PRO)
+# Lint / Format / Types (Flask 3 SAFE)
 # =========================
 ruff==0.8.4
 black==24.10.0
 mypy==1.13.0
 
+# Tipos útiles (compatibles con py311)
 types-requests==2.32.0.20241016
 types-python-dateutil==2.9.0.20241206
 types-six==1.17.0.20241205
 
-# ✅ Nota PRO:
-# types-Flask / types-Werkzeug viejos NO sirven bien con Flask3/Werkzeug3.
-# Mejor: tipado por stubs inline + "mypy --install-types" + plugins si hiciera falta.
-# WTForms stub a veces ayuda, a veces molesta: lo dejamos opcional.
-# types-WTForms==3.1.0.20240425
+# ⚠️ Nota PRO:
+# Flask/Werkzeug stubs oficiales NO están alineados con Flask 3.
+# Mejor estrategia: typing inline + mypy --install-types
+# types-Flask / types-Werkzeug NO recomendados.
 
 
 # =========================
@@ -75,19 +72,21 @@ types-six==1.17.0.20241205
 # =========================
 ipython==8.31.0
 rich==13.9.4
-watchdog==6.0.0
+
+# ✅ Mejora 5: watchdog solo en dev, evita reloads rotos en Windows
+watchdog==6.0.0; platform_system != "Windows"
 debugpy==1.8.11
 
 
 # =========================
-# Seguridad / Quality gates (dev)
+# Seguridad / Quality Gates (DEV)
 # =========================
 bandit==1.7.10
 
-# ✅ revisar vulnerabilidades conocidas en deps (solo dev)
+# Auditoría de dependencias (solo dev)
 pip-audit==2.7.3
 
-# ✅ Mejora nueva: ver árbol de dependencias y detectar duplicados
+# Árbol de dependencias (detecta duplicados/conflictos)
 pipdeptree==2.23.4
 
 
@@ -98,14 +97,10 @@ sqlalchemy-utils==0.41.2
 faker==33.1.0
 factory-boy==3.3.1
 
-# ⚠️ (opcional) a veces rompe en algunos entornos
-# prettyprinter==0.18.0
-
 
 # =========================
-# Tooling pro (reproducible / CI)
+# Tooling PRO / CI
 # =========================
-# ✅ Mejora nueva: tox para correr test/lint/mypy en entornos consistentes
 tox==4.23.2
 
 
@@ -114,13 +109,13 @@ tox==4.23.2
 # =========================
 pip-tools==7.4.1
 
-# Pre-commit (si querés automatizar ruff/black)
+# Pre-commit (si automatizás ruff/black)
 # pre-commit==4.0.1
 
-# HTTP mocking clásico (requests)
+# HTTP mocking clásico
 # responses==0.25.3
 
-# ✅ Mejora nueva: mocking moderno (opcional)
+# Mocking async moderno (opcional)
 # httpx==0.27.2
 # respx==0.21.1
 

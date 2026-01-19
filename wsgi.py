@@ -1,4 +1,4 @@
-# wsgi.py — Skyline Store (ULTRA PRO / FINAL · Bulletproof v3)
+# wsgi.py — Skyline Store (ULTRA PRO / FINAL · Bulletproof v3.1)
 from __future__ import annotations
 
 import logging
@@ -12,6 +12,8 @@ from typing import Any, Dict, Optional, Tuple
 # =============================================================================
 _TRUE = {"1", "true", "yes", "y", "on", "checked"}
 _FALSE = {"0", "false", "no", "n", "off"}
+
+_ALLOWED_LOG_LEVELS = {"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"}
 
 
 def _bool_env(key: str, default: bool = False) -> bool:
@@ -75,19 +77,25 @@ elif os.getenv("FLASK_DEBUG") is not None:
 else:
     DEBUG = ENV == "development"
 
-LOG_LEVEL = (os.getenv("LOG_LEVEL") or ("DEBUG" if DEBUG else "INFO")).upper().strip()
+LOG_LEVEL_RAW = (os.getenv("LOG_LEVEL") or ("DEBUG" if DEBUG else "INFO")).upper().strip()
+LOG_LEVEL = LOG_LEVEL_RAW if LOG_LEVEL_RAW in _ALLOWED_LOG_LEVELS else ("DEBUG" if DEBUG else "INFO")  # ✅ mejora #2
 
 
 # =============================================================================
 # Logging (no duplica handlers si gunicorn ya configuró)
 # =============================================================================
 root = logging.getLogger()
+
+# ✅ mejora #1: si Gunicorn ya tiene logging, no lo pises
 if not root.handlers:
     logging.basicConfig(
         level=getattr(logging, LOG_LEVEL, logging.INFO),
         format="%(asctime)s | %(levelname)-8s | %(name)s - %(message)s",
     )
-root.setLevel(getattr(logging, LOG_LEVEL, logging.INFO))
+else:
+    # Si ya hay handlers, solo aseguramos nivel razonable sin reconfigurar handlers
+    root.setLevel(getattr(logging, LOG_LEVEL, logging.INFO))
+
 log = logging.getLogger("wsgi")
 
 # Snapshot (sin secrets)
@@ -151,8 +159,9 @@ try:
             x_proto=1,
             x_host=1,
             x_prefix=1,
+            x_port=1,  # ✅ mejora #3
         )  # type: ignore[attr-defined]
-        log.info("✅ ProxyFix habilitado (x_for=1 x_proto=1 x_host=1 x_prefix=1)")
+        log.info("✅ ProxyFix habilitado (x_for=1 x_proto=1 x_host=1 x_prefix=1 x_port=1)")
     elif should_apply and already:
         log.info("ℹ️ ProxyFix ya estaba aplicado (omitido)")
     else:
@@ -174,15 +183,19 @@ def _has_rule(rule_path: str) -> bool:
 def _db_ping() -> Tuple[bool, Optional[str], Optional[float]]:
     """
     Ready check real:
-    - si NO hay SQLALCHEMY_DATABASE_URI, no intentamos ping duro
+    - si NO hay SQLALCHEMY_DATABASE_URI pero sí DATABASE_URL, lo consideramos "set" (Render)
     - ejecuta SELECT 1 con SQLAlchemy
     - rollback seguro si falla
     """
     t0 = time.time()
     try:
-        uri = (app.config.get("SQLALCHEMY_DATABASE_URI") or "").strip()
-        if not uri:
-            return False, "SQLALCHEMY_DATABASE_URI missing", (time.time() - t0)
+        uri_cfg = (app.config.get("SQLALCHEMY_DATABASE_URI") or "").strip()
+        uri_env = (os.getenv("SQLALCHEMY_DATABASE_URI") or "").strip()
+        db_url = (os.getenv("DATABASE_URL") or "").strip()
+
+        # ✅ mejora #4: no marcar missing si está DATABASE_URL
+        if not (uri_cfg or uri_env or db_url):
+            return False, "DB url missing (SQLALCHEMY_DATABASE_URI/DATABASE_URL)", (time.time() - t0)
 
         from app.models import db  # type: ignore
         from sqlalchemy import text
@@ -195,7 +208,8 @@ def _db_ping() -> Tuple[bool, Optional[str], Optional[float]]:
             db.session.rollback()
         except Exception:
             pass
-        return False, (f"{type(e).__name__}: {e}"[:240] if str(e) else "db_error"), (time.time() - t0)
+        msg = f"{type(e).__name__}: {e}".strip()
+        return False, (msg[:240] if msg else "db_error"), (time.time() - t0)
 
 
 # /health: liveness (liviano)

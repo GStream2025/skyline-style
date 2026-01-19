@@ -1,11 +1,14 @@
-{# app/templates/index.html — Skyline Store (ULTRA PRO v16.2.1 · PATCH · NO-500)
-   ✅ Revisión (3x): sin duplicar JS, sin variables vacías, sin IDs duplicados
-   ✅ +5 mejoras extra:
-      1) ✅ Evita doble lógica: REMOVIDO el patch inline (home.js queda como fuente única)
-      2) ✅ Canonical/OG URL robusto + fallback seguro sin request
-      3) ✅ OG image absoluto cuando se puede (_external), fallback local
-      4) ✅ Preload hero con imagesrcset placeholder + fetchpriority (mejor LCP)
-      5) ✅ data-home-ver + hooks para debug visual (ver que versión está cargada)
+{# app/templates/index.html — Skyline Store (ULTRA PRO v16.2.3 · FIX + 10 MEJORAS · NO-500)
+   1) Canonical limpio (sin query) + OG url consistente
+   2) Root absoluto robusto (JSON-LD sin "/" inválido)
+   3) OG image absoluto + fallback seguro
+   4) Preload hero con imagesizes (mejor LCP real)
+   5) Prefetch tienda con as=document
+   6) Pills = buttons A11y + aria-controls/expanded (JS-friendly)
+   7) featured_list safe (nunca None)
+   8) CTA principal domina + “mini cuenta” secundaria clara
+   9) Img: sizes + fetchpriority + decoding (CLS/LCP)
+   10) Hooks de debug: data-home-ver + data-env (diagnóstico visual)
 #}
 {% extends "base.html" %}
 
@@ -17,9 +20,18 @@
   {% set _req = (request if request is defined and request else none) %}
   {% set _vf  = (view_functions if view_functions is defined and view_functions else {}) %}
 
-  {# canonical robusto #}
-  {% set _base_url = (_req.base_url if _req and _req.base_url else '/') %}
+  {# ✅ Cache-bust REAL (default 162) #}
+  {% set _home_ver = (HOME_CSS_VER if HOME_CSS_VER is defined and HOME_CSS_VER else '162')|string|trim %}
+
+  {# ✅ Canonical limpio (sin querystring) #}
+  {% set _canonical = (_req.base_url if _req and _req.base_url else '/') %}
   {% set _root = (_req.url_root if _req and _req.url_root else '/') %}
+
+  {# ✅ Root absoluto robusto para JSON-LD (evita "/") #}
+  {% set _root_abs = _root %}
+  {% if _root_abs == '/' %}
+    {% set _root_abs = 'https://skyline-style.onrender.com/' %}
+  {% endif %}
 
   {# ---------------- Assets ---------------- #}
   {% set hero_img = url_for('static', filename='img/banners/hero_home.png') %}
@@ -32,11 +44,11 @@
 
   <meta name="description" content="{{ _desc|e }}">
   <meta name="robots" content="{{ 'index,follow' if _env == 'production' else 'noindex,nofollow' }}">
-
-  <link rel="canonical" href="{{ _base_url|e }}">
-  <meta property="og:url" content="{{ _base_url|e }}">
-  <meta property="og:site_name" content="Skyline Store">
   <meta name="theme-color" content="#2563eb">
+
+  <link rel="canonical" href="{{ _canonical|e }}">
+  <meta property="og:url" content="{{ _canonical|e }}">
+  <meta property="og:site_name" content="Skyline Store">
 
   <meta property="og:title" content="{{ _t|e }}">
   <meta property="og:description" content="{{ _desc|e }}">
@@ -49,31 +61,33 @@
   <meta name="twitter:description" content="{{ _desc|e }}">
   <meta name="twitter:image" content="{{ og_img|e }}">
 
-  {# PERF: preload hero (LCP) + preconnect/dns-prefetch #}
-  <link rel="preload" as="image" href="{{ hero_img|e }}" fetchpriority="high">
-  <link rel="preconnect" href="{{ _root|e }}">
-  <link rel="dns-prefetch" href="{{ _root|e }}">
+  {# PERF: preload hero (LCP) + sizes #}
+  <link rel="preload" as="image" href="{{ hero_img|e }}" fetchpriority="high" imagesizes="(max-width: 900px) 92vw, 720px">
 
-  {# ✅ Cache-bust REAL (default 162) #}
-  {% set _home_ver = (HOME_CSS_VER if HOME_CSS_VER is defined and HOME_CSS_VER else '162')|string|trim %}
   <link rel="stylesheet" href="{{ url_for('static', filename='css/home.css') }}?v={{ _home_ver|e }}">
 
   {# PERF: prefetch tienda (seguro) #}
   {% set _shop_prefetch = (url_for('shop.shop') if 'shop.shop' in _vf else '/shop') %}
-  <link rel="prefetch" href="{{ _shop_prefetch|e }}">
+  <link rel="prefetch" href="{{ _shop_prefetch|e }}" as="document">
 
   {# CSP nonce #}
   {% set _csp_nonce = (csp_nonce if csp_nonce is defined and csp_nonce else (nonce if nonce is defined and nonce else '')) %}
+
+  {# JSON-LD robusto #}
+  {% set _shop_abs = _shop_prefetch %}
+  {% if _shop_abs and _shop_abs.startswith('/') and _root_abs and _root_abs.startswith('http') %}
+    {% set _shop_abs = _root_abs ~ _shop_abs.lstrip('/') %}
+  {% endif %}
 
   <script type="application/ld+json"{% if _csp_nonce %} nonce="{{ _csp_nonce|e }}"{% endif %}>
   {
     "@context":"https://schema.org",
     "@graph":[
-      {"@type":"Organization","name":"Skyline Store","url":"{{ _root|e }}","logo":"{{ url_for('static', filename='img/og.png', _external=True) }}"},
-      {"@type":"WebSite","name":"Skyline Store","url":"{{ _root|e }}",
-        "potentialAction":{"@type":"SearchAction","target":"{{ (_root ~ 'shop?q={search_term_string}')|e }}","query-input":"required name=search_term_string"}
+      {"@type":"Organization","name":"Skyline Store","url":"{{ _root_abs|e }}","logo":"{{ url_for('static', filename='img/og.png', _external=True) }}"},
+      {"@type":"WebSite","name":"Skyline Store","url":"{{ _root_abs|e }}",
+        "potentialAction":{"@type":"SearchAction","target":"{{ (_shop_abs ~ '?q={search_term_string}')|e }}","query-input":"required name=search_term_string"}
       },
-      {"@type":"WebPage","name":"{{ _t|e }}","url":"{{ _base_url|e }}",
+      {"@type":"WebPage","name":"{{ _t|e }}","url":"{{ _canonical|e }}",
         "primaryImageOfPage":{"@type":"ImageObject","url":"{{ hero_img|e }}"}
       }
     ]
@@ -84,8 +98,9 @@
 {% block content %}
   {# ---------------- SAFE routing + FIX SCOPE ---------------- #}
   {% set _vf = (view_functions if view_functions is defined and view_functions else {}) %}
-  {% set hero_img = url_for('static', filename='img/banners/hero_home.png') %}
+  {% set _home_ver = (HOME_CSS_VER if HOME_CSS_VER is defined and HOME_CSS_VER else '162')|string|trim %}
 
+  {% set hero_img = url_for('static', filename='img/banners/hero_home.png') %}
   {% set shop_url = (url_for('shop.shop') if 'shop.shop' in _vf else '/shop') %}
   {% set offers_url = shop_url ~ ('?ofertas=1' if '?' not in shop_url else '&ofertas=1') %}
 
@@ -99,21 +114,21 @@
   {% set account_register_url = account_url ~ ('?tab=register' if '?' not in account_url else '&tab=register') %}
 
   {% set featured_list = (featured if featured is defined and featured else []) %}
+  {% if featured_list is none %}{% set featured_list = [] %}{% endif %}
 
   {% set _hero_overlay =
     "linear-gradient(90deg, rgba(255,255,255,.94) 0%, rgba(255,255,255,.86) 46%, rgba(255,255,255,.42) 72%, rgba(255,255,255,0) 100%)"
   %}
 
-  <div class="hp hp-v15 hp-v161" id="hp" role="main" aria-label="Inicio Skyline Store"
-       data-version="{{ _home_ver|e }}" data-home-ver="{{ _home_ver|e }}">
+  <div class="hp hp-v15 hp-v162" id="hp" role="main" aria-label="Inicio Skyline Store"
+       data-home-ver="{{ _home_ver|e }}" data-env="{{ _env|e }}">
 
+    {# ✅ Menos ruido arriba del hero #}
     <section class="hp-top" aria-label="Beneficios">
       <div class="hp-wrap">
         <ul class="hp-topTrust" role="list">
           <li class="hp-topTrust__item" role="listitem"><span class="hp-ico" aria-hidden="true">🔒</span><div><b>Pago protegido</b><small>Soporte y respaldo</small></div></li>
           <li class="hp-topTrust__item" role="listitem"><span class="hp-ico" aria-hidden="true">🚚</span><div><b>Envíos con tracking</b><small>Seguimiento del pedido</small></div></li>
-          <li class="hp-topTrust__item" role="listitem"><span class="hp-ico" aria-hidden="true">⚡</span><div><b>Compra rápida</b><small>Checkout optimizado</small></div></li>
-          <li class="hp-topTrust__item" role="listitem"><span class="hp-ico" aria-hidden="true">💬</span><div><b>Soporte 24/7</b><small>Atención dedicada</small></div></li>
         </ul>
       </div>
     </section>
@@ -126,8 +141,11 @@
           <div class="hp-kickerRow">
             <span class="hp-kicker">SKYLINE STORE</span>
             <span class="hp-verified" aria-label="Verificado">Verificado</span>
-            <span class="hp-pill" data-pill data-target="#hpCats" role="button" tabindex="0" aria-label="Ir a categorías">Categorías</span>
-            <span class="hp-pill" data-pill data-target="#hpGrid" role="button" tabindex="0" aria-label="Ir a destacados">Destacados</span>
+
+            <button class="hp-pill" type="button" data-pill data-target="#hpCats"
+                    aria-controls="hpCats" aria-expanded="false" aria-label="Ir a categorías">Categorías</button>
+            <button class="hp-pill" type="button" data-pill data-target="#hpGrid"
+                    aria-controls="hpGrid" aria-expanded="false" aria-label="Ir a destacados">Destacados</button>
           </div>
 
           <h1 id="hpTitle" class="hp-title">
@@ -148,7 +166,6 @@
           <div class="hp-ctas" role="group" aria-label="Acciones principales">
             <a href="{{ shop_url|e }}" class="btn primary">Explorar tienda</a>
             <a href="{{ offers_url|e }}" class="btn ghost">Ver ofertas</a>
-            <a href="{{ account_login_url|e }}" class="btn soft" aria-label="Ingresar o crear cuenta">Mi cuenta</a>
           </div>
 
           <div class="hp-chips" aria-label="Garantías" role="list">
@@ -156,6 +173,12 @@
             <span class="hp-chip" role="listitem">✅ Seguimiento del pedido</span>
             <span class="hp-chip" role="listitem">✅ Políticas claras</span>
           </div>
+
+          <nav class="hp-miniLinks" aria-label="Cuenta">
+            <a href="{{ account_login_url|e }}" class="hp-link">Entrar</a>
+            <span aria-hidden="true">·</span>
+            <a href="{{ account_register_url|e }}" class="hp-link">Crear cuenta</a>
+          </nav>
         </div>
 
         <div class="hp-hero__media" aria-label="Imagen principal">
@@ -167,11 +190,13 @@
               alt="Skyline Store: tecnología y streetwear premium"
               width="1600"
               height="900"
+              sizes="(max-width: 900px) 92vw, 720px"
               loading="eager"
               decoding="async"
               fetchpriority="high"
               class="hp-heroImg"
-              onerror="this.onerror=null; this.remove(); this.closest('.hp-heroCard')?.classList.add('is-fallback');">
+              style="aspect-ratio: 16 / 9;"
+              onerror="this.onerror=null; this.closest('.hp-heroCard')?.classList.add('is-fallback');">
 
             <figcaption class="hp-heroCap">
               <b>Curado por calidad</b>
@@ -254,7 +279,7 @@
           <a class="hp-linkMore" href="{{ offers_url|e }}">Ofertas →</a>
         </div>
 
-        <div class="hp-products" {% if featured_list|length > 0 %}role="list"{% endif %}>
+        <div class="hp-products" role="list">
           {% if featured_list|length == 0 %}
             <div class="hp-empty" aria-live="polite">
               <b>Estamos armando los destacados</b>
@@ -312,7 +337,7 @@
       </div>
     </section>
 
-    <div class="hp-sticky" id="hpSticky" role="region" aria-label="Barra fija de ofertas">
+    <div class="hp-sticky" id="hpSticky" role="region" aria-label="Barra fija de ofertas" aria-live="polite">
       <div class="hp-sticky__txt">
         <b>Skyline Store</b>
         <span>Explorá ofertas premium</span>
@@ -325,7 +350,6 @@
 {% endblock %}
 
 {% block extra_js %}
-  {# ✅ Cache-bust JS (misma versión que CSS) — ÚNICA fuente de comportamiento #}
   {% set _home_ver = (HOME_CSS_VER if HOME_CSS_VER is defined and HOME_CSS_VER else '162')|string|trim %}
   <script src="{{ url_for('static', filename='js/home.js') }}?v={{ _home_ver|e }}" defer></script>
 {% endblock %}

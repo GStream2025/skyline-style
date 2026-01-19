@@ -1,23 +1,22 @@
 # =====================================================
-# SKYLINE STORE — .gitattributes (ULTRA PRO / FINAL)
+# SKYLINE STORE — .gitattributes (ULTRA PRO / FINAL v2.1)
 # Windows + Render/Linux friendly
 # Objetivo:
 # - Eliminar diffs falsos por EOL
-# - LF en servidor (Linux / Render)
-# - CRLF solo en scripts Windows
+# - Default LF (servidor Linux/Render)
+# - CRLF solo donde conviene (Windows legacy)
 # - Binarios intocables
 # - Merges limpios y previsibles
 # =====================================================
 
 # -----------------------------------------------------
-# 1) DEFAULTS
-# Normaliza texto automáticamente (recomendado)
+# 1) DEFAULTS (MEJORA 1)
+# Default LF en todo texto (reduce diffs por SO)
 # -----------------------------------------------------
-* text=auto
+* text=auto eol=lf
 
 # -----------------------------------------------------
 # 2) CÓDIGO / CONFIG (SIEMPRE LF)
-# Render/Docker/Linux friendly
 # -----------------------------------------------------
 *.py        text eol=lf
 *.wsgi      text eol=lf
@@ -44,20 +43,28 @@
 *.csv       text eol=lf
 *.sql       text eol=lf
 
-.env        text eol=lf
-.env.*      text eol=lf
 Dockerfile  text eol=lf
 *.sh        text eol=lf
 
+# ✅ MEJORA 2: Makefiles y configs típicos de CI
+Makefile    text eol=lf
+*.env       text eol=lf
+.env        text eol=lf
+.env.*      text eol=lf
+
 # -----------------------------------------------------
-# 3) WINDOWS / POWERSHELL (CRLF)
-# Para ejecución nativa en Windows
+# 3) WINDOWS / POWERSHELL
 # -----------------------------------------------------
+# ✅ MEJORA 3: CRLF solo para scripts Windows "legacy"
+*.cmd       text eol=crlf
+*.bat       text eol=crlf
+
+# PowerShell:
+# - Si usás Windows PowerShell (5.1) y querés máxima compat: CRLF ✅
+# - Si usás PowerShell 7 cross-platform, podrías cambiar a LF
 *.ps1       text eol=crlf
 *.psm1      text eol=crlf
 *.psd1      text eol=crlf
-*.cmd       text eol=crlf
-*.bat       text eol=crlf
 
 # -----------------------------------------------------
 # 4) BINARIOS (NUNCA TOCAR / NUNCA EOL)
@@ -90,9 +97,12 @@ Dockerfile  text eol=lf
 *.mp3       binary
 *.wav       binary
 
+# ✅ MEJORA 4: formatos comunes extra (si los usás)
+*.webm      binary
+*.heic      binary
+
 # -----------------------------------------------------
 # 5) LOCKFILES (texto LF, merge normal)
-# OJO: NO usar merge=ours por defecto (puede ocultar updates)
 # -----------------------------------------------------
 poetry.lock   text eol=lf
 Pipfile.lock  text eol=lf
@@ -104,6 +114,15 @@ Pipfile.lock  text eol=lf
 *.db        binary
 *.sqlite    binary
 *.sqlite3   binary
+
+# -----------------------------------------------------
+# 7) EXTRA PRO (MEJORA 5): evitar "linguist" ruido (opcional)
+# Si tenés archivos generados (build), marcarlos como generated
+# -----------------------------------------------------
+# dist/**     linguist-generated
+# build/**    linguist-generated
+# *.min.js    linguist-generated
+# *.min.css   linguist-generated
 
 # -----------------------------------------------------
 # FIN
