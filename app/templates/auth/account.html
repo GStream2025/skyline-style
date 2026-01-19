@@ -1,18 +1,32 @@
-{# app/templates/auth/account.html — Skyline Store (ULTRA PRO / CSRF SAFE / v6.2 FINAL)
-   ✅ FIX real: csrf_token() (no depende de csrf_token_value)
-   ✅ next hardening + preserve form values
-   ✅ A11y tabs (ARIA + keyboard) + reduced motion
-   ✅ Diseño pro alineado a skyline-pro.css (usa tokens globales)
-   ✅ Honeypot + autocomplete correcto + input hints
-   ✅ Mensajes flash seguros + layout estable
-   ✅ JS robusto: no rompe si falta localStorage/URL, evita doble submit, fallback labels
-   ✅ Mejora UX: errores inline, show/hide pass accesible, focus management
+{# app/templates/auth/account.html — Skyline Store (ULTRA PRO / CSRF SAFE / v6.9 BULLETPROOF)
+   20 mejoras extra (resumen):
+   1) Endpoints robustos (usa view_functions, evita 500 si faltan)
+   2) Legacy safety: links a /auth/login y /auth/register (si existen) sugeridos vía alias en backend, aquí no rompe
+   3) CSRF: usa csrf_token() si existe, si no csrf_token_value, si no vacío (no rompe)
+   4) Meta csrf-token + hidden csrf_token (form post) consistente
+   5) Nonce login/register conectado a auth_routes.py (si viene, lo usa; si no, sigue)
+   6) next hardening + preserva next en forms
+   7) Preserva valores por tab usando _tab (evita mezclar inputs)
+   8) A11y tabs: role tablist/tab/tabpanel, keyboard arrows/home/end
+   9) A11y errors: role="status", aria-live, aria-invalid sobre inputs
+   10) Focus management seguro (sin scroll)
+   11) Evita doble submit + timeout de restore
+   12) Honeypot anti-bots (invisible, a11y safe)
+   13) Autocomplete correcto (username/current-password/new-password)
+   14) Mobile friendly: padding/clamps, touch targets 44px
+   15) Reduced motion respetado
+   16) Dark mode legibility (sin pisar theme)
+   17) Estilos “premium shell” (no cuadro grosero)
+   18) Print-safe (oculta nav/footer si existen)
+   19) JS no rompe sin localStorage/URL APIs
+   20) Sanitiza flash categories + layout estable
 #}
+
 {% extends "base.html" %}
 {% block title %}Mi cuenta | {{ (APP_NAME or "Skyline Store")|e }}{% endblock %}
 
 {% block extra_head %}
-  {# CSS específicos (si existen) #}
+  {# ───────────── CSS específicos (si existen) ───────────── #}
   <link rel="preload" as="style" href="{{ url_for('static', filename='css/login.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
   <link rel="preload" as="style" href="{{ url_for('static', filename='css/register.css') }}">
@@ -24,30 +38,29 @@
   {# CSP nonce (si existe) #}
   {% set _csp_nonce = (csp_nonce if csp_nonce is defined and csp_nonce else (nonce if nonce is defined and nonce else '')) %}
 
-  {# CSRF: SIEMPRE usar csrf_token() si existe; fallback a meta base.html #}
-  {% set _csrf_html = '' %}
+  {# ───────────── CSRF robusto ───────────── #}
+  {% set _csrf_val = '' %}
   {% if csrf_token is defined and csrf_token %}
-    {% set _csrf_html = csrf_token() %}
+    {% if csrf_token is callable %}
+      {% set _csrf_val = csrf_token() %}
+    {% else %}
+      {% set _csrf_val = csrf_token %}
+    {% endif %}
   {% elif csrf_token_value is defined and csrf_token_value %}
-    {% set _csrf_html = csrf_token_value %}
+    {% set _csrf_val = csrf_token_value %}
   {% endif %}
-  <meta name="csrf-token" content="{{ (_csrf_html|string)|e }}">
+  <meta name="csrf-token" content="{{ (_csrf_val|string)|e }}">
 
   <style{% if _csp_nonce %} nonce="{{ _csp_nonce|e }}"{% endif %}>
     /* =========================================================================
-       ACCOUNT — PRO (tabs + forms)
-       - usa tokens globales de skyline-pro.css
-       - evita “cuadro grosero”, deja layout premium
+       ACCOUNT — Skyline PRO (tabs + forms)
+       - premium shell (no cuadro grosero)
+       - usa tokens globales si existen
     ========================================================================= */
 
-    .ss-account{
-      max-width: 1040px;
-      margin: 0 auto;
-      padding: clamp(16px, 2vw, 26px);
-    }
-
+    .ss-account{ max-width: 1040px; margin: 0 auto; padding: clamp(16px, 2vw, 28px); }
     .ss-shell{
-      background: rgba(255,255,255,.72);
+      background: rgba(255,255,255,.74);
       border: 1px solid var(--border, rgba(10,16,32,.10));
       border-radius: var(--r-xl, 28px);
       box-shadow: var(--sh2, 0 22px 60px rgba(10,16,32,.12));
@@ -55,24 +68,15 @@
       overflow: hidden;
     }
     @media (prefers-color-scheme: dark){
-      .ss-shell{
-        background: rgba(9,12,24,.62);
-        box-shadow: none;
-      }
+      .ss-shell{ background: rgba(9,12,24,.62); box-shadow: none; border-color: rgba(148,163,184,.16); }
     }
 
     /* Tabs */
-    .ss-tabs{
-      display:flex;
-      gap:10px;
-      flex-wrap:wrap;
-      margin: 0 0 14px;
-      align-items:center;
-    }
+    .ss-tabs{ display:flex; gap:10px; flex-wrap:wrap; margin: 0 0 14px; align-items:center; }
     .ss-tab{
       appearance:none;
       border: 1px solid var(--border, rgba(10,16,32,.12));
-      background: rgba(255,255,255,.78);
+      background: rgba(255,255,255,.80);
       padding: 10px 14px;
       border-radius: 999px;
       cursor: pointer;
@@ -80,47 +84,47 @@
       color: var(--muted, rgba(10,16,32,.68));
       box-shadow: var(--sh1, 0 12px 30px rgba(10,16,32,.08));
       transition: transform .14s ease, box-shadow .22s ease, border-color .22s ease, background .22s ease, color .22s ease;
+      min-height: 44px;
     }
-    .ss-tab:hover{
-      transform: translateY(-1px);
-      border-color: rgba(37,99,235,.22);
-    }
+    .ss-tab:hover{ transform: translateY(-1px); border-color: rgba(37,99,235,.22); }
     .ss-tab.is-active{
       color: var(--p, #2563eb);
       background: rgba(37,99,235,.10);
       border-color: rgba(37,99,235,.20);
       transform: translateY(-1px);
     }
+    .ss-tab:focus-visible{ outline:none; box-shadow: var(--ring, 0 0 0 6px rgba(37,99,235,.16)); }
     @media (prefers-color-scheme: dark){
       .ss-tab{ background: rgba(255,255,255,.06); box-shadow:none; }
       .ss-tab:hover{ transform:none; }
       .ss-tab.is-active{ background: rgba(6,182,212,.12); border-color: rgba(6,182,212,.24); color: var(--p2, #06b6d4); }
     }
 
-    .ss-panels{ display:block; }
     .ss-panel{ display:none; }
     .ss-panel.is-active{ display:block; }
 
     /* Flashes */
-    .ss-flashes{margin: 10px 0 14px; display:grid; gap:8px;}
+    .ss-flashes{ margin: 10px 0 14px; display:grid; gap:8px; }
     .ss-flash{
       border-radius: 16px;
       padding: 10px 12px;
       border: 1px solid var(--border, rgba(10,16,32,.10));
       background: rgba(255,255,255,.78);
       box-shadow: var(--sh1, 0 12px 30px rgba(10,16,32,.08));
+      font-weight: 850;
+      color: var(--ink, #0a1020);
     }
     @media (prefers-color-scheme: dark){
-      .ss-flash{ background: rgba(9,12,24,.60); box-shadow:none; }
+      .ss-flash{ background: rgba(9,12,24,.60); box-shadow:none; color: rgba(238,242,255,.92); }
     }
-    .ss-flash.error{border-color: rgba(220,38,38,.28);}
-    .ss-flash.success{border-color: rgba(22,163,74,.24);}
-    .ss-flash.warning{border-color: rgba(245,158,11,.28);}
-    .ss-flash.info{border-color: rgba(59,130,246,.22);}
+    .ss-flash.error{ border-color: rgba(220,38,38,.28); }
+    .ss-flash.success{ border-color: rgba(22,163,74,.24); }
+    .ss-flash.warning{ border-color: rgba(245,158,11,.28); }
+    .ss-flash.info{ border-color: rgba(59,130,246,.22); }
 
     /* Form */
-    .ss-form{ display:grid; gap: 12px; }
-    .ss-field{ display:grid; gap: 6px; margin: 4px 0; }
+    .ss-form{ display:grid; gap:12px; }
+    .ss-field{ display:grid; gap:6px; margin: 4px 0; }
     .ss-label{ font-weight: 950; color: var(--ink, #0a1020); }
     .ss-hint{ font-size: .92rem; color: var(--muted, rgba(10,16,32,.68)); }
 
@@ -133,11 +137,13 @@
       box-shadow: inset 0 1px 0 rgba(255,255,255,.7), 0 12px 26px rgba(10,16,32,.06);
       color: var(--ink, #0a1020);
       font-weight: 750;
+      min-height: 44px;
     }
     @media (prefers-color-scheme: dark){
-      .ss-input{ background: rgba(255,255,255,.06); box-shadow:none; }
+      .ss-input{ background: rgba(255,255,255,.06); box-shadow:none; border-color: rgba(148,163,184,.18); color: rgba(238,242,255,.92); }
     }
-    .ss-input:focus{ outline: none; box-shadow: var(--ring, 0 0 0 6px rgba(37,99,235,.16)); border-color: rgba(37,99,235,.22); }
+    .ss-input:focus{ outline:none; box-shadow: var(--ring, 0 0 0 6px rgba(37,99,235,.16)); border-color: rgba(37,99,235,.22); }
+    .ss-input[aria-invalid="true"]{ border-color: rgba(220,38,38,.35); }
 
     .ss-pw-wrap{ display:flex; gap:10px; align-items:center; }
     .ss-pw-wrap .ss-input{ flex: 1; }
@@ -149,11 +155,13 @@
       cursor: pointer;
       font-weight: 900;
       line-height: 1;
+      min-height: 44px;
       transition: transform .14s ease, border-color .22s ease, background .22s ease;
     }
     .ss-pw-btn:hover{ transform: translateY(-1px); border-color: rgba(37,99,235,.22); }
+    .ss-pw-btn:focus-visible{ outline:none; box-shadow: var(--ring, 0 0 0 6px rgba(37,99,235,.16)); }
     @media (prefers-color-scheme: dark){
-      .ss-pw-btn{ background: rgba(255,255,255,.06); }
+      .ss-pw-btn{ background: rgba(255,255,255,.06); border-color: rgba(148,163,184,.18); color: rgba(238,242,255,.92); }
       .ss-pw-btn:hover{ transform:none; }
     }
 
@@ -165,7 +173,7 @@
       flex-wrap:wrap;
       margin-top: 6px;
     }
-    .ss-link{ opacity:.86; font-weight: 900; }
+    .ss-link{ opacity:.86; font-weight: 900; color: inherit; }
     .ss-link:hover{ opacity:1; text-decoration: underline; }
 
     .ss-submit{
@@ -220,37 +228,43 @@
       .ss-tab:hover,.ss-submit:hover,.ss-pw-btn:hover{ transform:none; }
       .ss-spinner{ animation:none; }
     }
+
+    @media print{
+      header, nav, footer{ display:none !important; }
+      .ss-account{ padding:0; }
+      .ss-shell{ box-shadow:none; background:#fff; border:1px solid #ddd; }
+    }
   </style>
 {% endblock %}
 
 {% block content %}
 
-{# ---------- next hardening ---------- #}
+{# ───────────── view_functions safe ───────────── #}
+{% set _vf = (view_functions if view_functions is defined and view_functions else (current_app.view_functions if current_app is defined else {})) %}
+
+{# ───────────── next hardening ───────────── #}
 {% set _raw_next = (next|default(request.args.get('next',''), true)|string).strip() %}
 {% set nxt = _raw_next %}
 {% if (not nxt) or (not nxt.startswith('/')) or (nxt.startswith('//')) %}
   {% set nxt = '' %}
 {% endif %}
 
-{# ---------- endpoints ---------- #}
-{% set login_action    = url_for('auth.login') %}
-{% set register_action = url_for('auth.register') %}
-{% set shop_url        = url_for('shop.shop') %}
+{# ───────────── endpoints safe (no 500) ───────────── #}
+{% set login_action = (url_for('auth.login') if 'auth.login' in _vf else '/auth/login') %}
+{% set register_action = (url_for('auth.register') if 'auth.register' in _vf else '/auth/register') %}
+{% set shop_url = (url_for('shop.shop') if 'shop.shop' in _vf else '/shop') %}
 
-{# ---------- initial tab ---------- #}
+{# ───────────── initial tab ───────────── #}
 {% set qtab = (request.args.get('tab','')|string|lower|trim) %}
 {% set initial_tab = (active_tab|default('login')|string|lower|trim) %}
-{% if qtab in ['login','register'] %}
-  {% set initial_tab = qtab %}
-{% endif %}
-{% if initial_tab not in ['login','register'] %}
-  {% set initial_tab = 'login' %}
-{% endif %}
+{% if qtab in ['login','register'] %}{% set initial_tab = qtab %}{% endif %}
+{% if initial_tab not in ['login','register'] %}{% set initial_tab = 'login' %}{% endif %}
 
-{# ---------- preserve typed values (solo POST) ---------- #}
-{% set _login_email = (request.form.get('email','') if request.method == 'POST' else '')|string %}
-{% set _reg_name    = (request.form.get('name','') if request.method == 'POST' else '')|string %}
-{% set _reg_email   = (request.form.get('email','') if request.method == 'POST' else '')|string %}
+{# ───────────── preserve typed values por tab ───────────── #}
+{% set _post_tab = (request.form.get('_tab','') if request.method == 'POST' else '')|string|lower|trim %}
+{% set _login_email = (request.form.get('email','') if request.method == 'POST' and _post_tab == 'login' else '')|string %}
+{% set _reg_name    = (request.form.get('name','')  if request.method == 'POST' and _post_tab == 'register' else '')|string %}
+{% set _reg_email   = (request.form.get('email','') if request.method == 'POST' and _post_tab == 'register' else '')|string %}
 
 <section class="ss-account" aria-label="Mi cuenta">
   <div class="ss-shell">
@@ -263,9 +277,7 @@
               aria-controls="panel-login"
               aria-selected="{{ 'true' if initial_tab == 'login' else 'false' }}"
               tabindex="{{ '0' if initial_tab == 'login' else '-1' }}"
-              data-tab="login">
-        Ingresar
-      </button>
+              data-tab="login">Ingresar</button>
 
       <button type="button"
               class="ss-tab {{ 'is-active' if initial_tab == 'register' else '' }}"
@@ -274,9 +286,7 @@
               aria-controls="panel-register"
               aria-selected="{{ 'true' if initial_tab == 'register' else 'false' }}"
               tabindex="{{ '0' if initial_tab == 'register' else '-1' }}"
-              data-tab="register">
-        Crear cuenta
-      </button>
+              data-tab="register">Crear cuenta</button>
     </div>
 
     {% set _msgs = get_flashed_messages(with_categories=true) %}
@@ -291,18 +301,24 @@
     {% endif %}
 
     <div class="ss-panels">
+
       <!-- ================= LOGIN ================= -->
       <div class="ss-panel {{ 'is-active' if initial_tab == 'login' else '' }}"
            id="panel-login"
            role="tabpanel"
            aria-labelledby="tab-login"
            {% if initial_tab != 'login' %}hidden aria-hidden="true"{% else %}aria-hidden="false"{% endif %}>
+
         <form method="post" action="{{ login_action }}" class="ss-form" novalidate autocomplete="on" id="loginForm">
-          {# CSRF REAL: Flask-WTF #}
-          <input type="hidden" name="csrf_token" value="{{ (_csrf_html|string)|e }}">
+          <input type="hidden" name="_tab" value="login">
+          <input type="hidden" name="csrf_token" value="{{ (_csrf_val|string)|e }}">
+
+          {% if nonce_login is defined and nonce_login %}
+            <input type="hidden" name="nonce" value="{{ nonce_login|e }}">
+          {% endif %}
+
           {% if nxt %}<input type="hidden" name="next" value="{{ nxt|e }}">{% endif %}
 
-          {# honeypot #}
           <div style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden" aria-hidden="true">
             <label for="hp_login">Website</label>
             <input id="hp_login" type="text" name="website" tabindex="-1" autocomplete="off">
@@ -354,12 +370,17 @@
            role="tabpanel"
            aria-labelledby="tab-register"
            {% if initial_tab != 'register' %}hidden aria-hidden="true"{% else %}aria-hidden="false"{% endif %}>
+
         <form method="post" action="{{ register_action }}" class="ss-form" novalidate autocomplete="on" id="registerForm">
-          {# CSRF REAL: Flask-WTF #}
-          <input type="hidden" name="csrf_token" value="{{ (_csrf_html|string)|e }}">
+          <input type="hidden" name="_tab" value="register">
+          <input type="hidden" name="csrf_token" value="{{ (_csrf_val|string)|e }}">
+
+          {% if nonce_register is defined and nonce_register %}
+            <input type="hidden" name="nonce" value="{{ nonce_register|e }}">
+          {% endif %}
+
           {% if nxt %}<input type="hidden" name="next" value="{{ nxt|e }}">{% endif %}
 
-          {# honeypot #}
           <div style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden" aria-hidden="true">
             <label for="hp_reg">Website</label>
             <input id="hp_reg" type="text" name="website" tabindex="-1" autocomplete="off">
@@ -431,8 +452,8 @@
           <p class="ss-hint">Al crear cuenta aceptás nuestros términos y políticas (los podés ver desde el footer).</p>
         </form>
       </div>
-    </div>
 
+    </div>
   </div>
 </section>
 
@@ -452,13 +473,8 @@
 
   const setPanelHidden = (panel, isHidden) => {
     if (!panel) return;
-    if (isHidden) {
-      panel.setAttribute("hidden", "");
-      panel.setAttribute("aria-hidden", "true");
-    } else {
-      panel.removeAttribute("hidden");
-      panel.setAttribute("aria-hidden", "false");
-    }
+    if (isHidden) { panel.setAttribute("hidden",""); panel.setAttribute("aria-hidden","true"); }
+    else { panel.removeAttribute("hidden"); panel.setAttribute("aria-hidden","false"); }
   };
 
   const setTab = (t, { persist = true, focus = false } = {}) => {
@@ -481,7 +497,7 @@
         window.history.replaceState({}, "", u.toString());
       } catch (_) {}
     }
-    if (focus) tabs[t].focus();
+    if (focus) { try { tabs[t].focus({preventScroll:true}); } catch(_) {} }
   };
 
   // init: query param > stored
@@ -489,10 +505,7 @@
   try { qp = new URL(window.location.href).searchParams.get("tab") || ""; } catch (_) {}
   let stored = "";
   try { stored = localStorage.getItem(KEY) || ""; } catch (_) {}
-  const initial =
-    (qp === "login" || qp === "register") ? qp :
-    ((stored === "login" || stored === "register") ? stored : "");
-
+  const initial = (qp === "login" || qp === "register") ? qp : ((stored === "login" || stored === "register") ? stored : "");
   if (initial) setTab(initial, { persist: false });
 
   Object.values(tabs).forEach((btn) => {
@@ -536,15 +549,18 @@
   bindToggle("toggleRegPass", "regPass");
   bindToggle("toggleRegPass2", "regPass2");
 
-  const showErr = (el, msg) => {
+  const showErr = (el, msg, inputEl) => {
     if (!el) return;
     if (!msg) {
       el.textContent = "";
       el.classList.remove("is-on");
+      if (inputEl) inputEl.setAttribute("aria-invalid","false");
       return;
     }
     el.textContent = msg;
     el.classList.add("is-on");
+    if (inputEl) inputEl.setAttribute("aria-invalid","true");
+    try { (inputEl || el).focus({preventScroll:true}); } catch(_) {}
   };
 
   const guardSubmit = (formId, btnId, errId, validateFn, restoreLabel) => {
@@ -556,18 +572,18 @@
     f.addEventListener("submit", (ev) => {
       if (b.disabled) return;
 
-      // client-side validation
       if (typeof validateFn === "function") {
         const res = validateFn();
         if (res !== true) {
           ev.preventDefault();
           ev.stopPropagation();
-          showErr(err, typeof res === "string" ? res : "Revisá los datos e intentá de nuevo.");
+          const msg = (typeof res === "string" ? res : "Revisá los datos e intentá de nuevo.");
+          showErr(err, msg, null);
           return;
         }
       }
 
-      showErr(err, "");
+      showErr(err, "", null);
       b.disabled = true;
       b.setAttribute("aria-busy", "true");
       b.dataset._label = b.textContent || restoreLabel || "Enviar";
@@ -582,23 +598,28 @@
     }, { passive: false });
   };
 
-  const isEmailLike = (s) => s && s.includes("@") && s.includes(".") && s.length >= 6;
+  const isEmailLike = (s) => !!(s && s.includes("@") && s.includes(".") && s.length >= 6);
 
   guardSubmit("loginForm", "loginSubmit", "loginErr", () => {
-    const em = (document.getElementById("loginEmail")?.value || "").trim();
-    const pw = (document.getElementById("loginPass")?.value || "");
-    if (!isEmailLike(em)) return "Ingresá un email válido.";
-    if (pw.length < 8) return "La contraseña debe tener al menos 8 caracteres.";
+    const emEl = document.getElementById("loginEmail");
+    const pwEl = document.getElementById("loginPass");
+    const em = (emEl?.value || "").trim();
+    const pw = (pwEl?.value || "");
+    if (!isEmailLike(em)) { showErr(document.getElementById("loginErr"), "Ingresá un email válido.", emEl); return false; }
+    if (pw.length < 8) { showErr(document.getElementById("loginErr"), "La contraseña debe tener al menos 8 caracteres.", pwEl); return false; }
     return true;
   }, "Entrar");
 
   guardSubmit("registerForm", "regSubmit", "regErr", () => {
-    const em = (document.getElementById("regEmail")?.value || "").trim();
-    const pw = (document.getElementById("regPass")?.value || "");
-    const pw2 = (document.getElementById("regPass2")?.value || "");
-    if (!isEmailLike(em)) return "Ingresá un email válido.";
-    if (pw.length < 8) return "La contraseña debe tener al menos 8 caracteres.";
-    if (pw !== pw2) return "Las contraseñas no coinciden.";
+    const emEl = document.getElementById("regEmail");
+    const pwEl = document.getElementById("regPass");
+    const pw2El = document.getElementById("regPass2");
+    const em = (emEl?.value || "").trim();
+    const pw = (pwEl?.value || "");
+    const pw2 = (pw2El?.value || "");
+    if (!isEmailLike(em)) { showErr(document.getElementById("regErr"), "Ingresá un email válido.", emEl); return false; }
+    if (pw.length < 8) { showErr(document.getElementById("regErr"), "La contraseña debe tener al menos 8 caracteres.", pwEl); return false; }
+    if (pw !== pw2) { showErr(document.getElementById("regErr"), "Las contraseñas no coinciden.", pw2El); return false; }
     return true;
   }, "Crear cuenta");
 })();
