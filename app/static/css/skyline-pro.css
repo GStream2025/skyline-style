@@ -924,3 +924,208 @@ input:-webkit-autofill:focus{
 @media (prefers-color-scheme: dark){
   ::selection{ background: rgba(6,182,212,.18); }
 }
+/* ==========================================================
+   HEADER — Skyline Store (ULTRA BAR v1)
+   Replica estilo "barra premium" (como tu 2da imagen)
+   Pegar al FINAL del global.css
+========================================================== */
+
+/* La topbar ya no es un “bloque” pegado arriba */
+.topbar{
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  background: transparent !important;
+  border-bottom: 0 !important;
+  box-shadow: none !important;
+  padding: 14px 0;
+}
+
+/* La barra premium vive en .topbar-inner */
+.topbar-inner{
+  max-width: var(--max);
+  margin: 12px auto;
+  padding: 16px 18px;
+
+  display: flex !important;
+  align-items: center;
+  gap: 18px;
+
+  background: rgba(255,255,255,.86);
+  border: 1px solid var(--border);
+  border-radius: 26px;
+  box-shadow: 0 26px 80px rgba(10,16,32,.14);
+}
+
+@supports (backdrop-filter: blur(10px)){
+  .topbar-inner{
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+  }
+}
+
+@media (prefers-color-scheme: dark){
+  .topbar-inner{
+    background: rgba(9,12,24,.72);
+    box-shadow: 0 30px 90px rgba(0,0,0,.55);
+  }
+}
+
+/* Brand: igual a la 2da imagen (compacto, pro) */
+.brand{
+  gap: 12px;
+  padding-right: 10px;
+}
+.brand-dot{
+  width: 14px;
+  height: 14px;
+}
+.brand .muted, .brand small, .brand span{
+  opacity: .78;
+  font-weight: 800;
+}
+
+/* NAV: links simples + “subrayado” en activo */
+.nav{
+  display: flex !important;
+  gap: 14px;
+  align-items: center;
+}
+.nav a{
+  position: relative;
+  padding: 10px 10px;
+  border-radius: 12px;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  color: rgba(10,16,32,.72);
+  font-weight: 950;
+}
+@media (prefers-color-scheme: dark){
+  .nav a{ color: rgba(238,242,255,.78); }
+}
+.nav a:hover{
+  color: var(--ink);
+  background: rgba(255,255,255,.50) !important;
+}
+@media (prefers-color-scheme: dark){
+  .nav a:hover{ background: rgba(255,255,255,.06) !important; }
+}
+.nav a.active{
+  color: var(--ink) !important;
+}
+.nav a.active::after{
+  content:"";
+  position:absolute;
+  left: 10px;
+  right: 10px;
+  bottom: -10px;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--p), var(--p2));
+  box-shadow: 0 12px 24px rgba(37,99,235,.18);
+}
+
+/* SEARCH: queda integrada, con botón azul “pill” a la derecha */
+.search{
+  flex: 1;
+  max-width: 560px;
+  margin: 0 !important;
+
+  min-height: 50px;
+  padding: 10px 12px;
+
+  background: rgba(255,255,255,.72);
+  border: 1px solid rgba(10,16,32,.10);
+  border-radius: 999px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.75);
+}
+@media (prefers-color-scheme: dark){
+  .search{
+    background: rgba(255,255,255,.06);
+    border-color: rgba(148,163,184,.18);
+    box-shadow: none;
+  }
+}
+
+.search input{
+  font-weight: 800;
+  padding: 6px 8px;
+}
+
+.search .btn,
+.search button{
+  min-height: 44px !important;
+  padding: 10px 18px !important;
+  border-radius: 999px !important;
+
+  color: #fff !important;
+  background: linear-gradient(135deg, var(--p), var(--p2)) !important;
+  box-shadow: 0 18px 55px rgba(37,99,235,.22) !important;
+  border: 1px solid rgba(255,255,255,.30) !important;
+}
+.search .btn:hover,
+.search button:hover{
+  filter: saturate(1.06) brightness(1.02);
+}
+
+/* Acciones derecha: íconos + “Mi cuenta” simple (como 2da imagen) */
+.topbar-actions{
+  display: flex !important;
+  align-items: center;
+  gap: 16px;
+  margin-left: auto;
+}
+
+/* “Mi cuenta” estilo simple, NO chip grande */
+.account-chip{
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 8px 6px !important;
+  gap: 10px !important;
+}
+.account-chip:hover{
+  transform: none !important;
+  border-color: transparent !important;
+}
+.account-chip .avatar{
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+.account-chip b, .account-chip strong{
+  font-weight: 950 !important;
+  color: var(--ink) !important;
+}
+
+/* Carrito: icono limpio + badge arriba a la derecha */
+.topbar-actions a{
+  position: relative;
+}
+.cart-badge{
+  top: -8px;
+  right: -8px;
+  min-width: 22px;
+  height: 22px;
+  font-size: .76rem;
+  box-shadow: 0 18px 40px rgba(37,99,235,.22);
+}
+
+/* Responsive: si no entra, nav se oculta y queda barra pro igual */
+@media (max-width: 920px){
+  .nav{ display:none !important; }
+  .search{ max-width: none; }
+}
+@media (max-width: 640px){
+  .topbar-inner{
+    padding: 14px 14px;
+    gap: 12px;
+  }
+  .search .btn, .search button{
+    padding: 10px 14px !important;
+  }
+}

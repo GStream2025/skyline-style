@@ -1,324 +1,331 @@
-{% extends "base.html" %}
+{# ======================================================================
+   app/templates/auth/verify_email.html — Skyline Store (ULTRA PRO · v3 FINAL)
+   ✅ 20+ mejoras reales (NO-500 / NO BuildError / CSRF PRO / UX PRO):
+   1) Elimina callable checks (Jinja-safe) → usa patrón csrf_token() con fallback seguro
+   2) No depende de current_app/view_functions (evita 500) → usa has_endpoint si existe
+   3) safe_url local para endpoints (sin BuildError)
+   4) Canonical/robots coherente (prod index, dev noindex)
+   5) CSRF meta + hidden input (mismo token) + credentials same-origin
+   6) Cooldown persistente + UI tick estable
+   7) AbortController + timeout
+   8) Maneja JSON y texto sin romper
+   9) Fallback submit normal si fetch falla
+   10) Evita doble click / locking
+   11) Flash categories sanitizadas (sin clases raras)
+   12) Email/support sanitizados
+   13) A11y: aria-live status + aria-busy + focus-visible
+   14) Reduced motion + print safe
+   15) Botón deshabilitado real si no hay endpoint
+   16) Copy claro y profesional
+   17) No rompe si email vacío
+   18) No rompe si form no existe
+   19) Usa tojson para strings (sin XSS)
+   20) Estilos encapsulados (no pisan global)
+====================================================================== #}
 
-{% block title %}Verificar correo · Skyline Store{% endblock %}
+{% extends "base.html" %}
+{% block title %}Verificar correo · {{ (APP_NAME or "Skyline Store")|e }}{% endblock %}
 
 {% block extra_head %}
-{# ==========================================================
-   VERIFY EMAIL — ULTRA PRO (v2 FINAL · NO-500)
-   ✅ 23 mejoras:
-   1) Endpoints safe (sin BuildError)
-   2) CSRF meta + fallback input + FlaskForm hidden_tag
-   3) No CSRF suelto fuera de form sin sentido (ahora es consistente)
-   4) Flash categories sanitizadas
-   5) Soporte email sanitizado básico
-   6) aria-live mejorado + status consistente
-   7) Botón con disabled/aria-disabled correcto
-   8) Cooldown persistente + UI robusta
-   9) Cooldown “server-friendly”: 30s (configurable)
-   10) fetch con timeout (AbortController)
-   11) Maneja JSON y NO-JSON (text) sin romper
-   12) Fallback a POST normal si fetch falla (opcional)
-   13) No rompe si email no existe
-   14) No rompe si endpoint no existe
-   15) Copy más claro
-   16) reduced-motion respetado
-   17) print safe
-   18) Evita doble click / doble request
-   19) Evita clase CSS rara por category
-   20) Usa request base_url en canonical (si lo necesitás en base)
-   21) Variables default(true) para None-safe
-   22) credentials same-origin + header X-CSRF-Token
-   23) “Back to shop/home” safe urls
-========================================================== #}
+  {# Robots #}
+  <meta name="robots" content="{{ 'index,follow' if (ENV|default('')|lower == 'production') else 'noindex,nofollow' }}">
 
-{# CSRF meta para fetch (si base.html no lo incluye) #}
-{% if csrf_token is defined %}
-  {% if csrf_token is callable %}
-    <meta name="csrf-token" content="{{ csrf_token() }}">
-  {% else %}
-    <meta name="csrf-token" content="{{ csrf_token }}">
+  {# CSP nonce (si existe) #}
+  {% set _csp_nonce = (csp_nonce if csp_nonce is defined and csp_nonce else (nonce if nonce is defined and nonce else '')) %}
+
+  {# CSRF token (prefer csrf_token()) #}
+  {% set _csrf_html = '' %}
+  {% if csrf_token is defined and csrf_token %}
+    {% set _csrf_html = csrf_token() %}
+  {% elif csrf_token_value is defined and csrf_token_value %}
+    {% set _csrf_html = csrf_token_value %}
   {% endif %}
-{% elif form is defined and form.csrf_token is defined %}
-  {# si viene FlaskForm, usamos su token como meta vía input hidden (abajo en form) #}
-{% endif %}
+  <meta name="csrf-token" content="{{ (_csrf_html|string)|e }}">
 
-<style>
-  .ss-ve{
-    --ink: var(--ink, #0b1220);
-    --muted: rgba(11,18,32,.68);
-    --stroke: rgba(148,163,184,.22);
-    --shadow: 0 22px 60px rgba(2,6,23,.12);
-    --ease: var(--ease, cubic-bezier(.2,.8,.2,1));
-    min-height: 70vh;
-    display:grid;
-    place-items:center;
-    padding: clamp(26px, 4vw, 44px) 14px;
-    background:
-      radial-gradient(820px 460px at 12% 0%, rgba(47,123,255,.08), transparent 60%),
-      radial-gradient(820px 460px at 88% 12%, rgba(255,181,71,.10), transparent 60%);
-  }
-  .ss-ve__card{
-    width:100%;
-    max-width: 560px;
-    border-radius: 26px;
-    border: 1px solid var(--stroke);
-    background: rgba(255,255,255,.88);
-    box-shadow: var(--shadow);
-    overflow:hidden;
-  }
-  .ss-ve__head{
-    padding: 18px 18px 14px;
-    background:
-      radial-gradient(520px 240px at 0% 0%, rgba(245,158,11,.18), transparent 60%),
-      radial-gradient(520px 240px at 100% 0%, rgba(56,189,248,.16), transparent 60%),
-      linear-gradient(180deg, rgba(255,255,255,.84), rgba(255,255,255,.76));
-    border-bottom: 1px solid rgba(148,163,184,.16);
-  }
-  .ss-ve__body{ padding: 16px 18px 18px; }
-  @media(min-width:520px){
-    .ss-ve__body{ padding: 18px 20px 20px; }
-    .ss-ve__head{ padding: 20px 20px 16px; }
-  }
-  .ss-ve__icon{
-    width:54px;height:54px;border-radius:18px;
-    display:grid;place-items:center;
-    background: rgba(245,158,11,.12);
-    border:1px solid rgba(245,158,11,.25);
-    box-shadow: 0 10px 22px rgba(2,6,23,.08);
-  }
-  .ss-ve__title{
-    margin: 10px 0 0;
-    font-weight: 1000;
-    letter-spacing: -.6px;
-    color: var(--ink);
-    font-size: clamp(1.4rem, 3vw, 1.9rem);
-    line-height: 1.15;
-  }
-  .ss-ve__sub{
-    margin: .5rem 0 0;
-    color: var(--muted);
-    font-weight: 850;
-    line-height: 1.55;
-  }
-  .ss-ve__flash{
-    margin-top: 12px;
-    padding: 10px 12px;
-    border-radius: 14px;
-    border: 1px solid rgba(148,163,184,.20);
-    background: rgba(255,255,255,.74);
-    color: rgba(11,18,32,.80);
-    font-weight: 900;
-    font-size: .88rem;
-  }
-  .ss-ve__flash.error{ background: rgba(255,0,0,.06); border-color: rgba(255,0,0,.14); }
-  .ss-ve__flash.warning{ background: rgba(255,181,71,.10); border-color: rgba(255,181,71,.18); }
-  .ss-ve__flash.success{ background: rgba(34,197,94,.10); border-color: rgba(34,197,94,.18); }
-  .ss-ve__flash.info{ background: rgba(47,123,255,.08); border-color: rgba(47,123,255,.16); }
+  {# Endpoint helper (sin BuildError) #}
+  {% set _has_ep = has_endpoint if has_endpoint is defined and has_endpoint else none %}
+  {% macro safe_url(endpoint, fallback='') -%}
+    {%- if _has_ep and endpoint and _has_ep(endpoint) -%}{{ url_for(endpoint) }}
+    {%- else -%}{{ fallback }}
+    {%- endif -%}
+  {%- endmacro %}
 
-  .ss-ve__note{
-    margin-top: 12px;
-    padding: 12px 12px;
-    border-radius: 16px;
-    border: 1px dashed rgba(148,163,184,.32);
-    background: rgba(248,250,252,.78);
-    color: rgba(11,18,32,.76);
-    font-size: .86rem;
-    line-height: 1.45;
-    font-weight: 850;
-  }
+  <style{% if _csp_nonce %} nonce="{{ _csp_nonce|e }}"{% endif %}>
+    .ss-ve{
+      --ink: var(--ink, #0b1220);
+      --muted: rgba(11,18,32,.68);
+      --stroke: rgba(148,163,184,.22);
+      --shadow: 0 22px 60px rgba(2,6,23,.12);
+      --ease: var(--ease, cubic-bezier(.2,.8,.2,1));
+      min-height: 70vh;
+      display:grid;
+      place-items:center;
+      padding: clamp(26px, 4vw, 44px) 14px;
+      background:
+        radial-gradient(820px 460px at 12% 0%, rgba(47,123,255,.08), transparent 60%),
+        radial-gradient(820px 460px at 88% 12%, rgba(255,181,71,.10), transparent 60%);
+    }
+    .ss-ve__card{
+      width:100%;
+      max-width: 560px;
+      border-radius: 26px;
+      border: 1px solid var(--stroke);
+      background: rgba(255,255,255,.88);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .ss-ve__head{
+      padding: 18px 18px 14px;
+      background:
+        radial-gradient(520px 240px at 0% 0%, rgba(245,158,11,.18), transparent 60%),
+        radial-gradient(520px 240px at 100% 0%, rgba(56,189,248,.16), transparent 60%),
+        linear-gradient(180deg, rgba(255,255,255,.84), rgba(255,255,255,.76));
+      border-bottom: 1px solid rgba(148,163,184,.16);
+    }
+    .ss-ve__body{ padding: 16px 18px 18px; }
+    @media(min-width:520px){
+      .ss-ve__body{ padding: 18px 20px 20px; }
+      .ss-ve__head{ padding: 20px 20px 16px; }
+    }
+    .ss-ve__icon{
+      width:54px;height:54px;border-radius:18px;
+      display:grid;place-items:center;
+      background: rgba(245,158,11,.12);
+      border:1px solid rgba(245,158,11,.25);
+      box-shadow: 0 10px 22px rgba(2,6,23,.08);
+    }
+    .ss-ve__title{
+      margin: 10px 0 0;
+      font-weight: 1000;
+      letter-spacing: -.6px;
+      color: var(--ink);
+      font-size: clamp(1.4rem, 3vw, 1.9rem);
+      line-height: 1.15;
+    }
+    .ss-ve__sub{
+      margin: .5rem 0 0;
+      color: var(--muted);
+      font-weight: 850;
+      line-height: 1.55;
+    }
 
-  .ss-ve__live{
-    margin-top: 10px;
-    border-radius: 14px;
-    padding: 10px 12px;
-    border: 1px solid rgba(148,163,184,.20);
-    background: rgba(255,255,255,.72);
-    color: rgba(11,18,32,.78);
-    font-weight: 900;
-    font-size: .86rem;
-    display:none;
-  }
-  .ss-ve__live.is-on{ display:block; }
+    .ss-ve__flash{
+      margin-top: 12px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(148,163,184,.20);
+      background: rgba(255,255,255,.74);
+      color: rgba(11,18,32,.80);
+      font-weight: 900;
+      font-size: .88rem;
+    }
+    .ss-ve__flash.error{ background: rgba(255,0,0,.06); border-color: rgba(255,0,0,.14); }
+    .ss-ve__flash.warning{ background: rgba(255,181,71,.10); border-color: rgba(255,181,71,.18); }
+    .ss-ve__flash.success{ background: rgba(34,197,94,.10); border-color: rgba(34,197,94,.18); }
+    .ss-ve__flash.info{ background: rgba(47,123,255,.08); border-color: rgba(47,123,255,.16); }
 
-  .ss-ve__actions{ display:grid; gap:10px; margin-top: 14px; }
+    .ss-ve__note{
+      margin-top: 12px;
+      padding: 12px 12px;
+      border-radius: 16px;
+      border: 1px dashed rgba(148,163,184,.32);
+      background: rgba(248,250,252,.78);
+      color: rgba(11,18,32,.76);
+      font-size: .86rem;
+      line-height: 1.45;
+      font-weight: 850;
+    }
 
-  .ss-ve__btn{
-    display:inline-flex; align-items:center; justify-content:center; gap:10px;
-    padding: 12px 14px;
-    border-radius: 999px;
-    border: 1px solid rgba(15,23,42,.12);
-    background: rgba(11,18,32,.96);
-    color: rgba(253,230,138,.96);
-    font-weight: 1000;
-    cursor:pointer;
-    transition: transform .14s var(--ease), box-shadow .14s var(--ease), filter .14s var(--ease);
-    user-select:none;
-    text-decoration:none;
-  }
-  .ss-ve__btn:hover{ transform: translateY(-1px); box-shadow: 0 14px 26px rgba(2,6,23,.14); filter:saturate(1.05) }
-  .ss-ve__btn:active{ transform: translateY(0) }
-  .ss-ve__btn[disabled], .ss-ve__btn[aria-disabled="true"]{ opacity:.72; cursor:not-allowed; transform:none; box-shadow:none; }
+    .ss-ve__live{
+      margin-top: 10px;
+      border-radius: 14px;
+      padding: 10px 12px;
+      border: 1px solid rgba(148,163,184,.20);
+      background: rgba(255,255,255,.72);
+      color: rgba(11,18,32,.78);
+      font-weight: 900;
+      font-size: .86rem;
+      display:none;
+    }
+    .ss-ve__live.is-on{ display:block; }
 
-  .ss-ve__btn--ghost{
-    background: transparent;
-    color: rgba(11,18,32,.86);
-  }
+    .ss-ve__actions{ display:grid; gap:10px; margin-top: 14px; }
 
-  .ss-ve__row{
-    display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between;
-    gap: 10px;
-    margin-top: 12px;
-  }
-  .ss-ve__link{
-    display:inline-flex; align-items:center; gap:8px;
-    font-size: .88rem;
-    color: rgba(245,158,11,.92);
-    text-decoration:none;
-    font-weight: 950;
-  }
-  .ss-ve__link:hover{ opacity:.92; text-decoration: underline; }
+    .ss-ve__btn{
+      display:inline-flex; align-items:center; justify-content:center; gap:10px;
+      padding: 12px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(15,23,42,.12);
+      background: rgba(11,18,32,.96);
+      color: rgba(253,230,138,.96);
+      font-weight: 1000;
+      cursor:pointer;
+      transition: transform .14s var(--ease), box-shadow .14s var(--ease), filter .14s var(--ease);
+      user-select:none;
+      text-decoration:none;
+    }
+    .ss-ve__btn:hover{ transform: translateY(-1px); box-shadow: 0 14px 26px rgba(2,6,23,.14); filter:saturate(1.05) }
+    .ss-ve__btn:active{ transform: translateY(0) }
+    .ss-ve__btn[disabled], .ss-ve__btn[aria-disabled="true"]{ opacity:.72; cursor:not-allowed; transform:none; box-shadow:none; }
 
-  .ss-ve__small{
-    margin: 12px 0 0;
-    color: rgba(11,18,32,.56);
-    font-size: .82rem;
-    font-weight: 850;
-    line-height: 1.45;
-  }
+    .ss-ve__btn--ghost{
+      background: transparent;
+      color: rgba(11,18,32,.86);
+    }
 
-  .ss-ve__spin{
-    width:16px;height:16px;border-radius:999px;
-    border:2px solid rgba(253,230,138,.25);
-    border-top-color: rgba(253,230,138,.96);
-    animation: ss-ve-rot .9s linear infinite;
-  }
-  @keyframes ss-ve-rot{ to{ transform: rotate(360deg) } }
+    .ss-ve__row{
+      display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between;
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .ss-ve__link{
+      display:inline-flex; align-items:center; gap:8px;
+      font-size: .88rem;
+      color: rgba(245,158,11,.92);
+      text-decoration:none;
+      font-weight: 950;
+    }
+    .ss-ve__link:hover{ opacity:.92; text-decoration: underline; }
 
-  .ss-ve :focus-visible{
-    outline:none;
-    box-shadow: 0 0 0 4px rgba(37,99,235,.18);
-    border-radius: 12px;
-  }
+    .ss-ve__small{
+      margin: 12px 0 0;
+      color: rgba(11,18,32,.56);
+      font-size: .82rem;
+      font-weight: 850;
+      line-height: 1.45;
+    }
 
-  @media (prefers-reduced-motion: reduce){
-    .ss-ve *{ transition:none!important; }
-    .ss-ve__spin{ animation:none!important; }
-    .ss-ve__btn:hover{ transform:none!important; }
-  }
+    .ss-ve__spin{
+      width:16px;height:16px;border-radius:999px;
+      border:2px solid rgba(253,230,138,.25);
+      border-top-color: rgba(253,230,138,.96);
+      animation: ss-ve-rot .9s linear infinite;
+    }
+    @keyframes ss-ve-rot{ to{ transform: rotate(360deg) } }
 
-  @media print{
-    header.topbar, footer, .ss-header, .ss-footer, nav{ display:none!important; }
-    .ss-ve{ min-height:auto; padding:0; }
-    .ss-ve__card{ box-shadow:none; border:1px solid #ddd; background:#fff; }
-  }
-</style>
+    .ss-ve :focus-visible{
+      outline:none;
+      box-shadow: 0 0 0 4px rgba(37,99,235,.18);
+      border-radius: 12px;
+    }
+
+    @media (prefers-reduced-motion: reduce){
+      .ss-ve *{ transition:none!important; }
+      .ss-ve__spin{ animation:none!important; }
+      .ss-ve__btn:hover{ transform:none!important; }
+    }
+
+    @media print{
+      header.topbar, footer, nav{ display:none!important; }
+      .ss-ve{ min-height:auto; padding:0; }
+      .ss-ve__card{ box-shadow:none; border:1px solid #ddd; background:#fff; }
+    }
+
+    @media (prefers-color-scheme: dark){
+      .ss-ve__card{ background: rgba(9,12,24,.72); box-shadow:none; }
+      .ss-ve__head{ background: rgba(255,255,255,.04); }
+      .ss-ve__note, .ss-ve__live, .ss-ve__flash{ background: rgba(255,255,255,.06); }
+      .ss-ve__btn--ghost{ color: rgba(226,232,240,.86); }
+    }
+  </style>
 {% endblock %}
 
 {% block content %}
-{# ---------------- Datos seguros ---------------- #}
-{% set _vf = (view_functions if view_functions is defined and view_functions else (current_app.view_functions if current_app is defined else {})) %}
+  {# ---------------- Datos seguros ---------------- #}
+  {% set email = (user.email if user is defined and user and user.email is defined else (customer_email if customer_email is defined else ""))|string|trim %}
+  {% set support_email_raw = (support_email if support_email is defined else "soporte@skylinestore.com") %}
+  {% set support_email_safe = support_email_raw|string|trim %}
 
-{% set email = (user.email if user is defined and user and user.email is defined else (customer_email if customer_email is defined else "")) %}
-{% set support_email_raw = (support_email if support_email is defined else "soporte@skylinestore.com") %}
-{% set support_email_safe = support_email_raw|string|trim %}
+  {# URLs robustas (sin BuildError) #}
+  {% set home_url = safe_url('main.home', '/') %}
+  {% set shop_url = safe_url('shop.shop', '/shop') %}
 
-{# URLs robustas #}
-{% set home_url = (url_for('main.home') if 'main.home' in _vf else '/') %}
-{% set shop_url = (url_for('shop.shop') if 'shop.shop' in _vf else '/shop') %}
+  {# Endpoint de reenvío: prioriza json, luego normal #}
+  {% set resend_endpoint = '' %}
+  {% set resend_is_json = false %}
+  {% set _try_json = safe_url('auth.resend_verification_json', '') %}
+  {% set _try_post = safe_url('auth.resend_verification', '') %}
+  {% if _try_json %}
+    {% set resend_endpoint = _try_json %}
+    {% set resend_is_json = true %}
+  {% elif _try_post %}
+    {% set resend_endpoint = _try_post %}
+    {% set resend_is_json = false %}
+  {% endif %}
 
-{# Endpoint de reenvío: prioriza json, luego normal #}
-{% set resend_endpoint = '' %}
-{% if 'auth.resend_verification_json' in _vf %}
-  {% set resend_endpoint = url_for('auth.resend_verification_json') %}
-{% elif 'auth.resend_verification' in _vf %}
-  {% set resend_endpoint = url_for('auth.resend_verification') %}
-{% endif %}
+  <section class="ss-ve" aria-label="Verificar correo">
+    <div class="ss-ve__card" role="region" aria-label="Verificación de email">
+      <div class="ss-ve__head">
+        <div class="ss-ve__icon" aria-hidden="true">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               style="color:rgba(245,158,11,.95)" stroke-width="1.8">
+            <path stroke-linecap="round" stroke-linejoin="round"
+                  d="M3 8l9 6 9-6M5 19h14a2 2 0 002-2V7a2 2 0 00-1-1.732L12 2 4 5.268A2 2 0 003 7v10a2 2 0 002 2z"/>
+          </svg>
+        </div>
 
-<section class="ss-ve" aria-label="Verificar correo">
-  <div class="ss-ve__card" role="region" aria-label="Verificación de email">
-
-    <div class="ss-ve__head">
-      <div class="ss-ve__icon" aria-hidden="true">
-        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="color:rgba(245,158,11,.95)" stroke-width="1.8">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M3 8l9 6 9-6M5 19h14a2 2 0 002-2V7a2 2 0 00-1-1.732L12 2 4 5.268A2 2 0 003 7v10a2 2 0 002 2z"/>
-        </svg>
-      </div>
-
-      <h1 class="ss-ve__title">Verificá tu correo</h1>
-      <p class="ss-ve__sub">
-        {% if email %}
-          Te enviamos un enlace a <b>{{ email|e }}</b> para confirmar tu cuenta.
-        {% else %}
-          Te enviamos un enlace para confirmar tu cuenta.
-        {% endif %}
-        Este paso ayuda a mantener tu perfil más seguro.
-      </p>
-    </div>
-
-    <div class="ss-ve__body">
-
-      {# Flash por redirect — category safe #}
-      {% set _msgs = get_flashed_messages(with_categories=true) %}
-      {% if _msgs %}
-        {% for category, message in _msgs %}
-          {% set cat = (category|string|lower|trim) %}
-          {% set cat = cat if cat in ['error','warning','success','info'] else 'info' %}
-          <div class="ss-ve__flash {{ cat }}" role="alert" aria-live="polite" aria-atomic="true">{{ message }}</div>
-        {% endfor %}
-      {% endif %}
-
-      <div class="ss-ve__note">
-        🔒 <b>Tip:</b> revisá “Spam/Promociones”. A veces el correo cae ahí.
-        Si pedís reenvío, esperá 30–60 segundos antes de volver a intentarlo.
-      </div>
-
-      <div id="veLive" class="ss-ve__live" role="status" aria-live="polite" aria-atomic="true"></div>
-
-      {# Fallback POST normal (si endpoint NO es JSON) #}
-      <form id="resendForm" method="post" action="{{ resend_endpoint if resend_endpoint else '#' }}" style="margin:0">
-        {# CSRF único (si viene FlaskForm, lo respetamos) #}
-        {% if form is defined and form.hidden_tag is defined %}
-          {{ form.hidden_tag() }}
-        {% elif csrf_token is defined %}
-          {% if csrf_token is callable %}
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <h1 class="ss-ve__title">Verificá tu correo</h1>
+        <p class="ss-ve__sub">
+          {% if email %}
+            Te enviamos un enlace a <b>{{ email|e }}</b> para confirmar tu cuenta.
           {% else %}
-            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            Te enviamos un enlace para confirmar tu cuenta.
           {% endif %}
-        {% endif %}
-
-        {% if email %}
-          <input type="hidden" name="email" value="{{ email|e }}">
-        {% endif %}
-      </form>
-
-      <div class="ss-ve__actions">
-        <button id="btnResend"
-                type="button"
-                class="ss-ve__btn"
-                aria-busy="false"
-                aria-disabled="{{ 'true' if not resend_endpoint else 'false' }}"
-                {% if not resend_endpoint %}disabled{% endif %}>
-          <span id="veSpin" class="ss-ve__spin" style="display:none" aria-hidden="true"></span>
-          <span id="btnTxt">{% if resend_endpoint %}Reenviar correo{% else %}Reenvío no disponible{% endif %}</span>
-        </button>
-
-        <a class="ss-ve__btn ss-ve__btn--ghost" href="{{ home_url }}">Volver al inicio</a>
+          Este paso ayuda a mantener tu perfil más seguro.
+        </p>
       </div>
 
-      <div class="ss-ve__row">
-        <a class="ss-ve__link" href="mailto:{{ support_email_safe|urlencode }}">✉️ Soporte: {{ support_email_safe|e }}</a>
-        <a class="ss-ve__link" href="{{ shop_url }}">🛍️ Ir a la tienda</a>
+      <div class="ss-ve__body">
+
+        {# Flash por redirect — category safe #}
+        {% set _msgs = get_flashed_messages(with_categories=true) %}
+        {% if _msgs %}
+          {% for category, message in _msgs %}
+            {% set cat = (category|string|lower|trim) %}
+            {% set cat = cat if cat in ['error','warning','success','info'] else 'info' %}
+            <div class="ss-ve__flash {{ cat }}" role="alert" aria-live="polite" aria-atomic="true">{{ message }}</div>
+          {% endfor %}
+        {% endif %}
+
+        <div class="ss-ve__note">
+          🔒 <b>Tip:</b> revisá “Spam/Promociones”. A veces el correo cae ahí.
+          Si pedís reenvío, esperá 30–60 segundos antes de volver a intentarlo.
+        </div>
+
+        <div id="veLive" class="ss-ve__live" role="status" aria-live="polite" aria-atomic="true"></div>
+
+        {# Fallback POST normal #}
+        <form id="resendForm" method="post" action="{{ resend_endpoint if resend_endpoint else '#' }}" style="margin:0">
+          <input type="hidden" name="csrf_token" value="{{ (_csrf_html|string)|e }}">
+          {% if email %}<input type="hidden" name="email" value="{{ email|e }}">{% endif %}
+        </form>
+
+        <div class="ss-ve__actions">
+          <button id="btnResend"
+                  type="button"
+                  class="ss-ve__btn"
+                  aria-busy="false"
+                  aria-disabled="{{ 'true' if not resend_endpoint else 'false' }}"
+                  {% if not resend_endpoint %}disabled{% endif %}>
+            <span id="veSpin" class="ss-ve__spin" style="display:none" aria-hidden="true"></span>
+            <span id="btnTxt">{% if resend_endpoint %}Reenviar correo{% else %}Reenvío no disponible{% endif %}</span>
+          </button>
+
+          <a class="ss-ve__btn ss-ve__btn--ghost" href="{{ home_url }}">Volver al inicio</a>
+        </div>
+
+        <div class="ss-ve__row">
+          <a class="ss-ve__link" href="mailto:{{ support_email_safe|urlencode }}">✉️ Soporte: {{ support_email_safe|e }}</a>
+          <a class="ss-ve__link" href="{{ shop_url }}">🛍️ Ir a la tienda</a>
+        </div>
+
+        <p class="ss-ve__small">
+          Si ya verificaste tu cuenta y seguís viendo esta pantalla, cerrá sesión y volvé a entrar.
+        </p>
+
       </div>
-
-      <p class="ss-ve__small">
-        Si ya verificaste tu cuenta y seguís viendo esta pantalla, cerrá sesión y volvé a entrar.
-      </p>
-
     </div>
-
-  </div>
-</section>
+  </section>
 {% endblock %}
 
 {% block extra_js %}
@@ -331,7 +338,8 @@
   const form = document.getElementById('resendForm');
 
   const endpoint = {{ resend_endpoint|tojson }};
-  const email = {{ (email|tojson) if email else '""' }};
+  const isJson   = {{ resend_is_json|tojson }};
+  const email    = {{ email|tojson }};
 
   const LS_KEY = "ss_verify_resend_cooldown_until";
   const COOLDOWN_MS = 30000;
@@ -342,8 +350,8 @@
 
   const say = (m) => {
     if(!live) return;
-    live.textContent = m;
-    live.classList.add('is-on');
+    live.textContent = m || "";
+    live.classList.toggle('is-on', !!m);
   };
 
   const readCsrf = () => {
@@ -364,13 +372,13 @@
     try{
       const v = parseInt(localStorage.getItem(LS_KEY) || "0", 10);
       return isNaN(v) ? 0 : v;
-    }catch(e){
+    }catch(_){
       return 0;
     }
   };
 
   const setCooldownUntil = (t) => {
-    try{ localStorage.setItem(LS_KEY, String(t)); }catch(e){}
+    try{ localStorage.setItem(LS_KEY, String(t)); }catch(_){}
   };
 
   const stopTick = () => {
@@ -414,33 +422,34 @@
   const parseResponse = async (r) => {
     const ct = (r.headers.get("content-type") || "").toLowerCase();
     if(ct.includes("application/json")){
-      try { return await r.json(); } catch(e){ return null; }
+      try { return await r.json(); } catch(_){ return null; }
     }
-    // fallback texto
-    try { return await r.text(); } catch(e){ return null; }
+    try { return await r.text(); } catch(_){ return null; }
   };
 
   const sendFetch = async () => {
-    const headers = { "Accept":"application/json", "Content-Type":"application/json" };
+    const headers = { "Accept":"application/json" };
     const csrf = readCsrf();
     if(csrf) headers["X-CSRF-Token"] = csrf;
+    if(isJson) headers["Content-Type"] = "application/json";
 
     const ctrl = ("AbortController" in window) ? new AbortController() : null;
     const timer = ctrl ? setTimeout(() => ctrl.abort(), TIMEOUT_MS) : null;
 
     try{
+      const body = isJson ? JSON.stringify({ email: email || undefined }) : null;
+
       const r = await fetch(endpoint, {
         method: "POST",
         headers,
         credentials: "same-origin",
         signal: ctrl ? ctrl.signal : undefined,
-        body: JSON.stringify({ email: email || undefined })
+        body
       });
 
       const data = await parseResponse(r);
 
       if(!r.ok){
-        // mensaje desde json o texto
         const msg = (data && typeof data === "object" && (data.message || data.error))
           ? (data.message || data.error)
           : (typeof data === "string" && data ? data : "No se pudo reenviar.");
@@ -452,7 +461,6 @@
       }
 
       return { ok: true, data };
-
     } finally {
       if(timer) clearTimeout(timer);
     }
@@ -482,20 +490,25 @@
     say("Enviando correo de verificación…");
 
     try{
-      // intentamos fetch primero
-      await sendFetch();
+      // Si no es JSON, intentamos submit directo (más compatible)
+      if(!isJson){
+        say("Reenviando…");
+        setCooldownUntil(Date.now() + COOLDOWN_MS);
+        startTick();
+        try { form && form.submit(); } catch(_){}
+        return;
+      }
 
+      await sendFetch();
       say("Listo ✅ Te reenviamos el email. Revisá tu bandeja y spam/promociones.");
       setCooldownUntil(Date.now() + COOLDOWN_MS);
       startTick();
 
     }catch(e){
-      // fallback: si tu endpoint NO es JSON y espera POST normal
-      // (esto evita frustración y sigue siendo CSRF-safe)
       const msg = (e && e.message) ? e.message : "";
+      // fallback submit
       if(form && endpoint){
         say(msg || "Intentando reenvío…");
-        // pequeña pausa para que el usuario vea feedback
         setTimeout(() => { try{ form.submit(); }catch(_){ ensureCooldownUI(); } }, 250);
         return;
       }
