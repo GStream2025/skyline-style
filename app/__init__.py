@@ -1,4 +1,4 @@
-﻿# app/__init__.py — Skyline Store (ULTRA PRO / NO BREAK / Render-safe) — vNEXT BULLETPROOF
+﻿# app/__init__.py — Skyline Store (ULTRA PRO / NO BREAK / Render-safe) — vNEXT+10 BULLETPROOF
 from __future__ import annotations
 
 import logging
@@ -7,6 +7,7 @@ import secrets
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Type
+from urllib.parse import urlencode
 
 from flask import Flask, jsonify, redirect, render_template, request, session, url_for
 from werkzeug.exceptions import HTTPException
@@ -83,17 +84,12 @@ def _env_name(app: Flask) -> str:
 
 
 def _is_prod(app: Flask) -> bool:
-    # Si DEBUG=True => NO prod (aunque ENV diga otra cosa)
     if bool(app.config.get("DEBUG")) or bool(getattr(app, "debug", False)):
         return False
     return _env_name(app) == "production"
 
 
 def _want_verbose_logs(app: Flask) -> bool:
-    """
-    Para depurar en Render sin prender DEBUG=True.
-    Setear: VERBOSE_REQUEST_LOGS=1
-    """
     if bool(getattr(app, "debug", False)):
         return True
     return _env_bool("VERBOSE_REQUEST_LOGS", False)
@@ -156,10 +152,7 @@ def setup_logging(app: Flask) -> None:
 
 
 def safe_init(app: Flask, label: str, fn: Callable[[], Any]) -> Any:
-    """
-    Init opcional sin romper deploy.
-    ✅ FIX: sin emojis sueltos -> cero SyntaxError
-    """
+    """Init opcional sin romper deploy."""
     try:
         out = fn()
         app.logger.info("OK %s inicializado", label)
@@ -213,9 +206,7 @@ def _require_secret_key_prod(app: Flask) -> None:
 
 
 def _ensure_secret_key_dev(app: Flask) -> None:
-    """
-    En dev/testing, si falta SECRET_KEY, generamos una por proceso.
-    """
+    """En dev/testing, si falta SECRET_KEY, generamos una por proceso."""
     if _is_prod(app):
         return
     if not (app.config.get("SECRET_KEY") or "").strip():
@@ -238,6 +229,18 @@ def _mask_db_url(uri: Any) -> str:
     return s
 
 
+def _safe_next_param(nxt: str) -> str:
+    """
+    ✅ Mejora extra: open-redirect hardening (solo path interno).
+    """
+    nxt = (nxt or "").strip()
+    if not nxt:
+        return ""
+    if not nxt.startswith("/") or nxt.startswith("//"):
+        return ""
+    return nxt
+
+
 # =============================================================================
 # CSRF (Flask-WTF)
 # =============================================================================
@@ -245,8 +248,7 @@ def _mask_db_url(uri: Any) -> str:
 def init_csrf(app: Flask) -> None:
     """
     CSRFProtect estable para Render.
-    ✅ Exime prefijos (webhooks) sin romper forms
-    ✅ Manejo de CSRFError uniforme
+    Exime prefijos (webhooks) sin romper forms.
     """
     from flask_wtf import CSRFProtect
     from flask_wtf.csrf import CSRFError
@@ -259,6 +261,9 @@ def init_csrf(app: Flask) -> None:
         "/webhooks",
         "/api/webhook",
         "/api/webhooks",
+        "/ready",
+        "/health",
+        "/__ping",
     }
 
     extra = _env_str("CSRF_EXEMPT_PREFIXES", "")
@@ -266,7 +271,6 @@ def init_csrf(app: Flask) -> None:
         for pref in [x.strip() for x in extra.split(",") if x.strip()]:
             exempt_prefixes.add(pref)
 
-    # cache para no estar eximiendo el mismo endpoint 1000 veces
     exempted_endpoints: Set[str] = set()
 
     @app.before_request
@@ -370,7 +374,6 @@ def _configure_session_cookies(app: Flask) -> None:
     else:
         app.config.setdefault("SESSION_COOKIE_SECURE", False)
 
-    # Si SameSite=None => Secure obligado
     if app.config.get("SESSION_COOKIE_SAMESITE") == "None":
         app.config["SESSION_COOKIE_SECURE"] = True
 
@@ -398,6 +401,9 @@ def create_app() -> Flask:
 
     # 1) Config primero (CRÍTICO)
     app.config.from_mapping(cfg_cls.as_flask_config())
+
+    # ✅ Mejora extra 1: límite global request (evita DOS por payload gigante)
+    app.config.setdefault("MAX_CONTENT_LENGTH", _env_int("MAX_CONTENT_LENGTH", 2_000_000, min_v=200_000, max_v=25_000_000))
 
     # 2) Logging idempotente
     setup_logging(app)
@@ -438,24 +444,25 @@ def create_app() -> Flask:
     )
 
     # =============================================================================
-    # Mejora 1: request-id + timing en un solo lugar (sin duplicar hooks)
+    # Pipeline: request-id + timing + redirects unificados
     # =============================================================================
     @app.before_request
     def _pipeline_before_request():
-        # request-id
+        # ✅ Mejora extra 2: responder OPTIONS rápido (CORS/Preflight friendly)
+        if request.method == "OPTIONS":
+            return ("", 204)
+
         rid = request.headers.get("X-Request-Id") or secrets.token_urlsafe(10)
         try:
             request._request_id = rid  # type: ignore[attr-defined]
         except Exception:
             pass
 
-        # timing
         try:
             request._t0 = time.time()  # type: ignore[attr-defined]
         except Exception:
             pass
 
-        # verbose request log
         if _want_verbose_logs(app):
             try:
                 app.logger.info("IN %s %s rid=%s", request.method, request.full_path, rid)
@@ -476,31 +483,24 @@ def create_app() -> Flask:
             except Exception:
                 pass
 
-        # Unified Account redirects (solo GET/HEAD)
+        # ✅ Mejora extra 3: redirects legacy SIEMPRE a auth.account (no main.account)
         if request.method in {"GET", "HEAD"}:
             p = (request.path or "")
-            if not p.startswith("/auth/account"):
-                nxt = (request.args.get("next") or "").strip()
-                if not (nxt.startswith("/") and not nxt.startswith("//")):
-                    nxt = ""
+            if p in {"/auth/login", "/login", "/account/login", "/cuenta/login"}:
+                nxt = _safe_next_param(request.args.get("next", ""))
+                try:
+                    return redirect(url_for("auth.account", tab="login", next=(nxt or "/")))
+                except Exception:
+                    qs = urlencode({"tab": "login", "next": (nxt or "/")})
+                    return redirect(f"/auth/account?{qs}")
 
-                def _redir(tab: str):
-                    try:
-                        if "main.account" in app.view_functions:
-                            if nxt:
-                                return redirect(url_for("main.account", tab=tab, next=nxt))
-                            return redirect(url_for("main.account", tab=tab))
-                    except Exception:
-                        pass
-                    q = f"?tab={tab}"
-                    if nxt:
-                        q += f"&next={nxt}"
-                    return redirect("/account" + q)
-
-                if p in {"/auth/login", "/login", "/account/login", "/cuenta/login"}:
-                    return _redir("login")
-                if p in {"/auth/register", "/register", "/account/register", "/cuenta/register"}:
-                    return _redir("register")
+            if p in {"/auth/register", "/register", "/account/register", "/cuenta/register"}:
+                nxt = _safe_next_param(request.args.get("next", ""))
+                try:
+                    return redirect(url_for("auth.account", tab="register", next=(nxt or "/")))
+                except Exception:
+                    qs = urlencode({"tab": "register", "next": (nxt or "/")})
+                    return redirect(f"/auth/account?{qs}")
 
         return None
 
@@ -514,14 +514,21 @@ def create_app() -> Flask:
         except Exception:
             pass
 
-        # timing header (Mejora 2)
+        # timing header
         try:
             t0 = getattr(request, "_t0", None)
             if t0:
                 ms = int((time.time() - float(t0)) * 1000)
                 resp.headers.setdefault("X-Response-Time", f"{ms}ms")
                 if _want_verbose_logs(app):
-                    app.logger.info("OUT %s %s -> %s (%sms) rid=%s", request.method, request.path, resp.status_code, ms, getattr(request, "_request_id", "-"))
+                    app.logger.info(
+                        "OUT %s %s -> %s (%sms) rid=%s",
+                        request.method,
+                        request.path,
+                        resp.status_code,
+                        ms,
+                        getattr(request, "_request_id", "-"),
+                    )
         except Exception:
             pass
 
@@ -539,6 +546,7 @@ def create_app() -> Flask:
         resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
         resp.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
 
+        # ✅ Mejora extra 4: HSTS solo en prod real + HTTPS forzado
         if _is_prod(app) and bool(app.config.get("FORCE_HTTPS", True)):
             resp.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 
@@ -558,9 +566,16 @@ def create_app() -> Flask:
     # MODELS HUB (CRÍTICO)
     critical_init(app, "Models hub", lambda: init_models(app, create_admin=True, log_loaded_models=True, ping_db=True))
 
-    # Migrate / Limiter DESPUÉS de DB lista
     safe_init(app, "Flask-Migrate", lambda: init_migrate(app))
     safe_init(app, "Flask-Limiter", lambda: init_limiter(app))
+
+    # ✅ Mejora extra 5: teardown DB (evita leaks y locks en gunicorn)
+    @app.teardown_appcontext
+    def _shutdown_session(_exc: Optional[BaseException]):
+        try:
+            db.session.remove()
+        except Exception:
+            pass
 
     # =============================================================================
     # Jinja Globals
@@ -606,7 +621,6 @@ def create_app() -> Flask:
             "is_logged_in": bool(getattr(cu, "id", None)) if cu else False,
             "is_admin": bool(getattr(cu, "is_admin", False)) if cu else bool(session.get("is_admin")),
             "view_functions": app.view_functions,
-            # usar en base.html: <meta name="csrf-token" content="{{ csrf_token_value }}">
             "csrf_token_value": csrf_value,
             "csp_nonce": csp_nonce,
         }
@@ -617,23 +631,24 @@ def create_app() -> Flask:
     registered: List[str] = []
 
     def _register_all_routes():
+        # ✅ Mejora extra 6: import protegido (si app.routes falta, no rompe con ROUTES_STRICT=0)
         from app.routes import register_blueprints
         register_blueprints(app)
         registered[:] = sorted(app.blueprints.keys())
         return True
 
-    # Mejora 3: si falla el registro en modo no-strict, lo loguea con stack si VERBOSE
     if _env_bool("ROUTES_STRICT", False):
         critical_init(app, "Register Blueprints", _register_all_routes)
     else:
         safe_init(app, "Register Blueprints", _register_all_routes)
 
     # =============================================================================
-    # Mejora 4: ROOT SAFETY ("/" nunca huérfano)
+    # ROOT SAFETY ("/" nunca huérfano)
     # =============================================================================
-    if "main.root" not in app.view_functions and "static" in app.view_functions:
+    if "main.root" not in app.view_functions:
         @app.get("/")
         def root_fallback():
+            # ✅ Mejora extra 7: no dependas de "static" view_function (puede no estar)
             try:
                 if "main.home" in app.view_functions:
                     return redirect(url_for("main.home"))
@@ -682,6 +697,11 @@ def create_app() -> Flask:
     def __ping():
         return "ok", 200
 
+    # ✅ Mejora extra 8: handler 413 (MAX_CONTENT_LENGTH)
+    @app.errorhandler(413)
+    def too_large(_e):
+        return resp_error(413, "payload_too_large", "El archivo o la solicitud es demasiado grande.")
+
     # =============================================================================
     # Error handlers
     # =============================================================================
@@ -690,15 +710,27 @@ def create_app() -> Flask:
         code = int(e.code or 500)
         name = (e.name or "http_error").lower().replace(" ", "_")
         if _want_verbose_logs(app) or code >= 500:
-            app.logger.warning("HTTP %s %s: %s rid=%s", code, request.path, name, getattr(request, "_request_id", "-"))
+            app.logger.warning(
+                "HTTP %s %s: %s rid=%s",
+                code,
+                request.path,
+                name,
+                getattr(request, "_request_id", "-"),
+            )
         return resp_error(code, name, e.description)
 
     @app.errorhandler(Exception)
     def unhandled_error(e: Exception):
         if isinstance(e, HTTPException):
             return e
-        # Mejora 5: stacktrace SIEMPRE en 500 (y con request-id)
-        app.logger.exception("Unhandled error on %s %s rid=%s: %s", request.method, request.path, getattr(request, "_request_id", "-"), e)
+        # ✅ Mejora extra 9: 500 SIEMPRE con request-id y stack
+        app.logger.exception(
+            "Unhandled error on %s %s rid=%s: %s",
+            request.method,
+            request.path,
+            getattr(request, "_request_id", "-"),
+            e,
+        )
         return resp_error(500, "server_error", "Error interno del servidor.")
 
     # =============================================================================
@@ -719,6 +751,9 @@ def create_app() -> Flask:
             return
         with app.app_context():
             print(create_admin_if_missing(app))  # type: ignore[misc]
+
+    # ✅ Mejora extra 10: sanity log final (sirve en Render)
+    app.logger.info("✅ create_app() listo | env=%s | blueprints=%s", _env_name(app), ",".join(sorted(app.blueprints.keys())))
 
     return app
 
