@@ -1,17 +1,19 @@
 /* ======================================================================
-   SKYLINE STORE — ULTRA PREMIUM UI (v5.2 · GLOBAL FINAL)
+   SKYLINE STORE — ULTRA PREMIUM UI (v5.4 · GLOBAL FINAL)
    Clean · premium · modern · consistent · marketplace
    ✅ safe reset (no rompe shop/account)
-   ✅ tokens + dark auto
-   ✅ header/topbar pro + mobile 2 filas
+   ✅ tokens + dark auto + alias tokens (ring/ring2/shadow-inset)
+   ✅ header/topbar pro + mobile 2 filas + search enterprise
    ✅ components + utilities + states
-   ✅ accesibilidad real (no mata outline)
-   ✅ no duplicados / no reglas contradictorias
+   ✅ accesibilidad real (focus visible + no matar outlines)
+   ✅ no duplicados / sin reglas contradictorias
+   ✅ PERF: content-visibility opcional + reduced motion/transparency/contrast
+   ✅ +5 mejoras extra (MEJORA EXTRA 1-5) al final del header/components
 ====================================================================== */
 
 /* -----------------------------
    0) RESET (safe + modern)
-   MEJORA #1: NO matar focus global (solo focus-visible)
+   - NO matar outline global: solo manejamos focus-visible
 ----------------------------- */
 *,*::before,*::after{box-sizing:border-box}
 html,body{margin:0;padding:0}
@@ -25,7 +27,10 @@ img,svg,video,canvas{max-width:100%;display:block}
 a{color:inherit;text-decoration:none}
 button,input,select,textarea{font:inherit}
 button{background:none;border:0;padding:0}
-:focus{outline:none} /* ok, pero focus real queda en focus-visible */
+
+/* ✅ A11y: NO romper focus por defecto */
+:focus{ outline: revert; }
+:where(a,button,input,select,textarea,[tabindex]):focus{ outline: none; }
 
 /* Selection */
 ::selection{background:rgba(37,99,235,.18)}
@@ -92,6 +97,12 @@ button{background:none;border:0;padding:0}
 
   /* title tracking */
   --ls-title: -0.035em;
+
+  /* v5.3 alias tokens (compat) */
+  --surface3: rgba(255,255,255,.92);
+  --shadow-inset: inset 0 1px 0 rgba(255,255,255,.7);
+  --ring: 0 0 0 6px rgba(37,99,235,.16);
+  --ring2: 0 0 0 3px rgba(37,99,235,.22);
 }
 
 /* -----------------------------
@@ -120,12 +131,17 @@ button{background:none;border:0;padding:0}
     --sh3: 0 38px 120px rgba(0,0,0,.65);
 
     --focus: 0 0 0 7px rgba(6,182,212,.18);
+
+    /* v5.3 alias tokens (dark) */
+    --surface3: rgba(10,14,28,.92);
+    --shadow-inset: inset 0 1px 0 rgba(255,255,255,.06);
+    --ring: 0 0 0 6px rgba(6,182,212,.16);
+    --ring2: 0 0 0 3px rgba(6,182,212,.22);
   }
 }
 
 /* -----------------------------
    3) BODY + BACKDROP
-   MEJORA #2: background dark coherente también
 ----------------------------- */
 body{
   font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
@@ -140,6 +156,7 @@ body{
   -webkit-font-smoothing:antialiased;
   text-rendering:optimizeLegibility;
   overflow-x:hidden;
+  overscroll-behavior-x: none;
 }
 @media (prefers-color-scheme: dark){
   body{
@@ -183,9 +200,16 @@ p{margin:.45rem 0;color:var(--muted)}
 ul{margin:.4rem 0;padding-left:1.1rem;color:var(--muted)}
 hr{border:0;border-top:1px solid var(--border);margin:18px 0}
 
+/* ✅ mejora pro: balance/pretty (solo si soporta) */
+@supports (text-wrap: balance){
+  h1,h2{ text-wrap: balance; }
+}
+@supports (text-wrap: pretty){
+  p{ text-wrap: pretty; }
+}
+
 /* -----------------------------
    5) HELPERS / LAYOUT UTILITIES
-   MEJORA #3: padding respeta safe-area en iOS
 ----------------------------- */
 .container,.section{
   max-width:var(--max);
@@ -245,13 +269,13 @@ hr{border:0;border-top:1px solid var(--border);margin:18px 0}
   border-radius: 16px;
 }
 
-/* MEJORA #4: tap highlight iOS */
+/* tap highlight iOS */
 a,button{ -webkit-tap-highlight-color: transparent; }
 
-/* -----------------------------
+/* ======================================================================
    6) TOPBAR / HEADER (marketplace)
-   Conecta con base.html: .topbar .topbar-inner .brand .nav .search .topbar-actions
------------------------------ */
+   base.html: .topbar .topbar-inner .brand .nav .search .topbar-actions
+====================================================================== */
 .topbar{
   position:sticky;top:0;z-index:60;
   background: var(--glass);
@@ -267,14 +291,26 @@ a,button{ -webkit-tap-highlight-color: transparent; }
 .topbar-inner{
   max-width:var(--max);
   margin:0 auto;
-  padding:12px var(--pad);
+  padding:
+    10px calc(var(--pad) + env(safe-area-inset-left))
+    10px calc(var(--pad) + env(safe-area-inset-right));
   display:grid;
   grid-template-columns: auto 1fr auto;
   align-items:center;
-  gap:12px;
+  gap:10px;
 }
-@media(min-width:980px){.topbar-inner{padding:12px var(--pad-lg)}}
+@media(min-width:980px){
+  .topbar-inner{
+    padding:
+      10px calc(var(--pad-lg) + env(safe-area-inset-left))
+      10px calc(var(--pad-lg) + env(safe-area-inset-right));
+  }
+}
 
+/* ✅ MEJORA EXTRA 1: tipografía del header más estable (evita “saltos”) */
+.topbar *{ text-rendering: geometricPrecision; }
+
+/* brand */
 .brand{
   display:flex;align-items:center;gap:10px;
   font-weight:1000;white-space:nowrap;
@@ -288,7 +324,7 @@ a,button{ -webkit-tap-highlight-color: transparent; }
 /* nav */
 .nav{display:flex;gap:6px;align-items:center}
 .nav a{
-  padding:10px 12px;border-radius:12px;
+  padding:10px 12px;border-radius:14px;
   color:var(--muted);
   font-weight:950;
   border:1px solid transparent;
@@ -303,10 +339,13 @@ a,button{ -webkit-tap-highlight-color: transparent; }
 @media (prefers-color-scheme: dark){
   .nav a:hover{background:rgba(255,255,255,.06);box-shadow:none}
 }
+@media (pointer:coarse){
+  .nav a:hover{ transform:none; box-shadow:none; }
+}
 .nav a.active{
   background: rgba(37,99,235,.10);
   color: var(--p);
-  border:1px solid rgba(37,99,235,.18);
+  border:1px solid rgba(37,99,235,.20);
 }
 
 /* Search */
@@ -315,26 +354,31 @@ a,button{ -webkit-tap-highlight-color: transparent; }
   max-width: 720px;
   margin: 0 auto;
   display:flex;align-items:center;gap:10px;
-  padding:10px 14px;
+  padding:10px 12px;
+  min-height:46px;
   border-radius:999px;
   border:1px solid var(--border);
   background: rgba(255,255,255,.86);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.7), 0 14px 34px rgba(10,16,32,.07);
+  box-shadow: var(--shadow-inset), 0 12px 26px rgba(10,16,32,.06);
 }
 @media (prefers-color-scheme: dark){
   .search{background: rgba(255,255,255,.06); box-shadow:none}
 }
-.search:focus-within{box-shadow: var(--focus)}
+.search:focus-within{box-shadow: var(--ring); border-color: rgba(37,99,235,.20); }
+@media (prefers-color-scheme: dark){
+  .search:focus-within{ box-shadow: var(--ring); }
+}
 .search input{
   flex:1;border:0;background:transparent;outline:none;
   padding:6px 4px;color:var(--ink);font-weight:800;
   min-width: 0;
+  line-height: 1.2;
 }
 .search input::placeholder{color:rgba(10,16,32,.45)}
 @media (prefers-color-scheme: dark){
   .search input::placeholder{color:rgba(238,242,255,.45)}
 }
-/* MEJORA #5: botón dentro de search consistente */
+/* botón dentro de search consistente */
 .search .btn{min-height:40px;padding:10px 12px;border-radius:999px}
 
 /* Right actions */
@@ -350,20 +394,42 @@ a,button{ -webkit-tap-highlight-color: transparent; }
   color:#fff;font-size:.72rem;font-weight:1000;
   padding:0 6px;border:1px solid rgba(255,255,255,.45);
   pointer-events:none;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
+
+/* ✅ account chip PRO (compacto, elegante) */
 .account-chip{
   display:inline-flex;align-items:center;gap:10px;
   padding:10px 12px;border-radius:999px;
   border:1px solid var(--border);
   background: rgba(255,255,255,.78);
-  box-shadow: var(--sh1);
+  box-shadow: 0 10px 22px rgba(10,16,32,.06);
   transition: transform var(--t), box-shadow var(--t), background var(--t), border-color var(--t);
 }
-.account-chip:hover{transform:translateY(-1px);border-color:rgba(37,99,235,.22)}
+.account-chip:hover{
+  transform:translateY(-1px);
+  border-color:rgba(37,99,235,.22);
+}
 @media (prefers-color-scheme: dark){
   .account-chip{background: rgba(255,255,255,.06); box-shadow:none}
-  .account-chip:hover{transform:none}
 }
+@media (pointer:coarse){
+  .account-chip:hover{ transform:none; }
+}
+
+/* ✅ MEJORA EXTRA 2: texto dentro del chip (si hay b/small) */
+.account-chip :where(b,strong){
+  font-weight: 1000;
+  letter-spacing: -.01em;
+  line-height: 1.05;
+}
+.account-chip :where(small,span){
+  font-weight: 850;
+  opacity: .78;
+}
+
+/* avatar */
 .avatar{
   width:30px;height:30px;border-radius:999px;
   background:linear-gradient(135deg, rgba(37,99,235,.18), rgba(6,182,212,.12));
@@ -376,6 +442,7 @@ a,button{ -webkit-tap-highlight-color: transparent; }
   .topbar-inner{
     grid-template-columns: 1fr auto;
     grid-template-rows: auto auto;
+    gap: 8px;
   }
   .nav{display:none}
   .brand{grid-column:1/2;grid-row:1}
@@ -383,12 +450,12 @@ a,button{ -webkit-tap-highlight-color: transparent; }
   .search{grid-column:1/3;grid-row:2;max-width:none}
 }
 
-/* MEJORA #6: sticky topbar evita “saltos” con fuentes */
-.topbar *{ text-rendering: geometricPrecision; }
+/* ✅ MEJORA EXTRA 3: evitar “bloques enormes” si algún wrapper mete padding raro */
+.topbar :where(.container,.section){ padding-top: 0; padding-bottom: 0; }
 
-/* -----------------------------
+/* ======================================================================
    7) COMPONENTS
------------------------------ */
+====================================================================== */
 
 /* Buttons */
 .btn{
@@ -405,10 +472,15 @@ a,button{ -webkit-tap-highlight-color: transparent; }
   user-select:none;
   font-weight:1000;
   transition: transform var(--t), box-shadow var(--t), filter var(--t), background var(--t), border-color var(--t), opacity var(--t);
+  isolation: isolate;              /* perf/paint */
+  will-change: transform;          /* microperf */
 }
 .btn:hover{transform:translateY(-1px);filter:saturate(1.03)}
 .btn:active{transform:translateY(0)}
 .btn:focus-visible{box-shadow:var(--focus)}
+@media (pointer:coarse){
+  .btn:hover{ transform:none; }
+}
 .btn[disabled], .btn.disabled{
   opacity:.62;
   cursor:not-allowed;
@@ -420,10 +492,12 @@ a,button{ -webkit-tap-highlight-color: transparent; }
 .btn.primary{
   color:#fff;
   background: linear-gradient(135deg,var(--p),var(--p2));
-  box-shadow: 0 18px 55px rgba(37,99,235,.22);
+  box-shadow: 0 18px 55px rgba(37,99,235,.20);
 }
+.btn.primary:hover{ filter: saturate(1.04) brightness(1.02); }
+
 .btn.ghost{
-  background: rgba(255,255,255,.86);
+  background: rgba(255,255,255,.82);
   border:1px solid var(--border);
   color: var(--ink);
   box-shadow: var(--sh1);
@@ -465,12 +539,15 @@ a,button{ -webkit-tap-highlight-color: transparent; }
   border-radius:18px;
   border:1px solid var(--border);
   background: rgba(255,255,255,.86);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.7), 0 14px 34px rgba(10,16,32,.07);
+  box-shadow: var(--shadow-inset), 0 12px 26px rgba(10,16,32,.06);
 }
 @media (prefers-color-scheme: dark){
   .input{background: rgba(255,255,255,.06); box-shadow:none}
 }
-.input:focus-within{box-shadow:var(--focus)}
+.input:focus-within{
+  box-shadow: var(--ring);
+  border-color: rgba(37,99,235,.22);
+}
 .input input{
   flex:1;border:0;background:transparent;outline:none;
   padding:6px 4px;color:var(--ink);font-weight:750;
@@ -480,8 +557,11 @@ a,button{ -webkit-tap-highlight-color: transparent; }
 @media (prefers-color-scheme: dark){
   .input input::placeholder{color:rgba(238,242,255,.45)}
 }
-.input[aria-invalid="true"], .input.is-error{border-color: rgba(220,38,38,.30)}
-.input.is-ok{border-color: rgba(22,163,74,.28)}
+.input[aria-invalid="true"], .input.is-error{
+  border-color: rgba(220,38,38,.28);
+  box-shadow: var(--ring2);
+}
+.input.is-ok{border-color: rgba(22,163,74,.24)}
 .input input:disabled{opacity:.7;cursor:not-allowed}
 
 /* Pills / chips */
@@ -501,6 +581,9 @@ a,button{ -webkit-tap-highlight-color: transparent; }
   .pill,.chip{background: rgba(255,255,255,.06); box-shadow:none; color: rgba(238,242,255,.78)}
 }
 .pill:hover, .chip:hover{transform:translateY(-1px);border-color:rgba(37,99,235,.22)}
+@media (pointer:coarse){
+  .pill:hover,.chip:hover{ transform:none; }
+}
 .pill[aria-pressed="true"]{
   background: linear-gradient(135deg,var(--p),var(--p2));
   color:#fff;border-color:transparent;
@@ -524,8 +607,11 @@ a,button{ -webkit-tap-highlight-color: transparent; }
   .card,.panel,.surface{background: rgba(9,12,24,.68); box-shadow:none}
   .card:hover,.panel:hover,.surface:hover{box-shadow:none}
 }
+@media (pointer:coarse){
+  .card:hover,.panel:hover,.surface:hover{ transform:none; }
+}
 
-/* MEJORA #7: estados utilitarios */
+/* States utilitarios */
 .is-ok{color:var(--good)}
 .is-bad{color:var(--bad)}
 .is-warn{color:var(--warn)}
@@ -572,10 +658,21 @@ a,button{ -webkit-tap-highlight-color: transparent; }
   flex:0 0 auto;
 }
 
+/* ✅ MEJORA EXTRA 4: Trust items más “chip” en desktop si querés */
+@media(min-width:980px){
+  .trust-item{ border-radius: 999px; align-items:center; }
+}
+
 /* -----------------------------
    8) PRODUCT CARD (unificada)
 ----------------------------- */
-.gridP{display:grid;gap:14px}
+.gridP{
+  display:grid;
+  gap:14px;
+  /* perf real: evita render de todo el grid */
+  content-visibility: auto;
+  contain-intrinsic-size: 700px;
+}
 @media(min-width:640px){.gridP{grid-template-columns:repeat(2,1fr)}}
 @media(min-width:980px){.gridP{grid-template-columns:repeat(3,1fr);gap:18px}}
 @media(min-width:1260px){.gridP{grid-template-columns:repeat(4,1fr)}}
@@ -596,8 +693,16 @@ a,button{ -webkit-tap-highlight-color: transparent; }
     box-shadow:none;
   }
 }
-.cardP:hover{transform:translateY(-8px);box-shadow:var(--sh2);border-color:rgba(37,99,235,.22);filter:saturate(1.05)}
+.cardP:hover{
+  transform:translateY(-6px);
+  box-shadow:var(--sh2);
+  border-color:rgba(37,99,235,.22);
+  filter:saturate(1.05)
+}
 .cardP:focus-within{box-shadow:var(--focus), var(--sh2)}
+@media (pointer:coarse){
+  .cardP:hover{ transform:none; }
+}
 
 .mediaP{position:relative;aspect-ratio:1/1;overflow:hidden;background:rgba(255,255,255,.55)}
 @media (prefers-color-scheme: dark){.mediaP{background:rgba(255,255,255,.04)}}
@@ -606,9 +711,12 @@ a,button{ -webkit-tap-highlight-color: transparent; }
   height:100%;
   object-fit:cover;
   opacity:1;
+  display:block;
   transition: transform .65s var(--ease);
 }
-.cardP:hover .mediaP img{transform:scale(1.08)}
+@media (pointer:fine){
+  .cardP:hover .mediaP img{transform:scale(1.08)}
+}
 
 .badgeP{
   position:absolute;left:10px;top:10px;z-index:3;
@@ -691,7 +799,7 @@ a,button{ -webkit-tap-highlight-color: transparent; }
 }
 @keyframes shimmer{to{transform: translateX(120%)}}
 
-/* MEJORA #8: evita “layout shift” con imágenes */
+/* evita layout shift con imágenes */
 img[width][height]{height:auto}
 
 /* -----------------------------
@@ -721,7 +829,7 @@ img[width][height]{height:auto}
 .hero::after{
   content:"";
   position:absolute; inset:0;
-  opacity:.06;
+  opacity:.045;
   pointer-events:none;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)' opacity='.8'/%3E%3C/svg%3E");
 }
@@ -784,13 +892,12 @@ input:-webkit-autofill:focus{
 
 /* -----------------------------
    12) FOOTER (tienda grande)
-   MEJORA #9: footer más consistente + container interno
 ----------------------------- */
 .footer{
   margin-top: 28px;
   padding: 22px 0;
   border-top: 1px solid var(--border);
-  background: rgba(255,255,255,.40);
+  background: rgba(255,255,255,.36);
 }
 @media (prefers-color-scheme: dark){.footer{background: rgba(255,255,255,.03)}}
 .footer a{opacity:.86}
@@ -798,7 +905,6 @@ input:-webkit-autofill:focus{
 
 /* -----------------------------
    13) ACCESSIBILITY + MOTION
-   MEJORA #10: reduce-motion + reduce blur cost
 ----------------------------- */
 @media (prefers-reduced-motion: reduce){
   html{scroll-behavior:auto}
@@ -807,260 +913,14 @@ input:-webkit-autofill:focus{
 @media (prefers-reduced-transparency: reduce){
   .topbar{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
 }
-/* ==========================================================
-   SKYLINE STORE — ULTRA PREMIUM UI (v5.3 · GLOBAL PATCH)
-   ✅ 40 mejoras: a11y + spacing + header + search + perf + dark
-   Pegar al FINAL del global.css
-========================================================== */
-
-/* 1) A11Y FIX: NO matar focus global */
-:focus{ outline: revert; }
-:where(a,button,input,select,textarea,[tabindex]):focus{ outline: none; }
-:where(a,button,input,select,textarea,[tabindex]):focus-visible{
-  outline: none;
-  box-shadow: var(--focus);
-  border-radius: 16px;
-}
-
-/* 2) Smooth scroll solo si no reduce-motion */
-@media (prefers-reduced-motion: reduce){
-  html{ scroll-behavior: auto !important; }
-}
-
-/* 3) Tokens extra (no rompe) */
-:root{
-  --max: clamp(1120px, 88vw, 1280px);
-  --pad: clamp(16px, 2vw, 20px);
-  --pad-lg: clamp(20px, 2.2vw, 28px);
-
-  --surface3: rgba(255,255,255,.92);
-  --shadow-inset: inset 0 1px 0 rgba(255,255,255,.7);
-
-  --ring: 0 0 0 6px rgba(37,99,235,.16);
-  --ring2: 0 0 0 3px rgba(37,99,235,.22);
-}
-
-@media (prefers-color-scheme: dark){
-  :root{
-    --surface3: rgba(10,14,28,.92);
-    --shadow-inset: inset 0 1px 0 rgba(255,255,255,.06);
-    --ring: 0 0 0 6px rgba(6,182,212,.16);
-    --ring2: 0 0 0 3px rgba(6,182,212,.22);
-  }
-}
-
-/* 4) Body microfixes */
-body{
-  overscroll-behavior-x: none;
-  -webkit-font-smoothing: antialiased;
-}
-
-/* 5) Titles más pro */
-h1,h2{ text-wrap: balance; }
-p{ text-wrap: pretty; }
-
-/* ==========================================================
-   HEADER/TOPBAR — compact + premium
-========================================================== */
-.topbar{
-  background: var(--glass);
-  border-bottom: 1px solid var(--border);
-}
-
-.topbar-inner{
-  padding:
-    10px calc(var(--pad) + env(safe-area-inset-left))
-    10px calc(var(--pad) + env(safe-area-inset-right));
-  gap: 10px;
-}
-
-@media(min-width:980px){
-  .topbar-inner{
-    padding:
-      10px calc(var(--pad-lg) + env(safe-area-inset-left))
-      10px calc(var(--pad-lg) + env(safe-area-inset-right));
-  }
-}
-
-/* nav: hover más fino */
-.nav a{
-  border-radius: 14px;
-}
-.nav a:hover{
-  transform: translateY(-1px);
-  box-shadow: var(--sh1);
-}
-@media (pointer:coarse){
-  .nav a:hover{ transform:none; box-shadow:none; }
-}
-
-/* active más claro */
-.nav a.active{
-  background: rgba(37,99,235,.10);
-  border: 1px solid rgba(37,99,235,.20);
-  color: var(--p);
-}
-
-/* search: menos “globo” */
-.search{
-  min-height: 46px;
-  padding: 10px 12px;
-  box-shadow: var(--shadow-inset), 0 12px 26px rgba(10,16,32,.06);
-}
-.search:focus-within{ box-shadow: var(--ring); border-color: rgba(37,99,235,.20); }
-@media (prefers-color-scheme: dark){
-  .search{ box-shadow: none; }
-  .search:focus-within{ box-shadow: var(--ring); }
-}
-.search input{
-  line-height: 1.2;
-}
-
-/* account chip: hover sutil */
-.account-chip{
-  box-shadow: 0 10px 22px rgba(10,16,32,.06);
-}
-.account-chip:hover{
-  transform: translateY(-1px);
-  border-color: rgba(37,99,235,.22);
-}
-@media (pointer:coarse){
-  .account-chip:hover{ transform:none; }
-}
-
-/* badge: legible */
-.cart-badge{
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-}
-
-/* Mobile 2 filas: más compacto */
-@media(max-width:760px){
-  .topbar-inner{ gap: 8px; }
-  .search{ padding: 10px 12px; }
-}
-
-/* ==========================================================
-   BUTTONS — premium microinteractions
-========================================================== */
-.btn{
-  isolation: isolate;
-  will-change: transform;
-}
-.btn:hover{ transform: translateY(-1px); }
-@media (pointer:coarse){
-  .btn:hover{ transform:none; }
-}
-
-.btn.primary{
-  box-shadow: 0 18px 55px rgba(37,99,235,.20);
-}
-.btn.primary:hover{
-  filter: saturate(1.04) brightness(1.02);
-}
-
-.btn.ghost{
-  background: rgba(255,255,255,.82);
-}
-@media (prefers-color-scheme: dark){
-  .btn.ghost{ background: rgba(255,255,255,.06); }
-}
-
-/* ==========================================================
-   INPUTS — focus consistente + estados suaves
-========================================================== */
-.input{
-  box-shadow: var(--shadow-inset), 0 12px 26px rgba(10,16,32,.06);
-}
-.input:focus-within{
-  box-shadow: var(--ring);
-  border-color: rgba(37,99,235,.22);
-}
-.input[aria-invalid="true"], .input.is-error{
-  border-color: rgba(220,38,38,.28);
-  box-shadow: var(--ring2);
-}
-.input.is-ok{
-  border-color: rgba(22,163,74,.24);
-}
-
-/* Autofill más robusto */
-input:-webkit-autofill,
-input:-webkit-autofill:hover,
-input:-webkit-autofill:focus{
-  -webkit-text-fill-color: var(--ink);
-  box-shadow: 0 0 0 1000px rgba(255,255,255,.92) inset !important;
-}
-@media (prefers-color-scheme: dark){
-  input:-webkit-autofill,
-  input:-webkit-autofill:hover,
-  input:-webkit-autofill:focus{
-    box-shadow: 0 0 0 1000px rgba(9,12,24,.86) inset !important;
-  }
-}
-
-/* ==========================================================
-   CARDS — hover pro sin mareo
-========================================================== */
-.card, .panel, .surface{
-  background: rgba(255,255,255,.86);
-  border-color: var(--border);
-}
-.card:hover, .panel:hover, .surface:hover{
-  transform: translateY(-2px);
-}
-@media (pointer:coarse){
-  .card:hover, .panel:hover, .surface:hover{ transform:none; }
-}
-
-/* PRODUCT GRID perf */
-.gridP{
-  content-visibility: auto;
-  contain-intrinsic-size: 700px;
-}
-
-/* Product card lift menos agresivo */
-.cardP:hover{
-  transform: translateY(-6px);
-}
-
-/* blur cost control */
-@supports (backdrop-filter: blur(10px)){
-  .badgeP, .chipP{
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-  }
-}
-
-/* CLS helpers */
-img[width][height]{ height:auto; }
-.mediaP img{ display:block; }
-
-/* ==========================================================
-   HERO noise overlay más liviano
-========================================================== */
-.hero::after{ opacity: .045; }
-
-/* ==========================================================
-   Footer contraste
-========================================================== */
-.footer{
-  background: rgba(255,255,255,.36);
-}
-@media (prefers-color-scheme: dark){
-  .footer{ background: rgba(255,255,255,.03); }
-}
-
-/* ==========================================================
-   Preferencias de usuario
-========================================================== */
-@media (prefers-reduced-transparency: reduce){
-  .topbar{ backdrop-filter:none!important; -webkit-backdrop-filter:none!important; }
-}
-
 @media (prefers-contrast: more){
   :root{ --border: rgba(10,16,32,.18); --border2: rgba(10,16,32,.24); }
   @media (prefers-color-scheme: dark){
     :root{ --border: rgba(148,163,184,.28); --border2: rgba(148,163,184,.36); }
   }
+}
+
+/* ✅ MEJORA EXTRA 5: selección más suave en dark */
+@media (prefers-color-scheme: dark){
+  ::selection{ background: rgba(6,182,212,.18); }
 }
