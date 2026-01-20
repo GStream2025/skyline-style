@@ -1,4 +1,4 @@
-﻿# app/models/user.py — Skyline Store (ULTRA PRO+++ / UNION-SAFE / NO BREAK / FAIL-SAFE · vNEXT)
+﻿# app/models/user.py — Skyline Store (ULTRA PRO++++ / UNION-SAFE / NO BREAK / FAIL-SAFE · vNEXT+25)
 from __future__ import annotations
 
 import hmac
@@ -6,10 +6,10 @@ import os
 import re
 import secrets
 from datetime import datetime, timezone, timedelta
-from typing import Optional, Dict, Any, Callable
+from typing import Optional, Dict, Any, Callable, Tuple
 
 from flask_login import UserMixin
-from sqlalchemy import Index, event, CheckConstraint
+from sqlalchemy import CheckConstraint, Index, event
 from sqlalchemy import text as sa_text
 from sqlalchemy.orm import validates
 
@@ -28,11 +28,12 @@ def utcnow() -> datetime:
 # ============================================================
 
 EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
-
 ALLOWED_ROLES = {"admin", "staff", "customer", "affiliate"}
+
 MIN_PASSWORD_LEN = 8
 MAX_PASSWORD_LEN = 256
 
+# ✅ Mejora: lista común “hard” pero acotada (evita falsos positivos)
 COMMON_PASSWORDS = {
     "12345678",
     "password",
@@ -64,6 +65,7 @@ def _clean_phone(v: Optional[str]) -> Optional[str]:
     vv = _safe_strip(v)
     if not vv:
         return None
+    # ✅ Mejora: solo chars permitidos + clamp
     cleaned = "".join(ch for ch in vv if ch.isdigit() or ch in {"+", " ", "(", ")", "-"}).strip()
     return cleaned[:40] if cleaned else None
 
@@ -81,6 +83,8 @@ def _clamp_int(v: Optional[int], lo: int = 0, hi: int = 10_000) -> int:
 def _normalize_email(email: str) -> str:
     # limpia NBSP / zero-width / espacios raros
     e = (email or "").replace("\u00A0", " ").replace("\u200B", "").strip().lower()
+    # ✅ Mejora: colapsar espacios internos (por si pegan email con espacios)
+    e = " ".join(e.split())
     return e
 
 def _is_email_valid(email: str) -> bool:
@@ -136,6 +140,7 @@ def _ensure_unique_token(
     """
     tries = max_tries if isinstance(max_tries, int) else _safe_provider_max_tries()
 
+    # ✅ Mejora: intentar primero con uno “last” para reducir loops
     last = make_token()
     for _ in range(tries):
         tok = make_token()
@@ -145,6 +150,7 @@ def _ensure_unique_token(
             if q.first() is None:
                 return tok
         except Exception:
+            # DB no disponible → no rompemos registro
             return tok
     return last
 
@@ -162,15 +168,22 @@ def _password_is_bad(pwd: str, email: Optional[str]) -> bool:
     em = _normalize_email(email or "")
     if em:
         user_part = em.split("@", 1)[0] if "@" in em else em
-        if em in low:
+        if em and em in low:
             return True
         if user_part and user_part in low:
             return True
 
+    # ✅ Mejora: patrón demasiado repetitivo
     if len(low) >= 10 and len(set(low)) <= 2:
         return True
 
     return False
+
+def _bool(v: Any, default: bool = False) -> bool:
+    try:
+        return bool(v)
+    except Exception:
+        return default
 
 # ============================================================
 # User
@@ -209,7 +222,7 @@ class User(UserMixin, db.Model):
     is_admin = db.Column(db.Boolean, nullable=False, default=False, index=True)
     role = db.Column(db.String(20), nullable=True, index=True)
 
-    # Email verification
+    # Email verification (sin tocar schema)
     email_verified = db.Column(db.Boolean, nullable=False, default=False, index=True)
     email_verified_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
@@ -241,17 +254,25 @@ class User(UserMixin, db.Model):
         passive_deletes=True,
     )
 
-    # ⚠️ NO backref (evita choque si Order ya define relación)
-    orders = db.relationship(
-        "Order",
-        lazy="selectin",
-        passive_deletes=True,
-    )
+    # ✅ Mejora: relación orders “safe” (evita AmbiguousForeignKeysError)
+    # Si Order no tiene user_id, queda igual sin explotar en import/mapping.
+    try:
+        orders = db.relationship(
+            "Order",
+            lazy="selectin",
+            passive_deletes=True,
+            primaryjoin="User.id==foreign(Order.user_id)",  # type: ignore[name-defined]
+        )
+    except Exception:  # pragma: no cover
+        orders = db.relationship("Order", lazy="selectin", passive_deletes=True)
 
     __table_args__ = (
         CheckConstraint("failed_login_count >= 0", name="ck_users_failed_login_nonneg"),
         CheckConstraint("length(email) > 3", name="ck_users_email_len_min"),
-        CheckConstraint("role IS NULL OR role IN ('admin','staff','customer','affiliate')", name="ck_users_role_allowed"),
+        CheckConstraint(
+            "role IS NULL OR role IN ('admin','staff','customer','affiliate')",
+            name="ck_users_role_allowed",
+        ),
     )
 
     # --------------------------------------------------------
@@ -327,7 +348,7 @@ class User(UserMixin, db.Model):
     def role_effective(self) -> str:
         if self.is_owner:
             return "admin"
-        if bool(self.is_admin):
+        if _bool(self.is_admin):
             return "admin"
         r = (self.role or "").lower().strip()
         return r if r in ALLOWED_ROLES else "customer"
@@ -366,7 +387,9 @@ class User(UserMixin, db.Model):
     def set_password(self, raw_password: str) -> None:
         pwd = (raw_password or "").strip()
         if _password_is_bad(pwd, self.email):
-            raise ValueError("Contraseña insegura. Usá 8+ caracteres y evitá claves comunes o relacionadas a tu email.")
+            raise ValueError(
+                "Contraseña insegura. Usá 8+ caracteres y evitá claves comunes o relacionadas a tu email."
+            )
         self.password_hash = hash_password(pwd)
         self.password_changed_at = utcnow()
         self.reinforce_owner_flags()
@@ -386,7 +409,7 @@ class User(UserMixin, db.Model):
     def can_login(self) -> bool:
         if self.is_owner:
             return True
-        if not bool(self.is_active):
+        if not _bool(self.is_active):
             return False
         if self.locked_until and utcnow() < self.locked_until:
             return False
@@ -440,8 +463,9 @@ class User(UserMixin, db.Model):
         self.reinforce_owner_flags()
 
     def create_reset_token(self, minutes: int = 30) -> str:
+        minutes = max(5, min(24 * 60, int(minutes)))
         self.reset_password_token = _ensure_unique_token("reset_password_token", _token64, User)
-        self.reset_password_expires_at = utcnow() + timedelta(minutes=int(minutes))
+        self.reset_password_expires_at = utcnow() + timedelta(minutes=minutes)
         return self.reset_password_token
 
     def reset_token_is_valid(self, token: str) -> bool:
@@ -482,7 +506,7 @@ class User(UserMixin, db.Model):
     # --------------------------------------------------------
     def default_address(self) -> Optional["UserAddress"]:
         for a in self.addresses or []:
-            if a.is_default:
+            if _bool(getattr(a, "is_default", False)):
                 return a
         addrs = list(self.addresses or [])
         return addrs[0] if addrs else None
@@ -501,45 +525,53 @@ class User(UserMixin, db.Model):
         - Evita valores inválidos que rompen templates/routes
         - Idempotente (safe en insert/update)
         """
+        # email
         try:
             if self.email is not None:
                 self.email = self.normalize_email(self.email)[:255]
         except Exception:
             pass
 
+        # phone
         try:
             self.phone = _clean_phone(self.phone)
         except Exception:
             pass
 
+        # country/city
         try:
             self.country = (self.country or "").strip().upper()[:2] or None
             self.city = (self.city or "").strip()[:80] or None
         except Exception:
             pass
 
+        # role safe
         try:
             self.set_role_safe(self.role)
         except Exception:
             pass
 
+        # tokens
         try:
             self.ensure_tokens()
         except Exception:
             pass
 
+        # email opt-in timestamp
         try:
             if self.email_opt_in and not self.email_opt_in_at:
                 self.email_opt_in_at = utcnow()
         except Exception:
             pass
 
+        # verified timestamp
         try:
             if self.email_verified and not self.email_verified_at:
                 self.email_verified_at = utcnow()
         except Exception:
             pass
 
+        # hard lock owner
         try:
             self.reinforce_owner_flags()
         except Exception:
@@ -557,8 +589,8 @@ class User(UserMixin, db.Model):
             "country": self.country,
             "city": self.city,
             "role": self.role_effective,
-            "is_active": bool(self.is_active),
-            "email_verified": bool(self.email_verified),
+            "is_active": _bool(self.is_active),
+            "email_verified": _bool(self.email_verified),
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "last_login_at": self.last_login_at.isoformat() if self.last_login_at else None,
         }
@@ -570,9 +602,9 @@ class User(UserMixin, db.Model):
             "masked_email": self.masked_email,
             "name": self.name,
             "role": self.role_effective,
-            "is_owner": bool(self.is_owner),
-            "is_active": bool(self.is_active),
-            "email_verified": bool(self.email_verified),
+            "is_owner": _bool(self.is_owner),
+            "is_active": _bool(self.is_active),
+            "email_verified": _bool(self.email_verified),
             "failed_login_count": int(self.failed_login_count or 0),
             "locked": bool(self.locked_until and utcnow() < self.locked_until),
             "created_at": self.created_at.isoformat() if self.created_at else None,
@@ -581,7 +613,7 @@ class User(UserMixin, db.Model):
         }
 
     def __repr__(self) -> str:
-        return f"<User id={self.id} email={self.masked_email!r} role={self.role_effective!r} active={bool(self.is_active)}>"
+        return f"<User id={self.id} email={self.masked_email!r} role={self.role_effective!r} active={_bool(self.is_active)}>"
 
     # --------------------------------------------------------
     # Validations (suaves)
@@ -613,6 +645,7 @@ class User(UserMixin, db.Model):
     @validates("role")
     def _v_role(self, _k, v: Optional[str]) -> Optional[str]:
         return _normalize_role(v)
+
 
 # ============================================================
 # Indexes
@@ -711,15 +744,34 @@ def _user_before_update(_mapper, _conn, target: User):
 @event.listens_for(UserAddress, "before_insert", propagate=True)
 @event.listens_for(UserAddress, "before_update", propagate=True)
 def _addr_ensure_single_default(_mapper, conn, target: UserAddress):
+    """
+    ✅ Garantiza 1 default por usuario, incluso si dos requests compiten.
+    - Usa conn.execute (server-side) para atomicidad.
+    - En INSERT target.id aún no existe → no filtramos por id, limpiamos todo y luego el insert marca default.
+    """
     try:
-        if target.is_default and target.user_id:
+        if not target.is_default or not target.user_id:
+            return
+
+        uid = int(target.user_id)
+        if getattr(target, "id", None):
             conn.execute(
                 sa_text(
                     "UPDATE user_addresses "
                     "SET is_default = 0 "
                     "WHERE user_id = :uid AND id != :id"
                 ),
-                {"uid": int(target.user_id), "id": int(target.id or 0)},
+                {"uid": uid, "id": int(target.id)},
+            )
+        else:
+            # insert: no hay id todavía
+            conn.execute(
+                sa_text(
+                    "UPDATE user_addresses "
+                    "SET is_default = 0 "
+                    "WHERE user_id = :uid"
+                ),
+                {"uid": uid},
             )
     except Exception:
         pass

@@ -1,4 +1,4 @@
-# app/routes/auth_routes.py — Skyline Store (ULTRA PRO / NO-404 / CSRF-SAFE / v6.1 BULLETPROOF)
+# app/routes/auth_routes.py — Skyline Store (ULTRA PRO++++ / NO-404 / CSRF-SAFE / EMAIL-VERIFY / v7 BULLETPROOF)
 from __future__ import annotations
 
 import logging
@@ -7,7 +7,7 @@ import re
 import secrets
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional, Set, Tuple
+from typing import Any, Dict, Optional, Set
 from urllib.parse import urlencode, urlparse, urlunparse
 
 from flask import (
@@ -39,6 +39,12 @@ try:
     from app.models import AffiliateProfile  # type: ignore
 except Exception:  # pragma: no cover
     AffiliateProfile = None  # type: ignore
+
+# Mailer (SMTP robusto). Si no existe, no rompe.
+try:
+    from app.utils.mailer import send_email  # type: ignore
+except Exception:  # pragma: no cover
+    send_email = None  # type: ignore
 
 log = logging.getLogger("auth_routes")
 
@@ -92,6 +98,10 @@ AUTH_RATE_LIMIT_WINDOW = _env_int("AUTH_RATE_LIMIT_WINDOW", 60, min_v=10, max_v=
 
 CANONICAL_HOST_ENFORCE = _env_flag("CANONICAL_HOST_ENFORCE", True)
 AUTO_LOGIN_AFTER_REGISTER = _env_flag("AUTO_LOGIN_AFTER_REGISTER", True)
+
+VERIFY_EMAIL_ENABLED = _env_flag("VERIFY_EMAIL_ENABLED", True)
+VERIFY_EMAIL_BLOCK_ADMIN = _env_flag("VERIFY_EMAIL_BLOCK_ADMIN", False)  # si querés que admin requiera verificación
+VERIFY_EMAIL_COOLDOWN_SEC = _env_float("VERIFY_EMAIL_COOLDOWN_SEC", 30.0, min_v=5.0, max_v=3600.0)
 
 # ─────────────────────────────────────────────────────────────
 # Session keys owned (NO tocar csrf/session interna)
@@ -176,11 +186,6 @@ def _wants_json() -> bool:
 
 
 def _safe_get_json() -> Dict[str, Any]:
-    """
-    JSON safe:
-    - si Content-Type es json -> get_json(silent)
-    - si mandan JSON malformado -> {}
-    """
     try:
         if request.is_json:
             d = request.get_json(silent=True) or {}
@@ -201,20 +206,18 @@ def _client_ip() -> str:
 
 
 def _rl_key(prefix: str, extra: str = "") -> str:
-    extra = (extra or "").strip().lower()
-    extra = extra[:64]
+    extra = (extra or "").strip().lower()[:64]
     return f"rl:{prefix}:{_client_ip()}:{extra}"
 
 
 def _rate_limit_ok(prefix: str, cooldown_sec: float, *, extra: str = "") -> bool:
     """
     Rate limit simple (session-signed):
-    - cooldown mínimo entre requests (AUTH_RATE_LIMIT_SECONDS)
-    - burst limit (AUTH_RATE_LIMIT_BURST dentro de AUTH_RATE_LIMIT_WINDOW)
+    - cooldown mínimo entre requests
+    - burst limit dentro de una ventana
     """
     now = time.time()
 
-    # cooldown
     k_cd = _rl_key(prefix, extra=extra) + ":cd"
     last = session.get(k_cd, 0)
     try:
@@ -225,7 +228,6 @@ def _rate_limit_ok(prefix: str, cooldown_sec: float, *, extra: str = "") -> bool
         return False
     session[k_cd] = now
 
-    # burst
     k_b = _rl_key(prefix, extra=extra) + ":b"
     bucket = session.get(k_b)
     if not isinstance(bucket, dict):
@@ -293,32 +295,20 @@ def _commit_safe() -> bool:
 
 
 def _csrf_token_value() -> str:
-    """
-    Para tu template account.html (meta + hidden input).
-    Si no hay Flask-WTF, devuelve "" (no rompe).
-    """
     try:
         from flask_wtf.csrf import generate_csrf  # type: ignore
-
-        return generate_csrf()
+        return str(generate_csrf() or "")
     except Exception:
         return ""
 
 
 def _clear_auth_session_only() -> None:
-    """NO borra toda la sesión (evita romper CSRF / otras flags)."""
     for k in _SESSION_KEYS_OWNED:
         session.pop(k, None)
     session.modified = True
 
 
 def _set_session_user(user: User) -> None:
-    """
-    Session login robusto:
-    - limpia sólo llaves propias
-    - setea role/is_admin si existen
-    - setea nonce para “session rotation” lógica (útil para invalidar caches UI)
-    """
     _clear_auth_session_only()
 
     try:
@@ -330,7 +320,6 @@ def _set_session_user(user: User) -> None:
     session["login_at"] = int(time.time())
     session["login_nonce"] = secrets.token_urlsafe(16)
 
-    # role / admin (compat)
     try:
         role = getattr(user, "role", None)
         if role is not None:
@@ -347,12 +336,10 @@ def _set_session_user(user: User) -> None:
     session.permanent = True
     session.modified = True
 
-    # Flask-Login bridge (si lo usás en el resto del proyecto)
     try:
         if _login_user is not None:
             _login_user(user)  # type: ignore[misc]
     except Exception:
-        # no rompemos auth por esto
         log.exception("flask_login.login_user failed (ignored).")
 
 
@@ -402,11 +389,6 @@ def _set_password(user: User, password: str) -> bool:
 
 
 def _json_or_html(message: str, category: str, *, tab: str, next_url: str, success_redirect: Optional[str] = None):
-    """
-    Respuesta unificada:
-    - JSON: {ok, message, category, redirect?}
-    - HTML: flash + redirect
-    """
     if _wants_json():
         ok = category not in {"error", "warning"}
         status = 200 if ok else 400
@@ -425,9 +407,6 @@ def _json_or_html(message: str, category: str, *, tab: str, next_url: str, succe
 
 
 def _redirect_account_tab(tab: str, nxt: str) -> Any:
-    """
-    Redirige a /auth/account con query segura (sin romper por caracteres).
-    """
     tab = (tab or "login").strip().lower()
     if tab not in {"login", "register"}:
         tab = "login"
@@ -436,9 +415,116 @@ def _redirect_account_tab(tab: str, nxt: str) -> Any:
     url = _safe_url_for("auth.account", tab=tab, next=nxt)
     if url:
         return redirect(url)
-    # fallback manual con urlencode
     qs = urlencode({"tab": tab, "next": nxt})
     return redirect(f"/auth/account?{qs}")
+
+
+def _app_base_url() -> str:
+    """
+    Base URL confiable para armar links de email.
+    Prioridad:
+    1) APP_URL env/config
+    2) request.host_url
+    """
+    app_url = (_env_str("APP_URL", "") or str(current_app.config.get("APP_URL") or "")).strip()
+    if app_url:
+        return app_url.rstrip("/")
+    return (request.host_url or "").rstrip("/")
+
+
+def _send_verification_email(user: User) -> bool:
+    """
+    Envía el link de verificación usando token DB (email_verify_token).
+    No rompe si SMTP no está configurado.
+    """
+    if not VERIFY_EMAIL_ENABLED:
+        return False
+
+    # cooldown por sesión (evita spam)
+    if not _rate_limit_ok("verify_send", float(VERIFY_EMAIL_COOLDOWN_SEC), extra=(user.email or "")):
+        return False
+
+    try:
+        if getattr(user, "email_verified", False):
+            return True
+    except Exception:
+        pass
+
+    # token DB
+    try:
+        token = user.ensure_email_verify_token()  # type: ignore[attr-defined]
+    except Exception:
+        token = None
+
+    if not token:
+        return False
+
+    # persist token si no estaba
+    try:
+        db.session.add(user)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        # igual intentamos mandar (por si ya estaba persistido)
+        pass
+
+    link = _app_base_url() + (_safe_url_for("auth.verify_email", token=token) or f"/auth/verify-email/{token}")
+
+    subject = "Verificá tu email — Skyline Store"
+    html = f"""
+    <div style="font-family:Arial,sans-serif;line-height:1.5">
+      <h2>Confirmá tu email</h2>
+      <p>Gracias por registrarte en <b>Skyline Store</b>.</p>
+      <p>Para verificar tu cuenta, hacé click en el botón:</p>
+      <p>
+        <a href="{link}" style="display:inline-block;padding:12px 16px;border-radius:10px;background:#2563eb;color:#fff;text-decoration:none">
+          Verificar email
+        </a>
+      </p>
+      <p style="color:#6b7280">Si no fuiste vos, ignorá este email.</p>
+      <p style="color:#6b7280;font-size:12px">Link: {link}</p>
+    </div>
+    """
+    text = f"Verificá tu email: {link}"
+
+    # si no hay mailer configurado, no rompemos
+    if send_email is None:
+        log.warning("send_email no disponible: no se envió verificación.")
+        return False
+
+    try:
+        return bool(send_email(str(user.email), subject, html, text=text))
+    except Exception:
+        log.exception("send_email failed")
+        return False
+
+
+def _login_warning_if_unverified(user: User) -> None:
+    """
+    UX pro: permite login pero avisa.
+    """
+    if not VERIFY_EMAIL_ENABLED:
+        return
+    try:
+        if getattr(user, "email_verified", False):
+            return
+    except Exception:
+        return
+
+    # aviso
+    try:
+        if hasattr(user, "masked_email"):
+            flash(f"Tu email ({user.masked_email}) aún no está verificado. Te enviamos un link para confirmarlo.", "warning")
+        else:
+            flash("Tu email aún no está verificado. Te enviamos un link para confirmarlo.", "warning")
+    except Exception:
+        pass
+
+    # intentar enviar (no bloquea)
+    try:
+        _send_verification_email(user)
+    except Exception:
+        pass
 
 
 # ─────────────────────────────────────────────────────────────
@@ -454,15 +540,12 @@ def _before_auth():
 
 @auth_bp.after_request
 def _after_auth(resp):
-    # Cache-control para auth
     if request.method == "GET":
         resp.headers.setdefault("Cache-Control", "no-store")
         resp.headers.setdefault("Pragma", "no-cache")
         resp.headers.setdefault("Vary", "Cookie")
-    # Headers base
     resp.headers.setdefault("X-Content-Type-Options", "nosniff")
     resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
-    # Si tu app no usa iframes, esto ayuda (no rompe normalmente)
     resp.headers.setdefault("X-Frame-Options", "DENY")
     return resp
 
@@ -512,6 +595,73 @@ def account():
 
 
 # ─────────────────────────────────────────────────────────────
+# Verify email
+# ─────────────────────────────────────────────────────────────
+@auth_bp.get("/verify-email/<token>")
+def verify_email(token: str):
+    token = (token or "").strip()
+    if not token or len(token) < 32:
+        return _json_or_html("Link inválido.", "error", tab="login", next_url=_safe_url_for("shop.shop") or "/")
+
+    try:
+        user = db.session.execute(select(User).where(User.email_verify_token == token)).scalar_one_or_none()
+    except Exception:
+        user = None
+
+    if not user:
+        return _json_or_html("El link expiró o ya fue usado.", "warning", tab="login", next_url=_safe_url_for("shop.shop") or "/")
+
+    try:
+        user.verify_email()  # type: ignore[attr-defined]
+        db.session.add(user)
+        if not _commit_safe():
+            return _json_or_html("No se pudo verificar. Probá de nuevo.", "error", tab="login", next_url=_safe_url_for("shop.shop") or "/")
+    except Exception:
+        db.session.rollback()
+        log.exception("verify_email failed")
+        return _json_or_html("No se pudo verificar. Probá de nuevo.", "error", tab="login", next_url=_safe_url_for("shop.shop") or "/")
+
+    # si está logueado, lo llevamos a cuenta
+    success = _safe_url_for("account.account_home") or "/account"
+    return _json_or_html("Email verificado ✅", "success", tab="login", next_url=success, success_redirect=success)
+
+
+# ─────────────────────────────────────────────────────────────
+# Resend verification (anti-enumeración)
+# ─────────────────────────────────────────────────────────────
+@auth_bp.post("/resend-verification")
+def resend_verification():
+    default_next = _safe_url_for("shop.shop") or _safe_url_for("main.home") or "/"
+    nxt = _next_url(default_next)
+
+    # rate limit fuerte
+    if not _rate_limit_ok("resend_verif", max(2.0, AUTH_RATE_LIMIT_SECONDS), extra=""):
+        return _json_or_html("Esperá un momento y reintentá.", "warning", tab="login", next_url=nxt)
+
+    data = _safe_get_json()
+    email = _safe_email((request.form.get("email") or "") or str(data.get("email") or ""))
+
+    neutral = "Si el email está registrado, te enviamos un link de verificación."
+
+    if not _valid_email(email):
+        return _json_or_html(neutral, "info", tab="login", next_url=nxt)
+
+    user = _get_user_by_email(email)
+    if user:
+        try:
+            if getattr(user, "email_verified", False):
+                return _json_or_html("Tu email ya está verificado ✅", "success", tab="login", next_url=nxt)
+        except Exception:
+            pass
+        try:
+            _send_verification_email(user)
+        except Exception:
+            pass
+
+    return _json_or_html(neutral, "info", tab="login", next_url=nxt)
+
+
+# ─────────────────────────────────────────────────────────────
 # Login
 # ─────────────────────────────────────────────────────────────
 @auth_bp.post("/login")
@@ -527,7 +677,6 @@ def login():
     email = _safe_email((request.form.get("email") or "") or str(data.get("email") or ""))
     password = ((request.form.get("password") or "") or str(data.get("password") or "")).strip()
 
-    # rate limit (incluye email para mejorar el control)
     if not _rate_limit_ok("login", AUTH_RATE_LIMIT_SECONDS, extra=email or "noemail"):
         return _json_or_html("Demasiados intentos. Esperá un momento y reintentá.", "warning", tab="login", next_url=nxt)
 
@@ -538,16 +687,39 @@ def login():
     if not user or not _check_password(user, password):
         return _json_or_html("Email o contraseña incorrectos.", "error", tab="login", next_url=nxt)
 
-    # is_active (si existe)
+    # is_active
     try:
         if hasattr(user, "is_active") and not bool(getattr(user, "is_active")):
             return _json_or_html("Tu cuenta está desactivada.", "error", tab="login", next_url=nxt)
     except Exception:
         pass
 
+    # (Opcional) si querés bloquear admin sin verificar
+    if VERIFY_EMAIL_ENABLED and VERIFY_EMAIL_BLOCK_ADMIN:
+        try:
+            if bool(getattr(user, "is_admin", False)) and not bool(getattr(user, "email_verified", False)):
+                return _json_or_html("Verificá tu email para acceder al panel admin.", "warning", tab="login", next_url=nxt)
+        except Exception:
+            pass
+
+    # set login session
     _set_session_user(user)
 
-    # redirect final (safe)
+    # update audit si existe
+    try:
+        if hasattr(user, "touch_login"):
+            user.touch_login(ip=_client_ip())  # type: ignore[attr-defined]
+            db.session.add(user)
+            db.session.commit()
+    except Exception:
+        db.session.rollback()
+
+    # UX: aviso si no verificado + enviar link
+    try:
+        _login_warning_if_unverified(user)
+    except Exception:
+        pass
+
     success_redir = nxt if _is_safe_next(nxt) else default_next
     return _json_or_html("Bienvenido 👋", "success", tab="login", next_url=nxt, success_redirect=success_redir)
 
@@ -570,7 +742,6 @@ def register():
     password2 = ((request.form.get("password2") or "") or str(data.get("password2") or "")).strip()
     name = ((request.form.get("name") or "") or str(data.get("name") or "")).strip()
 
-    # rate limit (incluye email)
     if not _rate_limit_ok("register", AUTH_RATE_LIMIT_SECONDS, extra=email or "noemail"):
         return _json_or_html("Esperá un momento y reintentá.", "warning", tab="register", next_url=nxt)
 
@@ -583,11 +754,11 @@ def register():
     if password2 and password2 != password:
         return _json_or_html("Las contraseñas no coinciden.", "warning", tab="register", next_url=nxt)
 
-    # ya existe?
+    # existe?
     if _get_user_by_email(email):
         return _json_or_html("Ese email ya está registrado. Iniciá sesión.", "info", tab="login", next_url=nxt)
 
-    # crear user (compat con modelos distintos)
+    # crear user
     try:
         user = User(email=email)  # type: ignore[call-arg]
     except Exception:
@@ -600,29 +771,37 @@ def register():
     if name:
         try:
             if hasattr(user, "name"):
-                setattr(user, "name", name)
+                setattr(user, "name", name[:120])
         except Exception:
             pass
 
     if not _set_password(user, password):
         return _json_or_html("No se pudo crear la cuenta (password engine).", "error", tab="register", next_url=nxt)
 
-    # defaults suaves
-    for attr, val in (("is_active", True), ("is_admin", False)):
+    # defaults
+    for attr, val in (("is_active", True), ("is_admin", False), ("email_verified", False)):
         try:
             if hasattr(user, attr):
                 setattr(user, attr, val)
         except Exception:
             pass
 
+    # token de verificación DB (si está habilitado)
+    if VERIFY_EMAIL_ENABLED:
+        try:
+            user.ensure_email_verify_token()  # type: ignore[attr-defined]
+        except Exception:
+            pass
+
+    # guardar
     try:
         db.session.add(user)
-        db.session.flush()  # asegura ID sin commit todavía
+        db.session.flush()  # asegura ID
     except Exception:
         db.session.rollback()
         return _json_or_html("Error creando la cuenta. Probá de nuevo.", "error", tab="register", next_url=nxt)
 
-    # afiliado opcional (si existe)
+    # afiliado opcional
     try:
         want_affiliate = (request.form.get("want_affiliate") or "").strip().lower() in _TRUE
         if want_affiliate and AffiliateProfile is not None:
@@ -639,9 +818,21 @@ def register():
     if not _commit_safe():
         return _json_or_html("Error guardando la cuenta. Probá de nuevo.", "error", tab="register", next_url=nxt)
 
-    # auto login (UX)
+    # enviar verificación (no bloquea)
+    if VERIFY_EMAIL_ENABLED:
+        try:
+            _send_verification_email(user)
+        except Exception:
+            pass
+
+    # auto login
     if AUTO_LOGIN_AFTER_REGISTER:
         _set_session_user(user)
+        # aviso pro si no verificado
+        try:
+            _login_warning_if_unverified(user)
+        except Exception:
+            pass
         success_redir = nxt if _is_safe_next(nxt) else default_next
         return _json_or_html("Cuenta creada con éxito ✅", "success", tab="register", next_url=nxt, success_redirect=success_redir)
 
@@ -655,7 +846,6 @@ def register():
 def logout():
     _clear_auth_session_only()
 
-    # Flask-Login bridge
     try:
         if _logout_user is not None:
             _logout_user()  # type: ignore[misc]
