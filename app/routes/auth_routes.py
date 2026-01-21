@@ -1,4 +1,4 @@
-# app/routes/auth_routes.py — Skyline Store (ULTRA PRO++++ / NO-404 / CSRF-SAFE / EMAIL-VERIFY / v7 BULLETPROOF)
+# app/routes/auth_routes.py — Skyline Store (ULTRA PRO++++ / NO-404 / CSRF-SAFE / EMAIL-VERIFY / v7.1 BULLETPROOF)
 from __future__ import annotations
 
 import logging
@@ -7,7 +7,7 @@ import re
 import secrets
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, Optional, Set, Tuple
 from urllib.parse import urlencode, urlparse, urlunparse
 
 from flask import (
@@ -23,6 +23,7 @@ from flask import (
     url_for,
 )
 from sqlalchemy import func, select
+from werkzeug.exceptions import BadRequest
 from werkzeug.routing import BuildError
 
 from app.models import User, db
@@ -55,6 +56,9 @@ auth_bp = Blueprint(
     template_folder="../templates",
 )
 
+# ─────────────────────────────────────────────────────────────
+# Constants / Regex
+# ─────────────────────────────────────────────────────────────
 _TRUE: Set[str] = {"1", "true", "yes", "y", "on", "checked"}
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
@@ -92,21 +96,31 @@ def _env_float(name: str, default: float, *, min_v: float, max_v: float) -> floa
 # ─────────────────────────────────────────────────────────────
 # Config (tunable)
 # ─────────────────────────────────────────────────────────────
-AUTH_RATE_LIMIT_SECONDS = _env_float("AUTH_RATE_LIMIT_SECONDS", 1.8, min_v=0.2, max_v=30.0)
-AUTH_RATE_LIMIT_BURST = _env_int("AUTH_RATE_LIMIT_BURST", 6, min_v=2, max_v=50)  # burst window
-AUTH_RATE_LIMIT_WINDOW = _env_int("AUTH_RATE_LIMIT_WINDOW", 60, min_v=10, max_v=600)  # seconds
+AUTH_RATE_LIMIT_SECONDS = _env_float("AUTH_RATE_LIMIT_SECONDS", 1.6, min_v=0.2, max_v=30.0)
+AUTH_RATE_LIMIT_BURST = _env_int("AUTH_RATE_LIMIT_BURST", 7, min_v=2, max_v=50)
+AUTH_RATE_LIMIT_WINDOW = _env_int("AUTH_RATE_LIMIT_WINDOW", 60, min_v=10, max_v=600)
 
 CANONICAL_HOST_ENFORCE = _env_flag("CANONICAL_HOST_ENFORCE", True)
 AUTO_LOGIN_AFTER_REGISTER = _env_flag("AUTO_LOGIN_AFTER_REGISTER", True)
 
 VERIFY_EMAIL_ENABLED = _env_flag("VERIFY_EMAIL_ENABLED", True)
-VERIFY_EMAIL_BLOCK_ADMIN = _env_flag("VERIFY_EMAIL_BLOCK_ADMIN", False)  # si querés que admin requiera verificación
+VERIFY_EMAIL_BLOCK_ADMIN = _env_flag("VERIFY_EMAIL_BLOCK_ADMIN", False)
 VERIFY_EMAIL_COOLDOWN_SEC = _env_float("VERIFY_EMAIL_COOLDOWN_SEC", 30.0, min_v=5.0, max_v=3600.0)
+
+# Diseño/UX (5 mejoras) — mensajes / rutas
+AUTH_BRAND_NAME = _env_str("APP_NAME", "") or "Skyline Store"
+AUTH_SUPPORT_EMAIL = _env_str("SUPPORT_EMAIL", "")  # opcional, sólo para UX en mensajes
+AUTH_SUCCESS_FLASH = _env_flag("AUTH_SUCCESS_FLASH", True)  # si querés apagar flashes “success”
+AUTH_NO_CACHE_GET = _env_flag("AUTH_NO_CACHE_GET", True)  # headers anti-cache en GET
+
+# Seguridad extra
+AUTH_SESSION_ROTATE = _env_flag("AUTH_SESSION_ROTATE", True)  # “rotate” session keys owned
+AUTH_LOGIN_AUDIT = _env_flag("AUTH_LOGIN_AUDIT", True)  # toca touch_login si existe
 
 # ─────────────────────────────────────────────────────────────
 # Session keys owned (NO tocar csrf/session interna)
 # ─────────────────────────────────────────────────────────────
-_SESSION_KEYS_OWNED = (
+_SESSION_KEYS_OWNED: Tuple[str, ...] = (
     "user_id",
     "user_email",
     "user_role",
@@ -144,7 +158,7 @@ def _is_production() -> bool:
 def _canonical_redirect_if_needed():
     """
     Fuerza host/scheme según APP_URL sólo en GET/HEAD y en prod.
-    Mantiene path + query actuales (evita perder UTM).
+    Mantiene path + query actuales.
     """
     if not CANONICAL_HOST_ENFORCE or not _is_production():
         return None
@@ -212,7 +226,7 @@ def _rl_key(prefix: str, extra: str = "") -> str:
 
 def _rate_limit_ok(prefix: str, cooldown_sec: float, *, extra: str = "") -> bool:
     """
-    Rate limit simple (session-signed):
+    Rate limit simple (session):
     - cooldown mínimo entre requests
     - burst limit dentro de una ventana
     """
@@ -309,7 +323,9 @@ def _clear_auth_session_only() -> None:
 
 
 def _set_session_user(user: User) -> None:
-    _clear_auth_session_only()
+    # Mejora extra: rotate keys owned (reduce estados raros)
+    if AUTH_SESSION_ROTATE:
+        _clear_auth_session_only()
 
     try:
         session["user_id"] = int(getattr(user, "id"))
@@ -336,6 +352,7 @@ def _set_session_user(user: User) -> None:
     session.permanent = True
     session.modified = True
 
+    # Flask-Login (si existe)
     try:
         if _login_user is not None:
             _login_user(user)  # type: ignore[misc]
@@ -388,16 +405,35 @@ def _set_password(user: User, password: str) -> bool:
     return False
 
 
-def _json_or_html(message: str, category: str, *, tab: str, next_url: str, success_redirect: Optional[str] = None):
+def _flash_safe(msg: str, cat: str) -> None:
+    # Mejora diseño: controlar flashes success
+    if cat == "success" and not AUTH_SUCCESS_FLASH:
+        return
+    try:
+        flash(msg, cat)
+    except Exception:
+        pass
+
+
+def _json_or_html(
+    message: str,
+    category: str,
+    *,
+    tab: str,
+    next_url: str,
+    success_redirect: Optional[str] = None,
+    status_ok: int = 200,
+    status_err: int = 400,
+):
     if _wants_json():
         ok = category not in {"error", "warning"}
-        status = 200 if ok else 400
+        status = status_ok if ok else status_err
         payload: Dict[str, Any] = {"ok": ok, "message": message, "category": category}
         if success_redirect:
             payload["redirect"] = success_redirect
         return jsonify(payload), status
 
-    flash(message, category)
+    _flash_safe(message, category)
 
     if success_redirect:
         return redirect(success_redirect)
@@ -441,7 +477,7 @@ def _send_verification_email(user: User) -> bool:
         return False
 
     # cooldown por sesión (evita spam)
-    if not _rate_limit_ok("verify_send", float(VERIFY_EMAIL_COOLDOWN_SEC), extra=(user.email or "")):
+    if not _rate_limit_ok("verify_send", float(VERIFY_EMAIL_COOLDOWN_SEC), extra=(getattr(user, "email", "") or "")):
         return False
 
     try:
@@ -465,44 +501,43 @@ def _send_verification_email(user: User) -> bool:
         db.session.commit()
     except Exception:
         db.session.rollback()
-        # igual intentamos mandar (por si ya estaba persistido)
         pass
 
-    link = _app_base_url() + (_safe_url_for("auth.verify_email", token=token) or f"/auth/verify-email/{token}")
+    path = _safe_url_for("auth.verify_email", token=token) or f"/auth/verify-email/{token}"
+    link = _app_base_url() + path
 
-    subject = "Verificá tu email — Skyline Store"
+    subject = f"Verificá tu email — {AUTH_BRAND_NAME}"
+    support = f"<br><small style='color:#6b7280'>Soporte: {AUTH_SUPPORT_EMAIL}</small>" if AUTH_SUPPORT_EMAIL else ""
+
     html = f"""
-    <div style="font-family:Arial,sans-serif;line-height:1.5">
-      <h2>Confirmá tu email</h2>
-      <p>Gracias por registrarte en <b>Skyline Store</b>.</p>
-      <p>Para verificar tu cuenta, hacé click en el botón:</p>
-      <p>
-        <a href="{link}" style="display:inline-block;padding:12px 16px;border-radius:10px;background:#2563eb;color:#fff;text-decoration:none">
+    <div style="font-family:Arial,sans-serif;line-height:1.55">
+      <h2 style="margin:0 0 10px">Confirmá tu email</h2>
+      <p style="margin:0 0 10px">Gracias por registrarte en <b>{AUTH_BRAND_NAME}</b>.</p>
+      <p style="margin:0 0 14px">Para verificar tu cuenta, hacé click:</p>
+      <p style="margin:0 0 14px">
+        <a href="{link}" style="display:inline-block;padding:12px 16px;border-radius:12px;background:#2563eb;color:#fff;text-decoration:none">
           Verificar email
         </a>
       </p>
-      <p style="color:#6b7280">Si no fuiste vos, ignorá este email.</p>
-      <p style="color:#6b7280;font-size:12px">Link: {link}</p>
+      <p style="margin:0;color:#6b7280">Si no fuiste vos, ignorá este email.{support}</p>
+      <p style="margin:12px 0 0;color:#9ca3af;font-size:12px">Link: {link}</p>
     </div>
-    """
+    """.strip()
+
     text = f"Verificá tu email: {link}"
 
-    # si no hay mailer configurado, no rompemos
     if send_email is None:
         log.warning("send_email no disponible: no se envió verificación.")
         return False
 
     try:
-        return bool(send_email(str(user.email), subject, html, text=text))
+        return bool(send_email(str(getattr(user, "email", "")), subject, html, text=text))
     except Exception:
         log.exception("send_email failed")
         return False
 
 
 def _login_warning_if_unverified(user: User) -> None:
-    """
-    UX pro: permite login pero avisa.
-    """
     if not VERIFY_EMAIL_ENABLED:
         return
     try:
@@ -511,14 +546,15 @@ def _login_warning_if_unverified(user: User) -> None:
     except Exception:
         return
 
-    # aviso
+    # UX pro: mensaje más claro
+    msg = "Tu email aún no está verificado. Te enviamos un link para confirmarlo."
     try:
         if hasattr(user, "masked_email"):
-            flash(f"Tu email ({user.masked_email}) aún no está verificado. Te enviamos un link para confirmarlo.", "warning")
-        else:
-            flash("Tu email aún no está verificado. Te enviamos un link para confirmarlo.", "warning")
+            msg = f"Tu email ({getattr(user, 'masked_email')}) aún no está verificado. Te enviamos un link para confirmarlo."
     except Exception:
         pass
+
+    _flash_safe(msg, "warning")
 
     # intentar enviar (no bloquea)
     try:
@@ -540,10 +576,13 @@ def _before_auth():
 
 @auth_bp.after_request
 def _after_auth(resp):
-    if request.method == "GET":
+    # Mejora extra: no cache GET auth (evita forms viejos / back button raro)
+    if request.method == "GET" and AUTH_NO_CACHE_GET:
         resp.headers.setdefault("Cache-Control", "no-store")
         resp.headers.setdefault("Pragma", "no-cache")
         resp.headers.setdefault("Vary", "Cookie")
+
+    # Seguridad headers
     resp.headers.setdefault("X-Content-Type-Options", "nosniff")
     resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     resp.headers.setdefault("X-Frame-Options", "DENY")
@@ -555,18 +594,18 @@ def _after_auth(resp):
 # ─────────────────────────────────────────────────────────────
 @auth_bp.get("/login")
 def legacy_login_get():
-    nxt = _next_url(_safe_url_for("shop.shop") or "/")
+    nxt = _next_url(_safe_url_for("shop.shop") or _safe_url_for("main.home") or "/")
     return _redirect_account_tab("login", nxt)
 
 
 @auth_bp.get("/register")
 def legacy_register_get():
-    nxt = _next_url(_safe_url_for("shop.shop") or "/")
+    nxt = _next_url(_safe_url_for("shop.shop") or _safe_url_for("main.home") or "/")
     return _redirect_account_tab("register", nxt)
 
 
 # ─────────────────────────────────────────────────────────────
-# Account (tabs)
+# Account (tabs) — SINGLE UI
 # ─────────────────────────────────────────────────────────────
 @auth_bp.get("/account")
 def account():
@@ -574,6 +613,7 @@ def account():
     default_next = _safe_url_for("shop.shop") or _safe_url_for("main.home") or "/"
     nxt = _next_url(default_next)
 
+    # ya logueado -> al destino
     if u:
         return redirect(nxt or default_next)
 
@@ -609,10 +649,22 @@ def verify_email(token: str):
         user = None
 
     if not user:
-        return _json_or_html("El link expiró o ya fue usado.", "warning", tab="login", next_url=_safe_url_for("shop.shop") or "/")
+        return _json_or_html(
+            "El link expiró o ya fue usado.",
+            "warning",
+            tab="login",
+            next_url=_safe_url_for("shop.shop") or "/",
+        )
 
     try:
-        user.verify_email()  # type: ignore[attr-defined]
+        # Mejora: tolera método verify_email o flags directos
+        if hasattr(user, "verify_email") and callable(getattr(user, "verify_email")):
+            user.verify_email()  # type: ignore[attr-defined]
+        else:
+            if hasattr(user, "email_verified"):
+                setattr(user, "email_verified", True)
+            if hasattr(user, "email_verify_token"):
+                setattr(user, "email_verify_token", None)
         db.session.add(user)
         if not _commit_safe():
             return _json_or_html("No se pudo verificar. Probá de nuevo.", "error", tab="login", next_url=_safe_url_for("shop.shop") or "/")
@@ -621,8 +673,7 @@ def verify_email(token: str):
         log.exception("verify_email failed")
         return _json_or_html("No se pudo verificar. Probá de nuevo.", "error", tab="login", next_url=_safe_url_for("shop.shop") or "/")
 
-    # si está logueado, lo llevamos a cuenta
-    success = _safe_url_for("account.account_home") or "/account"
+    success = _safe_url_for("admin.dashboard") or _safe_url_for("shop.shop") or "/"
     return _json_or_html("Email verificado ✅", "success", tab="login", next_url=success, success_redirect=success)
 
 
@@ -634,7 +685,6 @@ def resend_verification():
     default_next = _safe_url_for("shop.shop") or _safe_url_for("main.home") or "/"
     nxt = _next_url(default_next)
 
-    # rate limit fuerte
     if not _rate_limit_ok("resend_verif", max(2.0, AUTH_RATE_LIMIT_SECONDS), extra=""):
         return _json_or_html("Esperá un momento y reintentá.", "warning", tab="login", next_url=nxt)
 
@@ -669,7 +719,7 @@ def login():
     default_next = _safe_url_for("shop.shop") or _safe_url_for("main.home") or "/"
     nxt = _next_url(default_next)
 
-    # honeypot
+    # honeypot (anti-bots)
     if (request.form.get("website") or "").strip():
         return _json_or_html("Solicitud inválida.", "error", tab="login", next_url=nxt)
 
@@ -694,7 +744,7 @@ def login():
     except Exception:
         pass
 
-    # (Opcional) si querés bloquear admin sin verificar
+    # bloquear admin sin verificación si querés
     if VERIFY_EMAIL_ENABLED and VERIFY_EMAIL_BLOCK_ADMIN:
         try:
             if bool(getattr(user, "is_admin", False)) and not bool(getattr(user, "email_verified", False)):
@@ -702,17 +752,18 @@ def login():
         except Exception:
             pass
 
-    # set login session
+    # set session
     _set_session_user(user)
 
-    # update audit si existe
-    try:
-        if hasattr(user, "touch_login"):
-            user.touch_login(ip=_client_ip())  # type: ignore[attr-defined]
-            db.session.add(user)
-            db.session.commit()
-    except Exception:
-        db.session.rollback()
+    # audit opcional (si existe)
+    if AUTH_LOGIN_AUDIT:
+        try:
+            if hasattr(user, "touch_login"):
+                user.touch_login(ip=_client_ip())  # type: ignore[attr-defined]
+                db.session.add(user)
+                db.session.commit()
+        except Exception:
+            db.session.rollback()
 
     # UX: aviso si no verificado + enviar link
     try:
@@ -748,8 +799,10 @@ def register():
     if not _valid_email(email):
         return _json_or_html("Email inválido.", "warning", tab="register", next_url=nxt)
 
-    if len(password) < 8:
-        return _json_or_html("La contraseña debe tener al menos 8 caracteres.", "warning", tab="register", next_url=nxt)
+    # Mejora extra: password mínimo configurable
+    min_len = _env_int("MIN_PASSWORD_LEN", 8, min_v=6, max_v=128)
+    if len(password) < min_len:
+        return _json_or_html(f"La contraseña debe tener al menos {min_len} caracteres.", "warning", tab="register", next_url=nxt)
 
     if password2 and password2 != password:
         return _json_or_html("Las contraseñas no coinciden.", "warning", tab="register", next_url=nxt)
@@ -758,7 +811,7 @@ def register():
     if _get_user_by_email(email):
         return _json_or_html("Ese email ya está registrado. Iniciá sesión.", "info", tab="login", next_url=nxt)
 
-    # crear user
+    # crear user (compat)
     try:
         user = User(email=email)  # type: ignore[call-arg]
     except Exception:
@@ -778,7 +831,7 @@ def register():
     if not _set_password(user, password):
         return _json_or_html("No se pudo crear la cuenta (password engine).", "error", tab="register", next_url=nxt)
 
-    # defaults
+    # defaults safe
     for attr, val in (("is_active", True), ("is_admin", False), ("email_verified", False)):
         try:
             if hasattr(user, attr):
@@ -786,17 +839,16 @@ def register():
         except Exception:
             pass
 
-    # token de verificación DB (si está habilitado)
     if VERIFY_EMAIL_ENABLED:
         try:
             user.ensure_email_verify_token()  # type: ignore[attr-defined]
         except Exception:
             pass
 
-    # guardar
+    # guardar + flush id
     try:
         db.session.add(user)
-        db.session.flush()  # asegura ID
+        db.session.flush()
     except Exception:
         db.session.rollback()
         return _json_or_html("Error creando la cuenta. Probá de nuevo.", "error", tab="register", next_url=nxt)
@@ -828,7 +880,6 @@ def register():
     # auto login
     if AUTO_LOGIN_AFTER_REGISTER:
         _set_session_user(user)
-        # aviso pro si no verificado
         try:
             _login_warning_if_unverified(user)
         except Exception:
@@ -855,7 +906,7 @@ def logout():
     if _wants_json():
         return jsonify({"ok": True}), 200
 
-    flash("Sesión cerrada.", "info")
+    _flash_safe("Sesión cerrada.", "info")
     return redirect(_safe_url_for("main.home") or _safe_url_for("shop.shop") or "/")
 
 

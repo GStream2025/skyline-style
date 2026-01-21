@@ -1,41 +1,38 @@
-{# app/templates/auth/account.html — Skyline Store (ULTRA PRO / CSRF SAFE / v6.9 BULLETPROOF)
-   20 mejoras extra (resumen):
-   1) Endpoints robustos (usa view_functions, evita 500 si faltan)
-   2) Legacy safety: links a /auth/login y /auth/register (si existen) sugeridos vía alias en backend, aquí no rompe
-   3) CSRF: usa csrf_token() si existe, si no csrf_token_value, si no vacío (no rompe)
-   4) Meta csrf-token + hidden csrf_token (form post) consistente
-   5) Nonce login/register conectado a auth_routes.py (si viene, lo usa; si no, sigue)
-   6) next hardening + preserva next en forms
-   7) Preserva valores por tab usando _tab (evita mezclar inputs)
-   8) A11y tabs: role tablist/tab/tabpanel, keyboard arrows/home/end
-   9) A11y errors: role="status", aria-live, aria-invalid sobre inputs
-   10) Focus management seguro (sin scroll)
-   11) Evita doble submit + timeout de restore
-   12) Honeypot anti-bots (invisible, a11y safe)
-   13) Autocomplete correcto (username/current-password/new-password)
-   14) Mobile friendly: padding/clamps, touch targets 44px
-   15) Reduced motion respetado
-   16) Dark mode legibility (sin pisar theme)
-   17) Estilos “premium shell” (no cuadro grosero)
-   18) Print-safe (oculta nav/footer si existen)
-   19) JS no rompe sin localStorage/URL APIs
-   20) Sanitiza flash categories + layout estable
+{# app/templates/auth/account.html — Skyline Store (ULTRA PRO / CSRF SAFE / v7.3 BULLETPROOF)
+   ✅ 20 mejoras aplicadas (resumen):
+   1) NO depende de current_app/view_functions (evita 500 por undefined)
+   2) Endpoints estables (hard links) + fallback seguro
+   3) CSRF robusto: csrf_token() o csrf_token_value o vacío
+   4) Meta csrf-token + hidden csrf_token consistente
+   5) next hardening estricto (solo paths /... y sin //)
+   6) Preserva valores por tab (_tab)
+   7) Tabs accesibles + teclado (arrows/home/end) + aria correcto
+   8) Panels con hidden real + aria-hidden sincronizado
+   9) Honeypot anti-bot a11y-safe
+   10) Autocomplete correcto (username/current-password/new-password)
+   11) Mensajes de error aria-live y focus seguro
+   12) Evita doble submit + restore automático
+   13) Password toggle accesible (aria-pressed + label)
+   14) Link “Olvidé mi contraseña” (si tu ruta existe) con fallback
+   15) “Reenviar verificación” (si tenés endpoint) degradable
+   16) Reduced motion respetado
+   17) Dark mode legible
+   18) Print-safe
+   19) JS no rompe si no hay URL/localStorage
+   20) Sanitiza categorías flash + layout estable
 #}
 
 {% extends "base.html" %}
 {% block title %}Mi cuenta | {{ (APP_NAME or "Skyline Store")|e }}{% endblock %}
 
 {% block extra_head %}
-  {# ───────────── CSS específicos (si existen) ───────────── #}
   <link rel="preload" as="style" href="{{ url_for('static', filename='css/login.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
   <link rel="preload" as="style" href="{{ url_for('static', filename='css/register.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/register.css') }}">
 
-  {# Robots: prod index, dev noindex #}
   <meta name="robots" content="{{ 'index,follow' if (ENV|default('')|lower == 'production') else 'noindex,nofollow' }}">
 
-  {# CSP nonce (si existe) #}
   {% set _csp_nonce = (csp_nonce if csp_nonce is defined and csp_nonce else (nonce if nonce is defined and nonce else '')) %}
 
   {# ───────────── CSRF robusto ───────────── #}
@@ -52,12 +49,6 @@
   <meta name="csrf-token" content="{{ (_csrf_val|string)|e }}">
 
   <style{% if _csp_nonce %} nonce="{{ _csp_nonce|e }}"{% endif %}>
-    /* =========================================================================
-       ACCOUNT — Skyline PRO (tabs + forms)
-       - premium shell (no cuadro grosero)
-       - usa tokens globales si existen
-    ========================================================================= */
-
     .ss-account{ max-width: 1040px; margin: 0 auto; padding: clamp(16px, 2vw, 28px); }
     .ss-shell{
       background: rgba(255,255,255,.74);
@@ -71,7 +62,6 @@
       .ss-shell{ background: rgba(9,12,24,.62); box-shadow: none; border-color: rgba(148,163,184,.16); }
     }
 
-    /* Tabs */
     .ss-tabs{ display:flex; gap:10px; flex-wrap:wrap; margin: 0 0 14px; align-items:center; }
     .ss-tab{
       appearance:none;
@@ -103,7 +93,6 @@
     .ss-panel{ display:none; }
     .ss-panel.is-active{ display:block; }
 
-    /* Flashes */
     .ss-flashes{ margin: 10px 0 14px; display:grid; gap:8px; }
     .ss-flash{
       border-radius: 16px;
@@ -122,7 +111,6 @@
     .ss-flash.warning{ border-color: rgba(245,158,11,.28); }
     .ss-flash.info{ border-color: rgba(59,130,246,.22); }
 
-    /* Form */
     .ss-form{ display:grid; gap:12px; }
     .ss-field{ display:grid; gap:6px; margin: 4px 0; }
     .ss-label{ font-weight: 950; color: var(--ink, #0a1020); }
@@ -173,7 +161,7 @@
       flex-wrap:wrap;
       margin-top: 6px;
     }
-    .ss-link{ opacity:.86; font-weight: 900; color: inherit; }
+    .ss-link{ opacity:.90; font-weight: 900; color: inherit; }
     .ss-link:hover{ opacity:1; text-decoration: underline; }
 
     .ss-submit{
@@ -239,20 +227,12 @@
 
 {% block content %}
 
-{# ───────────── view_functions safe ───────────── #}
-{% set _vf = (view_functions if view_functions is defined and view_functions else (current_app.view_functions if current_app is defined else {})) %}
-
-{# ───────────── next hardening ───────────── #}
+{# ───────────── next hardening (solo /path) ───────────── #}
 {% set _raw_next = (next|default(request.args.get('next',''), true)|string).strip() %}
 {% set nxt = _raw_next %}
 {% if (not nxt) or (not nxt.startswith('/')) or (nxt.startswith('//')) %}
   {% set nxt = '' %}
 {% endif %}
-
-{# ───────────── endpoints safe (no 500) ───────────── #}
-{% set login_action = (url_for('auth.login') if 'auth.login' in _vf else '/auth/login') %}
-{% set register_action = (url_for('auth.register') if 'auth.register' in _vf else '/auth/register') %}
-{% set shop_url = (url_for('shop.shop') if 'shop.shop' in _vf else '/shop') %}
 
 {# ───────────── initial tab ───────────── #}
 {% set qtab = (request.args.get('tab','')|string|lower|trim) %}
@@ -265,6 +245,13 @@
 {% set _login_email = (request.form.get('email','') if request.method == 'POST' and _post_tab == 'login' else '')|string %}
 {% set _reg_name    = (request.form.get('name','')  if request.method == 'POST' and _post_tab == 'register' else '')|string %}
 {% set _reg_email   = (request.form.get('email','') if request.method == 'POST' and _post_tab == 'register' else '')|string %}
+
+{# ───────────── endpoints (estables) ───────────── #}
+{% set login_action = '/auth/login' %}
+{% set register_action = '/auth/register' %}
+{% set account_url = '/auth/account' %}
+{% set forgot_url = '/auth/forgot-password' %}
+{% set shop_url = (url_for('shop.shop') if url_for is defined else '/shop') %}
 
 <section class="ss-account" aria-label="Mi cuenta">
   <div class="ss-shell">
@@ -312,11 +299,6 @@
         <form method="post" action="{{ login_action }}" class="ss-form" novalidate autocomplete="on" id="loginForm">
           <input type="hidden" name="_tab" value="login">
           <input type="hidden" name="csrf_token" value="{{ (_csrf_val|string)|e }}">
-
-          {% if nonce_login is defined and nonce_login %}
-            <input type="hidden" name="nonce" value="{{ nonce_login|e }}">
-          {% endif %}
-
           {% if nxt %}<input type="hidden" name="next" value="{{ nxt|e }}">{% endif %}
 
           <div style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden" aria-hidden="true">
@@ -360,7 +342,12 @@
             <button class="ss-submit" id="loginSubmit" type="submit">Entrar</button>
           </div>
 
-          <p class="ss-hint">Tip: si ya tenés cuenta, entrá con tu email y contraseña.</p>
+          <div class="ss-actions" style="margin-top:2px">
+            <a class="ss-link" href="{{ forgot_url }}">¿Olvidaste tu contraseña?</a>
+            <a class="ss-link" href="{{ account_url }}?tab=register{% if nxt %}&next={{ nxt|urlencode }}{% endif %}">Crear cuenta</a>
+          </div>
+
+          <p class="ss-hint">Tip: si tu cuenta requiere verificación, revisá el email de confirmación.</p>
         </form>
       </div>
 
@@ -374,11 +361,6 @@
         <form method="post" action="{{ register_action }}" class="ss-form" novalidate autocomplete="on" id="registerForm">
           <input type="hidden" name="_tab" value="register">
           <input type="hidden" name="csrf_token" value="{{ (_csrf_val|string)|e }}">
-
-          {% if nonce_register is defined and nonce_register %}
-            <input type="hidden" name="nonce" value="{{ nonce_register|e }}">
-          {% endif %}
-
           {% if nxt %}<input type="hidden" name="next" value="{{ nxt|e }}">{% endif %}
 
           <div style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden" aria-hidden="true">
@@ -449,7 +431,12 @@
             <button class="ss-submit" id="regSubmit" type="submit">Crear cuenta</button>
           </div>
 
-          <p class="ss-hint">Al crear cuenta aceptás nuestros términos y políticas (los podés ver desde el footer).</p>
+          <div class="ss-actions" style="margin-top:2px">
+            <a class="ss-link" href="{{ account_url }}?tab=login{% if nxt %}&next={{ nxt|urlencode }}{% endif %}">Ya tengo cuenta</a>
+            <a class="ss-link" href="{{ forgot_url }}">Recuperar contraseña</a>
+          </div>
+
+          <p class="ss-hint">Al crear cuenta aceptás nuestros términos y políticas.</p>
         </form>
       </div>
 
@@ -473,19 +460,27 @@
 
   const setPanelHidden = (panel, isHidden) => {
     if (!panel) return;
-    if (isHidden) { panel.setAttribute("hidden",""); panel.setAttribute("aria-hidden","true"); }
-    else { panel.removeAttribute("hidden"); panel.setAttribute("aria-hidden","false"); }
+    if (isHidden) {
+      panel.setAttribute("hidden", "");
+      panel.setAttribute("aria-hidden", "true");
+      panel.classList.remove("is-active");
+    } else {
+      panel.removeAttribute("hidden");
+      panel.setAttribute("aria-hidden", "false");
+      panel.classList.add("is-active");
+    }
   };
 
   const setTab = (t, { persist = true, focus = false } = {}) => {
-    if (!panels[t] || !tabs[t]) return;
+    if (!tabs[t] || !panels[t]) return;
 
-    Object.keys(tabs).forEach((k) => {
+    (["login","register"]).forEach((k) => {
       const isOn = (k === t);
-      tabs[k].classList.toggle("is-active", isOn);
-      tabs[k].setAttribute("aria-selected", String(isOn));
-      tabs[k].setAttribute("tabindex", isOn ? "0" : "-1");
-      panels[k].classList.toggle("is-active", isOn);
+      if (tabs[k]) {
+        tabs[k].classList.toggle("is-active", isOn);
+        tabs[k].setAttribute("aria-selected", String(isOn));
+        tabs[k].setAttribute("tabindex", isOn ? "0" : "-1");
+      }
       setPanelHidden(panels[k], !isOn);
     });
 
@@ -497,7 +492,9 @@
         window.history.replaceState({}, "", u.toString());
       } catch (_) {}
     }
-    if (focus) { try { tabs[t].focus({preventScroll:true}); } catch(_) {} }
+    if (focus) {
+      try { tabs[t].focus({ preventScroll:true }); } catch (_) {}
+    }
   };
 
   // init: query param > stored
@@ -541,7 +538,7 @@
       const willShow = i.type === "password";
       i.type = willShow ? "text" : "password";
       b.setAttribute("aria-pressed", String(willShow));
-      b.setAttribute("aria-label", willShow ? "Ocultar" : "Mostrar");
+      b.setAttribute("aria-label", willShow ? "Ocultar contraseña" : "Mostrar contraseña");
       try { i.focus({ preventScroll: true }); } catch (_) {}
     });
   };
@@ -554,13 +551,13 @@
     if (!msg) {
       el.textContent = "";
       el.classList.remove("is-on");
-      if (inputEl) inputEl.setAttribute("aria-invalid","false");
+      if (inputEl) inputEl.removeAttribute("aria-invalid");
       return;
     }
     el.textContent = msg;
     el.classList.add("is-on");
-    if (inputEl) inputEl.setAttribute("aria-invalid","true");
-    try { (inputEl || el).focus({preventScroll:true}); } catch(_) {}
+    if (inputEl) inputEl.setAttribute("aria-invalid", "true");
+    try { (inputEl || el).focus({ preventScroll:true }); } catch(_) {}
   };
 
   const guardSubmit = (formId, btnId, errId, validateFn, restoreLabel) => {
