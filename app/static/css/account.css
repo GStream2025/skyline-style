@@ -1,272 +1,856 @@
-/* ==========================================================
-   Skyline Store — Account (CLEAN PRO v5.2)
-   SAFE / NO BREAK — pegar al FINAL del archivo
-   - Unifica v4.3 + v5.0 sin duplicados
-   - Elimina reglas viejas (.panel/.is-hidden) y deja solo .ss-panel
-   - Animaciones y focus pro + dark-mode + fallback blur
-========================================================== */
+/* ==========================================================================
+   Skyline Store — AUTH (Account + Login + Register) — ULTRA PRO (Unified)
+   - Unifica: account.css + login.css + register.css
+   - Scope seguro: .ss-account (principal) + compat legacy .ss-login / .ss-register
+   - A11y: focus-visible premium + reduced motion
+   - Dark mode: tokens + buen contraste
+   - Autofill fix + inputs consistentes
+   - NO rompe estilos globales: todo va bajo wrapper .ss-account/.ss-login/.ss-register
+========================================================================== */
 
-/* 0) Tokens suaves (no rompen si ya existen) */
-.ss-account{
-  --ss-ease: cubic-bezier(.2,.9,.2,1);
-  --ss-dur: .36s;
-  --ss-shadow-soft: 0 18px 40px rgba(2,6,23,.10);
-  --ss-shadow-card: 0 22px 60px rgba(2,6,23,.12);
-  --ss-border-soft: rgba(37,99,235,.18);
-  --ss-border: rgba(15,23,42,.12);
-  --ss-bg: rgba(255,255,255,.78);
-  --ss-bg2: rgba(255,255,255,.92);
-  --ss-ink: rgba(11,18,32,.92);
-  --ss-muted: rgba(11,18,32,.68);
-  --ss-ring: 0 0 0 6px rgba(37,99,235,.16);
-  --ss-ring-soft: 0 0 0 4px rgba(0,0,0,.08);
-  --ss-radius: 999px;
+/* ==============================
+   0) WRAPPERS + TOKENS
+============================== */
+.ss-account,
+.ss-login,
+.ss-register{
+  --auth-bg: #f6f8fc;
+  --auth-surface: rgba(255,255,255,.92);
+  --auth-surface2: rgba(255,255,255,.78);
+  --auth-ink: #0b1220;
+  --auth-muted: #5b6b82;
+  --auth-border: rgba(15,23,42,.14);
+
+  --auth-p: var(--p, #2563eb);
+  --auth-p2: var(--p2, #0ea5e9);
+  --auth-good: #16a34a;
+  --auth-warn: #f59e0b;
+  --auth-bad: #ef4444;
+  --auth-info: #0ea5e9;
+
+  --auth-r-sm: 14px;
+  --auth-r: 18px;
+  --auth-r-lg: 22px;
+
+  --auth-sh1: 0 10px 30px rgba(2,6,23,.10);
+  --auth-sh2: 0 24px 60px rgba(2,6,23,.14);
+
+  --auth-ring: 0 0 0 4px rgba(37,99,235,.22);
+  --auth-ring-strong: 0 0 0 5px rgba(14,165,233,.22);
+
+  color: var(--auth-ink);
 }
 
-/* 1) Entrada premium (solo piezas clave) */
-.ss-account .ss-tabs,
-.ss-account .ss-flashes,
-.ss-account .ss-panel.is-active{
-  transform: translateY(8px);
-  opacity: 0;
-  animation: ssAccEnter var(--ss-dur) var(--ss-ease) forwards;
-  will-change: transform, opacity;
-}
-.ss-account .ss-flashes{ animation-delay: .04s; }
-.ss-account .ss-panel.is-active{ animation-delay: .06s; }
-
-@keyframes ssAccEnter{
-  to{ transform: translateY(0); opacity: 1; }
-}
-
-/* 2) Reduced motion (no mareo) */
-@media (prefers-reduced-motion: reduce){
-  .ss-account .ss-tabs,
-  .ss-account .ss-flashes,
-  .ss-account .ss-panel.is-active{
-    animation:none !important;
-    transform:none !important;
-    opacity:1 !important;
-  }
-}
-
-/* 3) Tabs (tacto premium + accesible) */
-.ss-account .ss-tab{
-  transition:
-    transform .12s var(--ss-ease),
-    box-shadow .18s var(--ss-ease),
-    border-color .18s var(--ss-ease),
-    background-color .18s var(--ss-ease),
-    color .18s var(--ss-ease);
-  border-color: var(--ss-border);
-}
-
-.ss-account .ss-tab:focus{ outline:0; }
-.ss-account .ss-tab:focus-visible{
-  outline:0;
-  box-shadow: var(--ss-ring-soft);
-}
-
-@media (hover:hover) and (pointer:fine){
-  .ss-account .ss-tab:hover{
-    transform: translateY(-1px);
-    box-shadow: var(--ss-shadow-soft);
-    border-color: var(--ss-border-soft);
-  }
-}
-
-/* 4) Panels (solo NEW account.html) */
-.ss-account .ss-panel{
-  transform-origin: top;
-  transition:
-    opacity .18s var(--ss-ease),
-    transform .18s var(--ss-ease);
-}
-
-/* no activo = hidden “suave” (sin flashes) */
-.ss-account .ss-panel:not(.is-active){
-  opacity: 0;
-  transform: translateY(8px) scale(.995);
-  pointer-events: none;
-  visibility: hidden;
-}
-
-/* activo */
-.ss-account .ss-panel.is-active{
-  opacity: 1;
-  transform: none;
-  pointer-events: auto;
-  visibility: visible;
-}
-
-/* 5) Inputs (premium + ring pro + evita “salto” en mobile) */
-.ss-account .ss-input{
-  transition:
-    box-shadow .2s var(--ss-ease),
-    border-color .2s var(--ss-ease),
-    background-color .2s var(--ss-ease);
-}
-
-.ss-account .ss-input:focus{ outline:0; }
-.ss-account .ss-input:focus-visible{
-  box-shadow: var(--ss-ring);
-  border-color: rgba(37,99,235,.25);
-}
-
-/* invalid state (si lo seteás con aria-invalid) */
-.ss-account .ss-input[aria-invalid="true"]{
-  border-color: rgba(220,38,38,.35);
-  box-shadow: 0 0 0 6px rgba(220,38,38,.10);
-}
-
-@media (prefers-reduced-motion: reduce){
-  .ss-account .ss-input{ transition:none; }
-}
-
-/* 6) Botón show/hide password */
-.ss-account .ss-pw-btn{
-  transition:
-    transform .12s var(--ss-ease),
-    box-shadow .18s var(--ss-ease),
-    border-color .18s var(--ss-ease),
-    background-color .18s var(--ss-ease);
-}
-
-.ss-account .ss-pw-btn:active{ transform: scale(.98); }
-.ss-account .ss-pw-btn:focus{ outline:0; }
-.ss-account .ss-pw-btn:focus-visible{ box-shadow: var(--ss-ring-soft); }
-
-/* 7) Submit (shine + loading pro sin romper) */
-.ss-account .ss-submit{
-  position: relative;
-  overflow: hidden;
-  transition:
-    transform .12s var(--ss-ease),
-    box-shadow .18s var(--ss-ease),
-    opacity .18s var(--ss-ease),
-    filter .18s var(--ss-ease);
-}
-
-@media (hover:hover) and (pointer:fine){
-  .ss-account .ss-submit:hover{
-    transform: translateY(-1px);
-    box-shadow: var(--ss-shadow-soft);
-    filter: saturate(1.04) brightness(1.02);
-  }
-
-  .ss-account .ss-submit::after{
-    content:"";
-    position:absolute;
-    inset:0;
-    transform: translateX(-120%);
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,.22), transparent);
-    pointer-events:none;
-  }
-
-  .ss-account .ss-submit:hover::after{
-    animation: ssAccShine 1.05s var(--ss-ease);
-  }
-}
-
-@keyframes ssAccShine{
-  to{ transform: translateX(120%); }
-}
-
-.ss-account .ss-submit[aria-busy="true"]{
-  opacity:.88;
-  cursor:progress;
-}
-
-/* Spinner (si usás .ss-spinner) */
-.ss-account .ss-spinner{
-  animation: ssAccSpin .9s linear infinite;
-}
-@keyframes ssAccSpin{ to{ transform: rotate(360deg); } }
-
-@media (prefers-reduced-motion: reduce){
-  .ss-account .ss-submit:hover::after{ animation:none !important; }
-  .ss-account .ss-spinner{ animation:none !important; }
-}
-
-/* 8) Flashes (más “card” sin exagerar) */
-.ss-account .ss-flash{
-  box-shadow: 0 10px 26px -20px rgba(2,6,23,.28);
-}
-
-/* 9) A11y: focus-visible global dentro de account (sin pisar todo) */
-.ss-account :focus-visible{
-  outline: none;
-}
-
-/* 10) Dark-mode legibility boost (sin pisar tu theme global) */
 @media (prefers-color-scheme: dark){
-  .ss-account{
-    --ss-bg: rgba(10,14,28,.60);
-    --ss-bg2: rgba(10,14,28,.72);
-    --ss-border: rgba(148,163,184,.18);
-    --ss-ink: rgba(238,242,255,.92);
-    --ss-muted: rgba(226,232,240,.72);
-    --ss-border-soft: rgba(6,182,212,.24);
-    --ss-ring: 0 0 0 6px rgba(6,182,212,.18);
-    --ss-ring-soft: 0 0 0 4px rgba(148,163,184,.18);
-  }
+  .ss-account,
+  .ss-login,
+  .ss-register{
+    --auth-bg: #060a12;
+    --auth-surface: rgba(15,23,42,.72);
+    --auth-surface2: rgba(15,23,42,.58);
+    --auth-ink: #e8eefc;
+    --auth-muted: #a7b4cc;
+    --auth-border: rgba(148,163,184,.20);
 
-  .ss-account .ss-tab{
-    background: var(--ss-bg);
-    border-color: var(--ss-border);
-  }
-  .ss-account .ss-tab.is-active{
-    background: var(--ss-bg2);
-    border-color: rgba(148,163,184,.26);
-  }
-  .ss-account .ss-input{
-    background: rgba(10,14,28,.62);
-    border-color: var(--ss-border);
-    color: var(--ss-ink);
-  }
-  .ss-account .ss-flash{
-    background: rgba(10,14,28,.64);
-    border-color: var(--ss-border);
+    --auth-sh1: 0 12px 34px rgba(0,0,0,.42);
+    --auth-sh2: 0 30px 74px rgba(0,0,0,.55);
+
+    --auth-ring: 0 0 0 4px rgba(56,189,248,.22);
+    --auth-ring-strong: 0 0 0 5px rgba(56,189,248,.28);
   }
 }
 
-/* 11) Fallback blur (solo para elementos de account, no pisa todo) */
-@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))){
-  .ss-account .ss-tab,
-  .ss-account .ss-input,
-  .ss-account .ss-flash{
-    background: rgba(255,255,255,.96);
-  }
-  @media (prefers-color-scheme: dark){
-    .ss-account .ss-tab,
-    .ss-account .ss-input,
-    .ss-account .ss-flash{
-      background: rgba(9,12,24,.90);
-    }
-  }
-}
+/* Reset suave dentro del scope */
+.ss-account *, .ss-login *, .ss-register *{ box-sizing: border-box; }
+.ss-account a, .ss-login a, .ss-register a{ color: inherit; text-decoration: none; }
 
-/* 12) Util opcional: shimmer loading (si marcás .is-loading) */
-.ss-account .is-loading{
+/* ==============================
+   1) PAGE BACKGROUND + CONTAINER
+============================== */
+.ss-account,
+.ss-login,
+.ss-register{
   position: relative;
-  overflow: hidden;
+  padding: clamp(14px, 2.2vw, 22px) 0;
 }
-.ss-account .is-loading::after{
+
+.ss-account::before,
+.ss-login::before,
+.ss-register::before{
   content:"";
-  position:absolute;
-  inset:0;
-  transform: translateX(-100%);
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,.18), transparent);
-  animation: ssAccShimmer 1.05s linear infinite;
+  position:absolute; inset:0;
+  background:
+    radial-gradient(1200px 520px at 18% 0%, rgba(37,99,235,.18), transparent 55%),
+    radial-gradient(900px 420px at 86% 10%, rgba(14,165,233,.14), transparent 55%),
+    linear-gradient(180deg, rgba(255,255,255,.0), rgba(255,255,255,.0));
   pointer-events:none;
 }
-@keyframes ssAccShimmer{ to{ transform: translateX(100%); } }
 
 @media (prefers-color-scheme: dark){
-  .ss-account .is-loading::after{
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,.08), transparent);
+  .ss-account::before,
+  .ss-login::before,
+  .ss-register::before{
+    background:
+      radial-gradient(1200px 520px at 18% 0%, rgba(56,189,248,.16), transparent 55%),
+      radial-gradient(900px 420px at 86% 10%, rgba(37,99,235,.12), transparent 55%),
+      linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,0));
   }
 }
+
+.ss-account .auth-wrap,
+.ss-login .auth-wrap,
+.ss-register .auth-wrap{
+  width: min(1120px, calc(100% - 32px));
+  margin: 0 auto;
+  position: relative;
+}
+
+/* ==============================
+   2) MAIN CARD / GRID
+============================== */
+.ss-account .auth-shell,
+.ss-login .auth-shell,
+.ss-register .auth-shell{
+  display: grid;
+  grid-template-columns: 1.15fr .85fr;
+  gap: clamp(14px, 2vw, 18px);
+  align-items: start;
+}
+
+@media (max-width: 980px){
+  .ss-account .auth-shell,
+  .ss-login .auth-shell,
+  .ss-register .auth-shell{
+    grid-template-columns: 1fr;
+  }
+}
+
+.ss-account .auth-card,
+.ss-login .auth-card,
+.ss-register .auth-card{
+  background: var(--auth-surface);
+  border: 1px solid var(--auth-border);
+  border-radius: var(--auth-r-lg);
+  box-shadow: var(--auth-sh1);
+  overflow: hidden;
+}
+
+.ss-account .auth-card__pad,
+.ss-login .auth-card__pad,
+.ss-register .auth-card__pad{
+  padding: clamp(16px, 2.2vw, 22px);
+}
+
+/* Panel lateral (beneficios / confianza) */
+.ss-account .auth-side,
+.ss-login .auth-side,
+.ss-register .auth-side{
+  background: var(--auth-surface2);
+  border: 1px solid var(--auth-border);
+  border-radius: var(--auth-r-lg);
+  box-shadow: var(--auth-sh1);
+  padding: clamp(16px, 2vw, 20px);
+}
+
+@media (max-width: 980px){
+  .ss-account .auth-side,
+  .ss-login .auth-side,
+  .ss-register .auth-side{
+    order: 2;
+  }
+}
+
+/* ==============================
+   3) HEADER / BRAND
+============================== */
+.ss-account .auth-brand,
+.ss-login .auth-brand,
+.ss-register .auth-brand{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--auth-border);
+  background: linear-gradient(180deg, rgba(255,255,255,.55), transparent);
+}
+
+@media (prefers-color-scheme: dark){
+  .ss-account .auth-brand,
+  .ss-login .auth-brand,
+  .ss-register .auth-brand{
+    background: linear-gradient(180deg, rgba(15,23,42,.55), transparent);
+  }
+}
+
+.ss-account .auth-brand__dot,
+.ss-login .auth-brand__dot,
+.ss-register .auth-brand__dot{
+  width: 12px; height: 12px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 30% 30%, var(--auth-p2), var(--auth-p));
+  box-shadow: 0 8px 18px rgba(37,99,235,.22);
+}
+
+.ss-account .auth-brand__title,
+.ss-login .auth-brand__title,
+.ss-register .auth-brand__title{
+  font-weight: 800;
+  letter-spacing: .2px;
+}
+
+.ss-account .auth-brand__sub,
+.ss-login .auth-brand__sub,
+.ss-register .auth-brand__sub{
+  color: var(--auth-muted);
+  font-size: 13px;
+  margin-left: auto;
+}
+
+/* ==============================
+   4) TABS (solo Account)
+============================== */
+.ss-account .auth-tabs{
+  display: flex;
+  gap: 10px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--auth-border);
+}
+
+.ss-account .auth-tab{
+  appearance: none;
+  border: 1px solid var(--auth-border);
+  background: transparent;
+  color: var(--auth-ink);
+  border-radius: 999px;
+  padding: 10px 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform .12s ease, background .12s ease, border-color .12s ease;
+}
+
+.ss-account .auth-tab[aria-selected="true"]{
+  background: rgba(37,99,235,.12);
+  border-color: rgba(37,99,235,.32);
+}
+
+.ss-account .auth-tab:hover{ transform: translateY(-1px); }
+
+.ss-account .auth-tab:focus-visible{
+  outline: none;
+  box-shadow: var(--auth-ring);
+  border-color: rgba(37,99,235,.55);
+}
+
+/* Sticky bar (si tu account.html lo usa) */
+.ss-account #accSticky{
+  position: sticky;
+  top: 10px;
+  z-index: 10;
+  margin: 12px 0 0;
+  background: var(--auth-surface);
+  border: 1px solid var(--auth-border);
+  border-radius: var(--auth-r);
+  box-shadow: var(--auth-sh1);
+  padding: 12px 14px;
+}
+
+.ss-account #accStickyTitle{ font-weight: 900; }
+.ss-account #accStickySub{ color: var(--auth-muted); font-size: 13px; margin-top: 2px; }
+.ss-account #accStickyBtn{
+  margin-top: 10px;
+  width: 100%;
+}
+
+/* ==============================
+   5) FORMS / FIELDS
+============================== */
+.ss-account form,
+.ss-login form,
+.ss-register form{
+  margin: 0;
+}
+
+.ss-account .auth-field,
+.ss-login .auth-field,
+.ss-register .auth-field{
+  display: grid;
+  gap: 7px;
+  margin: 12px 0;
+}
+
+.ss-account .auth-field label,
+.ss-login .auth-field label,
+.ss-register .auth-field label{
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--auth-ink);
+}
+
+.ss-account .auth-input,
+.ss-login .auth-input,
+.ss-register .auth-input{
+  width: 100%;
+  padding: 12px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--auth-border);
+  background: rgba(255,255,255,.72);
+  color: var(--auth-ink);
+  outline: none;
+  transition: box-shadow .12s ease, border-color .12s ease, transform .12s ease;
+}
+
+@media (prefers-color-scheme: dark){
+  .ss-account .auth-input,
+  .ss-login .auth-input,
+  .ss-register .auth-input{
+    background: rgba(2,6,23,.22);
+  }
+}
+
+.ss-account .auth-input::placeholder,
+.ss-login .auth-input::placeholder,
+.ss-register .auth-input::placeholder{
+  color: color-mix(in srgb, var(--auth-muted) 82%, transparent);
+}
+
+.ss-account .auth-input:focus,
+.ss-login .auth-input:focus,
+.ss-register .auth-input:focus{
+  border-color: rgba(37,99,235,.55);
+  box-shadow: var(--auth-ring);
+}
+
+.ss-account .auth-input:focus-visible,
+.ss-login .auth-input:focus-visible,
+.ss-register .auth-input:focus-visible{
+  border-color: rgba(14,165,233,.60);
+  box-shadow: var(--auth-ring-strong);
+}
+
+.ss-account .auth-help,
+.ss-login .auth-help,
+.ss-register .auth-help{
+  color: var(--auth-muted);
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+
+/* Autofill fix */
+.ss-account input:-webkit-autofill,
+.ss-login input:-webkit-autofill,
+.ss-register input:-webkit-autofill{
+  -webkit-text-fill-color: var(--auth-ink);
+  transition: background-color 9999s ease-out 0s;
+  box-shadow: 0 0 0 40px rgba(255,255,255,.75) inset;
+}
+
+@media (prefers-color-scheme: dark){
+  .ss-account input:-webkit-autofill,
+  .ss-login input:-webkit-autofill,
+  .ss-register input:-webkit-autofill{
+    box-shadow: 0 0 0 40px rgba(2,6,23,.35) inset;
+  }
+}
+
+/* Honeypot invisible pero seguro */
+.ss-account .hp-field,
+.ss-login .hp-field,
+.ss-register .hp-field{
+  position: absolute !important;
+  left: -9999px !important;
+  width: 1px !important;
+  height: 1px !important;
+  overflow: hidden !important;
+}
+
+/* Checkbox */
+.ss-account .auth-check,
+.ss-login .auth-check,
+.ss-register .auth-check{
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 10px 0 2px;
+  color: var(--auth-muted);
+  font-size: 13px;
+}
+
+.ss-account .auth-check input,
+.ss-login .auth-check input,
+.ss-register .auth-check input{
+  margin-top: 2px;
+  accent-color: var(--auth-p);
+}
+
+.ss-account .auth-check input:focus-visible,
+.ss-login .auth-check input:focus-visible,
+.ss-register .auth-check input:focus-visible{
+  outline: none;
+  box-shadow: var(--auth-ring);
+  border-radius: 6px;
+}
+
+/* ==============================
+   6) BUTTONS
+============================== */
+.ss-account .auth-actions,
+.ss-login .auth-actions,
+.ss-register .auth-actions{
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.ss-account .btn-primary,
+.ss-login .btn-primary,
+.ss-register .btn-primary{
+  appearance: none;
+  width: 100%;
+  border: 0;
+  border-radius: 14px;
+  padding: 12px 14px;
+  font-weight: 900;
+  cursor: pointer;
+  color: #fff;
+  background: linear-gradient(135deg, var(--auth-p), var(--auth-p2));
+  box-shadow: 0 18px 44px rgba(37,99,235,.22);
+  transition: transform .12s ease, filter .12s ease;
+}
+
+.ss-account .btn-primary:hover,
+.ss-login .btn-primary:hover,
+.ss-register .btn-primary:hover{
+  transform: translateY(-1px);
+  filter: brightness(1.02);
+}
+
+.ss-account .btn-primary:active,
+.ss-login .btn-primary:active,
+.ss-register .btn-primary:active{
+  transform: translateY(0px);
+}
+
+.ss-account .btn-primary:focus-visible,
+.ss-login .btn-primary:focus-visible,
+.ss-register .btn-primary:focus-visible{
+  outline: none;
+  box-shadow: var(--auth-ring-strong);
+}
+
+.ss-account .btn-ghost,
+.ss-login .btn-ghost,
+.ss-register .btn-ghost{
+  appearance: none;
+  width: 100%;
+  border-radius: 14px;
+  padding: 12px 14px;
+  font-weight: 800;
+  cursor: pointer;
+  border: 1px solid var(--auth-border);
+  background: transparent;
+  color: var(--auth-ink);
+  transition: transform .12s ease, background .12s ease, border-color .12s ease;
+}
+
+.ss-account .btn-ghost:hover,
+.ss-login .btn-ghost:hover,
+.ss-register .btn-ghost:hover{
+  transform: translateY(-1px);
+  background: rgba(148,163,184,.10);
+}
+
+.ss-account .btn-ghost:focus-visible,
+.ss-login .btn-ghost:focus-visible,
+.ss-register .btn-ghost:focus-visible{
+  outline: none;
+  box-shadow: var(--auth-ring);
+}
+
+/* Links */
+.ss-account .auth-links,
+.ss-login .auth-links,
+.ss-register .auth-links{
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+  color: var(--auth-muted);
+  font-size: 13px;
+}
+
+.ss-account .auth-links a,
+.ss-login .auth-links a,
+.ss-register .auth-links a{
+  color: color-mix(in srgb, var(--auth-p) 82%, var(--auth-ink));
+  font-weight: 800;
+}
+
+.ss-account .auth-links a:hover,
+.ss-login .auth-links a:hover,
+.ss-register .auth-links a:hover{
+  text-decoration: underline;
+}
+
+/* ==============================
+   7) FLASH / ERRORS
+============================== */
+.ss-account .auth-flash,
+.ss-login .auth-flash,
+.ss-register .auth-flash{
+  margin: 12px 0 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--auth-border);
+  background: rgba(148,163,184,.10);
+}
+
+.ss-account .auth-flash strong,
+.ss-login .auth-flash strong,
+.ss-register .auth-flash strong{
+  font-weight: 900;
+}
+
+.ss-account .auth-flash.success,
+.ss-login .auth-flash.success,
+.ss-register .auth-flash.success{
+  border-color: rgba(22,163,74,.35);
+  background: rgba(22,163,74,.10);
+}
+
+.ss-account .auth-flash.warning,
+.ss-login .auth-flash.warning,
+.ss-register .auth-flash.warning{
+  border-color: rgba(245,158,11,.38);
+  background: rgba(245,158,11,.12);
+}
+
+.ss-account .auth-flash.error,
+.ss-login .auth-flash.error,
+.ss-register .auth-flash.error{
+  border-color: rgba(239,68,68,.40);
+  background: rgba(239,68,68,.10);
+}
+
+.ss-account .auth-flash.info,
+.ss-login .auth-flash.info,
+.ss-register .auth-flash.info{
+  border-color: rgba(14,165,233,.40);
+  background: rgba(14,165,233,.10);
+}
+
+/* Mensajes inline */
+.ss-account .field-error,
+.ss-login .field-error,
+.ss-register .field-error{
+  color: var(--auth-bad);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+/* ==============================
+   8) SIDE BENEFITS (opcional)
+============================== */
+.ss-account .side-title,
+.ss-login .side-title,
+.ss-register .side-title{
+  font-weight: 1000;
+  letter-spacing: .2px;
+  margin: 0 0 8px;
+}
+
+.ss-account .side-list,
+.ss-login .side-list,
+.ss-register .side-list{
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 10px;
+}
+
+.ss-account .side-item,
+.ss-login .side-item,
+.ss-register .side-item{
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 10px;
+  border: 1px dashed var(--auth-border);
+  border-radius: 14px;
+}
+
+.ss-account .side-dot,
+.ss-login .side-dot,
+.ss-register .side-dot{
+  width: 10px; height: 10px;
+  border-radius: 999px;
+  margin-top: 5px;
+  background: radial-gradient(circle at 30% 30%, var(--auth-p2), var(--auth-p));
+}
+
+/* ==============================
+   9) MOTION SAFETY
+============================== */
 @media (prefers-reduced-motion: reduce){
-  .ss-account .is-loading::after{ animation:none !important; }
+  .ss-account .auth-tab,
+  .ss-account .btn-primary,
+  .ss-account .btn-ghost,
+  .ss-login .btn-primary,
+  .ss-login .btn-ghost,
+  .ss-register .btn-primary,
+  .ss-register .btn-ghost{
+    transition: none !important;
+  }
+  .ss-account .btn-primary:hover,
+  .ss-account .btn-ghost:hover,
+  .ss-login .btn-primary:hover,
+  .ss-login .btn-ghost:hover,
+  .ss-register .btn-primary:hover,
+  .ss-register .btn-ghost:hover{
+    transform: none !important;
+  }
+}
+/* ==========================================================================
+   Skyline Store — AUTH (ULTRA PATCH v8.2) — +20 mejoras SIN FALLOS
+   Pegá este bloque AL FINAL de account.css
+========================================================================== */
+
+/* (1) Fallback para browsers sin color-mix() */
+@supports not (color: color-mix(in srgb, #000 50%, transparent)){
+  .ss-account .auth-input::placeholder,
+  .ss-login .auth-input::placeholder,
+  .ss-register .auth-input::placeholder{ color: rgba(91,107,130,.75); }
+
+  .ss-account .auth-links a,
+  .ss-login .auth-links a,
+  .ss-register .auth-links a{ color: var(--auth-p); }
+}
+
+/* (2) Anti overflow horizontal y layout estable */
+.ss-account, .ss-login, .ss-register{
+  overflow-x: clip;
+  contain: layout paint;
+}
+
+/* (3) Mejor contraste y tipografía consistente (sin tocar global) */
+.ss-account .auth-card,
+.ss-login .auth-card,
+.ss-register .auth-card{
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* (4) Ajuste de background del input para evitar “gris lavado” en dark */
+@media (prefers-color-scheme: dark){
+  .ss-account .auth-input,
+  .ss-login .auth-input,
+  .ss-register .auth-input{
+    border-color: rgba(148,163,184,.22);
+  }
+}
+
+/* (5) Estados invalid/valid accesibles (HTML5) */
+.ss-account .auth-input:invalid:not(:placeholder-shown),
+.ss-login .auth-input:invalid:not(:placeholder-shown),
+.ss-register .auth-input:invalid:not(:placeholder-shown){
+  border-color: rgba(239,68,68,.55);
+  box-shadow: 0 0 0 4px rgba(239,68,68,.12);
+}
+
+.ss-account .auth-input:valid:not(:placeholder-shown),
+.ss-login .auth-input:valid:not(:placeholder-shown),
+.ss-register .auth-input:valid:not(:placeholder-shown){
+  border-color: rgba(22,163,74,.45);
+}
+
+/* (6) Aria-invalid desde JS */
+.ss-account .auth-input[aria-invalid="true"],
+.ss-login .auth-input[aria-invalid="true"],
+.ss-register .auth-input[aria-invalid="true"]{
+  border-color: rgba(239,68,68,.60);
+  box-shadow: 0 0 0 4px rgba(239,68,68,.14);
+}
+
+/* (7) Focus fallback para browsers sin :focus-visible */
+@supports not selector(:focus-visible){
+  .ss-account .auth-tab:focus,
+  .ss-account .btn-primary:focus,
+  .ss-account .btn-ghost:focus,
+  .ss-login .btn-primary:focus,
+  .ss-login .btn-ghost:focus,
+  .ss-register .btn-primary:focus,
+  .ss-register .btn-ghost:focus{
+    outline: none;
+    box-shadow: var(--auth-ring);
+  }
+}
+
+/* (8) Mejoras responsive: links apilan y botones más cómodos */
+@media (max-width: 520px){
+  .ss-account .auth-links,
+  .ss-login .auth-links,
+  .ss-register .auth-links{
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .ss-account .auth-brand__sub,
+  .ss-login .auth-brand__sub,
+  .ss-register .auth-brand__sub{
+    display: none;
+  }
+}
+
+/* (9) Padding especial para flash (clase usada en template) */
+.ss-account .auth-pad--flash{
+  padding-top: 14px;
+  padding-bottom: 0;
+}
+
+/* (10) Utilidad auth-muted (clase usada en template) */
+.ss-account .auth-muted,
+.ss-login .auth-muted,
+.ss-register .auth-muted{
+  opacity: .78;
+  font-weight: 800;
+}
+
+/* (11) Side actions (clase usada en template) */
+.ss-account .side-actions,
+.ss-login .side-actions,
+.ss-register .side-actions{
+  margin-top: 14px;
+}
+
+/* (12) Password wrap + botón ojo (faltaba en tu CSS base) */
+.ss-account .ss-pw-wrap,
+.ss-login .ss-pw-wrap,
+.ss-register .ss-pw-wrap{
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+.ss-account .ss-pw-wrap .auth-input,
+.ss-login .ss-pw-wrap .auth-input,
+.ss-register .ss-pw-wrap .auth-input{
+  padding-right: 44px;
+}
+
+.ss-account .ss-pw-btn,
+.ss-login .ss-pw-btn,
+.ss-register .ss-pw-btn{
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  border: 1px solid var(--auth-border);
+  background: rgba(148,163,184,.10);
+  color: var(--auth-ink);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: transform .12s ease, background .12s ease, border-color .12s ease;
+}
+
+.ss-account .ss-pw-btn:hover,
+.ss-login .ss-pw-btn:hover,
+.ss-register .ss-pw-btn:hover{
+  transform: translateY(-50%) scale(1.02);
+  background: rgba(148,163,184,.14);
+}
+
+.ss-account .ss-pw-btn:focus-visible,
+.ss-login .ss-pw-btn:focus-visible,
+.ss-register .ss-pw-btn:focus-visible{
+  outline: none;
+  box-shadow: var(--auth-ring);
+  border-color: rgba(37,99,235,.55);
+}
+
+/* (13) Spinner (clase usada en JS del template) */
+.ss-account .ss-spinner,
+.ss-login .ss-spinner,
+.ss-register .ss-spinner{
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  border: 2px solid rgba(255,255,255,.55);
+  border-top-color: rgba(255,255,255,.98);
+  display: inline-block;
+  vertical-align: -3px;
+  margin-right: 8px;
+  animation: ssSpin .75s linear infinite;
+}
+@keyframes ssSpin{ to{ transform: rotate(360deg); } }
+
+/* (14) Estado disabled/busy consistente */
+.ss-account .btn-primary[disabled],
+.ss-login .btn-primary[disabled],
+.ss-register .btn-primary[disabled],
+.ss-account .btn-ghost[disabled],
+.ss-login .btn-ghost[disabled],
+.ss-register .btn-ghost[disabled]{
+  cursor: not-allowed;
+  opacity: .70;
+  transform: none !important;
+  filter: none !important;
+}
+
+/* (15) Botones tipo <a> con clases (tu HTML usa <a class="btn-ghost">) */
+.ss-account a.btn-primary,
+.ss-login a.btn-primary,
+.ss-register a.btn-primary,
+.ss-account a.btn-ghost,
+.ss-login a.btn-ghost,
+.ss-register a.btn-ghost{
+  display: grid;
+  place-items: center;
+  text-align: center;
+}
+
+/* (16) Mejoras de “tap targets” */
+.ss-account .auth-tab,
+.ss-account .btn-primary,
+.ss-account .btn-ghost,
+.ss-login .btn-primary,
+.ss-login .btn-ghost,
+.ss-register .btn-primary,
+.ss-register .btn-ghost{
+  min-height: 44px;
+}
+
+/* (17) Tabs: scroll safe si hay muchos (future-proof) */
+.ss-account .auth-tabs{
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.ss-account .auth-tabs::-webkit-scrollbar{ display:none; }
+
+/* (18) Sticky safe (evita superposición con header fijo) */
+.ss-account #accSticky{
+  scroll-margin-top: 90px;
+}
+
+/* (19) Mejoras de side-item en mobile */
+@media (max-width: 980px){
+  .ss-account .side-item,
+  .ss-login .side-item,
+  .ss-register .side-item{
+    background: rgba(148,163,184,.06);
+  }
+}
+
+/* (20) Reduced motion: también apaga spinner */
+@media (prefers-reduced-motion: reduce){
+  .ss-account .ss-spinner,
+  .ss-login .ss-spinner,
+  .ss-register .ss-spinner{
+    animation: none !important;
+  }
 }

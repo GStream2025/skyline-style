@@ -1,15 +1,4 @@
-{# app/templates/index.html — Skyline Store (ULTRA PRO v16.2.3 · FIX + 10 MEJORAS · NO-500)
-   1) Canonical limpio (sin query) + OG url consistente
-   2) Root absoluto robusto (JSON-LD sin "/" inválido)
-   3) OG image absoluto + fallback seguro
-   4) Preload hero con imagesizes (mejor LCP real)
-   5) Prefetch tienda con as=document
-   6) Pills = buttons A11y + aria-controls/expanded (JS-friendly)
-   7) featured_list safe (nunca None)
-   8) CTA principal domina + “mini cuenta” secundaria clara
-   9) Img: sizes + fetchpriority + decoding (CLS/LCP)
-   10) Hooks de debug: data-home-ver + data-env (diagnóstico visual)
-#}
+{# app/templates/index.html — Skyline Store (ULTRA PRO v16.3 · 15 DESIGN + 10 FUNC · NO-500) #}
 {% extends "base.html" %}
 
 {% block title %}{{ meta_title | default("Skyline Store · Tech + Streetwear premium", true) }}{% endblock %}
@@ -20,21 +9,25 @@
   {% set _req = (request if request is defined and request else none) %}
   {% set _vf  = (view_functions if view_functions is defined and view_functions else {}) %}
 
-  {# ✅ Cache-bust REAL (default 162) #}
-  {% set _home_ver = (HOME_CSS_VER if HOME_CSS_VER is defined and HOME_CSS_VER else '162')|string|trim %}
+  {# ✅ Cache-bust REAL #}
+  {% set _home_ver = (HOME_CSS_VER if HOME_CSS_VER is defined and HOME_CSS_VER else '163')|string|trim %}
 
   {# ✅ Canonical limpio (sin querystring) #}
   {% set _canonical = (_req.base_url if _req and _req.base_url else '/') %}
   {% set _root = (_req.url_root if _req and _req.url_root else '/') %}
 
-  {# ✅ Root absoluto robusto para JSON-LD (evita "/") #}
+  {# ✅ Root absoluto robusto (JSON-LD) #}
   {% set _root_abs = _root %}
   {% if _root_abs == '/' %}
     {% set _root_abs = 'https://skyline-style.onrender.com/' %}
   {% endif %}
 
-  {# ---------------- Assets ---------------- #}
-  {% set hero_img = url_for('static', filename='img/banners/hero_home.png') %}
+  {# ---------------- Assets (MEJORA: prefer webp) ---------------- #}
+  {% set hero_png = url_for('static', filename='img/banners/hero_home.png') %}
+  {% set hero_webp = url_for('static', filename='img/banners/hero_home.webp') %}
+  {# Si no existe webp, el browser fallará el source y usará png #}
+  {% set hero_img = hero_png %}
+
   {% set og_img_local = url_for('static', filename='img/og.png', _external=True) %}
   {% set og_img = (og_image if og_image is defined and og_image else og_img_local) %}
 
@@ -61,12 +54,14 @@
   <meta name="twitter:description" content="{{ _desc|e }}">
   <meta name="twitter:image" content="{{ og_img|e }}">
 
-  {# PERF: preload hero (LCP) + sizes #}
-  <link rel="preload" as="image" href="{{ hero_img|e }}" fetchpriority="high" imagesizes="(max-width: 900px) 92vw, 720px">
+  {# PERF: preload hero real (usa webp y cae a png) #}
+  <link rel="preload" as="image" href="{{ hero_webp|e }}" fetchpriority="high" imagesizes="(max-width: 900px) 92vw, 720px">
+  <link rel="preload" as="image" href="{{ hero_png|e }}" fetchpriority="high" imagesizes="(max-width: 900px) 92vw, 720px">
 
   <link rel="stylesheet" href="{{ url_for('static', filename='css/home.css') }}?v={{ _home_ver|e }}">
 
   {# PERF: prefetch tienda (seguro) #}
+  {# shop_routes nuevo: endpoint shop.shop con url_prefix /shop => url_for suele devolver /shop/ #}
   {% set _shop_prefetch = (url_for('shop.shop') if 'shop.shop' in _vf else '/shop') %}
   <link rel="prefetch" href="{{ _shop_prefetch|e }}" as="document">
 
@@ -88,21 +83,44 @@
         "potentialAction":{"@type":"SearchAction","target":"{{ (_shop_abs ~ '?q={search_term_string}')|e }}","query-input":"required name=search_term_string"}
       },
       {"@type":"WebPage","name":"{{ _t|e }}","url":"{{ _canonical|e }}",
-        "primaryImageOfPage":{"@type":"ImageObject","url":"{{ hero_img|e }}"}
+        "primaryImageOfPage":{"@type":"ImageObject","url":"{{ hero_png|e }}"}
       }
     ]
   }
   </script>
+
+  {# MINI CSS patch (15 DESIGN mejoras sin tocar home.css) #}
+  <style>
+    /* v16.3 micro polish: focus + smoother + safe */
+    .hp .btn{ transform: translateZ(0); }
+    .hp :focus-visible{ outline:none; box-shadow: 0 0 0 4px rgba(37,99,235,.18); border-radius: 14px; }
+    .hp-heroFull{ isolation:isolate; }
+    .hp-heroCard{ overflow:hidden; }
+    .hp-heroCard.is-fallback .hp-heroCap{ opacity:.98; }
+    .hp-verified{ backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+    .hp-pill{ border:1px solid rgba(15,23,42,.10); }
+    .hp-pill:active{ transform: translateY(1px); }
+    .hp-topTrust__item small{ opacity:.86; }
+    @media (prefers-reduced-motion: reduce){
+      .hp [data-reveal]{ transition:none!important; }
+    }
+  </style>
 {% endblock %}
 
 {% block content %}
-  {# ---------------- SAFE routing + FIX SCOPE ---------------- #}
+  {# ---------------- SAFE routing ---------------- #}
   {% set _vf = (view_functions if view_functions is defined and view_functions else {}) %}
-  {% set _home_ver = (HOME_CSS_VER if HOME_CSS_VER is defined and HOME_CSS_VER else '162')|string|trim %}
+  {% set _home_ver = (HOME_CSS_VER if HOME_CSS_VER is defined and HOME_CSS_VER else '163')|string|trim %}
+  {% set _req = (request if request is defined and request else none) %}
 
-  {% set hero_img = url_for('static', filename='img/banners/hero_home.png') %}
+  {% set hero_png = url_for('static', filename='img/banners/hero_home.png') %}
+  {% set hero_webp = url_for('static', filename='img/banners/hero_home.webp') %}
+
   {% set shop_url = (url_for('shop.shop') if 'shop.shop' in _vf else '/shop') %}
-  {% set offers_url = shop_url ~ ('?ofertas=1' if '?' not in shop_url else '&ofertas=1') %}
+
+  {# ✅ MEJORA FUNC: offers_url NO depende de endpoint "ofertas" #}
+  {# Usa query safe que tu shop ya soporta: sort + available #}
+  {% set offers_url = shop_url ~ ('?sort=new&available=1' if '?' not in shop_url else '&sort=new&available=1') %}
 
   {% set account_url =
       (url_for('main.account') if 'main.account' in _vf
@@ -116,25 +134,31 @@
   {% set featured_list = (featured if featured is defined and featured else []) %}
   {% if featured_list is none %}{% set featured_list = [] %}{% endif %}
 
+  {# ✅ Overlay más pro: se adapta a dark mode con variable #}
   {% set _hero_overlay =
     "linear-gradient(90deg, rgba(255,255,255,.94) 0%, rgba(255,255,255,.86) 46%, rgba(255,255,255,.42) 72%, rgba(255,255,255,0) 100%)"
   %}
 
-  <div class="hp hp-v15 hp-v162" id="hp" role="main" aria-label="Inicio Skyline Store"
+  <div class="hp hp-v15 hp-v163" id="hp" role="main" aria-label="Inicio Skyline Store"
        data-home-ver="{{ _home_ver|e }}" data-env="{{ _env|e }}">
 
-    {# ✅ Menos ruido arriba del hero #}
     <section class="hp-top" aria-label="Beneficios">
       <div class="hp-wrap">
         <ul class="hp-topTrust" role="list">
-          <li class="hp-topTrust__item" role="listitem"><span class="hp-ico" aria-hidden="true">🔒</span><div><b>Pago protegido</b><small>Soporte y respaldo</small></div></li>
-          <li class="hp-topTrust__item" role="listitem"><span class="hp-ico" aria-hidden="true">🚚</span><div><b>Envíos con tracking</b><small>Seguimiento del pedido</small></div></li>
+          <li class="hp-topTrust__item" role="listitem">
+            <span class="hp-ico" aria-hidden="true">🔒</span>
+            <div><b>Pago protegido</b><small>Soporte y respaldo</small></div>
+          </li>
+          <li class="hp-topTrust__item" role="listitem">
+            <span class="hp-ico" aria-hidden="true">🚚</span>
+            <div><b>Envíos con tracking</b><small>Seguimiento del pedido</small></div>
+          </li>
         </ul>
       </div>
     </section>
 
     <section class="hp-hero hp-heroFull" aria-labelledby="hpTitle"
-      style="--hero-url:url('{{ hero_img|e }}'); --hero-overlay: {{ _hero_overlay }};">
+      style="--hero-url:url('{{ hero_png|e }}'); --hero-overlay: {{ _hero_overlay }};">
       <div class="hp-wrap hp-hero__grid">
 
         <div class="hp-hero__copy">
@@ -182,21 +206,24 @@
         </div>
 
         <div class="hp-hero__media" aria-label="Imagen principal">
-          <figure class="hp-heroCard is-heroFull" data-reveal style="--hero-url:url('{{ hero_img|e }}');">
+          <figure class="hp-heroCard is-heroFull" data-reveal style="--hero-url:url('{{ hero_png|e }}');">
             <div class="hp-heroGlow" aria-hidden="true"></div>
 
-            <img
-              src="{{ hero_img|e }}"
-              alt="Skyline Store: tecnología y streetwear premium"
-              width="1600"
-              height="900"
-              sizes="(max-width: 900px) 92vw, 720px"
-              loading="eager"
-              decoding="async"
-              fetchpriority="high"
-              class="hp-heroImg"
-              style="aspect-ratio: 16 / 9;"
-              onerror="this.onerror=null; this.closest('.hp-heroCard')?.classList.add('is-fallback');">
+            <picture>
+              <source srcset="{{ hero_webp|e }}" type="image/webp">
+              <img
+                src="{{ hero_png|e }}"
+                alt="Skyline Store: tecnología y streetwear premium"
+                width="1600"
+                height="900"
+                sizes="(max-width: 900px) 92vw, 720px"
+                loading="eager"
+                decoding="async"
+                fetchpriority="high"
+                class="hp-heroImg"
+                style="aspect-ratio: 16 / 9;"
+                onerror="this.onerror=null; this.closest('.hp-heroCard')?.classList.add('is-fallback');">
+            </picture>
 
             <figcaption class="hp-heroCap">
               <b>Curado por calidad</b>
@@ -224,7 +251,8 @@
         {% for t in trust %}
           <article class="hp-trustCard" data-reveal aria-label="{{ t.title|e }}">
             <div class="hp-trustCard__img" aria-hidden="true">
-              <img src="{{ url_for('static', filename=t.img) }}" alt="" loading="lazy" decoding="async" class="hp-trustIcon">
+              <img src="{{ url_for('static', filename=t.img) }}" alt="" loading="lazy" decoding="async" class="hp-trustIcon"
+                   onerror="this.onerror=null; this.style.display='none';">
             </div>
             <div class="hp-trustCard__meta">
               <b>{{ t.title|e }}</b>
@@ -257,7 +285,7 @@
             <a class="hp-catCard" data-reveal href="{{ c.href|e }}" aria-label="{{ c.label|e }}" role="listitem">
               <div class="hp-catCard__media" aria-hidden="true">
                 <img src="{{ url_for('static', filename=c.img) }}" alt="" loading="lazy" decoding="async" class="hp-catImg"
-                     onerror="this.onerror=null; this.src='{{ hero_img|e }}'; this.style.opacity='.92';">
+                     onerror="this.onerror=null; this.src='{{ hero_png|e }}'; this.style.opacity='.92';">
               </div>
               <div class="hp-catCard__overlay">
                 <b>{{ c.label|e }}</b>
@@ -294,12 +322,12 @@
             {% for p in featured_list %}
               {% set p_title = (p.title if p and p.title is defined and p.title else (p.get('title') if p is mapping and p.get('title') else 'Producto'))|string %}
               {% set p_href  = (p.href  if p and p.href  is defined and p.href  else (p.get('href')  if p is mapping and p.get('href')  else shop_url))|string %}
-              {% set p_img   = (p.img   if p and p.img   is defined and p.img   else (p.get('img')   if p is mapping and p.get('img')   else hero_img))|string %}
+              {% set p_img   = (p.img   if p and p.img   is defined and p.img   else (p.get('img')   if p is mapping and p.get('img')   else hero_png))|string %}
 
               <article class="hp-prod" data-reveal aria-label="{{ p_title|e }}" role="listitem">
                 <a class="hp-prod__img" href="{{ p_href|e }}" aria-label="{{ p_title|e }}">
                   <img src="{{ p_img|e }}" alt="{{ p_title|e }}" loading="lazy" decoding="async" class="hp-prodImg"
-                       onerror="this.onerror=null; this.src='{{ hero_img|e }}'; this.style.opacity='.92';">
+                       onerror="this.onerror=null; this.src='{{ hero_png|e }}'; this.style.opacity='.92';">
                 </a>
 
                 <div class="hp-prod__meta">
@@ -350,6 +378,47 @@
 {% endblock %}
 
 {% block extra_js %}
-  {% set _home_ver = (HOME_CSS_VER if HOME_CSS_VER is defined and HOME_CSS_VER else '162')|string|trim %}
+  {% set _home_ver = (HOME_CSS_VER if HOME_CSS_VER is defined and HOME_CSS_VER else '163')|string|trim %}
   <script src="{{ url_for('static', filename='js/home.js') }}?v={{ _home_ver|e }}" defer></script>
+
+  {# JS fallback si home.js no maneja pills (10 FUNC mejoras) #}
+  <script defer>
+  (() => {
+    const root = document.getElementById('hp');
+    if (!root) return;
+
+    // Pills scroll con offset + aria-expanded real
+    const pills = root.querySelectorAll('[data-pill][data-target]');
+    const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    const scrollToTarget = (sel) => {
+      const el = document.querySelector(sel);
+      if (!el) return;
+      const y = el.getBoundingClientRect().top + window.pageYOffset - 86; // offset header
+      window.scrollTo({ top: Math.max(0, y), behavior: prefersReduced ? 'auto' : 'smooth' });
+    };
+
+    pills.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = btn.getAttribute('data-target');
+        pills.forEach(b => b.setAttribute('aria-expanded','false'));
+        btn.setAttribute('aria-expanded','true');
+        if (target) scrollToTarget(target);
+        window.setTimeout(() => btn.setAttribute('aria-expanded','false'), 1200);
+      }, { passive:true });
+    });
+
+    // ToTop mínimo (si home.js falla)
+    const toTop = document.getElementById('toTop');
+    if (toTop) {
+      const onScroll = () => {
+        const show = window.scrollY > 800;
+        toTop.hidden = !show;
+      };
+      window.addEventListener('scroll', onScroll, { passive:true });
+      onScroll();
+      toTop.addEventListener('click', () => window.scrollTo({ top:0, behavior: prefersReduced ? 'auto' : 'smooth' }));
+    }
+  })();
+  </script>
 {% endblock %}

@@ -1,35 +1,34 @@
-{# app/templates/auth/account.html — Skyline Store (ULTRA PRO / CSRF SAFE / v7.3 BULLETPROOF)
-   ✅ 20 mejoras aplicadas (resumen):
-   1) NO depende de current_app/view_functions (evita 500 por undefined)
-   2) Endpoints estables (hard links) + fallback seguro
-   3) CSRF robusto: csrf_token() o csrf_token_value o vacío
-   4) Meta csrf-token + hidden csrf_token consistente
-   5) next hardening estricto (solo paths /... y sin //)
-   6) Preserva valores por tab (_tab)
-   7) Tabs accesibles + teclado (arrows/home/end) + aria correcto
-   8) Panels con hidden real + aria-hidden sincronizado
-   9) Honeypot anti-bot a11y-safe
-   10) Autocomplete correcto (username/current-password/new-password)
-   11) Mensajes de error aria-live y focus seguro
-   12) Evita doble submit + restore automático
-   13) Password toggle accesible (aria-pressed + label)
-   14) Link “Olvidé mi contraseña” (si tu ruta existe) con fallback
-   15) “Reenviar verificación” (si tenés endpoint) degradable
-   16) Reduced motion respetado
-   17) Dark mode legible
-   18) Print-safe
-   19) JS no rompe si no hay URL/localStorage
-   20) Sanitiza categorías flash + layout estable
+{# app/templates/auth/account.html — Skyline Store (ULTRA PRO / CSRF SAFE / v8.0 UNIFIED)
+   ✅ 20 MEJORAS (v8.0):
+   1) ✅ Unifica CSS: usa SOLO /static/css/account.css (ya incluye login+register)
+   2) ✅ Estructura alineada al CSS PRO (auth-wrap/auth-shell/auth-card/auth-side)
+   3) ✅ Endpoints estables (hard links) + no rompe si faltan rutas
+   4) ✅ CSRF robusto: csrf_token() o csrf_token_value o vacío (meta + hidden)
+   5) ✅ next hardening estricto (solo paths /... y sin //) + preserva next en tabs
+   6) ✅ Preserva valores por tab (_tab) + no “mezcla” campos entre forms
+   7) ✅ Tabs accesibles (aria + teclado arrows/home/end) + focus correcto
+   8) ✅ Panels con hidden real + aria-hidden sincronizado
+   9) ✅ Honeypot anti-bot a11y-safe (hp-field) + no rompe autofill
+   10) ✅ Autocomplete correcto (username/current-password/new-password/name)
+   11) ✅ Errores inline aria-live + aria-invalid + foco seguro
+   12) ✅ Evita doble submit + spinner + restore automático
+   13) ✅ Password toggle accesible (aria-pressed + aria-label dinámico)
+   14) ✅ Fallback links: “Olvidé…” / “Seguir como invitado” / “Tienda”
+   15) ✅ Sanitiza categorías flash (solo error/warning/success/info)
+   16) ✅ CSP nonce soportado (inline JS con nonce opcional)
+   17) ✅ No depende de current_app/view_functions (evita 500 por undefined)
+   18) ✅ Reduced motion respetado (CSS ya lo cubre) + JS sin anim forzada
+   19) ✅ Dark mode legible (CSS ya lo cubre) + layout estable
+   20) ✅ Progressive enhancement: JS no rompe si localStorage/URL no existen
 #}
 
 {% extends "base.html" %}
 {% block title %}Mi cuenta | {{ (APP_NAME or "Skyline Store")|e }}{% endblock %}
 
 {% block extra_head %}
-  <link rel="preload" as="style" href="{{ url_for('static', filename='css/login.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
-  <link rel="preload" as="style" href="{{ url_for('static', filename='css/register.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/register.css') }}">
+  {# ✅ CSS UNIFICADO (login+register+account) #}
+  <link rel="preload" as="style" href="{{ url_for('static', filename='css/account.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/account.css') }}">
 
   <meta name="robots" content="{{ 'index,follow' if (ENV|default('')|lower == 'production') else 'noindex,nofollow' }}">
 
@@ -47,182 +46,6 @@
     {% set _csrf_val = csrf_token_value %}
   {% endif %}
   <meta name="csrf-token" content="{{ (_csrf_val|string)|e }}">
-
-  <style{% if _csp_nonce %} nonce="{{ _csp_nonce|e }}"{% endif %}>
-    .ss-account{ max-width: 1040px; margin: 0 auto; padding: clamp(16px, 2vw, 28px); }
-    .ss-shell{
-      background: rgba(255,255,255,.74);
-      border: 1px solid var(--border, rgba(10,16,32,.10));
-      border-radius: var(--r-xl, 28px);
-      box-shadow: var(--sh2, 0 22px 60px rgba(10,16,32,.12));
-      padding: clamp(16px, 2vw, 22px);
-      overflow: hidden;
-    }
-    @media (prefers-color-scheme: dark){
-      .ss-shell{ background: rgba(9,12,24,.62); box-shadow: none; border-color: rgba(148,163,184,.16); }
-    }
-
-    .ss-tabs{ display:flex; gap:10px; flex-wrap:wrap; margin: 0 0 14px; align-items:center; }
-    .ss-tab{
-      appearance:none;
-      border: 1px solid var(--border, rgba(10,16,32,.12));
-      background: rgba(255,255,255,.80);
-      padding: 10px 14px;
-      border-radius: 999px;
-      cursor: pointer;
-      font-weight: 950;
-      color: var(--muted, rgba(10,16,32,.68));
-      box-shadow: var(--sh1, 0 12px 30px rgba(10,16,32,.08));
-      transition: transform .14s ease, box-shadow .22s ease, border-color .22s ease, background .22s ease, color .22s ease;
-      min-height: 44px;
-    }
-    .ss-tab:hover{ transform: translateY(-1px); border-color: rgba(37,99,235,.22); }
-    .ss-tab.is-active{
-      color: var(--p, #2563eb);
-      background: rgba(37,99,235,.10);
-      border-color: rgba(37,99,235,.20);
-      transform: translateY(-1px);
-    }
-    .ss-tab:focus-visible{ outline:none; box-shadow: var(--ring, 0 0 0 6px rgba(37,99,235,.16)); }
-    @media (prefers-color-scheme: dark){
-      .ss-tab{ background: rgba(255,255,255,.06); box-shadow:none; }
-      .ss-tab:hover{ transform:none; }
-      .ss-tab.is-active{ background: rgba(6,182,212,.12); border-color: rgba(6,182,212,.24); color: var(--p2, #06b6d4); }
-    }
-
-    .ss-panel{ display:none; }
-    .ss-panel.is-active{ display:block; }
-
-    .ss-flashes{ margin: 10px 0 14px; display:grid; gap:8px; }
-    .ss-flash{
-      border-radius: 16px;
-      padding: 10px 12px;
-      border: 1px solid var(--border, rgba(10,16,32,.10));
-      background: rgba(255,255,255,.78);
-      box-shadow: var(--sh1, 0 12px 30px rgba(10,16,32,.08));
-      font-weight: 850;
-      color: var(--ink, #0a1020);
-    }
-    @media (prefers-color-scheme: dark){
-      .ss-flash{ background: rgba(9,12,24,.60); box-shadow:none; color: rgba(238,242,255,.92); }
-    }
-    .ss-flash.error{ border-color: rgba(220,38,38,.28); }
-    .ss-flash.success{ border-color: rgba(22,163,74,.24); }
-    .ss-flash.warning{ border-color: rgba(245,158,11,.28); }
-    .ss-flash.info{ border-color: rgba(59,130,246,.22); }
-
-    .ss-form{ display:grid; gap:12px; }
-    .ss-field{ display:grid; gap:6px; margin: 4px 0; }
-    .ss-label{ font-weight: 950; color: var(--ink, #0a1020); }
-    .ss-hint{ font-size: .92rem; color: var(--muted, rgba(10,16,32,.68)); }
-
-    .ss-input{
-      width:100%;
-      border: 1px solid var(--border, rgba(10,16,32,.14));
-      border-radius: 18px;
-      padding: 12px 12px;
-      background: rgba(255,255,255,.86);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,.7), 0 12px 26px rgba(10,16,32,.06);
-      color: var(--ink, #0a1020);
-      font-weight: 750;
-      min-height: 44px;
-    }
-    @media (prefers-color-scheme: dark){
-      .ss-input{ background: rgba(255,255,255,.06); box-shadow:none; border-color: rgba(148,163,184,.18); color: rgba(238,242,255,.92); }
-    }
-    .ss-input:focus{ outline:none; box-shadow: var(--ring, 0 0 0 6px rgba(37,99,235,.16)); border-color: rgba(37,99,235,.22); }
-    .ss-input[aria-invalid="true"]{ border-color: rgba(220,38,38,.35); }
-
-    .ss-pw-wrap{ display:flex; gap:10px; align-items:center; }
-    .ss-pw-wrap .ss-input{ flex: 1; }
-    .ss-pw-btn{
-      border-radius: 16px;
-      border: 1px solid var(--border, rgba(10,16,32,.12));
-      background: rgba(255,255,255,.70);
-      padding: 10px 12px;
-      cursor: pointer;
-      font-weight: 900;
-      line-height: 1;
-      min-height: 44px;
-      transition: transform .14s ease, border-color .22s ease, background .22s ease;
-    }
-    .ss-pw-btn:hover{ transform: translateY(-1px); border-color: rgba(37,99,235,.22); }
-    .ss-pw-btn:focus-visible{ outline:none; box-shadow: var(--ring, 0 0 0 6px rgba(37,99,235,.16)); }
-    @media (prefers-color-scheme: dark){
-      .ss-pw-btn{ background: rgba(255,255,255,.06); border-color: rgba(148,163,184,.18); color: rgba(238,242,255,.92); }
-      .ss-pw-btn:hover{ transform:none; }
-    }
-
-    .ss-actions{
-      display:flex;
-      justify-content: space-between;
-      align-items:center;
-      gap: 12px;
-      flex-wrap:wrap;
-      margin-top: 6px;
-    }
-    .ss-link{ opacity:.90; font-weight: 900; color: inherit; }
-    .ss-link:hover{ opacity:1; text-decoration: underline; }
-
-    .ss-submit{
-      display:inline-flex;
-      align-items:center;
-      justify-content:center;
-      gap:10px;
-      min-height: 44px;
-      padding: 12px 16px;
-      border-radius: 999px;
-      border: 1px solid transparent;
-      cursor: pointer;
-      user-select:none;
-      font-weight: 1000;
-      color:#fff;
-      background: linear-gradient(135deg, var(--p, #2563eb), var(--p2, #06b6d4));
-      box-shadow: 0 18px 55px rgba(37,99,235,.20);
-      transition: transform .14s ease, filter .22s ease, box-shadow .22s ease;
-    }
-    .ss-submit:hover{ transform: translateY(-1px); filter: saturate(1.04) brightness(1.02); }
-    .ss-submit:active{ transform: translateY(0); }
-    .ss-submit[disabled]{ opacity:.70; cursor:not-allowed; transform:none; filter:none; }
-
-    .ss-err{
-      display:none;
-      margin-top: 6px;
-      border-radius: 14px;
-      padding: 9px 10px;
-      border: 1px solid rgba(220,38,38,.24);
-      background: rgba(254,242,242,.75);
-      color: #991b1b;
-      font-weight: 800;
-    }
-    @media (prefers-color-scheme: dark){
-      .ss-err{ background: rgba(127,29,29,.18); color: rgba(254,226,226,.90); }
-    }
-    .ss-err.is-on{ display:block; }
-
-    .ss-spinner{
-      width:16px;height:16px;
-      border: 2px solid currentColor;
-      border-right-color: transparent;
-      border-radius: 50%;
-      display:inline-block;
-      vertical-align:-3px;
-      animation: sspin .9s linear infinite;
-    }
-    @keyframes sspin{ to{ transform: rotate(360deg); } }
-
-    @media (prefers-reduced-motion: reduce){
-      .ss-tab,.ss-submit,.ss-pw-btn{ transition:none; }
-      .ss-tab:hover,.ss-submit:hover,.ss-pw-btn:hover{ transform:none; }
-      .ss-spinner{ animation:none; }
-    }
-
-    @media print{
-      header, nav, footer{ display:none !important; }
-      .ss-account{ padding:0; }
-      .ss-shell{ box-shadow:none; background:#fff; border:1px solid #ddd; }
-    }
-  </style>
 {% endblock %}
 
 {% block content %}
@@ -246,7 +69,7 @@
 {% set _reg_name    = (request.form.get('name','')  if request.method == 'POST' and _post_tab == 'register' else '')|string %}
 {% set _reg_email   = (request.form.get('email','') if request.method == 'POST' and _post_tab == 'register' else '')|string %}
 
-{# ───────────── endpoints (estables) ───────────── #}
+{# ───────────── endpoints (estables / sin 500) ───────────── #}
 {% set login_action = '/auth/login' %}
 {% set register_action = '/auth/register' %}
 {% set account_url = '/auth/account' %}
@@ -254,191 +77,232 @@
 {% set shop_url = (url_for('shop.shop') if url_for is defined else '/shop') %}
 
 <section class="ss-account" aria-label="Mi cuenta">
-  <div class="ss-shell">
+  <div class="auth-wrap">
 
-    <div class="ss-tabs" role="tablist" aria-label="Acceso">
-      <button type="button"
-              class="ss-tab {{ 'is-active' if initial_tab == 'login' else '' }}"
-              role="tab"
-              id="tab-login"
-              aria-controls="panel-login"
-              aria-selected="{{ 'true' if initial_tab == 'login' else 'false' }}"
-              tabindex="{{ '0' if initial_tab == 'login' else '-1' }}"
-              data-tab="login">Ingresar</button>
+    <div class="auth-shell">
 
-      <button type="button"
-              class="ss-tab {{ 'is-active' if initial_tab == 'register' else '' }}"
-              role="tab"
-              id="tab-register"
-              aria-controls="panel-register"
-              aria-selected="{{ 'true' if initial_tab == 'register' else 'false' }}"
-              tabindex="{{ '0' if initial_tab == 'register' else '-1' }}"
-              data-tab="register">Crear cuenta</button>
-    </div>
+      {# ================= LEFT: CARD ================= #}
+      <div class="auth-card" role="region" aria-label="Acceso">
+        <div class="auth-brand">
+          <span class="auth-brand__dot" aria-hidden="true"></span>
+          <div class="auth-brand__title">{{ (APP_NAME or "Skyline Store")|e }}</div>
+          <div class="auth-brand__sub">Ingresá o creá tu cuenta</div>
+        </div>
 
-    {% set _msgs = get_flashed_messages(with_categories=true) %}
-    {% if _msgs %}
-      <div class="ss-flashes" aria-live="polite" aria-atomic="true">
-        {% for category, msg in _msgs %}
-          {% set cat = (category|string|lower|trim) %}
-          {% set cat = cat if cat in ['error','warning','success','info'] else 'info' %}
-          <div class="ss-flash {{ cat }}" role="alert">{{ msg }}</div>
-        {% endfor %}
+        <div class="auth-tabs" role="tablist" aria-label="Acceso">
+          <button type="button"
+                  class="auth-tab"
+                  role="tab"
+                  id="tab-login"
+                  aria-controls="panel-login"
+                  aria-selected="{{ 'true' if initial_tab == 'login' else 'false' }}"
+                  tabindex="{{ '0' if initial_tab == 'login' else '-1' }}"
+                  data-tab="login">Ingresar</button>
+
+          <button type="button"
+                  class="auth-tab"
+                  role="tab"
+                  id="tab-register"
+                  aria-controls="panel-register"
+                  aria-selected="{{ 'true' if initial_tab == 'register' else 'false' }}"
+                  tabindex="{{ '0' if initial_tab == 'register' else '-1' }}"
+                  data-tab="register">Crear cuenta</button>
+        </div>
+
+        {# Flash messages (sanitizadas) #}
+        {% set _msgs = get_flashed_messages(with_categories=true) %}
+        {% if _msgs %}
+          <div class="auth-card__pad" style="padding-top: 14px; padding-bottom: 0;">
+            {% for category, msg in _msgs %}
+              {% set cat = (category|string|lower|trim) %}
+              {% set cat = cat if cat in ['error','warning','success','info'] else 'info' %}
+              <div class="auth-flash {{ cat }}" role="alert" aria-live="polite" aria-atomic="true">
+                <strong>{{ msg }}</strong>
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+
+        <div class="auth-card__pad">
+
+          {# ================= LOGIN PANEL ================= #}
+          <div id="panel-login"
+               role="tabpanel"
+               aria-labelledby="tab-login"
+               {% if initial_tab != 'login' %}hidden aria-hidden="true"{% else %}aria-hidden="false"{% endif %}>
+
+            <form method="post" action="{{ login_action }}" novalidate autocomplete="on" id="loginForm">
+              <input type="hidden" name="_tab" value="login">
+              <input type="hidden" name="csrf_token" value="{{ (_csrf_val|string)|e }}">
+              {% if nxt %}<input type="hidden" name="next" value="{{ nxt|e }}">{% endif %}
+
+              <div class="hp-field" aria-hidden="true">
+                <label for="hp_login">Website</label>
+                <input id="hp_login" type="text" name="website" tabindex="-1" autocomplete="off">
+              </div>
+
+              <div class="auth-field">
+                <label for="loginEmail">Email</label>
+                <input class="auth-input"
+                       id="loginEmail"
+                       type="email"
+                       name="email"
+                       value="{{ _login_email|trim|e }}"
+                       required maxlength="254"
+                       autocomplete="username"
+                       inputmode="email"
+                       autocapitalize="none"
+                       spellcheck="false"
+                       placeholder="tu@email.com">
+                <div class="field-error" id="loginErr" role="status" aria-live="polite" aria-atomic="true"></div>
+              </div>
+
+              <div class="auth-field">
+                <label for="loginPass">Contraseña</label>
+                <div class="ss-pw-wrap">
+                  <input class="auth-input"
+                         id="loginPass"
+                         type="password"
+                         name="password"
+                         required minlength="8"
+                         autocomplete="current-password"
+                         placeholder="Tu contraseña">
+                  <button type="button"
+                          class="ss-pw-btn"
+                          id="toggleLoginPass"
+                          aria-label="Mostrar contraseña"
+                          aria-pressed="false">👁</button>
+                </div>
+              </div>
+
+              <div class="auth-actions">
+                <button class="btn-primary" id="loginSubmit" type="submit">
+                  Entrar
+                </button>
+                <a class="btn-ghost" href="{{ shop_url }}">Seguir como invitado</a>
+              </div>
+
+              <div class="auth-links">
+                <a href="{{ forgot_url }}">¿Olvidaste tu contraseña?</a>
+                <a href="{{ account_url }}?tab=register{% if nxt %}&next={{ nxt|urlencode }}{% endif %}">Crear cuenta</a>
+              </div>
+
+              <p class="auth-help">Si tu cuenta requiere verificación, revisá el email de confirmación.</p>
+            </form>
+          </div>
+
+          {# ================= REGISTER PANEL ================= #}
+          <div id="panel-register"
+               role="tabpanel"
+               aria-labelledby="tab-register"
+               {% if initial_tab != 'register' %}hidden aria-hidden="true"{% else %}aria-hidden="false"{% endif %}>
+
+            <form method="post" action="{{ register_action }}" novalidate autocomplete="on" id="registerForm">
+              <input type="hidden" name="_tab" value="register">
+              <input type="hidden" name="csrf_token" value="{{ (_csrf_val|string)|e }}">
+              {% if nxt %}<input type="hidden" name="next" value="{{ nxt|e }}">{% endif %}
+
+              <div class="hp-field" aria-hidden="true">
+                <label for="hp_reg">Website</label>
+                <input id="hp_reg" type="text" name="website" tabindex="-1" autocomplete="off">
+              </div>
+
+              <div class="auth-field">
+                <label for="regName">Nombre <span style="opacity:.75;font-weight:700">(opcional)</span></label>
+                <input class="auth-input"
+                       id="regName"
+                       type="text"
+                       name="name"
+                       value="{{ _reg_name|trim|e }}"
+                       maxlength="120"
+                       autocomplete="name"
+                       placeholder="Tu nombre">
+              </div>
+
+              <div class="auth-field">
+                <label for="regEmail">Email</label>
+                <input class="auth-input"
+                       id="regEmail"
+                       type="email"
+                       name="email"
+                       value="{{ _reg_email|trim|e }}"
+                       required maxlength="254"
+                       autocomplete="username"
+                       inputmode="email"
+                       autocapitalize="none"
+                       spellcheck="false"
+                       placeholder="tu@email.com">
+                <div class="field-error" id="regErr" role="status" aria-live="polite" aria-atomic="true"></div>
+              </div>
+
+              <div class="auth-field">
+                <label for="regPass">Contraseña</label>
+                <div class="ss-pw-wrap">
+                  <input class="auth-input"
+                         id="regPass"
+                         type="password"
+                         name="password"
+                         required minlength="8"
+                         autocomplete="new-password"
+                         placeholder="Mínimo 8 caracteres">
+                  <button type="button"
+                          class="ss-pw-btn"
+                          id="toggleRegPass"
+                          aria-label="Mostrar contraseña"
+                          aria-pressed="false">👁</button>
+                </div>
+              </div>
+
+              <div class="auth-field">
+                <label for="regPass2">Confirmar contraseña</label>
+                <div class="ss-pw-wrap">
+                  <input class="auth-input"
+                         id="regPass2"
+                         type="password"
+                         name="password2"
+                         required minlength="8"
+                         autocomplete="new-password"
+                         placeholder="Repetí la contraseña">
+                  <button type="button"
+                          class="ss-pw-btn"
+                          id="toggleRegPass2"
+                          aria-label="Mostrar confirmación"
+                          aria-pressed="false">👁</button>
+                </div>
+              </div>
+
+              <div class="auth-actions">
+                <button class="btn-primary" id="regSubmit" type="submit">
+                  Crear cuenta
+                </button>
+                <a class="btn-ghost" href="{{ shop_url }}">Seguir como invitado</a>
+              </div>
+
+              <div class="auth-links">
+                <a href="{{ account_url }}?tab=login{% if nxt %}&next={{ nxt|urlencode }}{% endif %}">Ya tengo cuenta</a>
+                <a href="{{ forgot_url }}">Recuperar contraseña</a>
+              </div>
+
+              <p class="auth-help">Al crear cuenta aceptás nuestros términos y políticas.</p>
+            </form>
+          </div>
+
+        </div>
       </div>
-    {% endif %}
 
-    <div class="ss-panels">
+      {# ================= RIGHT: SIDE ================= #}
+      <aside class="auth-side" aria-label="Beneficios">
+        <h3 class="side-title">Comprá con confianza</h3>
+        <ul class="side-list">
+          <li class="side-item"><span class="side-dot" aria-hidden="true"></span><div><strong>Pagos seguros</strong><br><span class="auth-help">Protección y métodos confiables.</span></div></li>
+          <li class="side-item"><span class="side-dot" aria-hidden="true"></span><div><strong>Envíos rápidos</strong><br><span class="auth-help">Seguimiento y soporte.</span></div></li>
+          <li class="side-item"><span class="side-dot" aria-hidden="true"></span><div><strong>Ofertas y beneficios</strong><br><span class="auth-help">Acceso a promos y novedades.</span></div></li>
+        </ul>
 
-      <!-- ================= LOGIN ================= -->
-      <div class="ss-panel {{ 'is-active' if initial_tab == 'login' else '' }}"
-           id="panel-login"
-           role="tabpanel"
-           aria-labelledby="tab-login"
-           {% if initial_tab != 'login' %}hidden aria-hidden="true"{% else %}aria-hidden="false"{% endif %}>
-
-        <form method="post" action="{{ login_action }}" class="ss-form" novalidate autocomplete="on" id="loginForm">
-          <input type="hidden" name="_tab" value="login">
-          <input type="hidden" name="csrf_token" value="{{ (_csrf_val|string)|e }}">
-          {% if nxt %}<input type="hidden" name="next" value="{{ nxt|e }}">{% endif %}
-
-          <div style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden" aria-hidden="true">
-            <label for="hp_login">Website</label>
-            <input id="hp_login" type="text" name="website" tabindex="-1" autocomplete="off">
-          </div>
-
-          <div class="ss-field">
-            <label class="ss-label" for="loginEmail">Email</label>
-            <input class="ss-input"
-                   id="loginEmail"
-                   type="email"
-                   name="email"
-                   value="{{ _login_email|trim|e }}"
-                   required maxlength="254"
-                   autocomplete="username"
-                   inputmode="email"
-                   autocapitalize="none"
-                   spellcheck="false"
-                   placeholder="tu@email.com">
-            <div class="ss-err" id="loginErr" role="status" aria-live="polite"></div>
-          </div>
-
-          <div class="ss-field">
-            <label class="ss-label" for="loginPass">Contraseña</label>
-            <div class="ss-pw-wrap">
-              <input class="ss-input"
-                     id="loginPass"
-                     type="password"
-                     name="password"
-                     required minlength="8"
-                     autocomplete="current-password"
-                     placeholder="Tu contraseña">
-              <button type="button" class="ss-pw-btn" id="toggleLoginPass"
-                      aria-label="Mostrar contraseña" aria-pressed="false">👁</button>
-            </div>
-          </div>
-
-          <div class="ss-actions">
-            <a class="ss-link" href="{{ shop_url }}">Seguir como invitado</a>
-            <button class="ss-submit" id="loginSubmit" type="submit">Entrar</button>
-          </div>
-
-          <div class="ss-actions" style="margin-top:2px">
-            <a class="ss-link" href="{{ forgot_url }}">¿Olvidaste tu contraseña?</a>
-            <a class="ss-link" href="{{ account_url }}?tab=register{% if nxt %}&next={{ nxt|urlencode }}{% endif %}">Crear cuenta</a>
-          </div>
-
-          <p class="ss-hint">Tip: si tu cuenta requiere verificación, revisá el email de confirmación.</p>
-        </form>
-      </div>
-
-      <!-- ================= REGISTER ================= -->
-      <div class="ss-panel {{ 'is-active' if initial_tab == 'register' else '' }}"
-           id="panel-register"
-           role="tabpanel"
-           aria-labelledby="tab-register"
-           {% if initial_tab != 'register' %}hidden aria-hidden="true"{% else %}aria-hidden="false"{% endif %}>
-
-        <form method="post" action="{{ register_action }}" class="ss-form" novalidate autocomplete="on" id="registerForm">
-          <input type="hidden" name="_tab" value="register">
-          <input type="hidden" name="csrf_token" value="{{ (_csrf_val|string)|e }}">
-          {% if nxt %}<input type="hidden" name="next" value="{{ nxt|e }}">{% endif %}
-
-          <div style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden" aria-hidden="true">
-            <label for="hp_reg">Website</label>
-            <input id="hp_reg" type="text" name="website" tabindex="-1" autocomplete="off">
-          </div>
-
-          <div class="ss-field">
-            <label class="ss-label" for="regName">Nombre <span style="opacity:.7;font-weight:800">(opcional)</span></label>
-            <input class="ss-input"
-                   id="regName"
-                   type="text"
-                   name="name"
-                   value="{{ _reg_name|trim|e }}"
-                   maxlength="120"
-                   autocomplete="name"
-                   placeholder="Tu nombre">
-          </div>
-
-          <div class="ss-field">
-            <label class="ss-label" for="regEmail">Email</label>
-            <input class="ss-input"
-                   id="regEmail"
-                   type="email"
-                   name="email"
-                   value="{{ _reg_email|trim|e }}"
-                   required maxlength="254"
-                   autocomplete="username"
-                   inputmode="email"
-                   autocapitalize="none"
-                   spellcheck="false"
-                   placeholder="tu@email.com">
-            <div class="ss-err" id="regErr" role="status" aria-live="polite"></div>
-          </div>
-
-          <div class="ss-field">
-            <label class="ss-label" for="regPass">Contraseña</label>
-            <div class="ss-pw-wrap">
-              <input class="ss-input"
-                     id="regPass"
-                     type="password"
-                     name="password"
-                     required minlength="8"
-                     autocomplete="new-password"
-                     placeholder="Mínimo 8 caracteres">
-              <button type="button" class="ss-pw-btn" id="toggleRegPass"
-                      aria-label="Mostrar contraseña" aria-pressed="false">👁</button>
-            </div>
-          </div>
-
-          <div class="ss-field">
-            <label class="ss-label" for="regPass2">Confirmar contraseña</label>
-            <div class="ss-pw-wrap">
-              <input class="ss-input"
-                     id="regPass2"
-                     type="password"
-                     name="password2"
-                     required minlength="8"
-                     autocomplete="new-password"
-                     placeholder="Repetí la contraseña">
-              <button type="button" class="ss-pw-btn" id="toggleRegPass2"
-                      aria-label="Mostrar confirmación" aria-pressed="false">👁</button>
-            </div>
-          </div>
-
-          <div class="ss-actions">
-            <a class="ss-link" href="{{ shop_url }}">Seguir como invitado</a>
-            <button class="ss-submit" id="regSubmit" type="submit">Crear cuenta</button>
-          </div>
-
-          <div class="ss-actions" style="margin-top:2px">
-            <a class="ss-link" href="{{ account_url }}?tab=login{% if nxt %}&next={{ nxt|urlencode }}{% endif %}">Ya tengo cuenta</a>
-            <a class="ss-link" href="{{ forgot_url }}">Recuperar contraseña</a>
-          </div>
-
-          <p class="ss-hint">Al crear cuenta aceptás nuestros términos y políticas.</p>
-        </form>
-      </div>
+        <div style="margin-top:14px;">
+          <a class="btn-ghost" href="{{ shop_url }}">Ir a la tienda</a>
+        </div>
+      </aside>
 
     </div>
   </div>
@@ -463,11 +327,9 @@
     if (isHidden) {
       panel.setAttribute("hidden", "");
       panel.setAttribute("aria-hidden", "true");
-      panel.classList.remove("is-active");
     } else {
       panel.removeAttribute("hidden");
       panel.setAttribute("aria-hidden", "false");
-      panel.classList.add("is-active");
     }
   };
 
@@ -477,7 +339,6 @@
     (["login","register"]).forEach((k) => {
       const isOn = (k === t);
       if (tabs[k]) {
-        tabs[k].classList.toggle("is-active", isOn);
         tabs[k].setAttribute("aria-selected", String(isOn));
         tabs[k].setAttribute("tabindex", isOn ? "0" : "-1");
       }
@@ -538,7 +399,7 @@
       const willShow = i.type === "password";
       i.type = willShow ? "text" : "password";
       b.setAttribute("aria-pressed", String(willShow));
-      b.setAttribute("aria-label", willShow ? "Ocultar contraseña" : "Mostrar contraseña");
+      b.setAttribute("aria-label", willShow ? "Ocultar" : "Mostrar");
       try { i.focus({ preventScroll: true }); } catch (_) {}
     });
   };
@@ -548,16 +409,14 @@
 
   const showErr = (el, msg, inputEl) => {
     if (!el) return;
-    if (!msg) {
-      el.textContent = "";
-      el.classList.remove("is-on");
-      if (inputEl) inputEl.removeAttribute("aria-invalid");
-      return;
+    el.textContent = msg || "";
+    if (inputEl) {
+      if (msg) inputEl.setAttribute("aria-invalid", "true");
+      else inputEl.removeAttribute("aria-invalid");
     }
-    el.textContent = msg;
-    el.classList.add("is-on");
-    if (inputEl) inputEl.setAttribute("aria-invalid", "true");
-    try { (inputEl || el).focus({ preventScroll:true }); } catch(_) {}
+    if (msg) {
+      try { (inputEl || el).focus({ preventScroll:true }); } catch(_) {}
+    }
   };
 
   const guardSubmit = (formId, btnId, errId, validateFn, restoreLabel) => {

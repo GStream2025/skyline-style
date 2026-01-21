@@ -1,1127 +1,324 @@
-{# app/templates/shop.html — Skyline Store (SHOP · ULTRA PRO FINAL v5 · NO BREAK / FAIL-SAFE) #}
+{# ============================================================================
+   Skyline Store — SHOP (ULTRA PRO v8 SERVER-SIDE)
+   ✔ Server-side: q/categoria/sort/page
+   ✔ Paginación robusta + conserva params
+   ✔ UI premium + A11y + dark + reduced motion
+============================================================================ #}
+
 {% extends "base.html" %}
-{% block title %}Tienda | Skyline Store{% endblock %}
+{% block title %}Tienda | {{ (APP_NAME or "Skyline Store")|e }}{% endblock %}
 
 {% block extra_head %}
-<meta name="description" content="{{ meta_description | default('Explorá tecnología y streetwear premium en Skyline Store.') }}">
-<link rel="canonical" href="{{ request.url }}">
-
+<meta name="description" content="{{ meta_description | default('Explorá tecnología y streetwear premium en Skyline Store.', true) }}">
+<link rel="canonical" href="{{ request.url|e }}">
 <meta property="og:title" content="Tienda | Skyline Store">
-<meta property="og:description" content="{{ meta_description | default('Explorá tecnología y streetwear premium en Skyline Store.') }}">
+<meta property="og:description" content="{{ meta_description | default('Explorá tecnología y streetwear premium en Skyline Store.', true) }}">
 <meta property="og:type" content="website">
 
 <style>
-/* ==========================================================
-   SKYLINE STORE · SHOP — ULTRA PRO MARKETPLACE (FINAL v5)
-   ✅ FAIL-SAFE url_for (no BuildError)
-   ✅ Fix CSS typo (border-color)
-   ✅ A11y + focus-visible + reduced motion
-   ✅ Sticky controls + filtros rápidos + sort client-side robusto
-   ✅ 100% scoped (.shop-page)
-========================================================== */
-
+/* ===== ULTRA SHOP UI (scoped) ===== */
 .shop-page{
-  --bg0:#ffffff;
-  --bg1:#f7f8fb;
-  --ink:#0b1220;
-  --muted: rgba(11,18,32,.68);
-  --muted2: rgba(11,18,32,.52);
-
-  --a:#2563eb;
-  --b:#06b6d4;
-  --c:#f59e0b;
-  --g:#22c55e;
-  --r:#ef4444;
-
-  --stroke: rgba(15,23,42,.10);
-  --stroke2: rgba(15,23,42,.07);
-
-  --shadow1: 0 10px 24px rgba(2,6,23,.08);
-  --shadow2: 0 30px 90px rgba(2,6,23,.12);
-
-  --r-lg: 1.05rem;
-  --r-xl: 1.45rem;
-  --r-2xl: 1.85rem;
-
-  --ring: 0 0 0 4px rgba(37,99,235,.16);
-  --grid: 1220px;
-  --ease: cubic-bezier(.2,.9,.2,1);
-
-  --glass: rgba(255,255,255,.72);
-  --glass2: rgba(255,255,255,.88);
-  --glassStroke: rgba(15,23,42,.10);
-
-  --cardTop: rgba(255,255,255,.98);
-  --cardBot: rgba(255,255,255,.88);
-
-  --glow: 0 0 0 1px rgba(37,99,235,.08), 0 18px 60px rgba(37,99,235,.08);
-
-  --btnInk:#ffffff;
-  --btnShadow: 0 18px 45px rgba(2,6,23,.14);
-
-  --soft: rgba(37,99,235,.10);
-  --softStroke: rgba(37,99,235,.22);
-
-  color-scheme: light dark;
+  --bg0:#fff;--bg1:#f7f8fb;
+  --ink:#0b1220;--muted:rgba(11,18,32,.68);
+  --a:#2563eb;--b:#06b6d4;--c:#f59e0b;
+  --stroke:rgba(15,23,42,.10);--stroke2:rgba(15,23,42,.07);
+  --sh1:0 10px 24px rgba(2,6,23,.08);
+  --sh2:0 30px 90px rgba(2,6,23,.12);
+  --ring:0 0 0 4px rgba(37,99,235,.18);
+  --r-xl:1.45rem;--r-2xl:1.85rem;--grid:1220px;
+  color-scheme:light dark;
 }
-
 @media (prefers-color-scheme: dark){
   .shop-page{
-    --bg0:#070b14;
-    --bg1:#0b1020;
-    --ink:#eef2ff;
-    --muted: rgba(238,242,255,.72);
-    --muted2: rgba(238,242,255,.55);
-
-    --stroke: rgba(148,163,184,.18);
-    --stroke2: rgba(148,163,184,.12);
-
-    --glass: rgba(9,12,24,.62);
-    --glass2: rgba(9,12,24,.82);
-    --glassStroke: rgba(148,163,184,.18);
-
-    --cardTop: rgba(12,16,34,.90);
-    --cardBot: rgba(12,16,34,.78);
-
-    --shadow1: 0 10px 24px rgba(0,0,0,.35);
-    --shadow2: 0 40px 110px rgba(0,0,0,.55);
-
-    --glow: 0 0 0 1px rgba(6,182,212,.14), 0 18px 60px rgba(6,182,212,.12);
-
-    --soft: rgba(6,182,212,.10);
-    --softStroke: rgba(6,182,212,.22);
+    --bg0:#070b14;--bg1:#0b1020;
+    --ink:#eef2ff;--muted:rgba(238,242,255,.65);
+    --stroke:rgba(148,163,184,.18);--stroke2:rgba(148,163,184,.12);
+    --sh1:0 10px 24px rgba(0,0,0,.35);
+    --sh2:0 40px 110px rgba(0,0,0,.55);
   }
 }
-
 .shop-page{
+  min-height:calc(100vh - 60px);
   background:
     radial-gradient(circle at 0% 0%, rgba(37,99,235,.12), transparent 40%),
     radial-gradient(circle at 100% 0%, rgba(6,182,212,.10), transparent 42%),
-    radial-gradient(circle at 50% 100%, rgba(245,158,11,.10), transparent 45%),
-    linear-gradient(180deg, var(--bg0), var(--bg1));
-  min-height: calc(100vh - 60px);
+    linear-gradient(180deg,var(--bg0),var(--bg1));
 }
+.shop-wrap{ max-width:var(--grid); margin:0 auto; padding:clamp(2rem,5vw,3.2rem) 1rem 5rem; }
+.shop-page a{ color:inherit; text-decoration:none; }
+.shop-page :focus-visible{ outline:none; box-shadow:var(--ring); }
 
-.shop-page .shop-wrap{
-  max-width: var(--grid);
-  margin: 0 auto;
-  padding: clamp(1.9rem, 4.8vw, 3.1rem) 1rem clamp(4.0rem, 7vw, 5.8rem);
-}
-@media(min-width:768px){
-  .shop-page .shop-wrap{ padding-left: 1.25rem; padding-right: 1.25rem; }
-}
-
-.shop-page .sr-only{
-  position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;
-  overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;
-}
-
-.shop-page a{ -webkit-tap-highlight-color: transparent; }
-.shop-page :focus-visible{ outline:none; }
-
-/* ---------- Header ---------- */
-.shop-page .shop-header{
-  position:relative;
-  border-radius: calc(var(--r-2xl) + .45rem);
-  border:1px solid var(--glassStroke);
-  box-shadow: var(--shadow2);
-  overflow:hidden;
-  background:
-    radial-gradient(1000px 560px at 14% 18%, rgba(37,99,235,.22), transparent 60%),
-    radial-gradient(900px 560px at 86% 22%, rgba(245,158,11,.20), transparent 62%),
-    radial-gradient(900px 620px at 45% 100%, rgba(34,197,94,.14), transparent 62%),
-    linear-gradient(135deg, var(--glass2), var(--glass));
-  padding: 1.15rem;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-}
-@media(min-width:900px){
-  .shop-page .shop-header{ padding: 1.35rem; }
-}
-.shop-page .shop-header::before{
-  content:"";
-  position:absolute; inset:-2px;
-  pointer-events:none;
-  opacity:.85;
-  background:
-    radial-gradient(600px 260px at 12% 16%, rgba(255,255,255,.30), transparent 70%),
-    radial-gradient(520px 260px at 88% 20%, rgba(255,255,255,.22), transparent 72%);
-  mix-blend-mode: overlay;
-}
-.shop-page .shop-header::after{
-  content:"";
-  position:absolute; inset:0;
-  pointer-events:none;
-  opacity:.06;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)' opacity='.8'/%3E%3C/svg%3E");
-}
-
-.shop-page .topline{
-  position:relative;
-  display:grid;
-  gap: 1rem;
-  align-items:start;
-}
-@media(min-width:980px){
-  .shop-page .topline{
-    grid-template-columns: 1.4fr .6fr;
-    gap: 1.1rem;
-    align-items:start;
-  }
-}
-
-.shop-page .shop-kicker{
-  display:inline-flex;
-  align-items:center;
-  gap:.55rem;
-  padding:.50rem 1.0rem;
-  border-radius:999px;
-  background: rgba(255,255,255,.70);
+.shop-header{
+  border-radius:calc(var(--r-2xl) + .4rem);
+  padding:1.4rem;
+  background:rgba(255,255,255,.70);
   border:1px solid var(--stroke);
-  box-shadow: 0 12px 22px rgba(2,6,23,.10);
-  font-weight: 1000;
-  font-size:.78rem;
-  letter-spacing:.12em;
-  text-transform: uppercase;
-  color: rgba(11,18,32,.82);
-  width: fit-content;
+  box-shadow:var(--sh2);
 }
-@media (prefers-color-scheme: dark){
-  .shop-page .shop-kicker{ background: rgba(255,255,255,.06); color: rgba(238,242,255,.86); }
-}
-.shop-page .shop-kicker .dot{
-  width:9px;height:9px;border-radius:50%;
-  background: radial-gradient(circle at 30% 30%, #60a5fa, #2563eb);
-  box-shadow: 0 0 0 6px rgba(37,99,235,.14);
-}
+@media (prefers-color-scheme: dark){ .shop-header{ background:rgba(10,14,30,.70); } }
 
-.shop-page .shop-h1{
-  margin:.85rem 0 0;
-  font-size: clamp(2.05rem, 4.2vw, 3.15rem);
-  line-height: 1.02;
-  font-weight: 1000;
-  letter-spacing: -1px;
-  color: var(--ink);
+.shop-kicker{
+  display:inline-flex;align-items:center;gap:.5rem;
+  padding:.45rem 1rem;border-radius:999px;
+  background:rgba(37,99,235,.12);
+  font-size:.75rem;font-weight:900;letter-spacing:.12em;
 }
-.shop-page .shop-h1 span{
-  background: linear-gradient(135deg, var(--a), var(--b));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-.shop-page .shop-sub{
-  margin:.6rem 0 0;
-  max-width: 66ch;
-  color: var(--muted);
-  line-height: 1.75;
-  font-weight: 850;
-  font-size: 1.06rem;
-}
+.shop-kicker .dot{ width:8px;height:8px;border-radius:50%; background:linear-gradient(135deg,var(--a),var(--b)); }
+.shop-h1{ margin:.85rem 0 0; font-size:clamp(2.1rem,4.2vw,3.2rem); font-weight:1000; line-height:1.02; color:var(--ink); }
+.shop-h1 span{ background:linear-gradient(135deg,var(--a),var(--b)); -webkit-background-clip:text;background-clip:text;color:transparent; }
+.shop-sub{ margin:.6rem 0 0; max-width:65ch; color:var(--muted); }
 
-.shop-page .shop-badges{
-  position:relative;
-  display:flex;
-  flex-wrap:wrap;
-  gap:.55rem;
-  margin-top: 1rem;
-}
-.shop-page .shop-badge{
-  display:inline-flex;align-items:center;gap:.45rem;
-  padding:.48rem .95rem;
-  border-radius:999px;
-  border:1px solid var(--stroke);
-  background: rgba(255,255,255,.66);
-  box-shadow: 0 12px 22px rgba(2,6,23,.08);
-  font-size:.78rem;
-  font-weight: 1000;
-  color: rgba(11,18,32,.78);
-}
-@media (prefers-color-scheme: dark){
-  .shop-page .shop-badge{ background: rgba(255,255,255,.06); color: rgba(238,242,255,.82); }
-}
-.shop-page .shop-badge b{ color: var(--ink); font-weight: 1000; }
-
-.shop-page .summary{
-  position:relative;
-  border-radius: calc(var(--r-2xl) - .10rem);
-  border: 1px solid var(--stroke2);
-  background: rgba(255,255,255,.55);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  box-shadow: 0 18px 45px rgba(2,6,23,.10);
-  padding: 1rem;
-  overflow:hidden;
-}
-@media (prefers-color-scheme: dark){
-  .shop-page .summary{ background: rgba(9,12,24,.54); }
-}
-.shop-page .summary::before{
-  content:"";
-  position:absolute; inset:-40%;
-  background:
-    radial-gradient(circle at 30% 20%, rgba(37,99,235,.18), transparent 55%),
-    radial-gradient(circle at 70% 30%, rgba(6,182,212,.14), transparent 55%),
-    radial-gradient(circle at 50% 80%, rgba(245,158,11,.10), transparent 55%);
-  filter: blur(22px);
-  opacity: .9;
-  pointer-events:none;
-}
-.shop-page .summary > *{ position:relative; }
-
-.shop-page .count{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  gap:.5rem;
-  padding:.60rem 1.0rem;
-  border-radius: 999px;
-  border:1px solid var(--stroke);
-  background: rgba(255,255,255,.66);
-  box-shadow: 0 14px 22px rgba(2,6,23,.08);
-  color: var(--muted);
-  font-weight: 950;
-  font-size: .82rem;
-}
-@media (prefers-color-scheme: dark){
-  .shop-page .count{ background: rgba(255,255,255,.06); color: rgba(238,242,255,.75); }
-}
-.shop-page .count b{ color: var(--ink); font-weight: 1000; }
-
-.shop-page .summary .ctaRow{
-  margin-top: .85rem;
-  display:flex;
-  gap:.55rem;
-  flex-wrap:wrap;
-}
-
-.shop-page .btn{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  gap:.55rem;
-  border-radius: 999px;
-  padding:.78rem 1.05rem;
-  font-weight: 1000;
-  border: 1px solid var(--stroke);
-  background: rgba(255,255,255,.74);
-  box-shadow: 0 14px 22px rgba(2,6,23,.08);
-  color: var(--ink);
-  text-decoration:none;
-  transition: transform .22s var(--ease), filter .22s var(--ease), box-shadow .22s var(--ease);
-  cursor:pointer;
-  user-select:none;
-}
-@media (prefers-color-scheme: dark){
-  .shop-page .btn{ background: rgba(255,255,255,.06); }
-}
-.shop-page .btn:hover{ transform: translateY(-2px); filter: saturate(1.06); box-shadow: var(--shadow1); }
-.shop-page .btn:active{ transform: translateY(-1px); }
-.shop-page .btn:focus-visible{ box-shadow: var(--ring), var(--shadow1); }
-
-.shop-page .btn-primary{
-  border-color: transparent;
-  background: linear-gradient(135deg, var(--a), var(--b));
-  color: var(--btnInk);
-  box-shadow: var(--btnShadow);
-}
-.shop-page .btn-soft{
-  background: rgba(37,99,235,.10);
-  border-color: rgba(37,99,235,.22);
-}
-
-/* ---------- Sticky controls ---------- */
-.shop-page .controls{
-  margin-top: 1.05rem;
-  display:grid;
-  gap:.75rem;
-  position: sticky;
-  top: 12px;
-  z-index: 20;
-  padding: .95rem;
-  border-radius: calc(var(--r-2xl) - .15rem);
-  border: 1px solid var(--stroke2);
-  background: rgba(255,255,255,.62);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  box-shadow: 0 18px 45px rgba(2,6,23,.10);
-}
-@media (prefers-color-scheme: dark){
-  .shop-page .controls{ background: rgba(9,12,24,.58); }
-}
-@media(min-width:900px){
-  .shop-page .controls{ grid-template-columns: 1.1fr .9fr; align-items:end; }
-}
-@media(max-width:520px){
-  .shop-page .controls{ top: 8px; padding: .85rem; }
-}
-
-.shop-page .searchRow{
-  display:flex;
-  gap:.55rem;
-  flex-wrap:wrap;
-  align-items:center;
-}
-
-.shop-page .shop-search{
-  flex: 1;
-  min-width: 240px;
-  display:flex;
-  align-items:center;
-  gap:.65rem;
-  padding:.84rem 1.05rem;
-  border-radius: 999px;
-  border:1px solid var(--stroke);
-  background: rgba(255,255,255,.78);
-  box-shadow: 0 14px 22px rgba(2,6,23,.08);
-}
-@media (prefers-color-scheme: dark){
-  .shop-page .shop-search{ background: rgba(255,255,255,.06); }
-}
-.shop-page .shop-search:focus-within{
-  box-shadow: var(--ring), 0 14px 22px rgba(2,6,23,.08);
-  border-color: rgba(37,99,235,.28);
-}
-.shop-page .shop-search .ico{
-  font-weight: 1000;
-  color: rgba(11,18,32,.55);
-}
-@media (prefers-color-scheme: dark){
-  .shop-page .shop-search .ico{ color: rgba(238,242,255,.60); }
-}
-.shop-page .shop-search input{
-  border:0; outline:none; width:100%;
-  background:transparent;
-  font-weight: 950;
-  color: var(--ink);
-}
-.shop-page .shop-search input::placeholder{
-  color: rgba(11,18,32,.45);
-  font-weight: 850;
-}
-@media (prefers-color-scheme: dark){
-  .shop-page .shop-search input::placeholder{ color: rgba(238,242,255,.45); }
-}
-
-.shop-page .shop-select,
-.shop-page .shop-reset{
-  padding:.84rem 1.05rem;
-  border-radius:999px;
-  border:1px solid var(--stroke);
-  background: rgba(255,255,255,.78);
-  box-shadow: 0 14px 22px rgba(2,6,23,.08);
-  font-weight: 1000;
-  color: var(--ink);
-  outline:none;
-}
-@media (prefers-color-scheme: dark){
-  .shop-page .shop-select,
-  .shop-page .shop-reset{ background: rgba(255,255,255,.06); }
-}
-.shop-page .shop-select:focus-visible,
-.shop-page .shop-reset:focus-visible{ box-shadow: var(--ring), 0 14px 22px rgba(2,6,23,.08); }
-.shop-page .shop-reset{ cursor:pointer; }
-.shop-page .shop-reset:hover{
-  background: rgba(37,99,235,.10);
-  border-color: rgba(37,99,235,.24);
-}
-
-.shop-page .filters-wrap{ display:flex; flex-wrap:wrap; gap:.55rem; align-items:center; }
-.shop-page .filters-scroll{
-  display:flex; gap:.55rem;
-  overflow-x:auto;
-  padding: .35rem .2rem .25rem;
-  scroll-snap-type: x mandatory;
-  overscroll-behavior-x: contain;
-}
-.shop-page .filters-scroll::-webkit-scrollbar{ height: 10px; }
-.shop-page .filters-scroll::-webkit-scrollbar-thumb{ background: rgba(15,23,42,.18); border-radius: 999px; }
-@media (prefers-color-scheme: dark){
-  .shop-page .filters-scroll::-webkit-scrollbar-thumb{ background: rgba(148,163,184,.24); }
-}
-
-.shop-page .pill{
-  scroll-snap-align:start;
-  border-radius:999px;
-  padding:.62rem 1.05rem;
-  font-size:.78rem;
-  font-weight: 1000;
-  border:1px solid var(--stroke);
-  background: rgba(255,255,255,.70);
-  color: var(--muted);
-  cursor:pointer;
-  transition: transform .18s var(--ease), background .18s var(--ease),
-              border-color .18s var(--ease), color .18s var(--ease),
-              box-shadow .18s var(--ease);
-  white-space:nowrap;
-  user-select:none;
-}
-@media (prefers-color-scheme: dark){
-  .shop-page .pill{ background: rgba(255,255,255,.06); color: rgba(238,242,255,.75); }
-}
-.shop-page .pill:hover{
-  border-color: rgba(37,99,235,.28);
-  background: rgba(37,99,235,.10);
-  color: var(--ink);
-  transform: translateY(-1px);
-}
-.shop-page .pill:focus-visible{ box-shadow: var(--ring); }
-.shop-page .pill[aria-pressed="true"]{
-  background: linear-gradient(135deg, var(--a), var(--b));
-  border-color: transparent;
-  color: #fff;
-  box-shadow: 0 16px 30px rgba(2,6,23,.14);
-}
-
-.shop-page .shop-section{ margin-top: 1.35rem; margin-bottom: 2.2rem; }
-.shop-page .section-title{
-  display:flex;
-  align-items:baseline;
-  justify-content:space-between;
-  gap:1rem;
-  margin: 1.1rem 0 1rem;
-}
-.shop-page .section-title h2{
-  margin:0;
-  font-size: 1.14rem;
-  font-weight: 1000;
-  letter-spacing: -.3px;
-  color: var(--ink);
-}
-.shop-page .section-title span{ font-size:.86rem; color: var(--muted); font-weight: 900; }
-
-.shop-page .shop-grid{ display:grid; gap: 1.1rem; }
-@media(min-width:640px){ .shop-page .shop-grid{ grid-template-columns: repeat(2, 1fr); } }
-@media(min-width:980px){ .shop-page .shop-grid{ grid-template-columns: repeat(3, 1fr); gap: 1.35rem; } }
-@media(min-width:1260px){ .shop-page .shop-grid{ grid-template-columns: repeat(4, 1fr); } }
-
-.shop-page .shop-card{
-  position:relative;
-  display:flex;
-  flex-direction:column;
-  border-radius: calc(var(--r-xl) + .15rem);
-  border: 1px solid var(--stroke2);
-  background: linear-gradient(180deg, var(--cardTop), var(--cardBot));
-  box-shadow: var(--shadow1);
-  overflow:hidden;
-  text-decoration:none;
-  color: inherit;
-  transform: translateZ(0);
-  transition: transform .22s var(--ease), box-shadow .22s var(--ease),
-              border-color .22s var(--ease), filter .22s var(--ease);
-}
-.shop-page .shop-card::before{
-  content:"";
-  position:absolute; inset:-2px;
-  pointer-events:none;
-  opacity:0;
-  background:
-    radial-gradient(420px 220px at 20% 10%, rgba(37,99,235,.22), transparent 70%),
-    radial-gradient(420px 220px at 80% 20%, rgba(6,182,212,.18), transparent 70%);
-  transition: opacity .22s var(--ease);
-}
-.shop-page .shop-card:hover{
-  transform: translateY(-9px);
-  box-shadow: var(--shadow2), var(--glow);
-  border-color: rgba(37,99,235,.22); /* ✅ FIX */
-  filter: saturate(1.05);
-}
-.shop-page .shop-card:hover::before{ opacity:1; }
-.shop-page .shop-card:focus-visible{ box-shadow: var(--ring), var(--shadow2); }
-
-.shop-page .media{
-  position:relative;
-  aspect-ratio: 1 / 1;
-  background:
-    radial-gradient(900px 420px at 18% 20%, rgba(37,99,235,.16), transparent 55%),
-    radial-gradient(720px 420px at 86% 20%, rgba(245,158,11,.14), transparent 58%),
-    rgba(248,250,252,.9);
-  overflow:hidden;
-}
-@media (prefers-color-scheme: dark){
-  .shop-page .media{ background: rgba(255,255,255,.04); }
-}
-.shop-page .media img{
-  width:100%;
-  height:100%;
-  object-fit:cover;
-  display:block;
-  transform: scale(1.001);
-  transition: transform .65s var(--ease), opacity .25s var(--ease);
-  opacity: 0;
-}
-.shop-page .shop-card:hover .media img{ transform: scale(1.085); }
-
-.shop-page .skel{
-  position:absolute; inset:0;
-  background: linear-gradient(90deg,
-    rgba(255,255,255,.10),
-    rgba(255,255,255,.42),
-    rgba(255,255,255,.10)
-  );
-  transform: translateX(-100%);
-  animation: shimmer 1.05s infinite;
-  opacity:.65;
-}
-@keyframes shimmer{
-  0%{ transform: translateX(-100%); }
-  100%{ transform: translateX(100%); }
-}
-.shop-page .fallback{
-  display:none;
-  position:absolute; inset:0;
-  place-items:center;
-  text-align:center;
-  padding:1rem;
-  color: var(--muted);
-  font-weight: 1000;
-  background: rgba(255,255,255,.78);
-}
-@media (prefers-color-scheme: dark){
-  .shop-page .fallback{ background: rgba(9,12,24,.75); }
-}
-
-.shop-page .badge-left{
-  position:absolute; top:.75rem; left:.75rem;
-  padding:.40rem .68rem;
-  border-radius:999px;
-  font-size:.78rem;
-  font-weight: 1000;
-  background: rgba(255,255,255,.78);
+.controls{
+  margin-top:1.1rem;
+  padding:1rem;border-radius:var(--r-xl);
+  background:rgba(255,255,255,.72);
   border:1px solid var(--stroke2);
-  box-shadow: 0 12px 22px rgba(2,6,23,.10);
-  text-transform: capitalize;
+  display:grid;gap:.8rem;
 }
-@media (prefers-color-scheme: dark){
-  .shop-page .badge-left{ background: rgba(255,255,255,.08); }
+@media (prefers-color-scheme: dark){ .controls{ background:rgba(10,14,30,.70); } }
+.searchRow{ display:flex; gap:.6rem; flex-wrap:wrap; align-items:center; }
+.shop-search{
+  flex:1; min-width:240px;
+  display:flex; gap:.6rem; align-items:center;
+  padding:.78rem 1rem;border-radius:999px;
+  border:1px solid var(--stroke);
+  background:rgba(255,255,255,.85);
 }
-.shop-page .badge-right{
-  position:absolute; top:.75rem; right:.75rem;
-  padding:.40rem .65rem;
-  border-radius:999px;
-  font-size:.75rem;
-  font-weight: 1000;
-  color: rgba(255,255,255,.98);
-  background: linear-gradient(135deg, #f97316, #ef4444);
-  border: 1px solid rgba(239,68,68,.18);
-  box-shadow: 0 14px 26px rgba(2,6,23,.14);
+@media (prefers-color-scheme: dark){ .shop-search{ background:rgba(255,255,255,.06); } }
+.shop-search input{ border:0;outline:none;width:100%;background:transparent;font-weight:900;color:var(--ink); }
+.shop-select,.shop-reset{
+  padding:.78rem 1rem;border-radius:999px;border:1px solid var(--stroke);
+  font-weight:900;background:rgba(255,255,255,.85); color:var(--ink);
+}
+@media (prefers-color-scheme: dark){ .shop-select,.shop-reset{ background:rgba(255,255,255,.06); } }
+.shop-reset{ cursor:pointer; }
+.shop-reset:hover{ border-color:rgba(37,99,235,.25); background:rgba(37,99,235,.10); }
+
+.filters-scroll{ display:flex; gap:.5rem; overflow-x:auto; padding:.25rem 0; }
+.pill{
+  padding:.55rem 1rem;border-radius:999px;
+  border:1px solid var(--stroke);
+  background:rgba(255,255,255,.78);
+  font-size:.78rem;font-weight:900;cursor:pointer;white-space:nowrap;
+}
+@media (prefers-color-scheme: dark){ .pill{ background:rgba(255,255,255,.06); } }
+.pill.is-on{
+  background:linear-gradient(135deg,var(--a),var(--b));
+  border-color:transparent;color:#fff;
 }
 
-.shop-page .body{
-  padding: 1.0rem 1.05rem 1.05rem;
-  display:flex;
-  flex-direction:column;
-  gap:.45rem;
+.sectionTop{
+  margin-top:1.25rem;
+  display:flex; align-items:baseline; justify-content:space-between; gap:1rem;
 }
-.shop-page .cat{
-  font-size:.67rem;
-  font-weight: 1000;
-  text-transform: uppercase;
-  letter-spacing: .14em;
-  color: rgba(15,23,42,.58);
-}
-@media (prefers-color-scheme: dark){
-  .shop-page .cat{ color: rgba(238,242,255,.60); }
-}
-.shop-page .name{
-  font-size: 1.02rem;
-  font-weight: 1000;
-  letter-spacing: -.25px;
-  color: var(--ink);
-  line-height:1.25;
-  display:-webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+.sectionTop h2{ margin:0; color:var(--ink); font-weight:1000; }
+.sectionTop .meta{ color:var(--muted); font-weight:900; }
+
+.shop-grid{ margin-top:1.1rem; display:grid; gap:1.2rem; }
+@media(min-width:640px){ .shop-grid{ grid-template-columns:repeat(2,1fr);} }
+@media(min-width:980px){ .shop-grid{ grid-template-columns:repeat(3,1fr);} }
+@media(min-width:1260px){ .shop-grid{ grid-template-columns:repeat(4,1fr);} }
+
+.shop-card{
+  border-radius:var(--r-xl);
+  border:1px solid var(--stroke2);
+  background:rgba(255,255,255,.92);
+  box-shadow:var(--sh1);
   overflow:hidden;
+  transition:transform .25s ease, box-shadow .25s ease;
+}
+@media (prefers-color-scheme: dark){ .shop-card{ background:rgba(12,16,34,.90); } }
+.shop-card:hover{ transform:translateY(-8px); box-shadow:var(--sh2); }
+
+.media{ aspect-ratio:1/1; background:#f1f5f9; position:relative; }
+.media img{ width:100%;height:100%;object-fit:cover; display:block; }
+.badge{
+  position:absolute; top:.7rem; right:.7rem;
+  padding:.35rem .6rem;border-radius:999px;
+  font-size:.7rem;font-weight:900;
+  background:linear-gradient(135deg,#f97316,#ef4444); color:#fff;
 }
 
-.shop-page .meta{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:.75rem;
-  margin-top:.15rem;
-}
-.shop-page .shop-price{
-  font-size: 1.08rem;
-  font-weight: 1000;
-  color: rgba(37,99,235,.98);
-}
-@media (prefers-color-scheme: dark){
-  .shop-page .shop-price{ color: rgba(96,165,250,.98); }
-}
-.shop-page .mini{
-  font-size:.82rem;
-  color: var(--muted);
-  font-weight: 900;
-}
+.body{ padding:1rem; display:grid; gap:.35rem; }
+.cat{ font-size:.65rem; letter-spacing:.12em; font-weight:900; color:var(--muted); text-transform:uppercase; }
+.name{ font-weight:1000; font-size:1rem; line-height:1.25; color:var(--ink); }
+.price{ font-weight:1000; color:var(--a); }
 
-.shop-page .card-cta{
-  margin-top:.7rem;
-  display:flex;
-  gap:.5rem;
-}
-.shop-page .card-cta .btn{
-  padding:.62rem .9rem;
-  font-size:.84rem;
-  box-shadow: none;
-}
-.shop-page .card-cta .btn:hover{ transform: translateY(-1px); }
-
-.shop-page mark.hl{
-  background: rgba(245,158,11,.26);
-  padding: 0 .08em;
-  border-radius: .35em;
-}
-
-.shop-page .empty{
-  margin-top: 1.5rem;
-  padding: 1.2rem 1.25rem;
-  border-radius: calc(var(--r-xl) + .25rem);
+.empty{
+  margin-top:1.8rem;
+  padding:1.4rem;border-radius:var(--r-xl);
   border:1px solid var(--stroke2);
-  background: rgba(255,255,255,.62);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  box-shadow: 0 18px 45px rgba(2,6,23,.08);
-  color: var(--muted);
-  line-height: 1.75;
-  font-weight: 850;
+  background:rgba(255,255,255,.70);
+  color:var(--muted);
 }
-@media (prefers-color-scheme: dark){
-  .shop-page .empty{ background: rgba(9,12,24,.58); }
-}
-.shop-page .empty strong{ color: var(--ink); font-weight:1000; }
-.shop-page .empty .btn{ margin-top:.7rem; }
+@media (prefers-color-scheme: dark){ .empty{ background:rgba(12,16,34,.70); } }
 
-.shop-page .sticky-cta{
-  position:fixed;
-  left: 16px;
-  right: 16px;
-  bottom: 14px;
-  z-index: 60;
-  display:none;
-  justify-content:center;
-  pointer-events:none;
+.pager{
+  margin-top:1.6rem;
+  display:flex;justify-content:center;gap:.5rem;flex-wrap:wrap;
 }
-.shop-page .sticky-cta.is-on{ display:flex; }
-.shop-page .sticky-cta .inner{
-  pointer-events:auto;
-  width:min(820px, 100%);
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:10px;
-  padding: 12px 12px;
-  border-radius: 999px;
-  border:1px solid var(--stroke2);
-  background: rgba(255,255,255,.72);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  box-shadow: 0 30px 90px rgba(2,6,23,.16);
+.pager a, .pager span{
+  padding:.6rem .95rem;border-radius:999px;
+  border:1px solid var(--stroke);
+  background:rgba(255,255,255,.78);
+  font-weight:900;
 }
-@media (prefers-color-scheme: dark){
-  .shop-page .sticky-cta .inner{ background: rgba(9,12,24,.62); }
+@media (prefers-color-scheme: dark){ .pager a, .pager span{ background:rgba(255,255,255,.06); } }
+.pager .on{
+  background:linear-gradient(135deg,var(--a),var(--b));
+  color:#fff;border-color:transparent;
 }
-.shop-page .sticky-cta b{ font-weight:1000; color: var(--ink); }
-.shop-page .small{ font-size:.88rem; color: var(--muted); font-weight: 850; }
-
-.shop-page .cta-btn{
-  display:inline-flex;align-items:center;justify-content:center;gap:.55rem;
-  border-radius:999px;
-  padding:.74rem 1.05rem;
-  font-weight:1000;
-  text-decoration:none;
-  border:1px solid transparent;
-  background: linear-gradient(135deg, var(--a), var(--b));
-  color:#fff;
-  box-shadow: 0 18px 40px rgba(2,6,23,.14);
-  transition: transform .22s var(--ease), filter .22s var(--ease);
-}
-.shop-page .cta-btn:hover{ transform: translateY(-2px); filter:saturate(1.08); }
-.shop-page .cta-btn:focus-visible{ box-shadow: var(--ring), 0 18px 40px rgba(2,6,23,.14); }
-
 @media (prefers-reduced-motion: reduce){
-  .shop-page *{ transition:none!important; animation:none!important; scroll-behavior:auto!important; }
-  .shop-page .cta-btn:hover,.shop-page .shop-card:hover{ transform:none!important; }
-  .shop-page .skel{ animation:none!important; }
+  .shop-page *{ transition:none!important; }
 }
 </style>
 {% endblock %}
 
 {% block content %}
-{# ------------------------------
-   FAIL-SAFE URLS (NO BuildError)
-   - usa has_endpoint global del __init__.py
------------------------------- #}
-{% set SHOP_URL = (url_for('shop.shop') if (has_endpoint is defined and has_endpoint('shop.shop')) else '/shop') %}
-{% set CART_URL = (url_for('cart.view') if (has_endpoint is defined and has_endpoint('cart.view')) else '/cart') %}
-{% set CART_JSON = (url_for('cart.cart_json') if (has_endpoint is defined and has_endpoint('cart.cart_json')) else '/cart/json') %}
-{% set PRODUCT_PREFIX = '/product/' %}
+{% set items = products if products is defined and products else [] %}
+{% set total = total_count|default(items|length) %}
+{% set page = page|default(1) %}
+{% set pages = pages|default(1) %}
+{% set qv = q|default(request.args.get('q','')) %}
+{% set catv = categoria|default(request.args.get('categoria','')) %}
+{% set sortv = sort|default(request.args.get('sort','')) %}
 
-<section class="shop-page" aria-label="Tienda">
+<section class="shop-page">
   <div class="shop-wrap">
 
     <header class="shop-header">
-      <div class="topline">
-        <div>
-          <div class="shop-kicker"><span class="dot"></span> Marketplace · Skyline Store</div>
-          <h1 class="shop-h1">Tienda <span>premium</span></h1>
-          <p class="shop-sub">Buscá rápido, filtrá por categoría y comprá con una experiencia tipo marketplace.</p>
+      <div class="shop-kicker"><span class="dot"></span> MARKETPLACE</div>
+      <h1 class="shop-h1">Tienda <span>Skyline</span></h1>
+      <p class="shop-sub">Buscá, filtrá y ordená con experiencia marketplace real (server-side).</p>
 
-          <div class="shop-badges" aria-label="Beneficios">
-            <span class="shop-badge">⚡ <b>Envío rápido</b></span>
-            <span class="shop-badge">🔒 <b>Pago seguro</b></span>
-            <span class="shop-badge">✅ <b>Compra protegida</b></span>
-            <span class="shop-badge">💬 <b>Soporte real</b></span>
-          </div>
-        </div>
-
-        <aside class="summary" aria-label="Resumen">
-          <div class="count" id="countPill" aria-live="polite">
-            <span>Resultados:</span> <b id="countNum">0</b>
-          </div>
-
-          <div class="ctaRow">
-            <a class="btn btn-primary" href="{{ CART_URL }}">Ir al carrito</a>
-            <a class="btn btn-soft" href="{{ SHOP_URL }}">Ver todo</a>
-          </div>
-
-          <p class="small" style="margin:.7rem 0 0">Tip: buscá por <b>hoodie</b>, <b>auriculares</b>, <b>smartwatch</b>.</p>
-        </aside>
-      </div>
-
-      <div class="controls" aria-label="Controles de tienda">
+      <div class="controls">
         <div class="searchRow">
-          <form id="shopForm" class="shop-search" action="{{ SHOP_URL }}" method="get" role="search" aria-label="Buscar productos">
-            <span class="ico" aria-hidden="true">🔎</span>
-            <label class="sr-only" for="q">Buscar</label>
-            <input
-              id="q"
-              name="q"
-              type="search"
-              value="{{ request.args.get('q','') }}"
-              placeholder="Buscar… ej: hoodie, auriculares, smartwatch"
-              autocomplete="off"
-              spellcheck="false"
-              enterkeyhint="search"
-            >
-            {% if request.args.get('sort') %}<input type="hidden" name="sort" value="{{ request.args.get('sort') }}">{% endif %}
-            {% if request.args.get('categoria') %}<input type="hidden" name="categoria" value="{{ request.args.get('categoria') }}">{% endif %}
+          <form id="shopForm" class="shop-search" action="{{ url_for('shop.shop') }}" method="get" role="search" aria-label="Buscar productos">
+            🔎
+            <input id="q" name="q" type="search" value="{{ qv|e }}" placeholder="Buscar… ej: hoodie, auriculares, smartwatch">
+            {% if catv %}<input type="hidden" name="categoria" value="{{ catv|e }}">{% endif %}
+            {% if sortv %}<input type="hidden" name="sort" value="{{ sortv|e }}">{% endif %}
           </form>
 
-          <select class="shop-select" id="sort" name="sort" form="shopForm" aria-label="Ordenar">
-            {% set current_sort = request.args.get('sort','') %}
-            <option value="" {{ 'selected' if current_sort=='' else '' }}>Ordenar</option>
-            <option value="new" {{ 'selected' if current_sort=='new' else '' }}>Novedades</option>
-            <option value="price_asc" {{ 'selected' if current_sort=='price_asc' else '' }}>Precio: menor</option>
-            <option value="price_desc" {{ 'selected' if current_sort=='price_desc' else '' }}>Precio: mayor</option>
+          <select id="sort" class="shop-select" aria-label="Ordenar">
+            <option value="" {{ 'selected' if sortv=='' else '' }}>Ordenar</option>
+            <option value="new" {{ 'selected' if sortv=='new' else '' }}>Novedades</option>
+            <option value="price_asc" {{ 'selected' if sortv=='price_asc' else '' }}>Precio ↑</option>
+            <option value="price_desc" {{ 'selected' if sortv=='price_desc' else '' }}>Precio ↓</option>
           </select>
 
-          <button class="shop-reset" id="resetBtn" type="button" aria-label="Resetear filtros">↺ Reset</button>
+          <button id="resetBtn" class="shop-reset" type="button">↺ Reset</button>
         </div>
 
-        <div class="filters-wrap" aria-label="Filtros rápidos">
-          <div class="filters-scroll" id="filters">
-            <button class="pill" type="button" data-cat="" aria-pressed="true">Todo</button>
+        <div class="filters-scroll" id="filters" aria-label="Filtros rápidos">
+          <a class="pill {{ 'is-on' if not catv else '' }}"
+             href="{{ url_for('shop.shop', q=qv, sort=sortv) }}">Todo</a>
 
-            {% if categories is defined and categories %}
-              {% for c in categories %}
-                {% set c_slug = (c.slug if c.slug is defined else c)|string %}
-                {% set c_name = (c.name if c.name is defined else c)|string %}
-                <button class="pill" type="button" data-cat="{{ c_slug|lower|e }}" aria-pressed="false">{{ c_name|e }}</button>
-              {% endfor %}
-            {% else %}
-              <button class="pill" type="button" data-cat="ropa" aria-pressed="false">Ropa</button>
-              <button class="pill" type="button" data-cat="accesorios" aria-pressed="false">Accesorios</button>
-              <button class="pill" type="button" data-cat="tecnologia" aria-pressed="false">Tecnología</button>
-            {% endif %}
-          </div>
+          {% for c in categories|default([]) %}
+            {% set slug = (c.slug if c.slug is defined else c['slug'] if c is mapping and c.get('slug') else c)|string %}
+            {% set name = (c.name if c.name is defined else c['name'] if c is mapping and c.get('name') else slug)|string %}
+            <a class="pill {{ 'is-on' if catv==slug else '' }}"
+               href="{{ url_for('shop.shop', q=qv, sort=sortv, categoria=slug) }}">{{ name|e }}</a>
+          {% endfor %}
         </div>
       </div>
     </header>
 
-    <section class="shop-section" aria-label="Listado de productos">
-      <div class="section-title">
-        <h2>Productos</h2>
-        <span id="activeFilterText">Mostrando: Todo</span>
-      </div>
-
-      {% set items = products if products is defined and products else [] %}
-
-      <div class="shop-grid" id="grid">
-        {% for p in items %}
-          {% set title = (p.title if p.title is defined else (p.name if p.name is defined else 'Producto'))|string %}
-          {% set img = (p.img if p.img is defined else (p.image if p.image is defined else ''))|string %}
-          {% set cat = (p.category if p.category is defined else (p.category_slug if p.category_slug is defined else ''))|string %}
-          {% set price = (p.price if p.price is defined else (p.price_display if p.price_display is defined else ''))|string %}
-
-          {% set href = (p.href if p.href is defined and p.href else '')|string %}
-          {% if not href and (p.slug is defined and p.slug) %}
-            {% set href = PRODUCT_PREFIX ~ (p.slug|string) %}
-          {% endif %}
-          {% if not href %}{% set href = SHOP_URL %}{% endif %}
-
-          {% set price_value = '' %}
-          {% if p.price_value is defined and p.price_value is not none %}
-            {% set price_value = p.price_value %}
-          {% elif p.price is defined and p.price is not none %}
-            {% set price_value = p.price %}
-          {% endif %}
-
-          {# NEW: timestamp for "Novedades" (si existe) #}
-          {% set ts = '' %}
-          {% if p.created_at is defined and p.created_at %}
-            {% set ts = p.created_at %}
-          {% elif p.ts is defined and p.ts %}
-            {% set ts = p.ts %}
-          {% endif %}
-
-          <a class="shop-card"
-             href="{{ href|e }}"
-             data-title="{{ title|lower|e }}"
-             data-cat="{{ cat|lower|e }}"
-             data-price="{{ price_value|string|e }}"
-             data-ts="{{ ts|string|e }}"
-             aria-label="{{ title|e }}">
-
-            <div class="media">
-              <div class="skel" aria-hidden="true"></div>
-
-              {% if img %}
-                <img src="{{ img|e }}" alt="{{ title|e }}" loading="lazy" decoding="async">
-              {% else %}
-                <div class="fallback" style="display:grid">Sin imagen</div>
-              {% endif %}
-
-              {% if p.is_offer is defined and p.is_offer %}
-                <span class="badge-right">OFERTA</span>
-              {% endif %}
-              {% if cat %}
-                <span class="badge-left">{{ cat|e }}</span>
-              {% endif %}
-            </div>
-
-            <div class="body">
-              {% if cat %}<div class="cat">{{ cat|e }}</div>{% endif %}
-              <div class="name" data-name>{{ title|e }}</div>
-
-              <div class="meta">
-                <div class="shop-price" data-price-text>{{ price|e }}</div>
-                <div class="mini">Premium</div>
-              </div>
-
-              <div class="card-cta" aria-hidden="true">
-                <span class="btn btn-primary" style="pointer-events:none">Comprar</span>
-                <span class="btn btn-soft" style="pointer-events:none">Ver</span>
-              </div>
-            </div>
-          </a>
-        {% endfor %}
-      </div>
-
-      {% if items|length == 0 %}
-        <div class="empty">
-          <strong>No hay productos para mostrar.</strong><br>
-          Probá con otra búsqueda o cargá productos desde Admin.
-          <div>
-            <a class="btn btn-primary" href="{{ SHOP_URL }}">Volver a tienda</a>
-          </div>
-        </div>
-      {% endif %}
-    </section>
-
-    <div class="sticky-cta" id="stickyCta" aria-hidden="true">
-      <div class="inner">
-        <div>
-          <b>Carrito listo</b>
-          <div class="small" id="stickyText">Continuá tu compra</div>
-        </div>
-        <a class="cta-btn" href="{{ CART_URL }}">Ver carrito →</a>
-      </div>
+    <div class="sectionTop">
+      <h2>Productos</h2>
+      <div class="meta">{{ total }} resultado(s) · Página {{ page }}/{{ pages }}</div>
     </div>
+
+    <div class="shop-grid">
+      {% for p in items %}
+        {% set title = (p.title if p.title is defined else (p.name if p.name is defined else 'Producto'))|string %}
+        {% set img = (p.img if p.img is defined else (p.image if p.image is defined else ''))|string %}
+        {% set cat = (p.category_slug if p.category_slug is defined else (p.category if p.category is defined else ''))|string %}
+        {% set price = (p.price_display if p.price_display is defined else (p.price if p.price is defined else ''))|string %}
+        {% set href = (p.href if p.href is defined and p.href else '')|string %}
+        {% if not href and (p.slug is defined and p.slug) %}{% set href = '/product/' ~ (p.slug|string) %}{% endif %}
+        {% if not href %}{% set href = url_for('shop.shop') %}{% endif %}
+
+        <a class="shop-card" href="{{ href|e }}" aria-label="{{ title|e }}">
+          <div class="media">
+            {% if img %}
+              <img src="{{ img|e }}" alt="{{ title|e }}" loading="lazy" decoding="async">
+            {% endif %}
+            {% if p.is_offer is defined and p.is_offer %}
+              <span class="badge">OFERTA</span>
+            {% endif %}
+          </div>
+          <div class="body">
+            {% if cat %}<div class="cat">{{ cat|e }}</div>{% endif %}
+            <div class="name">{{ title|e }}</div>
+            <div class="price">{{ price|e }}</div>
+          </div>
+        </a>
+      {% endfor %}
+    </div>
+
+    {% if items|length == 0 %}
+      <div class="empty">
+        <strong>No hay productos para mostrar.</strong><br>
+        Probá otra búsqueda o cargá productos desde Admin.
+      </div>
+    {% endif %}
+
+    {% if pages|int > 1 %}
+      <nav class="pager" aria-label="Paginación">
+        {% set prev = page|int - 1 %}
+        {% set nxt = page|int + 1 %}
+
+        {% if prev >= 1 %}
+          <a href="{{ url_for('shop.shop', q=qv, sort=sortv, categoria=catv, page=prev) }}">← Anterior</a>
+        {% endif %}
+
+        {# ventana de páginas (fail-safe) #}
+        {% set start = (page|int - 2) %}
+        {% set end = (page|int + 2) %}
+        {% if start < 1 %}{% set start = 1 %}{% endif %}
+        {% if end > pages %}{% set end = pages %}{% endif %}
+
+        {% for n in range(start, end + 1) %}
+          {% if n == page|int %}
+            <span class="on">{{ n }}</span>
+          {% else %}
+            <a href="{{ url_for('shop.shop', q=qv, sort=sortv, categoria=catv, page=n) }}">{{ n }}</a>
+          {% endif %}
+        {% endfor %}
+
+        {% if nxt <= pages|int %}
+          <a href="{{ url_for('shop.shop', q=qv, sort=sortv, categoria=catv, page=nxt) }}">Siguiente →</a>
+        {% endif %}
+      </nav>
+    {% endif %}
 
   </div>
 </section>
 
 <script>
 (() => {
-  const root = document.querySelector('.shop-page');
-  if (!root) return;
-
-  const grid = document.getElementById('grid');
-  if (!grid) return;
-
-  const q = document.getElementById('q');
-  const countNum = document.getElementById('countNum');
-  const activeFilterText = document.getElementById('activeFilterText');
-  const filters = document.getElementById('filters');
-  const resetBtn = document.getElementById('resetBtn');
-  const sticky = document.getElementById('stickyCta');
-  const stickyText = document.getElementById('stickyText');
   const sort = document.getElementById('sort');
+  const reset = document.getElementById('resetBtn');
 
-  // cards live (se reordenan)
-  const getCards = () => Array.from(grid.querySelectorAll('.shop-card'));
-
-  const state = {
-    cat: "",
-    query: (q?.value || "").trim().toLowerCase(),
-    sort: (sort?.value || "").trim()
-  };
-
-  // Fade-in images + remove skeleton
-  getCards().forEach(card => {
-    const img = card.querySelector('img');
-    const skel = card.querySelector('.skel');
-    if (!img) { if (skel) skel.style.display = 'none'; return; }
-    const done = () => { img.style.opacity = '1'; if (skel) skel.style.display = 'none'; };
-    if (img.complete) done();
-    img.addEventListener('load', done, { once:true });
-    img.addEventListener('error', () => {
-      if (skel) skel.style.display = 'none';
-      const fb = card.querySelector('.fallback');
-      if (fb) fb.style.display = 'grid';
-    }, { once:true });
-  });
-
-  // Highlight matches (safe)
-  const escapeHtml = (s) => String(s ?? "").replace(/[&<>"']/g, m => ({
-    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
-  }[m]));
-  const highlight = (el, needle) => {
-    if (!el) return;
-    const txt = el.textContent || "";
-    if (!needle) { el.innerHTML = escapeHtml(txt); return; }
-    const safeTxt = escapeHtml(txt);
-    const n = String(needle).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    el.innerHTML = safeTxt.replace(new RegExp(`(${n})`, "ig"), "<mark class='hl'>$1</mark>");
-  };
-
-  const numPrice = (el) => {
-    const raw = el.getAttribute('data-price') || "";
-    const n = parseFloat(String(raw).replace(/[^0-9.,]/g,'').replace(',','.'));
-    return Number.isFinite(n) ? n : 0;
-  };
-
-  const tsValue = (el) => {
-    const raw = (el.getAttribute('data-ts') || "").trim();
-    // acepta unix, iso, o vacío
-    const asNum = Number(raw);
-    if (Number.isFinite(asNum) && asNum > 0) return asNum;
-    const t = Date.parse(raw);
-    return Number.isFinite(t) ? t : 0;
-  };
-
-  const matches = (card) => {
-    const title = (card.getAttribute('data-title') || "");
-    const cat = (card.getAttribute('data-cat') || "");
-    const okQ = !state.query || title.includes(state.query);
-    const okC = !state.cat || cat === state.cat;
-    return okQ && okC;
-  };
-
-  const apply = () => {
-    const cards = getCards();
-    let visible = 0;
-
-    for (const card of cards) {
-      const nameEl = card.querySelector('[data-name]');
-      highlight(nameEl, state.query);
-
-      const show = matches(card);
-      card.style.display = show ? "" : "none";
-      if (show) visible++;
-    }
-
-    // sort AFTER filtering (solo reordena visibles, pero estable)
-    const visibles = cards.filter(c => c.style.display !== "none");
-    if (state.sort === "price_asc") visibles.sort((a,b) => numPrice(a) - numPrice(b));
-    else if (state.sort === "price_desc") visibles.sort((a,b) => numPrice(b) - numPrice(a));
-    else if (state.sort === "new") visibles.sort((a,b) => tsValue(b) - tsValue(a));
-
-    for (const el of visibles) grid.appendChild(el);
-
-    if (countNum) countNum.textContent = String(visible);
-    if (activeFilterText) activeFilterText.textContent = `Mostrando: ${state.cat ? state.cat : "Todo"}`;
-  };
-
-  // Debounced typing
-  if (q) {
-    let t;
-    q.addEventListener('input', () => {
-      window.clearTimeout(t);
-      t = window.setTimeout(() => {
-        state.query = (q.value || "").trim().toLowerCase();
-        apply();
-      }, 90);
-    }, {passive:true});
-  }
-
-  // Filter pills
-  if (filters) {
-    filters.addEventListener('click', (e) => {
-      const btn = e.target.closest('.pill');
-      if (!btn) return;
-
-      filters.querySelectorAll('.pill').forEach(b => b.setAttribute('aria-pressed','false'));
-      btn.setAttribute('aria-pressed','true');
-
-      state.cat = (btn.getAttribute('data-cat') || "").trim().toLowerCase();
-      apply();
-    });
-  }
-
-  // Sort
   if (sort) {
     sort.addEventListener('change', () => {
-      state.sort = (sort.value || "").trim();
-      apply();
-    }, {passive:true});
-  }
-
-  // Reset
-  if (resetBtn) {
-    resetBtn.addEventListener('click', () => {
-      state.cat = "";
-      state.query = "";
-      state.sort = "";
-      if (q) q.value = "";
-      if (sort) sort.value = "";
-
-      if (filters) {
-        filters.querySelectorAll('.pill').forEach(b => b.setAttribute('aria-pressed','false'));
-        const first = filters.querySelector('.pill[data-cat=""]') || filters.querySelector('.pill');
-        if (first) first.setAttribute('aria-pressed','true');
-      }
-
-      apply();
-
-      try {
-        const u = new URL(window.location.href);
-        u.search = "";
-        window.history.replaceState({}, "", u.toString());
-      } catch (_) {}
+      const u = new URL(window.location.href);
+      const v = (sort.value || '').trim();
+      if (v) u.searchParams.set('sort', v);
+      else u.searchParams.delete('sort');
+      u.searchParams.delete('page'); // reset page al ordenar
+      window.location.href = u.toString();
     });
   }
 
-  // Sticky CTA (carrito) - FAIL SAFE URL
-  const showSticky = (count) => {
-    if (!sticky) return;
-    if (count > 0) {
-      sticky.classList.add('is-on');
-      sticky.setAttribute('aria-hidden','false');
-      if (stickyText) stickyText.textContent = `${count} ítem(s) en carrito · Finalizá tu compra`;
-    } else {
-      sticky.classList.remove('is-on');
-      sticky.setAttribute('aria-hidden','true');
-    }
-  };
-
-  fetch("{{ CART_JSON }}", { credentials: 'same-origin' })
-    .then(r => r.ok ? r.json() : null)
-    .then(d => showSticky(d?.items_count || 0))
-    .catch(() => {});
-
-  apply();
+  if (reset) {
+    reset.addEventListener('click', () => {
+      const u = new URL(window.location.href);
+      u.search = '';
+      window.location.href = u.toString();
+    });
+  }
 })();
 </script>
 {% endblock %}
