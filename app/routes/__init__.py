@@ -1,28 +1,22 @@
 """
-Skyline Store · Routes Package (BULLETPROOF FINAL · vNEXT+FIX · +15 mejoras)
-========================================================================
+Skyline Store · Routes Package (BULLETPROOF FINAL · vNEXT+FIX · +10 mejoras)
+===========================================================================
 FIX CRÍTICO:
 ✅ Evita duplicar url_prefix cuando el Blueprint ya trae url_prefix interno.
    (origen del /auth/auth/... y los 404)
-========================================================================
+===========================================================================
 
-+15 mejoras (resumen):
-1)  FIX definitivo /prefix duplicado: nunca pasa url_prefix si ya hay interno
-    y sólo aplica override externo (ENV/spec) de forma segura.
-2)  Override externo NO concatena con el interno: reemplaza limpio.
-3)  Sanitiza y normaliza prefijos (//, trailing /, vacío).
-4)  `ROUTES_SCAN_ONLY_MODULES` acepta wildcards correctamente (sin bug only_list vacío).
-5)  Mejora: `ROUTES_SCAN_ONLY_MODULES` matchea por módulo completo y tail.
-6)  Dedupe más robusto: (id), (origin), (name), (modsym) estable.
-7)  Report `map` incluye `effective_prefix` real (interno u override).
-8)  Report `imports_failed` se deduplica y se ordena estable.
-9)  `ROUTES_BUST_IMPORT_CACHE=1` limpia caches reales (import + scan).
-10) `_safe_import_module` no cachea None si `ROUTES_IMPORT_NO_CACHE=1`.
-11) `_scan_route_modules` maneja __path__ faltante sin reventar.
-12) Filtro “ruido” mejorado para tests/conftest/__init__.
-13) Logging: resume registered/disabled/dup/failed y (debug) imports fallidos.
-14) Strict mode más predecible: dev-only por ENV/debug + FORCE.
-15) Código más defensivo en edge cases (attrs raros en Blueprint).
++10 mejoras (resumen):
+1)  ROUTES_CODE_VER participa del cache key (bust sin cambiar envs).
+2)  only/exclude matchea por módulo completo y tail (wildcards OK).
+3)  ROUTES_PRIORITY soporta "mod:Symbol" (importa blueprint puntual).
+4)  ROUTES_PRIORITY soporta "mod@/prefix" (override externo por spec).
+5)  Import errors: no pisa error si luego importó OK.
+6)  Dedupe modsym estable + name/id/origin.
+7)  Report map agrega internal_prefix y override_prefix.
+8)  Strict error incluye required_missing + imports_failed.
+9)  Logging final incluye scan_only + strict.
+10) Más defensivo con attrs raros en Blueprint.
 """
 
 from __future__ import annotations
@@ -86,7 +80,6 @@ def _scan_exclude_patterns() -> List[str]:
 
 
 def _scan_only_modules_raw() -> List[str]:
-    # lista raw (ya lower) para wildcard match, NO set (porque orden estable)
     return [x.lower() for x in _split_csv_env("ROUTES_SCAN_ONLY_MODULES")]
 
 
@@ -98,7 +91,7 @@ def _allowed_names() -> Set[str]:
     return {x.lower() for x in _split_csv_env("ROUTES_ALLOW")}
 
 
-def _priority_modules() -> List[str]:
+def _priority_modules_raw() -> List[str]:
     return [x for x in _split_csv_env("ROUTES_PRIORITY") if x]
 
 
@@ -143,6 +136,11 @@ def _match_any(value: str, patterns: List[str]) -> bool:
     return False
 
 
+def _match_module(name_l: str, tail_l: str, patterns: List[str]) -> bool:
+    # mejora: matchea por módulo completo y también por tail
+    return _match_any(name_l, patterns) or _match_any(tail_l, patterns)
+
+
 def _is_disabled(bp_name: str, sym_tail: str, mod_path: str, patterns: List[str]) -> bool:
     return (
         _match_any(bp_name, patterns)
@@ -164,9 +162,7 @@ def _bp_env_key(bp_name: str) -> str:
 def _env_prefix_for(bp_name: str) -> Optional[str]:
     key = f"ROUTES_PREFIX_{_bp_env_key(bp_name)}"
     v = (os.getenv(key) or "").strip()
-    if not v:
-        return None
-    return v
+    return v or None
 
 
 # =============================================================================
@@ -188,6 +184,8 @@ def _compute_env_cache_key() -> str:
         "ROUTES_STRICT_FORCE",
         "ROUTES_BUST_IMPORT_CACHE",
         "ROUTES_PRIORITY_DEFAULTS",
+        # ✅ nuevo: version interno para bust sin cambiar todo
+        "ROUTES_CODE_VER",
     ]
     prefix_items: List[str] = []
     for k, v in os.environ.items():
@@ -230,6 +228,7 @@ def _safe_import_module(path: str):
         mod = import_module(path)
         if not no_cache:
             _MODULE_CACHE[path] = mod
+        # ✅ mejora: si importó OK, limpiamos error previo
         _IMPORT_ERRORS.pop(path, None)
         return mod
     except Exception as e:
@@ -300,7 +299,9 @@ def _scan_route_modules(exclude_patterns: List[str], only_patterns: List[str]) -
     global _SCAN_CACHE, _SCAN_CACHE_KEY
 
     scan_sub = _env_bool("ROUTES_SCAN_SUBPACKAGES", False)
-    only_list = sorted([x for x in (only_patterns or []) if x])
+    only_list = [x for x in (only_patterns or []) if x]
+    only_list = sorted(only_list)
+
     key = f"sub={int(scan_sub)}|ex={'/'.join(exclude_patterns or [])}|only={'/'.join(only_list)}"
     if _SCAN_CACHE is not None and _SCAN_CACHE_KEY == key:
         return list(_SCAN_CACHE)
@@ -323,10 +324,11 @@ def _scan_route_modules(exclude_patterns: List[str], only_patterns: List[str]) -
             name_l = m.name.lower()
             tail_l = tail.lower()
 
-            if _match_any(name_l, exclude_patterns) or _match_any(tail_l, exclude_patterns):
+            if _match_module(name_l, tail_l, exclude_patterns):
                 continue
 
-            if only_list and (not _match_any(name_l, only_list) and not _match_any(tail_l, only_list)):
+            # ✅ mejora: only matchea módulo o tail (wildcards OK)
+            if only_list and (not _match_module(name_l, tail_l, only_list)):
                 continue
 
             mods.append(m.name)
@@ -341,9 +343,9 @@ def _scan_route_modules(exclude_patterns: List[str], only_patterns: List[str]) -
                             continue
                         sm_l = sm.name.lower()
                         stail_l = stail.lower()
-                        if _match_any(sm_l, exclude_patterns) or _match_any(stail_l, exclude_patterns):
+                        if _match_module(sm_l, stail_l, exclude_patterns):
                             continue
-                        if only_list and (not _match_any(sm_l, only_list) and not _match_any(stail_l, only_list)):
+                        if only_list and (not _match_module(sm_l, stail_l, only_list)):
                             continue
                         mods.append(sm.name)
                 except Exception:
@@ -365,14 +367,11 @@ def _scan_route_modules(exclude_patterns: List[str], only_patterns: List[str]) -
 def _normalize_prefix(prefix: Optional[str]) -> Optional[str]:
     if not prefix:
         return None
-    p = prefix.strip()
+    p = str(prefix).strip()
     if not p:
         return None
-
-    # normaliza barras dobles
     while "//" in p:
         p = p.replace("//", "/")
-
     if not p.startswith("/"):
         p = "/" + p
     if p != "/" and p.endswith("/"):
@@ -392,11 +391,30 @@ def _normalize_origin(origin: str) -> str:
     return (origin or "").strip().lower()
 
 
-@dataclass(frozen=True)
-class _BpKey:
-    bp_id: int
-    bp_name: str
-    origin: str
+def _parse_priority_item(raw: str) -> Tuple[str, Optional[str], Optional[str]]:
+    """
+    Soporta:
+      - module
+      - module:Symbol
+      - module@/prefix
+      - module:Symbol@/prefix
+    """
+    s = (raw or "").strip()
+    if not s:
+        return ("", None, None)
+
+    prefix = None
+    if "@" in s:
+        left, right = s.split("@", 1)
+        s = left.strip()
+        prefix = _normalize_prefix(right.strip()) or None
+
+    symbol = None
+    if ":" in s:
+        mod, sym = s.split(":", 1)
+        return (mod.strip(), (sym.strip() or None), prefix)
+
+    return (s, None, prefix)
 
 
 def _register_bp(
@@ -454,15 +472,6 @@ def _register_bp(
         report["duplicate"].append(f"(name) {bp_name} <- {origin}")
         return
 
-    # =========================================================
-    # ✅ FIX CRÍTICO anti /auth/auth:
-    # - El blueprint puede tener prefijo interno (bp.url_prefix).
-    # - Si pasamos url_prefix externo igual, Flask duplica.
-    #
-    # Regla:
-    # 1) Si hay override externo (ENV/spec), lo pasamos a register_blueprint.
-    # 2) Si NO hay override externo, registramos SIN url_prefix para respetar el interno.
-    # =========================================================
     env_pref = _normalize_prefix(_env_prefix_for(bp_name))
     spec_pref = _normalize_prefix(url_prefix)
     internal_pref = _bp_internal_prefix(bp)
@@ -489,6 +498,8 @@ def _register_bp(
             "origin": origin,
             "symbol": symbol,
             "prefix": effective_prefix,
+            "internal_prefix": internal_pref or "",
+            "override_prefix": override_prefix or "",
         }
     except Exception as e:
         report["failed_register"].append(f"{bp_name} <- {origin} :: {_short_exc(e)}")
@@ -526,9 +537,7 @@ def _default_specs() -> List[Tuple[str, Optional[str], Optional[str]]]:
 
 def _use_default_specs() -> bool:
     raw = (os.getenv("ROUTES_PRIORITY_DEFAULTS") or "").strip().lower()
-    if raw in _FALSE:
-        return False
-    return True
+    return raw not in _FALSE
 
 
 # =============================================================================
@@ -566,14 +575,19 @@ def register_blueprints(app: "Flask") -> Dict[str, Any]:
         "timing_ms": 0,
         "counts": {},
         "strict": strict,
+        "scan_only": scan_only,
         "map": {},
     }
 
     specs: List[Tuple[str, Optional[str], Optional[str]]] = []
     if _use_default_specs():
         specs.extend(_default_specs())
-    for m in _priority_modules():
-        specs.append((m, None, None))
+
+    # ✅ mejoras: ROUTES_PRIORITY soporta module:Symbol@/prefix
+    for raw in _priority_modules_raw():
+        mod, sym, pref = _parse_priority_item(raw)
+        if mod:
+            specs.append((mod, sym, pref))
 
     # -----------------------------------------
     # 1) PRIORIDAD
@@ -643,14 +657,16 @@ def register_blueprints(app: "Flask") -> Dict[str, Any]:
         miss = sorted(required - have)
         if miss:
             report["required_missing"] = miss
+            msg = f"ROUTES_REQUIRE faltantes: {', '.join(miss)}"
+            if report["imports_failed"]:
+                msg += f" | imports_failed: {', '.join(sorted(set(report['imports_failed'])))}"
             if strict:
-                raise RuntimeError(f"ROUTES_REQUIRE faltantes: {', '.join(miss)}")
-            log.warning("⚠️ ROUTES_REQUIRE faltantes: %s", ", ".join(miss))
+                raise RuntimeError(msg)
+            log.warning("⚠️ %s", msg)
 
     # -----------------------------------------
     # Post-procesos report
     # -----------------------------------------
-    # Dedup imports_failed y estable
     try:
         if report["imports_failed"]:
             report["imports_failed"] = sorted(set(report["imports_failed"]))
@@ -673,8 +689,11 @@ def register_blueprints(app: "Flask") -> Dict[str, Any]:
 
     try:
         log.info(
-            "✅ Routes ready | registered=%d | disabled=%d | dup=%d | failed=%d | %dms",
+            "✅ Routes ready | registered=%d | scan=%d | scan_only=%s | strict=%s | disabled=%d | dup=%d | failed=%d | %dms",
             report["counts"]["registered"],
+            report["counts"]["scan_registered"],
+            str(bool(scan_only)).lower(),
+            str(bool(strict)).lower(),
             report["counts"]["disabled"],
             report["counts"]["duplicate"],
             report["counts"]["failed_register"],

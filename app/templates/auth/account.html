@@ -1,32 +1,7 @@
-{# app/templates/auth/account.html — Skyline Store (ULTRA PRO / CSRF SAFE / v8.0 UNIFIED)
-   ✅ 20 MEJORAS (v8.0):
-   1) ✅ Unifica CSS: usa SOLO /static/css/account.css (ya incluye login+register)
-   2) ✅ Estructura alineada al CSS PRO (auth-wrap/auth-shell/auth-card/auth-side)
-   3) ✅ Endpoints estables (hard links) + no rompe si faltan rutas
-   4) ✅ CSRF robusto: csrf_token() o csrf_token_value o vacío (meta + hidden)
-   5) ✅ next hardening estricto (solo paths /... y sin //) + preserva next en tabs
-   6) ✅ Preserva valores por tab (_tab) + no “mezcla” campos entre forms
-   7) ✅ Tabs accesibles (aria + teclado arrows/home/end) + focus correcto
-   8) ✅ Panels con hidden real + aria-hidden sincronizado
-   9) ✅ Honeypot anti-bot a11y-safe (hp-field) + no rompe autofill
-   10) ✅ Autocomplete correcto (username/current-password/new-password/name)
-   11) ✅ Errores inline aria-live + aria-invalid + foco seguro
-   12) ✅ Evita doble submit + spinner + restore automático
-   13) ✅ Password toggle accesible (aria-pressed + aria-label dinámico)
-   14) ✅ Fallback links: “Olvidé…” / “Seguir como invitado” / “Tienda”
-   15) ✅ Sanitiza categorías flash (solo error/warning/success/info)
-   16) ✅ CSP nonce soportado (inline JS con nonce opcional)
-   17) ✅ No depende de current_app/view_functions (evita 500 por undefined)
-   18) ✅ Reduced motion respetado (CSS ya lo cubre) + JS sin anim forzada
-   19) ✅ Dark mode legible (CSS ya lo cubre) + layout estable
-   20) ✅ Progressive enhancement: JS no rompe si localStorage/URL no existen
-#}
-
 {% extends "base.html" %}
 {% block title %}Mi cuenta | {{ (APP_NAME or "Skyline Store")|e }}{% endblock %}
 
 {% block extra_head %}
-  {# ✅ CSS UNIFICADO (login+register+account) #}
   <link rel="preload" as="style" href="{{ url_for('static', filename='css/account.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/account.css') }}">
 
@@ -34,7 +9,6 @@
 
   {% set _csp_nonce = (csp_nonce if csp_nonce is defined and csp_nonce else (nonce if nonce is defined and nonce else '')) %}
 
-  {# ───────────── CSRF robusto ───────────── #}
   {% set _csrf_val = '' %}
   {% if csrf_token is defined and csrf_token %}
     {% if csrf_token is callable %}
@@ -50,135 +24,90 @@
 
 {% block content %}
 
-{# ───────────── next hardening (solo /path) ───────────── #}
 {% set _raw_next = (next|default(request.args.get('next',''), true)|string).strip() %}
-{% set nxt = _raw_next %}
-{% if (not nxt) or (not nxt.startswith('/')) or (nxt.startswith('//')) %}
-  {% set nxt = '' %}
-{% endif %}
+{% set nxt = _raw_next if _raw_next.startswith('/') and not _raw_next.startswith('//') else '' %}
 
-{# ───────────── initial tab ───────────── #}
 {% set qtab = (request.args.get('tab','')|string|lower|trim) %}
 {% set initial_tab = (active_tab|default('login')|string|lower|trim) %}
 {% if qtab in ['login','register'] %}{% set initial_tab = qtab %}{% endif %}
 {% if initial_tab not in ['login','register'] %}{% set initial_tab = 'login' %}{% endif %}
 
-{# ───────────── preserve typed values por tab ───────────── #}
 {% set _post_tab = (request.form.get('_tab','') if request.method == 'POST' else '')|string|lower|trim %}
-{% set _login_email = (request.form.get('email','') if request.method == 'POST' and _post_tab == 'login' else '')|string %}
-{% set _reg_name    = (request.form.get('name','')  if request.method == 'POST' and _post_tab == 'register' else '')|string %}
-{% set _reg_email   = (request.form.get('email','') if request.method == 'POST' and _post_tab == 'register' else '')|string %}
+{% set _login_email = (request.form.get('email','') if request.method == 'POST' and _post_tab == 'login' else prefill_email|default('',true))|string %}
+{% set _reg_name  = (request.form.get('name','')  if request.method == 'POST' and _post_tab == 'register' else '')|string %}
+{% set _reg_email = (request.form.get('email','') if request.method == 'POST' and _post_tab == 'register' else '')|string %}
 
-{# ───────────── endpoints (estables / sin 500) ───────────── #}
 {% set login_action = '/auth/login' %}
 {% set register_action = '/auth/register' %}
 {% set account_url = '/auth/account' %}
 {% set forgot_url = '/auth/forgot-password' %}
 {% set shop_url = (url_for('shop.shop') if url_for is defined else '/shop') %}
 
-<section class="ss-account" aria-label="Mi cuenta">
+<section class="ss-account">
   <div class="auth-wrap">
-
     <div class="auth-shell">
 
-      {# ================= LEFT: CARD ================= #}
-      <div class="auth-card" role="region" aria-label="Acceso">
+      <div class="auth-card">
         <div class="auth-brand">
-          <span class="auth-brand__dot" aria-hidden="true"></span>
+          <span class="auth-brand__dot"></span>
           <div class="auth-brand__title">{{ (APP_NAME or "Skyline Store")|e }}</div>
           <div class="auth-brand__sub">Ingresá o creá tu cuenta</div>
         </div>
 
-        <div class="auth-tabs" role="tablist" aria-label="Acceso">
-          <button type="button"
-                  class="auth-tab"
-                  role="tab"
-                  id="tab-login"
-                  aria-controls="panel-login"
+        <div class="auth-tabs" role="tablist">
+          <button type="button" class="auth-tab" id="tab-login" role="tab"
                   aria-selected="{{ 'true' if initial_tab == 'login' else 'false' }}"
                   tabindex="{{ '0' if initial_tab == 'login' else '-1' }}"
                   data-tab="login">Ingresar</button>
 
-          <button type="button"
-                  class="auth-tab"
-                  role="tab"
-                  id="tab-register"
-                  aria-controls="panel-register"
+          <button type="button" class="auth-tab" id="tab-register" role="tab"
                   aria-selected="{{ 'true' if initial_tab == 'register' else 'false' }}"
                   tabindex="{{ '0' if initial_tab == 'register' else '-1' }}"
                   data-tab="register">Crear cuenta</button>
         </div>
 
-        {# Flash messages (sanitizadas) #}
         {% set _msgs = get_flashed_messages(with_categories=true) %}
         {% if _msgs %}
-          <div class="auth-card__pad" style="padding-top: 14px; padding-bottom: 0;">
+          <div class="auth-card__pad">
             {% for category, msg in _msgs %}
               {% set cat = (category|string|lower|trim) %}
               {% set cat = cat if cat in ['error','warning','success','info'] else 'info' %}
-              <div class="auth-flash {{ cat }}" role="alert" aria-live="polite" aria-atomic="true">
-                <strong>{{ msg }}</strong>
-              </div>
+              <div class="auth-flash {{ cat }}" role="alert">{{ msg }}</div>
             {% endfor %}
           </div>
         {% endif %}
 
         <div class="auth-card__pad">
 
-          {# ================= LOGIN PANEL ================= #}
-          <div id="panel-login"
-               role="tabpanel"
-               aria-labelledby="tab-login"
-               {% if initial_tab != 'login' %}hidden aria-hidden="true"{% else %}aria-hidden="false"{% endif %}>
-
-            <form method="post" action="{{ login_action }}" novalidate autocomplete="on" id="loginForm">
+          <div id="panel-login" role="tabpanel" {% if initial_tab != 'login' %}hidden{% endif %}>
+            <form method="post" action="{{ login_action }}" novalidate id="loginForm">
               <input type="hidden" name="_tab" value="login">
               <input type="hidden" name="csrf_token" value="{{ (_csrf_val|string)|e }}">
               {% if nxt %}<input type="hidden" name="next" value="{{ nxt|e }}">{% endif %}
 
-              <div class="hp-field" aria-hidden="true">
-                <label for="hp_login">Website</label>
-                <input id="hp_login" type="text" name="website" tabindex="-1" autocomplete="off">
+              <div class="hp-field">
+                <input type="text" name="website" tabindex="-1" autocomplete="off">
               </div>
 
               <div class="auth-field">
-                <label for="loginEmail">Email</label>
-                <input class="auth-input"
-                       id="loginEmail"
-                       type="email"
-                       name="email"
+                <label>Email</label>
+                <input class="auth-input" type="email" name="email"
                        value="{{ _login_email|trim|e }}"
-                       required maxlength="254"
-                       autocomplete="username"
-                       inputmode="email"
-                       autocapitalize="none"
-                       spellcheck="false"
-                       placeholder="tu@email.com">
-                <div class="field-error" id="loginErr" role="status" aria-live="polite" aria-atomic="true"></div>
+                       required autocomplete="username">
+                <div class="field-error" id="loginErr"></div>
               </div>
 
               <div class="auth-field">
-                <label for="loginPass">Contraseña</label>
+                <label>Contraseña</label>
                 <div class="ss-pw-wrap">
-                  <input class="auth-input"
-                         id="loginPass"
-                         type="password"
-                         name="password"
-                         required minlength="8"
-                         autocomplete="current-password"
-                         placeholder="Tu contraseña">
-                  <button type="button"
-                          class="ss-pw-btn"
-                          id="toggleLoginPass"
-                          aria-label="Mostrar contraseña"
-                          aria-pressed="false">👁</button>
+                  <input class="auth-input" id="loginPass" type="password" name="password"
+                         required minlength="8" autocomplete="current-password">
+                  <button type="button" class="ss-pw-btn" id="toggleLoginPass" aria-pressed="false">👁</button>
                 </div>
               </div>
 
               <div class="auth-actions">
-                <button class="btn-primary" id="loginSubmit" type="submit">
-                  Entrar
-                </button>
+                <button class="btn-primary" id="loginSubmit" type="submit">Entrar</button>
                 <a class="btn-ghost" href="{{ shop_url }}">Seguir como invitado</a>
               </div>
 
@@ -186,95 +115,61 @@
                 <a href="{{ forgot_url }}">¿Olvidaste tu contraseña?</a>
                 <a href="{{ account_url }}?tab=register{% if nxt %}&next={{ nxt|urlencode }}{% endif %}">Crear cuenta</a>
               </div>
-
-              <p class="auth-help">Si tu cuenta requiere verificación, revisá el email de confirmación.</p>
             </form>
           </div>
 
-          {# ================= REGISTER PANEL ================= #}
-          <div id="panel-register"
-               role="tabpanel"
-               aria-labelledby="tab-register"
-               {% if initial_tab != 'register' %}hidden aria-hidden="true"{% else %}aria-hidden="false"{% endif %}>
-
-            <form method="post" action="{{ register_action }}" novalidate autocomplete="on" id="registerForm">
+          <div id="panel-register" role="tabpanel" {% if initial_tab != 'register' %}hidden{% endif %}>
+            <form method="post" action="{{ register_action }}" novalidate id="registerForm">
               <input type="hidden" name="_tab" value="register">
               <input type="hidden" name="csrf_token" value="{{ (_csrf_val|string)|e }}">
               {% if nxt %}<input type="hidden" name="next" value="{{ nxt|e }}">{% endif %}
 
-              <div class="hp-field" aria-hidden="true">
-                <label for="hp_reg">Website</label>
-                <input id="hp_reg" type="text" name="website" tabindex="-1" autocomplete="off">
+              <div class="hp-field">
+                <input type="text" name="website" tabindex="-1" autocomplete="off">
               </div>
 
               <div class="auth-field">
-                <label for="regName">Nombre <span style="opacity:.75;font-weight:700">(opcional)</span></label>
-                <input class="auth-input"
-                       id="regName"
-                       type="text"
-                       name="name"
-                       value="{{ _reg_name|trim|e }}"
-                       maxlength="120"
-                       autocomplete="name"
-                       placeholder="Tu nombre">
+                <label>Nombre</label>
+                <input class="auth-input" type="text" name="name"
+                       value="{{ _reg_name|trim|e }}" autocomplete="name">
               </div>
 
               <div class="auth-field">
-                <label for="regEmail">Email</label>
-                <input class="auth-input"
-                       id="regEmail"
-                       type="email"
-                       name="email"
+                <label>Email</label>
+                <input class="auth-input" type="email" name="email"
                        value="{{ _reg_email|trim|e }}"
-                       required maxlength="254"
-                       autocomplete="username"
-                       inputmode="email"
-                       autocapitalize="none"
-                       spellcheck="false"
-                       placeholder="tu@email.com">
-                <div class="field-error" id="regErr" role="status" aria-live="polite" aria-atomic="true"></div>
+                       required autocomplete="username">
+                <div class="field-error" id="regErr"></div>
               </div>
 
               <div class="auth-field">
-                <label for="regPass">Contraseña</label>
+                <label>Contraseña</label>
                 <div class="ss-pw-wrap">
-                  <input class="auth-input"
-                         id="regPass"
-                         type="password"
-                         name="password"
-                         required minlength="8"
-                         autocomplete="new-password"
-                         placeholder="Mínimo 8 caracteres">
-                  <button type="button"
-                          class="ss-pw-btn"
-                          id="toggleRegPass"
-                          aria-label="Mostrar contraseña"
-                          aria-pressed="false">👁</button>
+                  <input class="auth-input" id="regPass" type="password" name="password"
+                         required minlength="8" autocomplete="new-password">
+                  <button type="button" class="ss-pw-btn" id="toggleRegPass" aria-pressed="false">👁</button>
                 </div>
               </div>
 
               <div class="auth-field">
-                <label for="regPass2">Confirmar contraseña</label>
+                <label>Confirmar contraseña</label>
                 <div class="ss-pw-wrap">
-                  <input class="auth-input"
-                         id="regPass2"
-                         type="password"
-                         name="password2"
-                         required minlength="8"
-                         autocomplete="new-password"
-                         placeholder="Repetí la contraseña">
-                  <button type="button"
-                          class="ss-pw-btn"
-                          id="toggleRegPass2"
-                          aria-label="Mostrar confirmación"
-                          aria-pressed="false">👁</button>
+                  <input class="auth-input" id="regPass2" type="password" name="password2"
+                         required minlength="8" autocomplete="new-password">
+                  <button type="button" class="ss-pw-btn" id="toggleRegPass2" aria-pressed="false">👁</button>
+                </div>
+              </div>
+
+              <div class="auth-field">
+                <label>Tipo de cuenta</label>
+                <div class="ss-choice">
+                  <label><input type="radio" name="role" value="customer" checked> Comprador</label>
+                  <label><input type="radio" name="role" value="affiliate"> Afiliado</label>
                 </div>
               </div>
 
               <div class="auth-actions">
-                <button class="btn-primary" id="regSubmit" type="submit">
-                  Crear cuenta
-                </button>
+                <button class="btn-primary" id="regSubmit" type="submit">Crear cuenta</button>
                 <a class="btn-ghost" href="{{ shop_url }}">Seguir como invitado</a>
               </div>
 
@@ -282,26 +177,20 @@
                 <a href="{{ account_url }}?tab=login{% if nxt %}&next={{ nxt|urlencode }}{% endif %}">Ya tengo cuenta</a>
                 <a href="{{ forgot_url }}">Recuperar contraseña</a>
               </div>
-
-              <p class="auth-help">Al crear cuenta aceptás nuestros términos y políticas.</p>
             </form>
           </div>
 
         </div>
       </div>
 
-      {# ================= RIGHT: SIDE ================= #}
-      <aside class="auth-side" aria-label="Beneficios">
-        <h3 class="side-title">Comprá con confianza</h3>
-        <ul class="side-list">
-          <li class="side-item"><span class="side-dot" aria-hidden="true"></span><div><strong>Pagos seguros</strong><br><span class="auth-help">Protección y métodos confiables.</span></div></li>
-          <li class="side-item"><span class="side-dot" aria-hidden="true"></span><div><strong>Envíos rápidos</strong><br><span class="auth-help">Seguimiento y soporte.</span></div></li>
-          <li class="side-item"><span class="side-dot" aria-hidden="true"></span><div><strong>Ofertas y beneficios</strong><br><span class="auth-help">Acceso a promos y novedades.</span></div></li>
+      <aside class="auth-side">
+        <h3>Comprá con confianza</h3>
+        <ul>
+          <li>Pagos seguros</li>
+          <li>Envíos rápidos</li>
+          <li>Ofertas exclusivas</li>
         </ul>
-
-        <div style="margin-top:14px;">
-          <a class="btn-ghost" href="{{ shop_url }}">Ir a la tienda</a>
-        </div>
+        <a class="btn-ghost" href="{{ shop_url }}">Ir a la tienda</a>
       </aside>
 
     </div>
@@ -310,174 +199,43 @@
 
 <script{% if _csp_nonce %} nonce="{{ _csp_nonce|e }}"{% endif %}>
 (() => {
-  "use strict";
-
-  const KEY = "ss_account_tab";
-  const tabs = {
-    login: document.getElementById("tab-login"),
-    register: document.getElementById("tab-register"),
-  };
+  const tabs = document.querySelectorAll('.auth-tab');
   const panels = {
-    login: document.getElementById("panel-login"),
-    register: document.getElementById("panel-register"),
+    login: document.getElementById('panel-login'),
+    register: document.getElementById('panel-register')
   };
 
-  const setPanelHidden = (panel, isHidden) => {
-    if (!panel) return;
-    if (isHidden) {
-      panel.setAttribute("hidden", "");
-      panel.setAttribute("aria-hidden", "true");
-    } else {
-      panel.removeAttribute("hidden");
-      panel.setAttribute("aria-hidden", "false");
-    }
+  const setTab = (t) => {
+    tabs.forEach(b => {
+      const on = b.dataset.tab === t;
+      b.setAttribute('aria-selected', on);
+      b.tabIndex = on ? 0 : -1;
+      panels[b.dataset.tab].hidden = !on;
+    });
+    try {
+      const u = new URL(location.href);
+      u.searchParams.set('tab', t);
+      history.replaceState({}, '', u.toString());
+    } catch {}
   };
 
-  const setTab = (t, { persist = true, focus = false } = {}) => {
-    if (!tabs[t] || !panels[t]) return;
+  tabs.forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
 
-    (["login","register"]).forEach((k) => {
-      const isOn = (k === t);
-      if (tabs[k]) {
-        tabs[k].setAttribute("aria-selected", String(isOn));
-        tabs[k].setAttribute("tabindex", isOn ? "0" : "-1");
-      }
-      setPanelHidden(panels[k], !isOn);
-    });
-
-    if (persist) {
-      try { localStorage.setItem(KEY, t); } catch (_) {}
-      try {
-        const u = new URL(window.location.href);
-        u.searchParams.set("tab", t);
-        window.history.replaceState({}, "", u.toString());
-      } catch (_) {}
-    }
-    if (focus) {
-      try { tabs[t].focus({ preventScroll:true }); } catch (_) {}
-    }
-  };
-
-  // init: query param > stored
-  let qp = "";
-  try { qp = new URL(window.location.href).searchParams.get("tab") || ""; } catch (_) {}
-  let stored = "";
-  try { stored = localStorage.getItem(KEY) || ""; } catch (_) {}
-  const initial = (qp === "login" || qp === "register") ? qp : ((stored === "login" || stored === "register") ? stored : "");
-  if (initial) setTab(initial, { persist: false });
-
-  Object.values(tabs).forEach((btn) => {
-    if (!btn) return;
-
-    btn.addEventListener("click", () => {
-      const t = btn.dataset.tab || "";
-      if (t === "login" || t === "register") setTab(t, { persist: true });
-    });
-
-    btn.addEventListener("keydown", (e) => {
-      const order = ["login", "register"];
-      const cur = btn.dataset.tab || "";
-      const idx = order.indexOf(cur);
-      if (idx === -1) return;
-
-      if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
-        e.preventDefault();
-        const next = order[(idx + (e.key === "ArrowRight" ? 1 : -1) + order.length) % order.length];
-        setTab(next, { persist: true, focus: true });
-      }
-      if (e.key === "Home") { e.preventDefault(); setTab("login", { persist:true, focus:true }); }
-      if (e.key === "End")  { e.preventDefault(); setTab("register", { persist:true, focus:true }); }
-    });
-  });
-
-  const bindToggle = (btnId, inputId) => {
-    const b = document.getElementById(btnId);
-    const i = document.getElementById(inputId);
+  const bindToggle = (btn, inp) => {
+    const b = document.getElementById(btn);
+    const i = document.getElementById(inp);
     if (!b || !i) return;
-
-    b.addEventListener("click", () => {
-      const willShow = i.type === "password";
-      i.type = willShow ? "text" : "password";
-      b.setAttribute("aria-pressed", String(willShow));
-      b.setAttribute("aria-label", willShow ? "Ocultar" : "Mostrar");
-      try { i.focus({ preventScroll: true }); } catch (_) {}
+    b.addEventListener('click', () => {
+      const s = i.type === 'password';
+      i.type = s ? 'text' : 'password';
+      b.setAttribute('aria-pressed', s);
     });
   };
-  bindToggle("toggleLoginPass", "loginPass");
-  bindToggle("toggleRegPass", "regPass");
-  bindToggle("toggleRegPass2", "regPass2");
 
-  const showErr = (el, msg, inputEl) => {
-    if (!el) return;
-    el.textContent = msg || "";
-    if (inputEl) {
-      if (msg) inputEl.setAttribute("aria-invalid", "true");
-      else inputEl.removeAttribute("aria-invalid");
-    }
-    if (msg) {
-      try { (inputEl || el).focus({ preventScroll:true }); } catch(_) {}
-    }
-  };
-
-  const guardSubmit = (formId, btnId, errId, validateFn, restoreLabel) => {
-    const f = document.getElementById(formId);
-    const b = document.getElementById(btnId);
-    const err = document.getElementById(errId);
-    if (!f || !b) return;
-
-    f.addEventListener("submit", (ev) => {
-      if (b.disabled) return;
-
-      if (typeof validateFn === "function") {
-        const res = validateFn();
-        if (res !== true) {
-          ev.preventDefault();
-          ev.stopPropagation();
-          const msg = (typeof res === "string" ? res : "Revisá los datos e intentá de nuevo.");
-          showErr(err, msg, null);
-          return;
-        }
-      }
-
-      showErr(err, "", null);
-      b.disabled = true;
-      b.setAttribute("aria-busy", "true");
-      b.dataset._label = b.textContent || restoreLabel || "Enviar";
-      b.innerHTML = '<span class="ss-spinner" aria-hidden="true"></span> Enviando...';
-
-      window.setTimeout(() => {
-        if (!b.disabled) return;
-        b.disabled = false;
-        b.removeAttribute("aria-busy");
-        b.textContent = b.dataset._label || restoreLabel || "Enviar";
-      }, 12000);
-    }, { passive: false });
-  };
-
-  const isEmailLike = (s) => !!(s && s.includes("@") && s.includes(".") && s.length >= 6);
-
-  guardSubmit("loginForm", "loginSubmit", "loginErr", () => {
-    const emEl = document.getElementById("loginEmail");
-    const pwEl = document.getElementById("loginPass");
-    const em = (emEl?.value || "").trim();
-    const pw = (pwEl?.value || "");
-    if (!isEmailLike(em)) { showErr(document.getElementById("loginErr"), "Ingresá un email válido.", emEl); return false; }
-    if (pw.length < 8) { showErr(document.getElementById("loginErr"), "La contraseña debe tener al menos 8 caracteres.", pwEl); return false; }
-    return true;
-  }, "Entrar");
-
-  guardSubmit("registerForm", "regSubmit", "regErr", () => {
-    const emEl = document.getElementById("regEmail");
-    const pwEl = document.getElementById("regPass");
-    const pw2El = document.getElementById("regPass2");
-    const em = (emEl?.value || "").trim();
-    const pw = (pwEl?.value || "");
-    const pw2 = (pw2El?.value || "");
-    if (!isEmailLike(em)) { showErr(document.getElementById("regErr"), "Ingresá un email válido.", emEl); return false; }
-    if (pw.length < 8) { showErr(document.getElementById("regErr"), "La contraseña debe tener al menos 8 caracteres.", pwEl); return false; }
-    if (pw !== pw2) { showErr(document.getElementById("regErr"), "Las contraseñas no coinciden.", pw2El); return false; }
-    return true;
-  }, "Crear cuenta");
+  bindToggle('toggleLoginPass','loginPass');
+  bindToggle('toggleRegPass','regPass');
+  bindToggle('toggleRegPass2','regPass2');
 })();
 </script>
+
 {% endblock %}

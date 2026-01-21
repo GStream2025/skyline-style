@@ -1,11 +1,3 @@
-{# ======================================================================
-   app/templates/base.html — Skyline Store (ULTRA PRO ENTERPRISE · v5.7 FINAL)
-   Replica EXACTA header premium (barra única)
-   ✅ NO 500 / FAIL-SAFE / FUTURE-PROOF
-   ✅ Header 1-line marketplace (igual a imagen)
-   ✅ A11y + SEO + perf + CSP + CSRF
-   ✅ Mobile limpio (sin bloques feos)
-====================================================================== #}
 <!doctype html>
 <html lang="es">
 <head>
@@ -13,28 +5,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
 
-  {# ---------- SAFE REQUEST ---------- #}
   {% set _req = request if request is defined and request else none %}
   {% set _path = (_req.path if _req and _req.path else '') %}
   {% set _args = (_req.args if _req and _req.args else {}) %}
   {% set _base_url = (_req.base_url if _req and _req.base_url else '/') %}
-
-  {# ---------- SAFE ENDPOINT ---------- #}
   {% set _has_ep = has_endpoint if has_endpoint is defined and has_endpoint else none %}
 
   {% macro safe_url(endpoint, fallback='/') -%}
-    {%- if _has_ep and endpoint and _has_ep(endpoint) -%}
-      {{ url_for(endpoint) }}
-    {%- else -%}
-      {{ fallback }}
-    {%- endif -%}
+    {%- if _has_ep and endpoint and _has_ep(endpoint) -%}{{ url_for(endpoint) }}{%- else -%}{{ fallback }}{%- endif -%}
   {%- endmacro %}
 
   {% macro safe_static(filename) -%}
     {{ url_for('static', filename=filename) if url_for is defined else '' }}
   {%- endmacro %}
 
-  {# ---------- SEO ---------- #}
   {% set _title = (meta_title or APP_NAME or "Skyline Store") %}
   {% set _desc  = (meta_description or "Marketplace premium de tecnología y streetwear.") %}
 
@@ -49,8 +33,8 @@
 
   <meta name="theme-color" content="#2563eb">
   <meta name="color-scheme" content="light dark">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
 
-  {# ---------- CSRF ---------- #}
   {% set _csrf = '' %}
   {% if csrf_token_value is defined and csrf_token_value %}
     {% set _csrf = csrf_token_value %}
@@ -59,38 +43,27 @@
   {% endif %}
   <meta name="csrf-token" content="{{ _csrf|e }}">
 
-  {# ---------- FONTS ---------- #}
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 
-  {# ---------- CSS GLOBAL ---------- #}
-  <link rel="stylesheet" href="{{ safe_static('css/skyline-pro.css') }}?v=5.7">
-
+  <link rel="stylesheet" href="{{ safe_static('css/skyline-pro.css') }}?v=5.8">
   {% block extra_head %}{% endblock %}
 </head>
 
 <body>
-
 <a href="#main" class="skip sr-only">Saltar al contenido</a>
 
-{# ---------- URLS ---------- #}
 {% set home = safe_url('main.home', '/') %}
 {% set shop = safe_url('shop.shop', '/shop') %}
 {% set cart = safe_url('cart.cart_view', '/cart') %}
 {% set account = safe_url('main.account', '/account') %}
 {% set login = account ~ '?tab=login' %}
 {% set register = account ~ '?tab=register' %}
-
 {% set user_ok = current_user is defined and current_user.is_authenticated is defined and current_user.is_authenticated %}
 
-<!-- =======================
-     HEADER — BARRA PREMIUM
-======================= -->
 <header class="topbar" role="banner">
   <div class="topbar-inner">
-
-    <!-- Brand -->
     <a href="{{ home }}" class="brand" aria-label="Inicio">
       <span class="brand-dot"></span>
       <div class="brand-txt">
@@ -99,53 +72,48 @@
       </div>
     </a>
 
-    <!-- Nav -->
     <nav class="nav" aria-label="Navegación principal">
       <a href="{{ home }}" class="{% if _path == '/' %}active{% endif %}">Inicio</a>
       <a href="{{ shop }}" class="{% if _path.startswith('/shop') and not _args.get('ofertas') %}active{% endif %}">Tienda</a>
       <a href="{{ shop }}?ofertas=1" class="{% if _args.get('ofertas') %}active{% endif %}">Ofertas</a>
     </nav>
 
-    <!-- Search -->
     <form class="search" action="{{ shop }}" method="get" role="search">
       <span aria-hidden="true">⌕</span>
-      <input type="search" name="q"
-             placeholder="Buscar productos..."
-             value="{{ _args.get('q','')|e }}">
+      <input
+        type="search"
+        name="q"
+        placeholder="Buscar productos..."
+        value="{{ _args.get('q','')|e }}"
+        autocomplete="off"
+        autocapitalize="none"
+        spellcheck="false"
+      >
       <button type="submit" class="btn primary">Buscar</button>
     </form>
 
-    <!-- Actions -->
     <div class="topbar-actions">
-
       <a href="{{ cart }}" aria-label="Carrito" class="icon-btn">
         🛒
         <span class="cart-badge" data-cart-badge hidden>0</span>
       </a>
 
-      <a href="{{ account if user_ok else login }}" class="account-link">
-        <span class="icon">👤</span>
+      <a href="{{ account if user_ok else login }}" class="account-link" aria-label="Mi cuenta">
+        <span class="icon" aria-hidden="true">👤</span>
         <span class="txt">
           <strong>Mi cuenta</strong>
           <small>{% if user_ok %}Panel{% else %}Entrar / Crear{% endif %}</small>
         </span>
       </a>
-
     </div>
   </div>
 </header>
 
-<!-- =======================
-     MAIN
-======================= -->
-<main id="main" class="container">
+<main id="main" class="container" role="main">
   {% block content %}{% endblock %}
 </main>
 
-<!-- =======================
-     FOOTER
-======================= -->
-<footer class="footer">
+<footer class="footer" role="contentinfo">
   <div class="container grid grid-4">
     <div>
       <strong>{{ APP_NAME or "Skyline Store" }}</strong>
@@ -170,21 +138,36 @@
   <p class="small container">© {{ current_year or 2026 }} {{ APP_NAME or "Skyline Store" }}</p>
 </footer>
 
-<!-- =======================
-     JS BASE (seguro)
-======================= -->
 <script>
 (() => {
-  const token = document.querySelector('meta[name="csrf-token"]')?.content;
+  const token = document.querySelector('meta[name="csrf-token"]')?.content || '';
   if (!token) return;
+
+  const sameOrigin = (u) => {
+    try {
+      const url = new URL(u, window.location.href);
+      return url.origin === window.location.origin;
+    } catch { return false; }
+  };
 
   const _fetch = window.fetch;
   window.fetch = (url, opts = {}) => {
-    opts.headers = opts.headers || {};
-    if (!opts.headers['X-CSRFToken']) {
-      opts.headers['X-CSRFToken'] = token;
+    try {
+      const o = opts || {};
+      const method = String(o.method || 'GET').toUpperCase();
+      const headers = new Headers(o.headers || {});
+      if (sameOrigin(url) && !headers.has('X-CSRFToken') && method !== 'GET' && method !== 'HEAD') {
+        headers.set('X-CSRFToken', token);
+      }
+      if (sameOrigin(url) && !headers.has('X-Requested-With')) {
+        headers.set('X-Requested-With', 'XMLHttpRequest');
+      }
+      o.headers = headers;
+      o.credentials = o.credentials || 'same-origin';
+      return _fetch(url, o);
+    } catch {
+      return _fetch(url, opts);
     }
-    return _fetch(url, opts);
   };
 })();
 </script>

@@ -1,34 +1,38 @@
 from __future__ import annotations
 
+import hashlib
 import hmac
 import os
+import secrets
 import time
 from functools import wraps
 from typing import Any, Callable, Dict, Tuple, TypeVar
+from urllib.parse import urlparse
 
 from flask import current_app, flash, jsonify, redirect, request, session, url_for
 
 F = TypeVar("F", bound=Callable[..., Any])
 
-_TRUE = {"1", "true", "yes", "y", "on"}
+_TRUE = {"1", "true", "yes", "y", "on", "checked"}
 _FALSE = {"0", "false", "no", "n", "off"}
 
-# -----------------------------
-# Session keys (namespace)
-# -----------------------------
 _SESS_FLAG = "admin_logged_in"
 _SESS_TS = "admin_ts"
 _SESS_LAST = "admin_last_seen"
 _SESS_EMAIL = "admin_email"
 _SESS_REM = "admin_remember"
+_SESS_CSRF = "admin_csrf"
 
-# Rate-limit key prefix
 _FAIL_PREFIX = "admin:fail:"
+_FAILS_TTL_KEY = "admin:fail:ttl"
 
+ADMIN_SESSION_TTL = 60 * 60 * 4
+ADMIN_SESSION_TTL_REMEMBER = 60 * 60 * 24 * 7
+ADMIN_SESSION_REFRESH_EVERY = 60 * 5
 
-# ============================================================
-# ENV helpers (safe)
-# ============================================================
+ADMIN_LOGIN_MAX_FAILS = 8
+ADMIN_LOGIN_WINDOW_SEC = 60 * 10
+ADMIN_LOCKOUT_SEC = 60 * 10
 
 
 def _env(key: str, default: str = "") -> str:
@@ -41,14 +45,17 @@ def _env(key: str, default: str = "") -> str:
         return default
 
 
-def _env_int(key: str, default: int) -> int:
+def _env_int(key: str, default: int, *, lo: int = 0, hi: int = 10**9) -> int:
     raw = _env(key, "")
-    if not raw:
-        return default
     try:
-        return int(str(raw).strip())
+        v = int(str(raw).strip()) if raw else int(default)
     except Exception:
-        return default
+        v = int(default)
+    if v < lo:
+        return lo
+    if v > hi:
+        return hi
+    return v
 
 
 def _env_bool(key: str, default: bool = False) -> bool:
@@ -69,59 +76,51 @@ def _now() -> int:
 
 def _wants_json() -> bool:
     try:
+        if request.is_json:
+            return True
         accept = (request.headers.get("Accept") or "").lower()
-        return (
-            ("application/json" in accept)
-            or bool(request.is_json)
-            or (request.args.get("json") == "1")
-        )
+        if "application/json" in accept:
+            return True
+        if (request.headers.get("X-Requested-With") or "").lower() == "xmlhttprequest":
+            return True
+        if (request.args.get("format") or "").lower() == "json":
+            return True
+        if (request.args.get("json") or "") == "1":
+            return True
     except Exception:
-        return False
+        pass
+    return False
 
 
 def _client_ip() -> str:
-    """
-    ProxyFix ya debería estar, pero igual blindamos:
-    X-Forwarded-For puede venir "ip, ip2"
-    """
     try:
         xff = (request.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
-        return xff or (request.remote_addr or "0.0.0.0")
+        if xff:
+            return xff[:64]
+        ra = (request.remote_addr or "0.0.0.0").strip()
+        return ra[:64] if ra else "0.0.0.0"
     except Exception:
         return "0.0.0.0"
 
 
-# ============================================================
-# Redirect seguro (anti open-redirect)
-# ============================================================
-
-
-def _is_safe_next(nxt: str) -> bool:
+def _safe_next(nxt: str) -> bool:
     if not nxt:
         return False
-    nxt = nxt.strip()
-
-    # solo paths internos
-    if not nxt.startswith("/"):
+    s = nxt.strip()
+    if not s.startswith("/") or s.startswith("//"):
         return False
-
-    # evita //evil.com
-    if nxt.startswith("//"):
+    if "\n" in s or "\r" in s or "\x00" in s:
         return False
-
-    # evita cosas raras tipo /\evil
-    if "\n" in nxt or "\r" in nxt:
+    try:
+        u = urlparse(s)
+        return (u.scheme == "" and u.netloc == "" and s.startswith("/"))
+    except Exception:
         return False
-
-    return True
 
 
 def admin_next(default_endpoint: str = "admin.dashboard") -> str:
-    """
-    Lee next desde query o form, solo si es seguro.
-    """
     nxt = (request.args.get("next") or request.form.get("next") or "").strip()
-    if _is_safe_next(nxt):
+    if _safe_next(nxt):
         return nxt
     try:
         return url_for(default_endpoint)
@@ -129,36 +128,12 @@ def admin_next(default_endpoint: str = "admin.dashboard") -> str:
         return "/admin"
 
 
-# ============================================================
-# Config (TTLs + rate-limit)
-# ============================================================
-
-ADMIN_SESSION_TTL = _env_int("ADMIN_SESSION_TTL", 60 * 60 * 4)  # 4h
-ADMIN_SESSION_TTL_REMEMBER = _env_int(
-    "ADMIN_SESSION_TTL_REMEMBER", 60 * 60 * 24 * 7
-)  # 7d
-ADMIN_SESSION_REFRESH_EVERY = _env_int("ADMIN_SESSION_REFRESH_EVERY", 60 * 5)  # 5m
-
-ADMIN_LOGIN_MAX_FAILS = _env_int("ADMIN_LOGIN_MAX_FAILS", 8)
-ADMIN_LOGIN_WINDOW_SEC = _env_int("ADMIN_LOGIN_WINDOW_SEC", 60 * 10)
-ADMIN_LOCKOUT_SEC = _env_int("ADMIN_LOCKOUT_SEC", 60 * 10)
-
-
-# ============================================================
-# Admin credentials (ENV) — multi + legacy + hash opcional
-# ============================================================
-
-
 def _parse_admin_users(raw: str) -> Dict[str, str]:
-    """
-    ADMIN_USERS="user1:pass1,user2:pass2"
-    """
     out: Dict[str, str] = {}
-    raw = (raw or "").strip()
-    if not raw:
+    s = (raw or "").strip()
+    if not s:
         return out
-
-    for part in raw.split(","):
+    for part in s.split(","):
         part = part.strip()
         if not part or ":" not in part:
             continue
@@ -172,47 +147,35 @@ def _parse_admin_users(raw: str) -> Dict[str, str]:
 
 def _get_admin_users() -> Dict[str, str]:
     users = _parse_admin_users(_env("ADMIN_USERS", ""))
-
-    # legacy
-    legacy_email = _env("ADMIN_EMAIL", "").lower()
-    legacy_pass = _env("ADMIN_PASSWORD", "")
+    legacy_email = _env("ADMIN_EMAIL", "").strip().lower()
+    legacy_pass = _env("ADMIN_PASSWORD", "").strip()
     if legacy_email and legacy_pass:
         users.setdefault(legacy_email, legacy_pass)
-
     return users
 
 
 def _const_time_dummy(password: str) -> None:
-    """
-    Siempre hacemos compare_digest contra algo, para timing uniform.
-    """
     p = password or ""
     dummy = "x" * max(1, len(p))
-    _ = hmac.compare_digest(p, dummy)
+    try:
+        _ = hmac.compare_digest(p, dummy)
+    except Exception:
+        pass
+
+
+def _sha256_hex(s: str) -> str:
+    return hashlib.sha256((s or "").encode("utf-8")).hexdigest()
 
 
 def admin_creds_ok(email: str, password: str) -> bool:
-    """
-    Valida contra:
-      - ADMIN_USERS (multi)
-      - fallback legacy ADMIN_EMAIL/ADMIN_PASSWORD
-
-    Además soporta opcional:
-      - ADMIN_PASSWORD_HASH (sha256 hex) para single-admin rápido
-        (si está, valida sha256(password) == hash)
-    """
     e = (email or "").strip().lower()
     p = (password or "").strip()
 
-    # Si config “hash-only”:
     admin_email = _env("ADMIN_EMAIL", "").strip().lower()
     admin_hash = _env("ADMIN_PASSWORD_HASH", "").strip().lower()
     if admin_email and admin_hash and e == admin_email:
         try:
-            import hashlib
-
-            got = hashlib.sha256(p.encode("utf-8")).hexdigest()
-            return hmac.compare_digest(got, admin_hash)
+            return hmac.compare_digest(_sha256_hex(p), admin_hash)
         except Exception:
             _const_time_dummy(p)
             return False
@@ -220,9 +183,7 @@ def admin_creds_ok(email: str, password: str) -> bool:
     admins = _get_admin_users()
     if not admins:
         try:
-            current_app.logger.warning(
-                "⚠️ Admin login bloqueado: faltan ADMIN_USERS o ADMIN_EMAIL/ADMIN_PASSWORD."
-            )
+            current_app.logger.warning("Admin login bloqueado: faltan credenciales en ENV.")
         except Exception:
             pass
         _const_time_dummy(p)
@@ -232,13 +193,11 @@ def admin_creds_ok(email: str, password: str) -> bool:
     if not stored:
         _const_time_dummy(p)
         return False
-
-    return hmac.compare_digest(p, stored)
-
-
-# ============================================================
-# Rate limit (por IP, guardado en session)
-# ============================================================
+    try:
+        return hmac.compare_digest(p, stored)
+    except Exception:
+        _const_time_dummy(p)
+        return False
 
 
 def _fail_key(ip: str) -> str:
@@ -248,46 +207,42 @@ def _fail_key(ip: str) -> str:
 def _rate_state(ip: str) -> Dict[str, int]:
     st = session.get(_fail_key(ip))
     if isinstance(st, dict):
-        # self-heal
-        return {
-            "fails": int(st.get("fails") or 0),
-            "win_start": int(st.get("win_start") or 0),
-            "locked_until": int(st.get("locked_until") or 0),
-        }
+        try:
+            return {
+                "fails": int(st.get("fails") or 0),
+                "win_start": int(st.get("win_start") or 0),
+                "locked_until": int(st.get("locked_until") or 0),
+            }
+        except Exception:
+            return {"fails": 0, "win_start": 0, "locked_until": 0}
     return {"fails": 0, "win_start": 0, "locked_until": 0}
+
+
+def _rate_reset_if_needed(st: Dict[str, int], now: int) -> Dict[str, int]:
+    ws = int(st.get("win_start") or 0)
+    if not ws or (now - ws) > ADMIN_LOGIN_WINDOW_SEC:
+        return {"fails": 0, "win_start": now, "locked_until": 0}
+    return st
 
 
 def _rate_limit_check(ip: str) -> Tuple[bool, int]:
     st = _rate_state(ip)
     now = _now()
-
-    if st["locked_until"] > now:
-        return True, st["locked_until"] - now
-
-    # ventana expirada -> reset
-    if st["win_start"] and (now - st["win_start"]) > ADMIN_LOGIN_WINDOW_SEC:
-        session.pop(_fail_key(ip), None)
-        return False, 0
-
+    locked_until = int(st.get("locked_until") or 0)
+    if locked_until > now:
+        return True, locked_until - now
     return False, 0
 
 
 def _rate_limit_fail(ip: str) -> Tuple[bool, int]:
-    st = _rate_state(ip)
     now = _now()
-
-    # reset si no hay ventana o expiró
-    if not st["win_start"] or (now - st["win_start"]) > ADMIN_LOGIN_WINDOW_SEC:
-        st = {"fails": 0, "win_start": now, "locked_until": 0}
-
-    st["fails"] += 1
-
+    st = _rate_reset_if_needed(_rate_state(ip), now)
+    st["fails"] = int(st.get("fails") or 0) + 1
     if st["fails"] >= ADMIN_LOGIN_MAX_FAILS:
         st["locked_until"] = now + ADMIN_LOCKOUT_SEC
-
     session[_fail_key(ip)] = st
-    if st["locked_until"] > now:
-        return True, st["locked_until"] - now
+    if int(st.get("locked_until") or 0) > now:
+        return True, int(st["locked_until"]) - now
     return False, 0
 
 
@@ -298,35 +253,74 @@ def _rate_limit_clear(ip: str) -> None:
         pass
 
 
-# ============================================================
-# Admin session
-# ============================================================
+def _token16() -> str:
+    return secrets.token_urlsafe(16)
+
+
+def admin_csrf_token() -> str:
+    tok = session.get(_SESS_CSRF)
+    if isinstance(tok, str) and tok:
+        return tok
+    tok2 = _token16()
+    session[_SESS_CSRF] = tok2
+    return tok2
+
+
+def admin_csrf_ok(token: str) -> bool:
+    try:
+        st = session.get(_SESS_CSRF)
+        if not isinstance(st, str) or not st:
+            return False
+        return hmac.compare_digest((token or "").strip(), st)
+    except Exception:
+        return False
+
+
+def _apply_env_overrides() -> None:
+    global ADMIN_SESSION_TTL, ADMIN_SESSION_TTL_REMEMBER, ADMIN_SESSION_REFRESH_EVERY
+    global ADMIN_LOGIN_MAX_FAILS, ADMIN_LOGIN_WINDOW_SEC, ADMIN_LOCKOUT_SEC
+
+    ADMIN_SESSION_TTL = _env_int("ADMIN_SESSION_TTL", ADMIN_SESSION_TTL, lo=60, hi=60 * 60 * 24 * 31)
+    ADMIN_SESSION_TTL_REMEMBER = _env_int(
+        "ADMIN_SESSION_TTL_REMEMBER", ADMIN_SESSION_TTL_REMEMBER, lo=60 * 60, hi=60 * 60 * 24 * 90
+    )
+    ADMIN_SESSION_REFRESH_EVERY = _env_int(
+        "ADMIN_SESSION_REFRESH_EVERY", ADMIN_SESSION_REFRESH_EVERY, lo=30, hi=60 * 60
+    )
+
+    ADMIN_LOGIN_MAX_FAILS = _env_int("ADMIN_LOGIN_MAX_FAILS", ADMIN_LOGIN_MAX_FAILS, lo=1, hi=50)
+    ADMIN_LOGIN_WINDOW_SEC = _env_int("ADMIN_LOGIN_WINDOW_SEC", ADMIN_LOGIN_WINDOW_SEC, lo=30, hi=60 * 60)
+    ADMIN_LOCKOUT_SEC = _env_int("ADMIN_LOCKOUT_SEC", ADMIN_LOCKOUT_SEC, lo=10, hi=60 * 60)
 
 
 def admin_login(*, email: str = "", remember: bool = False) -> None:
-    """
-    Anti session fixation: limpia session y crea flags admin.
-    OJO: si querés conservar carrito, en vez de session.clear()
-    guardá/restoreá keys específicas.
-    """
+    _apply_env_overrides()
     session.clear()
     session[_SESS_FLAG] = True
     session[_SESS_TS] = _now()
     session[_SESS_LAST] = _now()
     session[_SESS_EMAIL] = (email or "").strip().lower()
     session[_SESS_REM] = bool(remember)
+    session[_SESS_CSRF] = _token16()
+    try:
+        session.modified = True
+    except Exception:
+        pass
 
 
 def admin_logout() -> None:
-    session.clear()
+    try:
+        session.clear()
+        session.modified = True
+    except Exception:
+        try:
+            session.clear()
+        except Exception:
+            pass
 
 
 def _ttl_current() -> int:
-    return (
-        ADMIN_SESSION_TTL_REMEMBER
-        if bool(session.get(_SESS_REM))
-        else ADMIN_SESSION_TTL
-    )
+    return ADMIN_SESSION_TTL_REMEMBER if bool(session.get(_SESS_REM)) else ADMIN_SESSION_TTL
 
 
 def _session_admin_valid() -> bool:
@@ -345,18 +339,17 @@ def _session_admin_valid() -> bool:
     if not isinstance(last, int):
         last = 0
 
-    # sliding refresh (no en cada request)
     if (now - last) >= ADMIN_SESSION_REFRESH_EVERY:
         session[_SESS_LAST] = now
+        try:
+            session.modified = True
+        except Exception:
+            pass
 
     return True
 
 
 def _current_user_is_admin_db() -> bool:
-    """
-    Fallback: usuario normal logueado con flag is_admin en DB.
-    No rompe si faltan modelos.
-    """
     if session.get("is_admin") is True:
         return True
 
@@ -365,9 +358,14 @@ def _current_user_is_admin_db() -> bool:
         return False
 
     try:
-        from app.models import db, User
+        from app.models import db, User  # noqa: WPS433
 
-        u = db.session.get(User, int(uid))
+        try:
+            model = getattr(User, "model", None) or getattr(User, "_model", None) or getattr(User, "cls", None) or User
+        except Exception:
+            model = User
+
+        u = db.session.get(model, int(uid))
         return bool(getattr(u, "is_admin", False)) if u else False
     except Exception:
         return False
@@ -380,16 +378,11 @@ def is_admin_logged() -> bool:
 def admin_identity() -> Dict[str, Any]:
     return {
         "is_admin": bool(is_admin_logged()),
-        "admin_email": session.get(_SESS_EMAIL) or "",
+        "admin_email": str(session.get(_SESS_EMAIL) or ""),
         "remember": bool(session.get(_SESS_REM)),
         "ttl": int(_ttl_current()),
         "ip": _client_ip(),
     }
-
-
-# ============================================================
-# Decorator
-# ============================================================
 
 
 def admin_required(view: F) -> F:
@@ -407,21 +400,8 @@ def admin_required(view: F) -> F:
     return wrapped  # type: ignore[misc]
 
 
-# ============================================================
-# Helper recomendado para /admin/login POST
-# ============================================================
-
-
-def admin_login_attempt(
-    email: str, password: str, *, remember: bool = False
-) -> Tuple[bool, str, int]:
-    """
-    Maneja:
-      - rate limit por IP
-      - validación de creds
-      - creación de sesión admin
-    Retorna: (ok, message, http_status_sugerido)
-    """
+def admin_login_attempt(email: str, password: str, *, remember: bool = False) -> Tuple[bool, str, int]:
+    _apply_env_overrides()
     ip = _client_ip()
 
     locked, secs = _rate_limit_check(ip)
@@ -449,4 +429,6 @@ __all__ = [
     "admin_identity",
     "is_admin_logged",
     "admin_next",
+    "admin_csrf_token",
+    "admin_csrf_ok",
 ]

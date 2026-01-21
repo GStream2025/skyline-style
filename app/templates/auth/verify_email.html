@@ -1,528 +1,162 @@
-{# ======================================================================
-   app/templates/auth/verify_email.html — Skyline Store (ULTRA PRO · v3 FINAL)
-   ✅ 20+ mejoras reales (NO-500 / NO BuildError / CSRF PRO / UX PRO):
-   1) Elimina callable checks (Jinja-safe) → usa patrón csrf_token() con fallback seguro
-   2) No depende de current_app/view_functions (evita 500) → usa has_endpoint si existe
-   3) safe_url local para endpoints (sin BuildError)
-   4) Canonical/robots coherente (prod index, dev noindex)
-   5) CSRF meta + hidden input (mismo token) + credentials same-origin
-   6) Cooldown persistente + UI tick estable
-   7) AbortController + timeout
-   8) Maneja JSON y texto sin romper
-   9) Fallback submit normal si fetch falla
-   10) Evita doble click / locking
-   11) Flash categories sanitizadas (sin clases raras)
-   12) Email/support sanitizados
-   13) A11y: aria-live status + aria-busy + focus-visible
-   14) Reduced motion + print safe
-   15) Botón deshabilitado real si no hay endpoint
-   16) Copy claro y profesional
-   17) No rompe si email vacío
-   18) No rompe si form no existe
-   19) Usa tojson para strings (sin XSS)
-   20) Estilos encapsulados (no pisan global)
-====================================================================== #}
-
 {% extends "base.html" %}
 {% block title %}Verificar correo · {{ (APP_NAME or "Skyline Store")|e }}{% endblock %}
 
 {% block extra_head %}
-  {# Robots #}
-  <meta name="robots" content="{{ 'index,follow' if (ENV|default('')|lower == 'production') else 'noindex,nofollow' }}">
+<meta name="robots" content="{{ 'index,follow' if (ENV|default('')|lower == 'production') else 'noindex,nofollow' }}">
+{% set _csp_nonce = (csp_nonce if csp_nonce is defined and csp_nonce else (nonce if nonce is defined and nonce else '')) %}
 
-  {# CSP nonce (si existe) #}
-  {% set _csp_nonce = (csp_nonce if csp_nonce is defined and csp_nonce else (nonce if nonce is defined and nonce else '')) %}
+{% set _csrf = '' %}
+{% if csrf_token is defined and csrf_token %}
+  {% set _csrf = csrf_token() %}
+{% elif csrf_token_value is defined and csrf_token_value %}
+  {% set _csrf = csrf_token_value %}
+{% endif %}
+<meta name="csrf-token" content="{{ (_csrf|string)|e }}">
 
-  {# CSRF token (prefer csrf_token()) #}
-  {% set _csrf_html = '' %}
-  {% if csrf_token is defined and csrf_token %}
-    {% set _csrf_html = csrf_token() %}
-  {% elif csrf_token_value is defined and csrf_token_value %}
-    {% set _csrf_html = csrf_token_value %}
-  {% endif %}
-  <meta name="csrf-token" content="{{ (_csrf_html|string)|e }}">
+{% set _has_ep = has_endpoint if has_endpoint is defined else none %}
+{% macro safe_url(ep, fb='') %}{% if _has_ep and _has_ep(ep) %}{{ url_for(ep) }}{% else %}{{ fb }}{% endif %}{% endmacro %}
 
-  {# Endpoint helper (sin BuildError) #}
-  {% set _has_ep = has_endpoint if has_endpoint is defined and has_endpoint else none %}
-  {% macro safe_url(endpoint, fallback='') -%}
-    {%- if _has_ep and endpoint and _has_ep(endpoint) -%}{{ url_for(endpoint) }}
-    {%- else -%}{{ fallback }}
-    {%- endif -%}
-  {%- endmacro %}
-
-  <style{% if _csp_nonce %} nonce="{{ _csp_nonce|e }}"{% endif %}>
-    .ss-ve{
-      --ink: var(--ink, #0b1220);
-      --muted: rgba(11,18,32,.68);
-      --stroke: rgba(148,163,184,.22);
-      --shadow: 0 22px 60px rgba(2,6,23,.12);
-      --ease: var(--ease, cubic-bezier(.2,.8,.2,1));
-      min-height: 70vh;
-      display:grid;
-      place-items:center;
-      padding: clamp(26px, 4vw, 44px) 14px;
-      background:
-        radial-gradient(820px 460px at 12% 0%, rgba(47,123,255,.08), transparent 60%),
-        radial-gradient(820px 460px at 88% 12%, rgba(255,181,71,.10), transparent 60%);
-    }
-    .ss-ve__card{
-      width:100%;
-      max-width: 560px;
-      border-radius: 26px;
-      border: 1px solid var(--stroke);
-      background: rgba(255,255,255,.88);
-      box-shadow: var(--shadow);
-      overflow:hidden;
-    }
-    .ss-ve__head{
-      padding: 18px 18px 14px;
-      background:
-        radial-gradient(520px 240px at 0% 0%, rgba(245,158,11,.18), transparent 60%),
-        radial-gradient(520px 240px at 100% 0%, rgba(56,189,248,.16), transparent 60%),
-        linear-gradient(180deg, rgba(255,255,255,.84), rgba(255,255,255,.76));
-      border-bottom: 1px solid rgba(148,163,184,.16);
-    }
-    .ss-ve__body{ padding: 16px 18px 18px; }
-    @media(min-width:520px){
-      .ss-ve__body{ padding: 18px 20px 20px; }
-      .ss-ve__head{ padding: 20px 20px 16px; }
-    }
-    .ss-ve__icon{
-      width:54px;height:54px;border-radius:18px;
-      display:grid;place-items:center;
-      background: rgba(245,158,11,.12);
-      border:1px solid rgba(245,158,11,.25);
-      box-shadow: 0 10px 22px rgba(2,6,23,.08);
-    }
-    .ss-ve__title{
-      margin: 10px 0 0;
-      font-weight: 1000;
-      letter-spacing: -.6px;
-      color: var(--ink);
-      font-size: clamp(1.4rem, 3vw, 1.9rem);
-      line-height: 1.15;
-    }
-    .ss-ve__sub{
-      margin: .5rem 0 0;
-      color: var(--muted);
-      font-weight: 850;
-      line-height: 1.55;
-    }
-
-    .ss-ve__flash{
-      margin-top: 12px;
-      padding: 10px 12px;
-      border-radius: 14px;
-      border: 1px solid rgba(148,163,184,.20);
-      background: rgba(255,255,255,.74);
-      color: rgba(11,18,32,.80);
-      font-weight: 900;
-      font-size: .88rem;
-    }
-    .ss-ve__flash.error{ background: rgba(255,0,0,.06); border-color: rgba(255,0,0,.14); }
-    .ss-ve__flash.warning{ background: rgba(255,181,71,.10); border-color: rgba(255,181,71,.18); }
-    .ss-ve__flash.success{ background: rgba(34,197,94,.10); border-color: rgba(34,197,94,.18); }
-    .ss-ve__flash.info{ background: rgba(47,123,255,.08); border-color: rgba(47,123,255,.16); }
-
-    .ss-ve__note{
-      margin-top: 12px;
-      padding: 12px 12px;
-      border-radius: 16px;
-      border: 1px dashed rgba(148,163,184,.32);
-      background: rgba(248,250,252,.78);
-      color: rgba(11,18,32,.76);
-      font-size: .86rem;
-      line-height: 1.45;
-      font-weight: 850;
-    }
-
-    .ss-ve__live{
-      margin-top: 10px;
-      border-radius: 14px;
-      padding: 10px 12px;
-      border: 1px solid rgba(148,163,184,.20);
-      background: rgba(255,255,255,.72);
-      color: rgba(11,18,32,.78);
-      font-weight: 900;
-      font-size: .86rem;
-      display:none;
-    }
-    .ss-ve__live.is-on{ display:block; }
-
-    .ss-ve__actions{ display:grid; gap:10px; margin-top: 14px; }
-
-    .ss-ve__btn{
-      display:inline-flex; align-items:center; justify-content:center; gap:10px;
-      padding: 12px 14px;
-      border-radius: 999px;
-      border: 1px solid rgba(15,23,42,.12);
-      background: rgba(11,18,32,.96);
-      color: rgba(253,230,138,.96);
-      font-weight: 1000;
-      cursor:pointer;
-      transition: transform .14s var(--ease), box-shadow .14s var(--ease), filter .14s var(--ease);
-      user-select:none;
-      text-decoration:none;
-    }
-    .ss-ve__btn:hover{ transform: translateY(-1px); box-shadow: 0 14px 26px rgba(2,6,23,.14); filter:saturate(1.05) }
-    .ss-ve__btn:active{ transform: translateY(0) }
-    .ss-ve__btn[disabled], .ss-ve__btn[aria-disabled="true"]{ opacity:.72; cursor:not-allowed; transform:none; box-shadow:none; }
-
-    .ss-ve__btn--ghost{
-      background: transparent;
-      color: rgba(11,18,32,.86);
-    }
-
-    .ss-ve__row{
-      display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between;
-      gap: 10px;
-      margin-top: 12px;
-    }
-    .ss-ve__link{
-      display:inline-flex; align-items:center; gap:8px;
-      font-size: .88rem;
-      color: rgba(245,158,11,.92);
-      text-decoration:none;
-      font-weight: 950;
-    }
-    .ss-ve__link:hover{ opacity:.92; text-decoration: underline; }
-
-    .ss-ve__small{
-      margin: 12px 0 0;
-      color: rgba(11,18,32,.56);
-      font-size: .82rem;
-      font-weight: 850;
-      line-height: 1.45;
-    }
-
-    .ss-ve__spin{
-      width:16px;height:16px;border-radius:999px;
-      border:2px solid rgba(253,230,138,.25);
-      border-top-color: rgba(253,230,138,.96);
-      animation: ss-ve-rot .9s linear infinite;
-    }
-    @keyframes ss-ve-rot{ to{ transform: rotate(360deg) } }
-
-    .ss-ve :focus-visible{
-      outline:none;
-      box-shadow: 0 0 0 4px rgba(37,99,235,.18);
-      border-radius: 12px;
-    }
-
-    @media (prefers-reduced-motion: reduce){
-      .ss-ve *{ transition:none!important; }
-      .ss-ve__spin{ animation:none!important; }
-      .ss-ve__btn:hover{ transform:none!important; }
-    }
-
-    @media print{
-      header.topbar, footer, nav{ display:none!important; }
-      .ss-ve{ min-height:auto; padding:0; }
-      .ss-ve__card{ box-shadow:none; border:1px solid #ddd; background:#fff; }
-    }
-
-    @media (prefers-color-scheme: dark){
-      .ss-ve__card{ background: rgba(9,12,24,.72); box-shadow:none; }
-      .ss-ve__head{ background: rgba(255,255,255,.04); }
-      .ss-ve__note, .ss-ve__live, .ss-ve__flash{ background: rgba(255,255,255,.06); }
-      .ss-ve__btn--ghost{ color: rgba(226,232,240,.86); }
-    }
-  </style>
+<style{% if _csp_nonce %} nonce="{{ _csp_nonce|e }}"{% endif %}>
+.ss-ve{min-height:70vh;display:grid;place-items:center;padding:32px 14px}
+.ss-ve__card{max-width:560px;width:100%;border-radius:26px;border:1px solid rgba(148,163,184,.22);background:rgba(255,255,255,.9);box-shadow:0 22px 60px rgba(2,6,23,.12)}
+.ss-ve__head{padding:20px;border-bottom:1px solid rgba(148,163,184,.16)}
+.ss-ve__body{padding:20px}
+.ss-ve__title{font-size:clamp(1.4rem,3vw,1.9rem);font-weight:900}
+.ss-ve__sub{margin-top:.4rem;color:rgba(11,18,32,.7);font-weight:700}
+.ss-ve__flash{margin-top:12px;padding:10px 12px;border-radius:14px;font-weight:800}
+.ss-ve__flash.error{background:rgba(255,0,0,.06)}
+.ss-ve__flash.success{background:rgba(34,197,94,.1)}
+.ss-ve__flash.info{background:rgba(47,123,255,.08)}
+.ss-ve__note{margin-top:14px;padding:12px;border-radius:16px;border:1px dashed rgba(148,163,184,.32);font-size:.86rem}
+.ss-ve__actions{display:grid;gap:10px;margin-top:16px}
+.ss-ve__btn{padding:12px 14px;border-radius:999px;border:1px solid rgba(15,23,42,.12);font-weight:900;cursor:pointer}
+.ss-ve__btn[disabled]{opacity:.65;cursor:not-allowed}
+.ss-ve__live{display:none;margin-top:12px;font-size:.86rem;font-weight:800}
+.ss-ve__live.is-on{display:block}
+.ss-ve__spin{width:16px;height:16px;border-radius:999px;border:2px solid rgba(253,230,138,.25);border-top-color:rgba(253,230,138,.95);animation:spin .9s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.ss-ve__spin{animation:none}}
+</style>
 {% endblock %}
 
 {% block content %}
-  {# ---------------- Datos seguros ---------------- #}
-  {% set email = (user.email if user is defined and user and user.email is defined else (customer_email if customer_email is defined else ""))|string|trim %}
-  {% set support_email_raw = (support_email if support_email is defined else "soporte@skylinestore.com") %}
-  {% set support_email_safe = support_email_raw|string|trim %}
+{% set email = (user.email if user is defined and user and user.email is defined else '')|trim %}
+{% set home_url = safe_url('main.home','/') %}
+{% set shop_url = safe_url('shop.shop','/shop') %}
+{% set resend_json = safe_url('auth.resend_verification_json','') %}
+{% set resend_post = safe_url('auth.resend_verification','') %}
+{% set resend_ep = resend_json if resend_json else resend_post %}
+{% set resend_is_json = true if resend_json else false %}
 
-  {# URLs robustas (sin BuildError) #}
-  {% set home_url = safe_url('main.home', '/') %}
-  {% set shop_url = safe_url('shop.shop', '/shop') %}
-
-  {# Endpoint de reenvío: prioriza json, luego normal #}
-  {% set resend_endpoint = '' %}
-  {% set resend_is_json = false %}
-  {% set _try_json = safe_url('auth.resend_verification_json', '') %}
-  {% set _try_post = safe_url('auth.resend_verification', '') %}
-  {% if _try_json %}
-    {% set resend_endpoint = _try_json %}
-    {% set resend_is_json = true %}
-  {% elif _try_post %}
-    {% set resend_endpoint = _try_post %}
-    {% set resend_is_json = false %}
-  {% endif %}
-
-  <section class="ss-ve" aria-label="Verificar correo">
-    <div class="ss-ve__card" role="region" aria-label="Verificación de email">
-      <div class="ss-ve__head">
-        <div class="ss-ve__icon" aria-hidden="true">
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               style="color:rgba(245,158,11,.95)" stroke-width="1.8">
-            <path stroke-linecap="round" stroke-linejoin="round"
-                  d="M3 8l9 6 9-6M5 19h14a2 2 0 002-2V7a2 2 0 00-1-1.732L12 2 4 5.268A2 2 0 003 7v10a2 2 0 002 2z"/>
-          </svg>
-        </div>
-
-        <h1 class="ss-ve__title">Verificá tu correo</h1>
-        <p class="ss-ve__sub">
-          {% if email %}
-            Te enviamos un enlace a <b>{{ email|e }}</b> para confirmar tu cuenta.
-          {% else %}
-            Te enviamos un enlace para confirmar tu cuenta.
-          {% endif %}
-          Este paso ayuda a mantener tu perfil más seguro.
-        </p>
-      </div>
-
-      <div class="ss-ve__body">
-
-        {# Flash por redirect — category safe #}
-        {% set _msgs = get_flashed_messages(with_categories=true) %}
-        {% if _msgs %}
-          {% for category, message in _msgs %}
-            {% set cat = (category|string|lower|trim) %}
-            {% set cat = cat if cat in ['error','warning','success','info'] else 'info' %}
-            <div class="ss-ve__flash {{ cat }}" role="alert" aria-live="polite" aria-atomic="true">{{ message }}</div>
-          {% endfor %}
-        {% endif %}
-
-        <div class="ss-ve__note">
-          🔒 <b>Tip:</b> revisá “Spam/Promociones”. A veces el correo cae ahí.
-          Si pedís reenvío, esperá 30–60 segundos antes de volver a intentarlo.
-        </div>
-
-        <div id="veLive" class="ss-ve__live" role="status" aria-live="polite" aria-atomic="true"></div>
-
-        {# Fallback POST normal #}
-        <form id="resendForm" method="post" action="{{ resend_endpoint if resend_endpoint else '#' }}" style="margin:0">
-          <input type="hidden" name="csrf_token" value="{{ (_csrf_html|string)|e }}">
-          {% if email %}<input type="hidden" name="email" value="{{ email|e }}">{% endif %}
-        </form>
-
-        <div class="ss-ve__actions">
-          <button id="btnResend"
-                  type="button"
-                  class="ss-ve__btn"
-                  aria-busy="false"
-                  aria-disabled="{{ 'true' if not resend_endpoint else 'false' }}"
-                  {% if not resend_endpoint %}disabled{% endif %}>
-            <span id="veSpin" class="ss-ve__spin" style="display:none" aria-hidden="true"></span>
-            <span id="btnTxt">{% if resend_endpoint %}Reenviar correo{% else %}Reenvío no disponible{% endif %}</span>
-          </button>
-
-          <a class="ss-ve__btn ss-ve__btn--ghost" href="{{ home_url }}">Volver al inicio</a>
-        </div>
-
-        <div class="ss-ve__row">
-          <a class="ss-ve__link" href="mailto:{{ support_email_safe|urlencode }}">✉️ Soporte: {{ support_email_safe|e }}</a>
-          <a class="ss-ve__link" href="{{ shop_url }}">🛍️ Ir a la tienda</a>
-        </div>
-
-        <p class="ss-ve__small">
-          Si ya verificaste tu cuenta y seguís viendo esta pantalla, cerrá sesión y volvé a entrar.
-        </p>
-
-      </div>
+<section class="ss-ve">
+  <div class="ss-ve__card">
+    <div class="ss-ve__head">
+      <h1 class="ss-ve__title">Verificá tu correo</h1>
+      <p class="ss-ve__sub">
+        {% if email %}Enviamos un enlace a <b>{{ email|e }}</b>.{% else %}Enviamos un enlace a tu correo.{% endif %}
+        Confirmalo para activar tu cuenta.
+      </p>
     </div>
-  </section>
+
+    <div class="ss-ve__body">
+      {% for c,m in get_flashed_messages(with_categories=true) %}
+        {% set k = c if c in ['error','success','info'] else 'info' %}
+        <div class="ss-ve__flash {{ k }}">{{ m }}</div>
+      {% endfor %}
+
+      <div class="ss-ve__note">
+        Revisá Spam o Promociones. El enlace puede tardar unos minutos.
+      </div>
+
+      <div id="veLive" class="ss-ve__live" role="status"></div>
+
+      <form id="resendForm" method="post" action="{{ resend_ep }}">
+        <input type="hidden" name="csrf_token" value="{{ (_csrf|string)|e }}">
+        {% if email %}<input type="hidden" name="email" value="{{ email|e }}">{% endif %}
+      </form>
+
+      <div class="ss-ve__actions">
+        <button id="btnResend" class="ss-ve__btn"
+                {% if not resend_ep %}disabled aria-disabled="true"{% endif %}>
+          <span id="veSpin" class="ss-ve__spin" style="display:none"></span>
+          <span id="btnTxt">{% if resend_ep %}Reenviar correo{% else %}Reenvío no disponible{% endif %}</span>
+        </button>
+        <a class="ss-ve__btn" href="{{ home_url }}">Volver al inicio</a>
+      </div>
+
+      <p style="margin-top:14px;font-size:.82rem">
+        ¿Ya verificaste? Cerrá sesión y volvé a entrar.
+        <a href="{{ shop_url }}">Ir a la tienda</a>
+      </p>
+    </div>
+  </div>
+</section>
 {% endblock %}
 
 {% block extra_js %}
-<script>
+<script{% if _csp_nonce %} nonce="{{ _csp_nonce|e }}"{% endif %}>
 (() => {
-  const btn  = document.getElementById('btnResend');
-  const live = document.getElementById('veLive');
+  const btn = document.getElementById('btnResend');
+  const txt = document.getElementById('btnTxt');
   const spin = document.getElementById('veSpin');
-  const txt  = document.getElementById('btnTxt');
+  const live = document.getElementById('veLive');
   const form = document.getElementById('resendForm');
 
-  const endpoint = {{ resend_endpoint|tojson }};
-  const isJson   = {{ resend_is_json|tojson }};
-  const email    = {{ email|tojson }};
+  const endpoint = {{ resend_ep|tojson }};
+  const isJson = {{ resend_is_json|tojson }};
+  const COOLDOWN = 30000;
+  const KEY = "ss_verify_cd";
 
-  const LS_KEY = "ss_verify_resend_cooldown_until";
-  const COOLDOWN_MS = 30000;
-  const TIMEOUT_MS = 12000;
+  const say = m => { if(live){ live.textContent=m||''; live.classList.toggle('is-on',!!m);} };
+  const getCd = () => parseInt(localStorage.getItem(KEY)||"0",10);
+  const setCd = t => localStorage.setItem(KEY,String(t));
 
-  let locked = false;
-  let tickTimer = null;
-
-  const say = (m) => {
-    if(!live) return;
-    live.textContent = m || "";
-    live.classList.toggle('is-on', !!m);
-  };
-
-  const readCsrf = () => {
-    const meta = document.querySelector('meta[name="csrf-token"]');
-    if (meta && meta.content) return meta.content.trim();
-    const inp = document.querySelector('input[name="csrf_token"]');
-    if (inp && inp.value) return inp.value.trim();
-    return "";
-  };
-
-  const setBusy = (on) => {
-    if(!btn) return;
-    btn.setAttribute('aria-busy', on ? 'true' : 'false');
-    if(spin) spin.style.display = on ? 'inline-block' : 'none';
-  };
-
-  const getCooldownUntil = () => {
-    try{
-      const v = parseInt(localStorage.getItem(LS_KEY) || "0", 10);
-      return isNaN(v) ? 0 : v;
-    }catch(_){
-      return 0;
-    }
-  };
-
-  const setCooldownUntil = (t) => {
-    try{ localStorage.setItem(LS_KEY, String(t)); }catch(_){}
-  };
-
-  const stopTick = () => {
-    if(tickTimer) clearInterval(tickTimer);
-    tickTimer = null;
-  };
-
-  const startTick = () => {
-    stopTick();
-    tickTimer = setInterval(() => {
-      if(!btn || !txt) return;
-      const until = getCooldownUntil();
-      const left = Math.ceil((until - Date.now()) / 1000);
-
-      if(left <= 0){
-        stopTick();
-        txt.textContent = endpoint ? "Reenviar correo" : "Reenvío no disponible";
-        btn.disabled = !endpoint;
-        btn.setAttribute("aria-disabled", btn.disabled ? "true" : "false");
-        return;
-      }
-
-      txt.textContent = `Reenviar en ${left}s`;
-      btn.disabled = true;
-      btn.setAttribute("aria-disabled", "true");
-    }, 250);
-  };
-
-  const ensureCooldownUI = () => {
-    if(!btn || !txt) return;
-    const until = getCooldownUntil();
-    if(until > Date.now()){
-      startTick();
+  const updateBtn = () => {
+    const left = Math.ceil((getCd()-Date.now())/1000);
+    if(left>0){
+      btn.disabled=true; txt.textContent=`Reenviar en ${left}s`;
     }else{
-      txt.textContent = endpoint ? "Reenviar correo" : "Reenvío no disponible";
-      btn.disabled = !endpoint;
-      btn.setAttribute("aria-disabled", btn.disabled ? "true" : "false");
-    }
-  };
-
-  const parseResponse = async (r) => {
-    const ct = (r.headers.get("content-type") || "").toLowerCase();
-    if(ct.includes("application/json")){
-      try { return await r.json(); } catch(_){ return null; }
-    }
-    try { return await r.text(); } catch(_){ return null; }
-  };
-
-  const sendFetch = async () => {
-    const headers = { "Accept":"application/json" };
-    const csrf = readCsrf();
-    if(csrf) headers["X-CSRF-Token"] = csrf;
-    if(isJson) headers["Content-Type"] = "application/json";
-
-    const ctrl = ("AbortController" in window) ? new AbortController() : null;
-    const timer = ctrl ? setTimeout(() => ctrl.abort(), TIMEOUT_MS) : null;
-
-    try{
-      const body = isJson ? JSON.stringify({ email: email || undefined }) : null;
-
-      const r = await fetch(endpoint, {
-        method: "POST",
-        headers,
-        credentials: "same-origin",
-        signal: ctrl ? ctrl.signal : undefined,
-        body
-      });
-
-      const data = await parseResponse(r);
-
-      if(!r.ok){
-        const msg = (data && typeof data === "object" && (data.message || data.error))
-          ? (data.message || data.error)
-          : (typeof data === "string" && data ? data : "No se pudo reenviar.");
-        throw new Error(msg);
-      }
-
-      if(data && typeof data === "object" && data.ok === false){
-        throw new Error(data.message || data.error || "No se pudo reenviar.");
-      }
-
-      return { ok: true, data };
-    } finally {
-      if(timer) clearTimeout(timer);
+      btn.disabled=!endpoint; txt.textContent=endpoint?"Reenviar correo":"Reenvío no disponible";
     }
   };
 
   const send = async () => {
-    if(locked) return;
+    if(!endpoint || btn.disabled) return;
+    setCd(Date.now()+COOLDOWN);
+    updateBtn();
+    spin.style.display='inline-block';
+    say("Enviando correo…");
 
-    if(!endpoint){
-      say("El reenvío automático no está habilitado en este servidor.");
+    if(!isJson){
+      try{ form.submit(); }catch(_){}
       return;
     }
-
-    const until = getCooldownUntil();
-    if(until > Date.now()){
-      const left = Math.ceil((until - Date.now()) / 1000);
-      say(`Esperá ${left}s para reenviar de nuevo.`);
-      startTick();
-      return;
-    }
-
-    locked = true;
-    btn.disabled = true;
-    btn.setAttribute("aria-disabled", "true");
-    setBusy(true);
-    txt.textContent = "Enviando…";
-    say("Enviando correo de verificación…");
 
     try{
-      // Si no es JSON, intentamos submit directo (más compatible)
-      if(!isJson){
-        say("Reenviando…");
-        setCooldownUntil(Date.now() + COOLDOWN_MS);
-        startTick();
-        try { form && form.submit(); } catch(_){}
-        return;
-      }
-
-      await sendFetch();
-      say("Listo ✅ Te reenviamos el email. Revisá tu bandeja y spam/promociones.");
-      setCooldownUntil(Date.now() + COOLDOWN_MS);
-      startTick();
-
+      const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
+      const r = await fetch(endpoint,{
+        method:"POST",
+        headers:{
+          "Content-Type":"application/json",
+          "Accept":"application/json",
+          "X-CSRF-Token":csrf
+        },
+        credentials:"same-origin"
+      });
+      const j = await r.json();
+      if(!r.ok || j.ok===false) throw new Error(j.message||"Error");
+      say("Correo reenviado. Revisá tu email.");
     }catch(e){
-      const msg = (e && e.message) ? e.message : "";
-      // fallback submit
-      if(form && endpoint){
-        say(msg || "Intentando reenvío…");
-        setTimeout(() => { try{ form.submit(); }catch(_){ ensureCooldownUI(); } }, 250);
-        return;
-      }
-      say(msg || "No está disponible el reenvío automático en este momento. Probá más tarde o escribinos a soporte.");
-      ensureCooldownUI();
+      say("No se pudo reenviar automáticamente. Intentá más tarde.");
     }finally{
-      locked = false;
-      setBusy(false);
-      ensureCooldownUI();
+      spin.style.display='none';
+      updateBtn();
     }
   };
 
   if(btn) btn.addEventListener('click', send);
-  ensureCooldownUI();
+  setInterval(updateBtn,500);
+  updateBtn();
 })();
 </script>
 {% endblock %}

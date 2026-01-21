@@ -1,15 +1,14 @@
-# app/routes/main_routes.py — Skyline Store (ULTRA PRO++ / NO BREAK / FAIL-SAFE v3.4 BULLETPROOF)
+# app/routes/main_routes.py — Skyline Store (ULTRA PRO++ / NO BREAK / FAIL-SAFE v3.6.1 BULLETPROOF)
 from __future__ import annotations
 
 import hashlib
 import logging
 import os
-import secrets
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Tuple
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlencode  # ✅ FIX: faltaba urlencode
 
 from flask import (
     Blueprint,
@@ -19,17 +18,14 @@ from flask import (
     redirect,
     render_template,
     request,
-    session,
     url_for,
 )
 
-# SQL text helper (evita db.text inexistente en Flask-SQLAlchemy)
 try:
     from sqlalchemy import text as sql_text
 except Exception:  # pragma: no cover
     sql_text = None  # type: ignore
 
-# Si tu proyecto tiene db en app.models:
 try:
     from app.models import db  # type: ignore
 except Exception:  # pragma: no cover
@@ -43,40 +39,8 @@ main_bp = Blueprint(
     template_folder="../templates",
 )
 
-# -----------------------------------------------------------------------------
-# Config / Defaults
-# -----------------------------------------------------------------------------
-
 _TRUE = {"1", "true", "yes", "y", "on", "checked"}
 _FALSE = {"0", "false", "no", "n", "off", "unchecked"}
-
-# ✅ Debe coincidir (aprox) con auth_routes.py (AUTH_FORM_NONCE_TTL)
-FORM_NONCE_TTL = int(os.getenv("AUTH_FORM_NONCE_TTL", "1200") or "1200")
-FORM_NONCE_TTL = max(30, min(FORM_NONCE_TTL, 3600))
-
-# Limpieza: cuántos nonces antiguos toleramos en sesión
-NONCE_CLEANUP_MAX = int(os.getenv("AUTH_NONCE_CLEANUP_MAX", "25") or "25")
-NONCE_CLEANUP_MAX = max(5, min(NONCE_CLEANUP_MAX, 200))
-
-# ✅ Podés forzar que "/" redirija a shop. (por defecto: NO)
-HOME_REDIRECT_TO_SHOP = str(os.getenv("HOME_REDIRECT_TO_SHOP", "") or "").strip().lower() in _TRUE
-
-# ✅ NUEVO: ruta “home real” (si tu app decide redirigir, al menos queda consistente)
-HOME_CANONICAL_PATH = (os.getenv("HOME_CANONICAL_PATH") or "/").strip() or "/"
-
-# Cache home
-HOME_CACHE_TTL = int(os.getenv("HOME_CACHE_TTL", "120") or "120")
-HOME_CACHE_TTL = max(0, min(HOME_CACHE_TTL, 3600))  # 0 = sin cache
-ENABLE_HOME_CACHE = (str(os.getenv("ENABLE_HOME_CACHE", "1")).strip().lower() in _TRUE)
-
-# Seguridad URL / scheme
-FORCE_HTTPS = (str(os.getenv("FORCE_HTTPS", "0")).strip().lower() in _TRUE)
-PREFERRED_URL_SCHEME = (os.getenv("PREFERRED_URL_SCHEME") or "").strip().lower() or ("https" if FORCE_HTTPS else "")
-
-# ✅ NUEVO: versionado cache-bust (mismo que index.html usa HOME_CSS_VER)
-HOME_ASSET_VER = (os.getenv("HOME_CSS_VER") or os.getenv("HOME_ASSET_VER") or "162").strip() or "162"
-
-_HOME_CACHE: Dict[str, Tuple[float, Dict[str, Any]]] = {}  # key -> (expires_at, payload)
 
 
 def _env_bool(key: str, default: bool = False) -> bool:
@@ -99,6 +63,23 @@ def _now_year() -> int:
     return _utcnow().year
 
 
+HOME_REDIRECT_TO_SHOP = _env_bool("HOME_REDIRECT_TO_SHOP", False)
+HOME_CANONICAL_PATH = (os.getenv("HOME_CANONICAL_PATH") or "/").strip() or "/"
+
+HOME_CACHE_TTL = int(os.getenv("HOME_CACHE_TTL", "120") or "120")
+HOME_CACHE_TTL = max(0, min(HOME_CACHE_TTL, 3600))
+ENABLE_HOME_CACHE = _env_bool("ENABLE_HOME_CACHE", True)
+
+FORCE_HTTPS = _env_bool("FORCE_HTTPS", False)
+PREFERRED_URL_SCHEME = (os.getenv("PREFERRED_URL_SCHEME") or "").strip().lower() or ("https" if FORCE_HTTPS else "")
+
+HOME_ASSET_VER = (os.getenv("HOME_CSS_VER") or os.getenv("HOME_ASSET_VER") or "162").strip() or "162"
+
+_HOME_CACHE: Dict[str, Tuple[float, Dict[str, Any]]] = {}
+_HOME_CACHE_MAX_KEYS = int(os.getenv("HOME_CACHE_MAX_KEYS", "32") or "32")
+_HOME_CACHE_MAX_KEYS = max(8, min(_HOME_CACHE_MAX_KEYS, 256))
+
+
 @dataclass(frozen=True)
 class SeoDefaults:
     title: str
@@ -114,15 +95,6 @@ SEO_DEFAULTS = SeoDefaults(
     ),
     og_image=os.getenv("OG_IMAGE", "img/og.png"),
 )
-
-
-# -----------------------------------------------------------------------------
-# Cache helpers (con limpieza y size cap)
-# -----------------------------------------------------------------------------
-
-# ✅ NUEVO: cap para evitar crecer infinito en worker (cache por proceso)
-_HOME_CACHE_MAX_KEYS = int(os.getenv("HOME_CACHE_MAX_KEYS", "32") or "32")
-_HOME_CACHE_MAX_KEYS = max(8, min(_HOME_CACHE_MAX_KEYS, 256))
 
 
 def _cache_get(key: str) -> Optional[Dict[str, Any]]:
@@ -142,31 +114,20 @@ def _cache_set(key: str, payload: Dict[str, Any]) -> None:
     if not (ENABLE_HOME_CACHE and HOME_CACHE_TTL > 0):
         return
 
-    # ✅ NUEVO: limpieza de expirados + cap simple
     now = time.time()
-    if len(_HOME_CACHE) >= _HOME_CACHE_MAX_KEYS:
-        # borra expirados primero
-        for k in list(_HOME_CACHE.keys()):
-            exp, _ = _HOME_CACHE[k]
-            if now > exp:
-                _HOME_CACHE.pop(k, None)
-        # si sigue grande, borra algunos arbitrarios
-        while len(_HOME_CACHE) >= _HOME_CACHE_MAX_KEYS:
-            _HOME_CACHE.pop(next(iter(_HOME_CACHE)), None)
+
+    for k in list(_HOME_CACHE.keys()):
+        exp, _ = _HOME_CACHE[k]
+        if now > exp:
+            _HOME_CACHE.pop(k, None)
+
+    while len(_HOME_CACHE) >= _HOME_CACHE_MAX_KEYS:
+        _HOME_CACHE.pop(next(iter(_HOME_CACHE)), None)
 
     _HOME_CACHE[key] = (now + HOME_CACHE_TTL, payload)
 
 
-# -----------------------------------------------------------------------------
-# URL safety
-# -----------------------------------------------------------------------------
-
 def _is_safe_next(url: str) -> bool:
-    """
-    Anti open-redirect:
-    - permite SOLO paths locales tipo "/shop"
-    - bloquea scheme/host, "//", "\" y control chars
-    """
     if not url:
         return False
     u = url.strip()
@@ -188,10 +149,6 @@ def _safe_next_from_args() -> str:
 
 
 def _best_scheme() -> str:
-    """
-    Render/ProxyFix: X-Forwarded-Proto suele venir.
-    Además respeta PREFERRED_URL_SCHEME / FORCE_HTTPS.
-    """
     if PREFERRED_URL_SCHEME in {"http", "https"}:
         return PREFERRED_URL_SCHEME
     if FORCE_HTTPS:
@@ -211,17 +168,12 @@ def _etag_for(text: str) -> str:
 
 
 def _maybe_304(req_etag: Optional[str], etag: str):
-    """
-    Conditional GET (ETag):
-    - si coincide, devolvemos 304 sin body
-    """
     if not req_etag:
         return None
     try:
         inm = req_etag.strip()
         if inm == etag or etag in {x.strip() for x in inm.split(",")}:
-            resp = make_response("", 304)
-            return resp
+            return make_response("", 304)
         return None
     except Exception:
         return None
@@ -236,34 +188,21 @@ def _resp_no_store(resp, *, vary_cookie: bool = True):
 
 
 def _resp_cache_public(resp, seconds: int):
-    # ✅ NUEVO: agrega stale-while-revalidate para UX sin romper
     s = max(0, int(seconds))
     resp.headers["Cache-Control"] = f"public, max-age={s}, stale-while-revalidate=30"
     return resp
 
 
 def _safe_og_image(value: str) -> str:
-    """
-    Acepta:
-    - URL absoluta: https://...
-    - filename de static: "img/og.png" o "static/img/og.png"
-    """
     og = (value or "").strip() or SEO_DEFAULTS.og_image
-
     if og.startswith(("http://", "https://")):
         return og
-
     if og.startswith("static/"):
         og = og.replace("static/", "", 1)
-
     return _absolute_url("static", filename=og)
 
 
 def _render(template: str, *, status: int = 200, **ctx: Any):
-    """
-    Render seguro: inyecta SEO defaults + valores comunes.
-    NO depende de variables que a veces faltan en producción.
-    """
     ctx.setdefault("meta_title", SEO_DEFAULTS.title)
     ctx.setdefault("meta_description", SEO_DEFAULTS.description)
     ctx["og_image"] = _safe_og_image(str(ctx.get("og_image") or SEO_DEFAULTS.og_image))
@@ -274,8 +213,6 @@ def _render(template: str, *, status: int = 200, **ctx: Any):
 
     ctx.setdefault("view_functions", getattr(current_app, "view_functions", {}) or {})
     ctx.setdefault("config", getattr(current_app, "config", {}) or {})
-
-    # ✅ NUEVO: inyecta HOME_CSS_VER para que index.html cache-bust funcione sí o sí
     ctx.setdefault("HOME_CSS_VER", HOME_ASSET_VER)
 
     try:
@@ -296,93 +233,15 @@ def _render(template: str, *, status: int = 200, **ctx: Any):
             return make_response("Ocurrió un error cargando la página.", 500)
 
 
-# -----------------------------------------------------------------------------
-# Account unified helpers (NONCE compatible con auth_routes.py)
-# -----------------------------------------------------------------------------
-
-def _nonce_is_valid(raw: Any) -> bool:
-    if not isinstance(raw, dict):
-        return False
-    v = str(raw.get("v") or "").strip()
-    ts = raw.get("ts")
-    if not v:
-        return False
-    try:
-        ts_i = int(ts)
-    except Exception:
-        return False
-    return (int(time.time()) - ts_i) <= FORM_NONCE_TTL
-
-
-def _cleanup_old_nonces() -> None:
-    """
-    Limpia nonces viejos para no inflar la cookie de sesión.
-    """
-    try:
-        keys = [k for k in session.keys() if isinstance(k, str) and k.startswith("nonce:")]
-
-        # primero limpiamos vencidos
-        for k in keys:
-            raw = session.get(k)
-            if not _nonce_is_valid(raw):
-                session.pop(k, None)
-
-        keys = [k for k in session.keys() if isinstance(k, str) and k.startswith("nonce:")]
-        if len(keys) <= NONCE_CLEANUP_MAX:
-            return
-
-        # si sigue habiendo demasiados, recortamos
-        extras = len(keys) - NONCE_CLEANUP_MAX
-        for k in keys[: max(0, extras)]:
-            session.pop(k, None)
-
-        session.modified = True
-    except Exception:
-        return
-
-
-def _ensure_form_nonce(key: str) -> str:
-    """
-    ✅ Devuelve un nonce válido para el key.
-    Si existe y no venció: reutiliza.
-    Si no existe o venció: crea nuevo (en formato compatible).
-    """
-    sk = f"nonce:{key}"
-    raw = session.get(sk)
-    if _nonce_is_valid(raw):
-        return str(raw.get("v") or "")
-    tok = secrets.token_urlsafe(20)
-    session[sk] = {"v": tok, "ts": int(time.time())}
-    session.modified = True
-    return tok
-
-
-def _account_active_tab() -> str:
-    """
-    Permite abrir directo la pestaña:
-      /account?tab=register  (o mode=signup)
-    """
-    t = (request.args.get("tab") or request.args.get("mode") or "").strip().lower()
-    return "register" if t in {"register", "signup", "crear"} else "login"
-
-
-# -----------------------------------------------------------------------------
-# After-request hardening (sin romper)
-# -----------------------------------------------------------------------------
-
 @main_bp.after_request
 def _security_headers(resp):
-    # No pisa Talisman; solo completa si falta
     resp.headers.setdefault("X-Content-Type-Options", "nosniff")
     resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
     resp.headers.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
     resp.headers.setdefault("X-Served-By", "skyline")
-
-    # ✅ NUEVO: ayuda a debug de caché/versión sin exponer info sensible
     resp.headers.setdefault("X-Home-Asset-Ver", str(HOME_ASSET_VER))
 
-    # No cachear pantallas sensibles
     if request.path.startswith(("/auth", "/admin", "/account", "/checkout", "/cart")):
         resp.headers.setdefault("Cache-Control", "no-store")
         resp.headers.setdefault("Vary", "Cookie")
@@ -390,39 +249,24 @@ def _security_headers(resp):
     return resp
 
 
-# -----------------------------------------------------------------------------
-# Routes
-# -----------------------------------------------------------------------------
-
 @main_bp.get("/")
 def home():
-    """
-    Home real:
-    - por defecto renderiza index.html
-    - opcional: redirige a shop si HOME_REDIRECT_TO_SHOP=1
-    - cache por lang + ETag correcto + cache-control
-    """
-    # ✅ Si querés que la tienda sea el home y evitar choques con shop.root
     if HOME_REDIRECT_TO_SHOP:
         try:
             return redirect(url_for("shop.shop"), code=302)
         except Exception:
             return redirect("/shop", code=302)
 
-    # ✅ NUEVO: Canonical redirect solo si la URL no coincide (evita 302 sorpresa)
     try:
-        if HOME_CANONICAL_PATH and request.path != HOME_CANONICAL_PATH and request.path == "/":
-            # solo si lo configurás distinto a "/"
-            if HOME_CANONICAL_PATH != "/":
-                return redirect(HOME_CANONICAL_PATH, code=302)
+        if HOME_CANONICAL_PATH and HOME_CANONICAL_PATH != "/" and request.path == "/":
+            return redirect(HOME_CANONICAL_PATH, code=302)
     except Exception:
         pass
 
     lang = (request.headers.get("Accept-Language") or "es").split(",")[0].strip().lower()
-    lang = (lang or "es")[:12]  # ✅ NUEVO: cap para evitar keys raras
+    lang = (lang or "es")[:12]
 
-    # ✅ NUEVO: versiona la cache con asset ver (si cambiás HOME_CSS_VER, invalida cache)
-    key = f"home:v3.4:lang={lang}:ver={HOME_ASSET_VER}"
+    key = f"home:v3.6.1:lang={lang}:ver={HOME_ASSET_VER}"
 
     cached = _cache_get(key)
     if cached:
@@ -441,7 +285,6 @@ def home():
     payload: Dict[str, Any] = {
         "meta_title": SEO_DEFAULTS.title,
         "meta_description": SEO_DEFAULTS.description,
-        # ✅ NUEVO: fuerza esta var (tu index.html ya la usa)
         "HOME_CSS_VER": HOME_ASSET_VER,
     }
     _cache_set(key, payload)
@@ -460,38 +303,26 @@ def home():
 
 
 @main_bp.get("/account")
-def account():
-    """
-    ✅ Página de cuenta UNIFICADA (tabs login/register)
-    Renderiza: templates/auth/account.html
-    - Genera nonce_login y nonce_register (compatibles con auth_routes)
-    - respeta next safe
-    - no-store para evitar formularios viejos
-    """
+def account_alias():
     nxt = _safe_next_from_args()
-    active_tab = _account_active_tab()
+    tab = (request.args.get("tab") or request.args.get("mode") or "").strip().lower()
+    tab = "register" if tab in {"register", "signup", "crear"} else "login"
 
-    _cleanup_old_nonces()
-    nonce_login = _ensure_form_nonce("login")
-    nonce_register = _ensure_form_nonce("register")
-
-    resp = _render(
-        "auth/account.html",
-        meta_title=f"Mi cuenta | {SEO_DEFAULTS.title}",
-        next=nxt,
-        active_tab=active_tab,
-        nonce_login=nonce_login,
-        nonce_register=nonce_register,
-    )
-    return _resp_no_store(resp, vary_cookie=True)
+    try:
+        return redirect(url_for("auth.account", tab=tab, next=nxt), code=302)
+    except Exception:
+        qs = urlencode({"tab": tab, "next": nxt}) if nxt else urlencode({"tab": tab})
+        return redirect(f"/auth/account?{qs}", code=302)
 
 
 @main_bp.get("/cuenta")
 def cuenta_alias():
     nxt = _safe_next_from_args()
-    if nxt:
-        return redirect(url_for("main.account", next=nxt), code=302)
-    return redirect(url_for("main.account"), code=302)
+    try:
+        return redirect(url_for("main.account_alias", next=nxt) if nxt else url_for("main.account_alias"), code=302)
+    except Exception:
+        qs = urlencode({"next": nxt}) if nxt else ""
+        return redirect(f"/account{('?' + qs) if qs else ''}", code=302)
 
 
 @main_bp.get("/about")
@@ -521,6 +352,8 @@ def health():
         "time_utc": _utcnow().isoformat(),
         "db_ok": db_ok,
         "db_error": db_err,
+        "home_cache_enabled": bool(ENABLE_HOME_CACHE and HOME_CACHE_TTL > 0),
+        "home_asset_ver": str(HOME_ASSET_VER),
     }
 
     resp = jsonify(data)
@@ -569,7 +402,7 @@ def sitemap():
     urls = [
         _absolute_url("main.home"),
         _absolute_url("main.about"),
-        _absolute_url("main.account"),
+        _absolute_url("auth.account") if "auth.account" in vf else _absolute_url("main.account_alias"),
     ]
 
     if "shop.shop" in vf:
@@ -649,3 +482,6 @@ def server_error(e):
         error_title="Error interno",
         error_message="Ocurrió un error. Probá de nuevo en unos segundos.",
     )
+
+
+__all__ = ["main_bp"]
