@@ -1,4 +1,4 @@
-﻿# app/models/__init__.py — Skyline Store (BULLETPROOF · FINAL · NO BREAK · v3.2)
+﻿# app/models/__init__.py — Skyline Store (BULLETPROOF · FINAL · NO BREAK · v3.2.1)
 from __future__ import annotations
 
 import logging
@@ -13,13 +13,12 @@ from sqlalchemy.exc import OperationalError, ProgrammingError
 log = logging.getLogger("models")
 db = SQLAlchemy()
 
-_TRUE = {"1", "true", "yes", "y", "on"}
+_TRUE = {"1", "true", "yes", "y", "on", "checked"}
 _FALSE = {"0", "false", "no", "n", "off"}
 
 _INIT_LOCK = threading.RLock()
 _LOADED_MODELS: Optional[Dict[str, Any]] = None
 _MODELS_INIT_ONCE_OK: bool = False
-
 
 try:
     from sqlalchemy import text as _sa_text  # type: ignore
@@ -49,7 +48,7 @@ def _env_str(name: str, default: str = "") -> str:
 
 
 def _app_env(app: Flask) -> str:
-    env = (app.config.get("ENV") or os.getenv("ENV") or os.getenv("FLASK_ENV") or "").lower().strip()
+    env = (app.config.get("ENV") or app.config.get("ENVIRONMENT") or os.getenv("ENV") or os.getenv("FLASK_ENV") or "").lower().strip()
     if env in {"prod", "production"}:
         return "production"
     if env in {"dev", "development"}:
@@ -111,7 +110,6 @@ def _db_tables_not_ready_error(e: Exception) -> bool:
 
 
 def _ensure_db_registered(app: Flask) -> None:
-    # Mejora: set defaults safe (no rompe si ya está seteado)
     app.config.setdefault("SQLALCHEMY_TRACK_MODIFICATIONS", False)
 
     ext = app.extensions.get("sqlalchemy")
@@ -128,10 +126,7 @@ def _ensure_db_registered(app: Flask) -> None:
         ) from e
 
     if app.extensions.get("sqlalchemy") is not db:
-        raise RuntimeError(
-            "Detecté múltiples instancias de SQLAlchemy() en el proyecto. "
-            "Debe existir SOLO 1 en app/models/__init__.py."
-        )
+        raise RuntimeError("Detecté múltiples instancias de SQLAlchemy() en el proyecto. Debe existir SOLO 1 en app/models/__init__.py.")
 
 
 def _import_required(module: str, name: str) -> Any:
@@ -162,22 +157,17 @@ def _load_models(*, force: bool = False) -> Dict[str, Any]:
         models: Dict[str, Any] = {}
         models["User"] = _import_required("app.models.user", "User")
         models["UserAddress"] = _import_required("app.models.user", "UserAddress")
-
         models["Category"] = _import_required("app.models.category", "Category")
-
         models["Product"] = _import_required("app.models.product", "Product")
         models["ProductMedia"] = _import_optional("app.models.product", "ProductMedia")
         models["Tag"] = _import_optional("app.models.product", "Tag")
-
         models["Order"] = _import_required("app.models.order", "Order")
         models["OrderItem"] = _import_required("app.models.order", "OrderItem")
-
         models["Offer"] = _import_optional("app.models.offer", "Offer")
         models["Media"] = _import_optional("app.models.media", "Media")
         models["Event"] = _import_optional("app.models.event", "Event")
         models["Campaign"] = _import_optional("app.models.campaign", "Campaign")
         models["CampaignSend"] = _import_optional("app.models.campaign", "CampaignSend")
-
         models["CommissionLedgerEntry"] = _import_optional("app.models.commission_ledger", "CommissionLedgerEntry")
         models["CommissionPayout"] = _import_optional("app.models.commission_ledger", "CommissionPayout")
 
@@ -197,13 +187,11 @@ class _ModelProxy:
             raise RuntimeError(f"Model '{self._name}' no cargado. Llamá init_models(app) dentro de create_app().")
         return loaded[self._name]
 
-    # Mejora CRÍTICA: hace al proxy compatible con SQLAlchemy (query/inspect)
     def __sa_inspect__(self):
-        from sqlalchemy.inspection import inspect as _inspect  # local import (evita overhead/circular)
+        from sqlalchemy.inspection import inspect as _inspect
 
         return _inspect(self._resolve())
 
-    # Mejora: soporta acceso a mapper (algunos integradores lo usan)
     @property
     def __mapper__(self):
         return self.__sa_inspect__().mapper
@@ -214,7 +202,7 @@ class _ModelProxy:
     def __call__(self, *a, **kw):
         return self._resolve()(*a, **kw)
 
-    def __repr__(self) -> str:  # ayuda debugging
+    def __repr__(self) -> str:
         return f"<ModelProxy {self._name}>"
 
 
@@ -241,59 +229,10 @@ def _ping_db(app: Flask) -> None:
         try:
             db.session.execute(text("SELECT 1"))
         finally:
-            # mejora: no dejar transacciones colgando
             try:
                 db.session.rollback()
             except Exception:
                 pass
-
-
-def init_models(
-    app: Flask,
-    *,
-    create_admin: bool = True,
-    force_reload_models: bool = False,
-    log_loaded_models: bool = False,
-    ping_db: bool = True,
-) -> Dict[str, Any]:
-    global _MODELS_INIT_ONCE_OK
-
-    with _INIT_LOCK:
-        uri = _ensure_db_uri(app)
-        if not uri:
-            raise RuntimeError("SQLALCHEMY_DATABASE_URI no configurado (set SQLALCHEMY_DATABASE_URI o DATABASE_URL).")
-
-        _ensure_db_registered(app)
-
-        loaded = _load_models(force=force_reload_models)
-
-        required: Set[str] = {"User", "Category", "Product", "Order", "OrderItem"}
-        missing = required - set(loaded.keys())
-        if missing:
-            raise RuntimeError(f"Faltan modelos core: {', '.join(sorted(missing))}")
-
-        if ping_db:
-            try:
-                _ping_db(app)
-            except Exception as e:
-                log.exception("DB ping failed: %s", e)
-                raise RuntimeError("No se pudo conectar a la DB (ping failed)") from e
-
-        if log_loaded_models:
-            log.info("Modelos cargados: %s", ", ".join(sorted(loaded.keys())))
-
-        result: Dict[str, Any] = {"ok": True, "env": _app_env(app), "db_uri": _db_uri(app), "models": sorted(loaded.keys())}
-
-        seed = _env_flag("SEED", False)
-        skip_admin = _env_flag("SKIP_ADMIN_BOOTSTRAP", False)
-
-        if create_admin and seed and not skip_admin and not _MODELS_INIT_ONCE_OK:
-            result["admin"] = create_admin_owner_guard(app)
-            _MODELS_INIT_ONCE_OK = True
-        else:
-            result["admin"] = {"skipped": True}
-
-        return result
 
 
 def _looks_like_email(email: str) -> bool:
@@ -346,8 +285,7 @@ def create_admin_owner_guard(app: Flask) -> Dict[str, Any]:
             for attr, value in (("is_admin", True), ("is_active", True), ("email_verified", True)):
                 if hasattr(existing, attr):
                     try:
-                        cur = getattr(existing, attr)
-                        if bool(cur) != bool(value):
+                        if bool(getattr(existing, attr)) != bool(value):
                             setattr(existing, attr, value)
                             changed = True
                     except Exception:
@@ -384,6 +322,53 @@ def create_admin_owner_guard(app: Flask) -> Dict[str, Any]:
             db.session.rollback()
             log.exception("Error creando admin owner")
             return {"ok": False, "msg": "failed to create admin"}
+
+
+def init_models(
+    app: Flask,
+    *,
+    create_admin: bool = True,
+    force_reload_models: bool = False,
+    log_loaded_models: bool = False,
+    ping_db: bool = True,
+) -> Dict[str, Any]:
+    global _MODELS_INIT_ONCE_OK
+
+    with _INIT_LOCK:
+        uri = _ensure_db_uri(app)
+        if not uri:
+            raise RuntimeError("SQLALCHEMY_DATABASE_URI no configurado (set SQLALCHEMY_DATABASE_URI o DATABASE_URL).")
+
+        _ensure_db_registered(app)
+        loaded = _load_models(force=force_reload_models)
+
+        required: Set[str] = {"User", "Category", "Product", "Order", "OrderItem"}
+        missing = required - set(loaded.keys())
+        if missing:
+            raise RuntimeError(f"Faltan modelos core: {', '.join(sorted(missing))}")
+
+        if ping_db:
+            try:
+                _ping_db(app)
+            except Exception as e:
+                log.exception("DB ping failed: %s", e)
+                raise RuntimeError("No se pudo conectar a la DB (ping failed)") from e
+
+        if log_loaded_models:
+            log.info("Modelos cargados: %s", ", ".join(sorted(loaded.keys())))
+
+        result: Dict[str, Any] = {"ok": True, "env": _app_env(app), "db_uri": _db_uri(app), "models": sorted(loaded.keys())}
+
+        seed = _env_flag("SEED", False)
+        skip_admin = _env_flag("SKIP_ADMIN_BOOTSTRAP", False)
+
+        if create_admin and seed and not skip_admin and not _MODELS_INIT_ONCE_OK:
+            result["admin"] = create_admin_owner_guard(app)
+            _MODELS_INIT_ONCE_OK = True
+        else:
+            result["admin"] = {"skipped": True}
+
+        return result
 
 
 def create_admin_if_missing(app: Flask) -> Dict[str, Any]:
