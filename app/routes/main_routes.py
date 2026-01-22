@@ -1,4 +1,4 @@
-# app/routes/main_routes.py — Skyline Store (ULTRA PRO++ / NO BREAK / FAIL-SAFE v3.6.1 BULLETPROOF)
+# app/routes/main_routes.py — Skyline Store (ULTRA PRO++ / NO BREAK / FAIL-SAFE v3.7.0 FINAL)
 from __future__ import annotations
 
 import hashlib
@@ -7,19 +7,10 @@ import os
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional, Tuple
-from urllib.parse import urlparse, urlencode  # ✅ FIX: faltaba urlencode
+from typing import Any, Dict, List, Optional, Set, Tuple
+from urllib.parse import urlencode, urlparse
 
-from flask import (
-    Blueprint,
-    current_app,
-    jsonify,
-    make_response,
-    redirect,
-    render_template,
-    request,
-    url_for,
-)
+from flask import Blueprint, current_app, jsonify, make_response, redirect, render_template, request, url_for
 
 try:
     from sqlalchemy import text as sql_text
@@ -31,13 +22,16 @@ try:
 except Exception:  # pragma: no cover
     db = None  # type: ignore
 
+try:
+    from app.models import Category, Product  # type: ignore
+except Exception:  # pragma: no cover
+    Category = None  # type: ignore
+    Product = None  # type: ignore
+
+
 log = logging.getLogger("main_routes")
 
-main_bp = Blueprint(
-    "main",
-    __name__,
-    template_folder="../templates",
-)
+main_bp = Blueprint("main", __name__, template_folder="../templates")
 
 _TRUE = {"1", "true", "yes", "y", "on", "checked"}
 _FALSE = {"0", "false", "no", "n", "off", "unchecked"}
@@ -63,95 +57,11 @@ def _now_year() -> int:
     return _utcnow().year
 
 
-HOME_REDIRECT_TO_SHOP = _env_bool("HOME_REDIRECT_TO_SHOP", False)
-HOME_CANONICAL_PATH = (os.getenv("HOME_CANONICAL_PATH") or "/").strip() or "/"
-
-HOME_CACHE_TTL = int(os.getenv("HOME_CACHE_TTL", "120") or "120")
-HOME_CACHE_TTL = max(0, min(HOME_CACHE_TTL, 3600))
-ENABLE_HOME_CACHE = _env_bool("ENABLE_HOME_CACHE", True)
-
-FORCE_HTTPS = _env_bool("FORCE_HTTPS", False)
-PREFERRED_URL_SCHEME = (os.getenv("PREFERRED_URL_SCHEME") or "").strip().lower() or ("https" if FORCE_HTTPS else "")
-
-HOME_ASSET_VER = (os.getenv("HOME_CSS_VER") or os.getenv("HOME_ASSET_VER") or "162").strip() or "162"
-
-_HOME_CACHE: Dict[str, Tuple[float, Dict[str, Any]]] = {}
-_HOME_CACHE_MAX_KEYS = int(os.getenv("HOME_CACHE_MAX_KEYS", "32") or "32")
-_HOME_CACHE_MAX_KEYS = max(8, min(_HOME_CACHE_MAX_KEYS, 256))
-
-
-@dataclass(frozen=True)
-class SeoDefaults:
-    title: str
-    description: str
-    og_image: str
-
-
-SEO_DEFAULTS = SeoDefaults(
-    title=os.getenv("SEO_TITLE", "Skyline Store · Tech + Streetwear premium"),
-    description=os.getenv(
-        "SEO_DESCRIPTION",
-        "Comprá moda urbana, accesorios y tecnología en un solo lugar. Envíos rápidos y pagos seguros.",
-    ),
-    og_image=os.getenv("OG_IMAGE", "img/og.png"),
-)
-
-
-def _cache_get(key: str) -> Optional[Dict[str, Any]]:
-    if not (ENABLE_HOME_CACHE and HOME_CACHE_TTL > 0):
-        return None
-    item = _HOME_CACHE.get(key)
-    if not item:
-        return None
-    expires_at, payload = item
-    if time.time() > expires_at:
-        _HOME_CACHE.pop(key, None)
-        return None
-    return payload
-
-
-def _cache_set(key: str, payload: Dict[str, Any]) -> None:
-    if not (ENABLE_HOME_CACHE and HOME_CACHE_TTL > 0):
-        return
-
-    now = time.time()
-
-    for k in list(_HOME_CACHE.keys()):
-        exp, _ = _HOME_CACHE[k]
-        if now > exp:
-            _HOME_CACHE.pop(k, None)
-
-    while len(_HOME_CACHE) >= _HOME_CACHE_MAX_KEYS:
-        _HOME_CACHE.pop(next(iter(_HOME_CACHE)), None)
-
-    _HOME_CACHE[key] = (now + HOME_CACHE_TTL, payload)
-
-
-def _is_safe_next(url: str) -> bool:
-    if not url:
-        return False
-    u = url.strip()
-    if not u or any(ch in u for ch in ("\x00", "\r", "\n")):
-        return False
-    if "\\" in u:
-        return False
-    if u.startswith("//"):
-        return False
-    parsed = urlparse(u)
-    if parsed.scheme or parsed.netloc:
-        return False
-    return u.startswith("/")
-
-
-def _safe_next_from_args() -> str:
-    nxt = (request.args.get("next") or "").strip()
-    return nxt if _is_safe_next(nxt) else ""
-
-
 def _best_scheme() -> str:
-    if PREFERRED_URL_SCHEME in {"http", "https"}:
-        return PREFERRED_URL_SCHEME
-    if FORCE_HTTPS:
+    preferred = (os.getenv("PREFERRED_URL_SCHEME") or "").strip().lower()
+    if preferred in {"http", "https"}:
+        return preferred
+    if _env_bool("FORCE_HTTPS", False):
         return "https"
     return request.headers.get("X-Forwarded-Proto", request.scheme or "https")
 
@@ -160,6 +70,13 @@ def _absolute_url(endpoint: str, **values: Any) -> str:
     values.setdefault("_external", True)
     values.setdefault("_scheme", _best_scheme())
     return url_for(endpoint, **values)
+
+
+def _site_base_url() -> str:
+    site = (current_app.config.get("SITE_URL") or os.getenv("SITE_URL") or "").strip().rstrip("/")
+    if site:
+        return site
+    return _absolute_url("main.home").rstrip("/")
 
 
 def _etag_for(text: str) -> str:
@@ -193,6 +110,84 @@ def _resp_cache_public(resp, seconds: int):
     return resp
 
 
+def _is_safe_next(url: str) -> bool:
+    if not url:
+        return False
+    u = url.strip()
+    if not u or any(ch in u for ch in ("\x00", "\r", "\n")):
+        return False
+    if "\\" in u:
+        return False
+    if u.startswith("//"):
+        return False
+    parsed = urlparse(u)
+    if parsed.scheme or parsed.netloc:
+        return False
+    return u.startswith("/")
+
+
+def _safe_next_from_args() -> str:
+    nxt = (request.args.get("next") or "").strip()
+    return nxt if _is_safe_next(nxt) else ""
+
+
+HOME_REDIRECT_TO_SHOP = _env_bool("HOME_REDIRECT_TO_SHOP", False)
+HOME_CANONICAL_PATH = (os.getenv("HOME_CANONICAL_PATH") or "/").strip() or "/"
+
+HOME_CACHE_TTL = int(os.getenv("HOME_CACHE_TTL", "120") or "120")
+HOME_CACHE_TTL = max(0, min(HOME_CACHE_TTL, 3600))
+ENABLE_HOME_CACHE = _env_bool("ENABLE_HOME_CACHE", True)
+
+HOME_ASSET_VER = (os.getenv("HOME_CSS_VER") or os.getenv("HOME_ASSET_VER") or "162").strip() or "162"
+
+_HOME_CACHE: Dict[str, Tuple[float, Dict[str, Any]]] = {}
+_HOME_CACHE_MAX_KEYS = int(os.getenv("HOME_CACHE_MAX_KEYS", "32") or "32")
+_HOME_CACHE_MAX_KEYS = max(8, min(_HOME_CACHE_MAX_KEYS, 256))
+
+
+@dataclass(frozen=True)
+class SeoDefaults:
+    title: str
+    description: str
+    og_image: str
+
+
+SEO_DEFAULTS = SeoDefaults(
+    title=os.getenv("SEO_TITLE", "Skyline Store · Tech + Streetwear premium"),
+    description=os.getenv(
+        "SEO_DESCRIPTION",
+        "Comprá moda urbana, accesorios y tecnología en un solo lugar. Envíos rápidos y pagos seguros.",
+    ),
+    og_image=os.getenv("OG_IMAGE", "img/og/og-home.png"),
+)
+
+
+def _cache_get(key: str) -> Optional[Dict[str, Any]]:
+    if not (ENABLE_HOME_CACHE and HOME_CACHE_TTL > 0):
+        return None
+    item = _HOME_CACHE.get(key)
+    if not item:
+        return None
+    expires_at, payload = item
+    if time.time() > expires_at:
+        _HOME_CACHE.pop(key, None)
+        return None
+    return payload
+
+
+def _cache_set(key: str, payload: Dict[str, Any]) -> None:
+    if not (ENABLE_HOME_CACHE and HOME_CACHE_TTL > 0):
+        return
+    now = time.time()
+    for k in list(_HOME_CACHE.keys()):
+        exp, _ = _HOME_CACHE[k]
+        if now > exp:
+            _HOME_CACHE.pop(k, None)
+    while len(_HOME_CACHE) >= _HOME_CACHE_MAX_KEYS:
+        _HOME_CACHE.pop(next(iter(_HOME_CACHE)), None)
+    _HOME_CACHE[key] = (now + HOME_CACHE_TTL, payload)
+
+
 def _safe_og_image(value: str) -> str:
     og = (value or "").strip() or SEO_DEFAULTS.og_image
     if og.startswith(("http://", "https://")):
@@ -210,7 +205,6 @@ def _render(template: str, *, status: int = 200, **ctx: Any):
 
     env = (os.getenv("ENV") or os.getenv("FLASK_ENV") or "").strip().lower() or "production"
     ctx.setdefault("ENV", env)
-
     ctx.setdefault("view_functions", getattr(current_app, "view_functions", {}) or {})
     ctx.setdefault("config", getattr(current_app, "config", {}) or {})
     ctx.setdefault("HOME_CSS_VER", HOME_ASSET_VER)
@@ -245,7 +239,6 @@ def _security_headers(resp):
     if request.path.startswith(("/auth", "/admin", "/account", "/checkout", "/cart")):
         resp.headers.setdefault("Cache-Control", "no-store")
         resp.headers.setdefault("Vary", "Cookie")
-
     return resp
 
 
@@ -266,7 +259,7 @@ def home():
     lang = (request.headers.get("Accept-Language") or "es").split(",")[0].strip().lower()
     lang = (lang or "es")[:12]
 
-    key = f"home:v3.6.1:lang={lang}:ver={HOME_ASSET_VER}"
+    key = f"home:v3.7.0:lang={lang}:ver={HOME_ASSET_VER}"
 
     cached = _cache_get(key)
     if cached:
@@ -307,7 +300,6 @@ def account_alias():
     nxt = _safe_next_from_args()
     tab = (request.args.get("tab") or request.args.get("mode") or "").strip().lower()
     tab = "register" if tab in {"register", "signup", "crear"} else "login"
-
     try:
         return redirect(url_for("auth.account", tab=tab, next=nxt), code=302)
     except Exception:
@@ -363,82 +355,100 @@ def health():
 
 
 @main_bp.get("/robots.txt")
-def robots():
-    env = (os.getenv("ENV") or os.getenv("FLASK_ENV") or "production").strip().lower()
-    base = _absolute_url("main.home").rstrip("/")
+def robots_txt():
+    base = _site_base_url()
+    try:
+        return redirect(url_for("static", filename="robots.txt"), code=302)
+    except Exception:
+        txt = f"User-agent: *\nAllow: /\n\nSitemap: {base}/sitemap.xml\n"
+        resp = make_response(txt, 200)
+        resp.headers["Content-Type"] = "text/plain; charset=utf-8"
+        return _resp_cache_public(resp, 3600)
 
-    lines = ["User-agent: *"]
-    lines += ["Allow: /"] if env == "production" else ["Disallow: /"]
-    lines += [f"Sitemap: {base}/sitemap.xml", ""]
-    txt = "\n".join(lines)
 
-    etag = _etag_for(txt)
-    maybe = _maybe_304(request.headers.get("If-None-Match"), etag)
-    if maybe is not None:
-        maybe.headers["Content-Type"] = "text/plain; charset=utf-8"
-        maybe.headers["ETag"] = etag
-        return _resp_cache_public(maybe, 3600)
-
-    resp = make_response(txt, 200)
-    resp.headers["Content-Type"] = "text/plain; charset=utf-8"
-    resp.headers["ETag"] = etag
-    return _resp_cache_public(resp, 3600)
+def _iso_utc(dt: Optional[datetime]) -> Optional[str]:
+    if not dt:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    else:
+        dt = dt.astimezone(timezone.utc)
+    return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 @main_bp.get("/sitemap.xml")
-def sitemap():
-    def _xml_escape(s: str) -> str:
-        return (
-            (s or "")
-            .replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-            .replace('"', "&quot;")
-            .replace("'", "&apos;")
-        )
+def sitemap_xml():
+    base = _site_base_url()
 
-    vf = getattr(current_app, "view_functions", {}) or {}
-
-    urls = [
-        _absolute_url("main.home"),
-        _absolute_url("main.about"),
-        _absolute_url("auth.account") if "auth.account" in vf else _absolute_url("main.account_alias"),
+    now = _iso_utc(_utcnow())
+    static_urls: List[Dict[str, Any]] = [
+        {"loc": f"{base}/", "lastmod": now, "changefreq": "daily", "priority": "1.0"},
+        {"loc": f"{base}/tienda", "lastmod": now, "changefreq": "daily", "priority": "0.9"},
+        {"loc": f"{base}/ofertas", "lastmod": now, "changefreq": "weekly", "priority": "0.8"},
+        {"loc": f"{base}/about", "lastmod": now, "changefreq": "monthly", "priority": "0.4"},
     ]
 
-    if "shop.shop" in vf:
+    categories: List[Dict[str, Any]] = []
+    products: List[Dict[str, Any]] = []
+
+    MAX_CATEGORIES = max(100, min(int(os.getenv("SITEMAP_MAX_CATEGORIES", "2000") or "2000"), 5000))
+    MAX_PRODUCTS = max(500, min(int(os.getenv("SITEMAP_MAX_PRODUCTS", "20000") or "20000"), 50000))
+
+    if db is not None and Category is not None and Product is not None:
         try:
-            urls.append(_absolute_url("shop.shop"))
-        except Exception:
-            pass
+            q_cat = db.session.query(Category)  # type: ignore
+            if hasattr(Category, "is_active"):
+                q_cat = q_cat.filter(getattr(Category, "is_active") == True)  # noqa: E712
+            if hasattr(Category, "updated_at"):
+                q_cat = q_cat.order_by(getattr(Category, "updated_at").desc())
+            elif hasattr(Category, "created_at"):
+                q_cat = q_cat.order_by(getattr(Category, "created_at").desc())
 
-    now = _utcnow().date().isoformat()
-    items = []
-    for u in urls:
-        items.append(
-            "<url>"
-            f"<loc>{_xml_escape(str(u))}</loc>"
-            f"<lastmod>{now}</lastmod>"
-            "<changefreq>daily</changefreq>"
-            "<priority>0.8</priority>"
-            "</url>"
-        )
+            seen: Set[str] = set()
+            for c in q_cat.limit(MAX_CATEGORIES).all():
+                slug = getattr(c, "slug", None) or getattr(c, "id", None)
+                if not slug:
+                    continue
+                loc = f"{base}/tienda?cat={slug}"
+                if loc in seen:
+                    continue
+                seen.add(loc)
+                lastmod = _iso_utc(getattr(c, "updated_at", None) or getattr(c, "created_at", None))
+                categories.append({"loc": loc, "lastmod": lastmod, "changefreq": "weekly", "priority": "0.6"})
 
-    xml = (
-        '<?xml version="1.0" encoding="UTF-8"?>'
-        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
-        + "".join(items)
-        + "</urlset>"
-    )
+            q_prod = db.session.query(Product)  # type: ignore
+            if hasattr(Product, "is_active"):
+                q_prod = q_prod.filter(getattr(Product, "is_active") == True)  # noqa: E712
+            if hasattr(Product, "updated_at"):
+                q_prod = q_prod.order_by(getattr(Product, "updated_at").desc())
+            elif hasattr(Product, "created_at"):
+                q_prod = q_prod.order_by(getattr(Product, "created_at").desc())
+
+            for p in q_prod.limit(MAX_PRODUCTS).all():
+                slug = getattr(p, "slug", None) or getattr(p, "id", None)
+                if not slug:
+                    continue
+                loc = f"{base}/producto/{slug}"
+                if loc in seen:
+                    continue
+                seen.add(loc)
+                lastmod = _iso_utc(getattr(p, "updated_at", None) or getattr(p, "created_at", None))
+                products.append({"loc": loc, "lastmod": lastmod, "changefreq": "weekly", "priority": "0.7"})
+
+        except Exception as e:
+            current_app.logger.warning("sitemap: fallback static only (%s)", e)
+
+    xml = render_template("sitemap.xml", static_urls=static_urls, categories=categories, products=products)
+    resp = make_response(xml, 200)
+    resp.headers["Content-Type"] = "application/xml; charset=utf-8"
 
     etag = _etag_for(xml)
     maybe = _maybe_304(request.headers.get("If-None-Match"), etag)
     if maybe is not None:
-        maybe.headers["Content-Type"] = "application/xml; charset=utf-8"
         maybe.headers["ETag"] = etag
+        maybe.headers["Content-Type"] = "application/xml; charset=utf-8"
         return _resp_cache_public(maybe, 3600)
 
-    resp = make_response(xml, 200)
-    resp.headers["Content-Type"] = "application/xml; charset=utf-8"
     resp.headers["ETag"] = etag
     return _resp_cache_public(resp, 3600)
 

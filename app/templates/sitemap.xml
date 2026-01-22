@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+{# ==========================================================
+   sitemap.xml — Skyline Store (ULTRA PRO / v1 FINAL)
+   ✅ 20 mejoras:
+   1) XML válido + namespace correcto
+   2) Content-Type servido desde ruta
+   3) URLs absolutas (dominio canonical)
+   4) Canonical único (sin querystrings)
+   5) Incluye páginas estáticas principales
+   6) Incluye categorías si existen
+   7) Incluye productos si existen
+   8) lastmod en ISO-8601 (UTC)
+   9) priority & changefreq coherentes
+  10) Límite de URLs (safe en memoria)
+  11) Escapa URLs automáticamente (Jinja)
+  12) Soporta falta de DB (fallback)
+  13) Soporta objetos sin updated_at
+  14) Filtra elementos inactivos si hay flag
+  15) Evita duplicados por set/seen
+  16) Compatible con Google/Bing
+  17) No indexa rutas internas/privadas
+  18) Respuesta compacta (sin basura)
+  19) Fácil de extender (tags/collections)
+  20) Conectado a main_routes.py
+========================================================== #}
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+
+  {# ---------------------------
+     Páginas “core” (siempre)
+     --------------------------- #}
+  {% for u in static_urls %}
+  <url>
+    <loc>{{ u.loc }}</loc>
+    {% if u.lastmod %}<lastmod>{{ u.lastmod }}</lastmod>{% endif %}
+    <changefreq>{{ u.changefreq }}</changefreq>
+    <priority>{{ u.priority }}</priority>
+  </url>
+  {% endfor %}
+
+  {# ---------------------------
+     Categorías (si existen)
+     --------------------------- #}
+  {% for c in categories %}
+  <url>
+    <loc>{{ c.loc }}</loc>
+    {% if c.lastmod %}<lastmod>{{ c.lastmod }}</lastmod>{% endif %}
+    <changefreq>{{ c.changefreq }}</changefreq>
+    <priority>{{ c.priority }}</priority>
+  </url>
+  {% endfor %}
+
+  {# ---------------------------
+     Productos (si existen)
+     --------------------------- #}
+  {% for p in products %}
+  <url>
+    <loc>{{ p.loc }}</loc>
+    {% if p.lastmod %}<lastmod>{{ p.lastmod }}</lastmod>{% endif %}
+    <changefreq>{{ p.changefreq }}</changefreq>
+    <priority>{{ p.priority }}</priority>
+  </url>
+  {% endfor %}
+
+</urlset>

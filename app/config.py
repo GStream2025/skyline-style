@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from datetime import timedelta
 from typing import Any, Dict, Optional, Type
+from urllib.parse import urlparse
 
 _TRUE = {"1", "true", "yes", "y", "on", "checked"}
 _FALSE = {"0", "false", "no", "n", "off"}
@@ -87,6 +88,22 @@ def normalize_scheme(raw: str, default: str = "http") -> str:
     return "https" if s == "https" else "http"
 
 
+def normalize_site_url(raw: str) -> str:
+    s = (raw or "").strip()
+    if not s:
+        return ""
+    s = s.rstrip("/")
+    if not s:
+        return ""
+    if not s.startswith(("http://", "https://")):
+        s = "https://" + s
+    p = urlparse(s)
+    if not p.netloc:
+        return ""
+    scheme = "https" if p.scheme == "https" else "http"
+    return f"{scheme}://{p.netloc}".rstrip("/")
+
+
 def _is_sqlite(uri: str) -> bool:
     return (uri or "").strip().lower().startswith("sqlite:")
 
@@ -107,6 +124,8 @@ def csp_for_tailwind_cdn() -> Dict[str, list]:
         "script-src": ["'self'", "'unsafe-inline'", "https:"],
         "font-src": ["'self'", "data:", "https:"],
         "connect-src": ["'self'", "https:"],
+        "frame-src": ["'self'", "https:"],
+        "worker-src": ["'self'", "blob:"],
     }
 
 
@@ -119,20 +138,24 @@ class BaseConfig:
     IS_PROD: bool = _is_prod(ENV)
 
     APP_NAME: str = env_str("APP_NAME", "Skyline Store")
-    APP_URL: str = env_str("APP_URL", env_str("SITE_URL", "")).rstrip("/")
-    SITE_URL: str = APP_URL
+
+    _raw_site = env_str("SITE_URL", env_str("APP_URL", env_str("RENDER_EXTERNAL_URL", "")))
+    SITE_URL: str = normalize_site_url(_raw_site)
+    APP_URL: str = SITE_URL
 
     HOST: str = env_str("HOST", "0.0.0.0")
     PORT: int = env_int("PORT", 5000, min_v=1, max_v=65535)
 
     SERVER_NAME: str = env_str("SERVER_NAME", "")
     PREFERRED_URL_SCHEME: str = normalize_scheme(
-        env_str("PREFERRED_URL_SCHEME", ("https" if IS_PROD else "http"))
+        env_str("PREFERRED_URL_SCHEME", ("https" if (IS_PROD or SITE_URL.startswith("https://")) else "http"))
     )
 
     TRUST_PROXY_HEADERS: bool = env_bool("TRUST_PROXY_HEADERS", default=IS_PROD)
+    FORCE_HTTPS: bool = env_bool("FORCE_HTTPS", default=IS_PROD)
+    HSTS: bool = env_bool("HSTS", default=IS_PROD)
 
-    SECRET_KEY: str = env_str("SECRET_KEY", "dev_skyline_fallback_change_me")
+    SECRET_KEY: str = env_str("SECRET_KEY", "dev_skyline_fallback_change_me_change_me_change_me")
 
     SESSION_COOKIE_NAME: str = env_str("SESSION_COOKIE_NAME", "skyline_session")
     SESSION_COOKIE_HTTPONLY: bool = env_bool("SESSION_COOKIE_HTTPONLY", True)
@@ -141,6 +164,7 @@ class BaseConfig:
         "Lax",
     )
     SESSION_COOKIE_SECURE: bool = env_bool("SESSION_COOKIE_SECURE", env_bool("COOKIE_SECURE", default=IS_PROD))
+    SESSION_COOKIE_DOMAIN: str = env_str("SESSION_COOKIE_DOMAIN", "").strip()
 
     SESSION_DAYS: int = env_int("SESSION_DAYS", 7, min_v=1, max_v=90)
     PERMANENT_SESSION_LIFETIME = timedelta(days=SESSION_DAYS)
@@ -148,7 +172,7 @@ class BaseConfig:
     WTF_CSRF_ENABLED: bool = env_bool("WTF_CSRF_ENABLED", True)
     WTF_CSRF_TIME_LIMIT: Optional[int] = env_opt_int("WTF_CSRF_TIME_LIMIT", 3600, min_v=300, max_v=86400)
     WTF_CSRF_SSL_STRICT: bool = env_bool("WTF_CSRF_SSL_STRICT", default=False)
-    WTF_CSRF_SECRET_KEY: str = env_str("WTF_CSRF_SECRET_KEY", "")
+    WTF_CSRF_SECRET_KEY: str = env_str("WTF_CSRF_SECRET_KEY", "").strip()
 
     UPLOADS_DIR: str = env_str("UPLOADS_DIR", "static/uploads")
     MAX_UPLOAD_MB: int = env_int("MAX_UPLOAD_MB", 20, min_v=1, max_v=200)
@@ -159,6 +183,7 @@ class BaseConfig:
     DATABASE_URL: str = normalize_database_url(os.getenv("DATABASE_URL"))
     SQLALCHEMY_DATABASE_URI: str = normalize_db_any(env_str("SQLALCHEMY_DATABASE_URI", DATABASE_URL)) or DATABASE_URL
     SQLALCHEMY_TRACK_MODIFICATIONS: bool = False
+    SQLALCHEMY_ECHO: bool = env_bool("SQLALCHEMY_ECHO", default=False)
 
     DB_POOL_RECYCLE: int = env_int("DB_POOL_RECYCLE", 280, min_v=30, max_v=3600)
     DB_POOL_SIZE: int = env_int("DB_POOL_SIZE", 5, min_v=1, max_v=30)
@@ -169,6 +194,14 @@ class BaseConfig:
 
     CACHE_TYPE: str = env_str("CACHE_TYPE", "SimpleCache")
     CACHE_DEFAULT_TIMEOUT: int = env_int("CACHE_DEFAULT_TIMEOUT", 300, min_v=10, max_v=86400)
+    CACHE_KEY_PREFIX: str = env_str("CACHE_KEY_PREFIX", env_str("APP_NAME", "skyline")).strip()[:64] or "skyline"
+
+    SEO_TITLE: str = env_str("SEO_TITLE", "Skyline Store · Tech + Streetwear premium")
+    SEO_DESCRIPTION: str = env_str(
+        "SEO_DESCRIPTION",
+        "Comprá moda urbana, accesorios y tecnología en un solo lugar. Envíos rápidos y pagos seguros.",
+    )
+    OG_IMAGE: str = env_str("OG_IMAGE", "img/og/og-home.png")
 
     PRINTFUL_API_KEY: str = env_str("PRINTFUL_API_KEY", env_str("PRINTFUL_KEY", env_str("PRINTFUL_API_TOKEN", "")))
     PRINTFUL_STORE_ID: str = env_str("PRINTFUL_STORE_ID", "")
@@ -184,10 +217,6 @@ class BaseConfig:
 
     PAYPAL_CLIENT_ID: str = env_str("PAYPAL_CLIENT_ID", "")
     PAYPAL_SECRET: str = env_str("PAYPAL_SECRET", "")
-
-    ENABLE_TALISMAN: bool = env_bool("ENABLE_TALISMAN", default=IS_PROD)
-    FORCE_HTTPS: bool = env_bool("FORCE_HTTPS", default=IS_PROD)
-    HSTS: bool = env_bool("HSTS", default=IS_PROD)
 
     MAIL_SERVER: str = env_str("MAIL_SERVER", "")
     MAIL_PORT: int = env_int("MAIL_PORT", 587, min_v=1, max_v=65535)
@@ -212,7 +241,6 @@ class BaseConfig:
     @classmethod
     def as_flask_config(cls) -> Dict[str, Any]:
         cfg: Dict[str, Any] = {}
-
         for base in reversed(cls.mro()):
             for k, v in getattr(base, "__dict__", {}).items():
                 if k.isupper():
@@ -229,13 +257,19 @@ class BaseConfig:
         if not str(cfg.get("WTF_CSRF_SECRET_KEY") or "").strip():
             cfg.pop("WTF_CSRF_SECRET_KEY", None)
 
-        cfg["SESSION_COOKIE_SAMESITE"] = normalize_samesite(str(cfg.get("SESSION_COOKIE_SAMESITE") or "Lax"), "Lax")
-        cfg["PREFERRED_URL_SCHEME"] = normalize_scheme(
-            str(cfg.get("PREFERRED_URL_SCHEME") or ("https" if cls.IS_PROD else "http"))
-        )
+        samesite = normalize_samesite(str(cfg.get("SESSION_COOKIE_SAMESITE") or "Lax"), "Lax")
+        cfg["SESSION_COOKIE_SAMESITE"] = samesite
+
+        scheme = normalize_scheme(str(cfg.get("PREFERRED_URL_SCHEME") or ("https" if cls.IS_PROD else "http")))
+        if cfg.get("FORCE_HTTPS") or (cls.SITE_URL.startswith("https://")):
+            scheme = "https"
+        cfg["PREFERRED_URL_SCHEME"] = scheme
 
         db_uri = normalize_db_any(str(cfg.get("SQLALCHEMY_DATABASE_URI") or ""))
         cfg["SQLALCHEMY_DATABASE_URI"] = db_uri or cls.DATABASE_URL
+
+        if not str(cfg.get("SESSION_COOKIE_DOMAIN") or "").strip():
+            cfg.pop("SESSION_COOKIE_DOMAIN", None)
 
         return cfg
 
@@ -250,6 +284,8 @@ class DevelopmentConfig(BaseConfig):
     PREFERRED_URL_SCHEME = normalize_scheme(env_str("PREFERRED_URL_SCHEME", "http"))
     WTF_CSRF_SSL_STRICT = env_bool("WTF_CSRF_SSL_STRICT", default=False)
     ENABLE_MINIFY = env_bool("ENABLE_MINIFY", default=False)
+    FORCE_HTTPS = env_bool("FORCE_HTTPS", default=False)
+    HSTS = env_bool("HSTS", default=False)
 
 
 class ProductionConfig(BaseConfig):
@@ -266,16 +302,14 @@ class ProductionConfig(BaseConfig):
     @classmethod
     def validate_required(cls) -> None:
         if not cls.SECRET_KEY or len(cls.SECRET_KEY) < 32:
-            raise RuntimeError(
-                "ProductionConfig: SECRET_KEY faltante o muy corto (>=32). "
-                "Setealo fijo en Render para evitar CSRF/session invalid."
-            )
+            raise RuntimeError("ProductionConfig: SECRET_KEY faltante o muy corto (>=32). Setealo en Render.")
+        if not cls.SITE_URL:
+            raise RuntimeError("ProductionConfig: SITE_URL faltante. Setealo en Render (ej: https://skyline-style.onrender.com).")
 
 
 def get_config(env_name: Optional[str] = None) -> Type[BaseConfig]:
     e = (str(env_name).strip().lower() if env_name else env_str("FLASK_ENV", env_str("ENV", "")).lower())
     debug = env_bool("DEBUG", env_bool("FLASK_DEBUG", False))
-
     if e in {"development", "dev"} or debug:
         return DevelopmentConfig
     return ProductionConfig

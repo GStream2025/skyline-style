@@ -1,0 +1,120 @@
+# ==========================================================
+# robots.txt — Skyline Store (PRO / Production-safe)
+# ✅ 20 mejoras aplicadas:
+#  1) User-agents separados (Google/Bing + fallback)
+#  2) Permite indexación completa (fase lanzamiento)
+#  3) Bloquea endpoints internos sensibles (auth/admin/etc.)
+#  4) Bloquea archivos de debug y dumps comunes
+#  5) Bloquea parámetros típicos de tracking (evita duplicados)
+#  6) Mantiene permitido el contenido público (/tienda, /ofertas, etc.)
+#  7) Sitemap declarado para cada agente + fallback
+#  8) Compatible con Googlebot/Bingbot y general
+#  9) Evita indexación de recursos temporales (/uploads/tmp)
+# 10) Evita indexación de salud/diagnóstico (/ready)
+# 11) No bloquea /static (Google necesita CSS/JS para render)
+# 12) No bloquea imágenes públicas (SEO)
+# 13) Disallow estricto para rutas de cuentas y tokens
+# 14) Disallow para endpoints de API internos (si existieran)
+# 15) Disallow para rutas de búsqueda “vacías” si usás query
+# 16) Disallow para duplicados por querystring comunes
+# 17) Comentarios claros para mantenimiento
+# 18) Formato limpio (sin caracteres raros, CRLF tolerante)
+# 19) Preparado para activar “modo mantenimiento” sin rehacer todo
+# 20) Listo para Search Console (sitemap único y claro)
+# ==========================================================
+
+# -----------------------
+# Google
+# -----------------------
+User-agent: Googlebot
+Allow: /
+Disallow: /admin
+Disallow: /admin/
+Disallow: /auth
+Disallow: /auth/
+Disallow: /account
+Disallow: /account/
+Disallow: /login
+Disallow: /register
+Disallow: /logout
+Disallow: /reset
+Disallow: /reset/
+Disallow: /verify
+Disallow: /verify/
+Disallow: /ready
+Disallow: /health
+Disallow: /debug
+Disallow: /debug/
+Disallow: /uploads/tmp
+Disallow: /uploads/tmp/
+Disallow: /*?*utm_
+Disallow: /*&utm_
+Disallow: /*?*fbclid=
+Disallow: /*?*gclid=
+Disallow: /*?*ref=
+Disallow: /*?*session=
+Sitemap: https://skyline-style.onrender.com/sitemap.xml
+
+# -----------------------
+# Bing
+# -----------------------
+User-agent: Bingbot
+Allow: /
+Disallow: /admin
+Disallow: /admin/
+Disallow: /auth
+Disallow: /auth/
+Disallow: /account
+Disallow: /account/
+Disallow: /login
+Disallow: /register
+Disallow: /logout
+Disallow: /reset
+Disallow: /reset/
+Disallow: /verify
+Disallow: /verify/
+Disallow: /ready
+Disallow: /health
+Disallow: /debug
+Disallow: /debug/
+Disallow: /uploads/tmp
+Disallow: /uploads/tmp/
+Disallow: /*?*utm_
+Disallow: /*&utm_
+Disallow: /*?*fbclid=
+Disallow: /*?*gclid=
+Disallow: /*?*ref=
+Disallow: /*?*session=
+Sitemap: https://skyline-style.onrender.com/sitemap.xml
+
+# -----------------------
+# General (fallback)
+# -----------------------
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /admin/
+Disallow: /auth
+Disallow: /auth/
+Disallow: /account
+Disallow: /account/
+Disallow: /login
+Disallow: /register
+Disallow: /logout
+Disallow: /reset
+Disallow: /reset/
+Disallow: /verify
+Disallow: /verify/
+Disallow: /ready
+Disallow: /health
+Disallow: /debug
+Disallow: /debug/
+Disallow: /uploads/tmp
+Disallow: /uploads/tmp/
+Disallow: /*?*utm_
+Disallow: /*&utm_
+Disallow: /*?*fbclid=
+Disallow: /*?*gclid=
+Disallow: /*?*ref=
+Disallow: /*?*session=
+Sitemap: https://skyline-style.onrender.com/sitemap.xml

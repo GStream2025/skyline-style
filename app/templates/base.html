@@ -10,6 +10,10 @@
   {% set _args = (_req.args if _req and _req.args else {}) %}
   {% set _base_url = (_req.base_url if _req and _req.base_url else '/') %}
   {% set _has_ep = has_endpoint if has_endpoint is defined and has_endpoint else none %}
+  {% set _app = (APP_NAME if APP_NAME is defined and APP_NAME else "Skyline Store") %}
+  {% set _title = (meta_title if meta_title is defined and meta_title else _app) %}
+  {% set _desc = (meta_description if meta_description is defined and meta_description else "Marketplace premium de tecnología y streetwear.") %}
+  {% set _og = (og_image if og_image is defined and og_image else safe_static('img/og/og-home.png')) %}
 
   {% macro safe_url(endpoint, fallback='/') -%}
     {%- if _has_ep and endpoint and _has_ep(endpoint) -%}{{ url_for(endpoint) }}{%- else -%}{{ fallback }}{%- endif -%}
@@ -19,10 +23,14 @@
     {{ url_for('static', filename=filename) if url_for is defined else '' }}
   {%- endmacro %}
 
-  {% set _title = (meta_title or APP_NAME or "Skyline Store") %}
-  {% set _desc  = (meta_description or "Marketplace premium de tecnología y streetwear.") %}
+  {% set _csrf = '' %}
+  {% if csrf_token_value is defined and csrf_token_value %}
+    {% set _csrf = csrf_token_value %}
+  {% elif csrf_token is defined %}
+    {% set _csrf = csrf_token() %}
+  {% endif %}
 
-  <title>{% block title %}{{ _title }}{% endblock %}</title>
+  <title>{% block title %}{{ _title|e }}{% endblock %}</title>
   <meta name="description" content="{{ _desc|e }}">
   <link rel="canonical" href="{{ _base_url }}">
 
@@ -30,29 +38,234 @@
   <meta property="og:description" content="{{ _desc|e }}">
   <meta property="og:type" content="website">
   <meta property="og:locale" content="es_UY">
+  <meta property="og:url" content="{{ _base_url }}">
+  {% if _og %}<meta property="og:image" content="{{ _og }}">{% endif %}
 
   <meta name="theme-color" content="#2563eb">
   <meta name="color-scheme" content="light dark">
   <meta name="referrer" content="strict-origin-when-cross-origin">
-
-  {% set _csrf = '' %}
-  {% if csrf_token_value is defined and csrf_token_value %}
-    {% set _csrf = csrf_token_value %}
-  {% elif csrf_token is defined %}
-    {% set _csrf = csrf_token() %}
-  {% endif %}
   <meta name="csrf-token" content="{{ _csrf|e }}">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="{{ safe_static('css/skyline-pro.css') }}?v=5.8">
+  {% set _cssv = (BASE_CSS_VER if BASE_CSS_VER is defined and BASE_CSS_VER else (ASSET_VER if ASSET_VER is defined and ASSET_VER else '6'))|string|trim %}
+  <link rel="preload" as="style" href="{{ safe_static('css/skyline-pro.css') }}?v={{ _cssv }}">
+  <link rel="stylesheet" href="{{ safe_static('css/skyline-pro.css') }}?v={{ _cssv }}">
+
+  <style>
+    :root{
+      --sb-bg: rgba(255,255,255,.78);
+      --sb-bg2: rgba(255,255,255,.60);
+      --sb-br: rgba(15,23,42,.12);
+      --sb-ink: #0b1220;
+      --sb-muted:#5b6b82;
+      --sb-p: #2563eb;
+      --sb-p2:#0ea5e9;
+      --sb-acc:#f59e0b;
+      --sb-r: 18px;
+      --sb-sh: 0 14px 40px rgba(2,8,23,.10);
+      --sb-ring: 0 0 0 3px rgba(37,99,235,.20);
+      --sb-max: 1200px;
+      --sb-gap: 14px;
+    }
+    @media (prefers-color-scheme: dark){
+      :root{
+        --sb-bg: rgba(2,8,23,.62);
+        --sb-bg2: rgba(2,8,23,.48);
+        --sb-br: rgba(148,163,184,.16);
+        --sb-ink:#e8eefc;
+        --sb-muted:#a9b7d3;
+        --sb-sh: 0 16px 48px rgba(0,0,0,.32);
+      }
+    }
+    .skip{
+      position:absolute; left:-9999px; top:10px;
+      background:#fff; color:#111; padding:10px 12px; border-radius:12px; z-index:9999;
+      box-shadow: var(--sb-sh);
+    }
+    .skip:focus{ left:10px; outline:none; box-shadow: var(--sb-ring), var(--sb-sh); }
+    .container{ max-width: var(--sb-max); margin: 0 auto; padding: 0 16px; }
+    .topbar{
+      position: sticky; top: 0; z-index: 50;
+      backdrop-filter: blur(14px);
+      background: linear-gradient(180deg, var(--sb-bg), var(--sb-bg2));
+      border-bottom: 1px solid var(--sb-br);
+    }
+    .topbar-inner{
+      max-width: var(--sb-max);
+      margin: 0 auto;
+      padding: 12px 16px;
+      display:flex;
+      align-items:center;
+      gap: var(--sb-gap);
+    }
+    .brand{
+      display:flex; align-items:center; gap:12px;
+      text-decoration:none; color: var(--sb-ink);
+      min-width: 220px;
+    }
+    .brand-dot{
+      width: 12px; height: 12px; border-radius: 999px;
+      background: radial-gradient(circle at 30% 30%, var(--sb-acc), var(--sb-p));
+      box-shadow: 0 0 0 6px rgba(37,99,235,.10);
+      flex: 0 0 auto;
+    }
+    .brand-txt{ display:flex; flex-direction:column; line-height:1.05; }
+    .brand-name{ font-weight: 900; letter-spacing: .2px; }
+    .brand-sub{ font-size: .82rem; color: var(--sb-muted); font-weight:700; }
+
+    .nav{ display:flex; gap: 10px; align-items:center; }
+    .nav a{
+      text-decoration:none;
+      color: var(--sb-muted);
+      font-weight: 800;
+      padding: 10px 12px;
+      border-radius: 999px;
+      transition: transform .15s ease, background .15s ease, color .15s ease;
+    }
+    .nav a:hover{ background: rgba(37,99,235,.10); color: var(--sb-ink); transform: translateY(-1px); }
+    .nav a.active{ background: rgba(37,99,235,.14); color: var(--sb-ink); }
+
+    .search{
+      flex:1;
+      display:flex;
+      align-items:center;
+      gap:10px;
+      padding: 10px 12px;
+      border: 1px solid var(--sb-br);
+      border-radius: 999px;
+      background: rgba(255,255,255,.42);
+    }
+    @media (prefers-color-scheme: dark){
+      .search{ background: rgba(2,8,23,.45); }
+    }
+    .search span{ color: var(--sb-muted); font-weight: 900; }
+    .search input{
+      width:100%;
+      border:0; outline:0;
+      background: transparent;
+      color: var(--sb-ink);
+      font-weight: 700;
+      font-size: .98rem;
+    }
+    .search input::placeholder{ color: var(--sb-muted); font-weight: 700; }
+    .btn{
+      appearance:none;
+      border:0;
+      cursor:pointer;
+      border-radius: 999px;
+      padding: 10px 14px;
+      font-weight: 900;
+      letter-spacing:.2px;
+      transition: transform .15s ease, box-shadow .15s ease, filter .15s ease;
+      user-select:none;
+      white-space: nowrap;
+    }
+    .btn.primary{
+      color:#fff;
+      background: linear-gradient(135deg, var(--sb-p), var(--sb-p2));
+      box-shadow: 0 12px 30px rgba(37,99,235,.22);
+    }
+    .btn.primary:hover{ transform: translateY(-1px); filter: brightness(1.03); }
+    .btn.primary:active{ transform: translateY(0); filter: brightness(.98); }
+
+    .topbar-actions{ display:flex; gap: 10px; align-items:center; }
+    .icon-btn{
+      position: relative;
+      display:inline-flex; align-items:center; justify-content:center;
+      width: 44px; height: 44px;
+      border-radius: 999px;
+      border: 1px solid var(--sb-br);
+      background: rgba(255,255,255,.45);
+      text-decoration:none;
+      color: var(--sb-ink);
+      transition: transform .15s ease, background .15s ease;
+    }
+    @media (prefers-color-scheme: dark){
+      .icon-btn{ background: rgba(2,8,23,.45); }
+    }
+    .icon-btn:hover{ transform: translateY(-1px); background: rgba(37,99,235,.10); }
+    .cart-badge{
+      position:absolute; top: -6px; right: -6px;
+      min-width: 18px; height: 18px;
+      padding: 0 6px;
+      border-radius: 999px;
+      background: #ef4444;
+      color:#fff;
+      font-size: 12px;
+      font-weight: 900;
+      display:flex; align-items:center; justify-content:center;
+      box-shadow: 0 10px 24px rgba(239,68,68,.25);
+    }
+
+    .account-link{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      text-decoration:none;
+      padding: 8px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--sb-br);
+      background: rgba(255,255,255,.45);
+      color: var(--sb-ink);
+      transition: transform .15s ease, background .15s ease;
+    }
+    @media (prefers-color-scheme: dark){
+      .account-link{ background: rgba(2,8,23,.45); }
+    }
+    .account-link:hover{ transform: translateY(-1px); background: rgba(37,99,235,.10); }
+    .account-link .icon{ width: 30px; height: 30px; display:flex; align-items:center; justify-content:center; }
+    .account-link .txt{ display:flex; flex-direction:column; line-height:1.05; }
+    .account-link strong{ font-weight: 900; font-size: .92rem; }
+    .account-link small{ color: var(--sb-muted); font-weight: 800; font-size: .78rem; }
+
+    main.container{ padding-top: 18px; padding-bottom: 40px; }
+
+    .footer{
+      border-top: 1px solid var(--sb-br);
+      background: linear-gradient(180deg, rgba(255,255,255,.55), rgba(255,255,255,.40));
+      padding: 26px 0;
+      margin-top: 34px;
+    }
+    @media (prefers-color-scheme: dark){
+      .footer{
+        background: linear-gradient(180deg, rgba(2,8,23,.60), rgba(2,8,23,.42));
+      }
+    }
+    .grid-4{
+      display:grid;
+      grid-template-columns: repeat(4, minmax(0,1fr));
+      gap: 14px;
+    }
+    .footer a{ color: var(--sb-muted); text-decoration:none; font-weight:800; }
+    .footer a:hover{ color: var(--sb-ink); text-decoration: underline; }
+    .small{ color: var(--sb-muted); font-weight: 700; font-size: .92rem; }
+    @media (max-width: 980px){
+      .topbar-inner{ flex-wrap: wrap; }
+      .brand{ min-width: unset; }
+      .nav{ order: 3; width:100%; justify-content:flex-start; }
+      .search{ order: 4; width:100%; }
+      .topbar-actions{ margin-left:auto; }
+      .grid-4{ grid-template-columns: repeat(2, minmax(0,1fr)); }
+    }
+    @media (max-width: 520px){
+      .grid-4{ grid-template-columns: 1fr; }
+      .btn.primary{ width: 100%; }
+      .topbar-actions{ width: 100%; justify-content: flex-end; }
+    }
+    :focus-visible{ outline: none; box-shadow: var(--sb-ring); border-radius: 14px; }
+    @media (prefers-reduced-motion: reduce){
+      *{ scroll-behavior:auto !important; transition:none !important; animation:none !important; }
+    }
+  </style>
+
   {% block extra_head %}{% endblock %}
 </head>
 
 <body>
-<a href="#main" class="skip sr-only">Saltar al contenido</a>
+<a href="#main" class="skip">Saltar al contenido</a>
 
 {% set home = safe_url('main.home', '/') %}
 {% set shop = safe_url('shop.shop', '/shop') %}
@@ -65,11 +278,11 @@
 <header class="topbar" role="banner">
   <div class="topbar-inner">
     <a href="{{ home }}" class="brand" aria-label="Inicio">
-      <span class="brand-dot"></span>
-      <div class="brand-txt">
-        <span class="brand-name">{{ APP_NAME or "Skyline Store" }}</span>
+      <span class="brand-dot" aria-hidden="true"></span>
+      <span class="brand-txt">
+        <span class="brand-name">{{ _app|e }}</span>
         <span class="brand-sub">Tech + Streetwear premium</span>
-      </div>
+      </span>
     </a>
 
     <nav class="nav" aria-label="Navegación principal">
@@ -78,13 +291,13 @@
       <a href="{{ shop }}?ofertas=1" class="{% if _args.get('ofertas') %}active{% endif %}">Ofertas</a>
     </nav>
 
-    <form class="search" action="{{ shop }}" method="get" role="search">
+    <form class="search" action="{{ shop }}" method="get" role="search" aria-label="Buscar productos">
       <span aria-hidden="true">⌕</span>
       <input
         type="search"
         name="q"
         placeholder="Buscar productos..."
-        value="{{ _args.get('q','')|e }}"
+        value="{{ (_args.get('q','') if _args else '')|e }}"
         autocomplete="off"
         autocapitalize="none"
         spellcheck="false"
@@ -94,7 +307,7 @@
 
     <div class="topbar-actions">
       <a href="{{ cart }}" aria-label="Carrito" class="icon-btn">
-        🛒
+        <span aria-hidden="true">🛒</span>
         <span class="cart-badge" data-cart-badge hidden>0</span>
       </a>
 
@@ -114,9 +327,9 @@
 </main>
 
 <footer class="footer" role="contentinfo">
-  <div class="container grid grid-4">
+  <div class="container grid-4">
     <div>
-      <strong>{{ APP_NAME or "Skyline Store" }}</strong>
+      <strong>{{ _app|e }}</strong>
       <p class="small">Marketplace premium de tecnología y streetwear.</p>
     </div>
     <div>
@@ -135,19 +348,23 @@
       <a href="{{ safe_url('main.privacy','/privacy') }}">Privacidad</a>
     </div>
   </div>
-  <p class="small container">© {{ current_year or 2026 }} {{ APP_NAME or "Skyline Store" }}</p>
+  <p class="small container">© {{ now_year if now_year is defined and now_year else 2026 }} {{ _app|e }}</p>
 </footer>
 
 <script>
 (() => {
   const token = document.querySelector('meta[name="csrf-token"]')?.content || '';
-  if (!token) return;
+  const badge = document.querySelector('[data-cart-badge]');
+  const setBadge = (n) => {
+    if (!badge) return;
+    const v = Number(n || 0);
+    badge.textContent = String(v);
+    badge.toggleAttribute('hidden', !(v > 0));
+  };
 
   const sameOrigin = (u) => {
-    try {
-      const url = new URL(u, window.location.href);
-      return url.origin === window.location.origin;
-    } catch { return false; }
+    try { return new URL(u, window.location.href).origin === window.location.origin; }
+    catch { return false; }
   };
 
   const _fetch = window.fetch;
@@ -156,7 +373,7 @@
       const o = opts || {};
       const method = String(o.method || 'GET').toUpperCase();
       const headers = new Headers(o.headers || {});
-      if (sameOrigin(url) && !headers.has('X-CSRFToken') && method !== 'GET' && method !== 'HEAD') {
+      if (sameOrigin(url) && token && !headers.has('X-CSRFToken') && method !== 'GET' && method !== 'HEAD') {
         headers.set('X-CSRFToken', token);
       }
       if (sameOrigin(url) && !headers.has('X-Requested-With')) {
@@ -169,6 +386,14 @@
       return _fetch(url, opts);
     }
   };
+
+  try {
+    const el = document.documentElement;
+    el.classList.toggle('js', true);
+  } catch {}
+
+  window.Skyline = window.Skyline || {};
+  window.Skyline.setCartBadge = setBadge;
 })();
 </script>
 
