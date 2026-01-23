@@ -854,3 +854,127 @@
     animation: none !important;
   }
 }
+/* ==========================================================================
+   Skyline Store — AUTH (ULTRA PATCH v8.3 FINAL)
+   +10 mejoras EXTRA · estabilidad · UX · performance · A11y
+========================================================================== */
+
+/* (21) Performance real: render diferido */
+.ss-account .auth-card,
+.ss-login .auth-card,
+.ss-register .auth-card{
+  content-visibility: auto;
+  contain-intrinsic-size: 720px;
+}
+
+/* (22) overflow: clip fallback (Safari < 16) */
+@supports not (overflow: clip){
+  .ss-account, .ss-login, .ss-register{
+    overflow-x: hidden;
+  }
+}
+
+/* (23) Estado loading real (conectado con JS .is-loading) */
+.ss-account .btn-primary.is-loading,
+.ss-login .btn-primary.is-loading,
+.ss-register .btn-primary.is-loading{
+  pointer-events: none;
+  opacity: .85;
+}
+
+.ss-account .btn-primary.is-loading .btn-label,
+.ss-login .btn-primary.is-loading .btn-label,
+.ss-register .btn-primary.is-loading .btn-label{
+  opacity: .85;
+}
+
+.ss-account .btn-primary.is-loading::after,
+.ss-login .btn-primary.is-loading::after,
+.ss-register .btn-primary.is-loading::after{
+  content: "";
+  width: 16px;
+  height: 16px;
+  margin-left: 10px;
+  border-radius: 999px;
+  border: 2px solid rgba(255,255,255,.55);
+  border-top-color: #fff;
+  display: inline-block;
+  vertical-align: -3px;
+  animation: ssSpin .75s linear infinite;
+}
+
+/* (24) Inputs disabled / readonly */
+.ss-account .auth-input:disabled,
+.ss-login .auth-input:disabled,
+.ss-register .auth-input:disabled,
+.ss-account .auth-input[readonly],
+.ss-login .auth-input[readonly],
+.ss-register .auth-input[readonly]{
+  opacity: .65;
+  cursor: not-allowed;
+  background: rgba(148,163,184,.12);
+}
+
+/* (25) Mejor tap en iOS (evita zoom raro) */
+.ss-account input,
+.ss-login input,
+.ss-register input,
+.ss-account button,
+.ss-login button,
+.ss-register button{
+  touch-action: manipulation;
+}
+
+/* (26) High Contrast / forced-colors (Windows) */
+@media (forced-colors: active){
+  .ss-account .btn-primary,
+  .ss-login .btn-primary,
+  .ss-register .btn-primary{
+    forced-color-adjust: none;
+    background: ButtonText;
+    color: ButtonFace;
+  }
+
+  .ss-account .auth-input,
+  .ss-login .auth-input,
+  .ss-register .auth-input{
+    forced-color-adjust: none;
+    background: Canvas;
+    color: CanvasText;
+    border-color: CanvasText;
+  }
+}
+
+/* (27) Sombras más limpias (menos blur en mobile) */
+@media (max-width: 520px){
+  .ss-account .auth-card,
+  .ss-login .auth-card,
+  .ss-register .auth-card,
+  .ss-account .auth-side,
+  .ss-login .auth-side,
+  .ss-register .auth-side{
+    box-shadow: 0 8px 22px rgba(2,6,23,.10);
+  }
+}
+
+/* (28) Side panel sticky opcional (si se activa por clase) */
+.ss-account .auth-side.is-sticky{
+  position: sticky;
+  top: 90px;
+}
+
+/* (29) auth-form normalizado (future-proof) */
+.ss-account .auth-form,
+.ss-login .auth-form,
+.ss-register .auth-form{
+  display: block;
+}
+
+/* (30) Corrección final spinner + reduced motion */
+@media (prefers-reduced-motion: reduce){
+  .ss-account .btn-primary.is-loading::after,
+  .ss-login .btn-primary.is-loading::after,
+  .ss-register .btn-primary.is-loading::after{
+    animation: none;
+  }
+}

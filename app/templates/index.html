@@ -1,4 +1,4 @@
-{# app/templates/index.html — Skyline Store (ULTRA PRO v16.3 · 15 DESIGN + 10 FUNC · NO-500) #}
+{# app/templates/index.html — Skyline Store (ULTRA PRO v16.4 · FIX + 10 EXTRA · NO-500 / Render-safe) #}
 {% extends "base.html" %}
 
 {% block title %}{{ meta_title | default("Skyline Store · Tech + Streetwear premium", true) }}{% endblock %}
@@ -10,23 +10,21 @@
   {% set _vf  = (view_functions if view_functions is defined and view_functions else {}) %}
 
   {# ✅ Cache-bust REAL #}
-  {% set _home_ver = (HOME_CSS_VER if HOME_CSS_VER is defined and HOME_CSS_VER else '163')|string|trim %}
+  {% set _home_ver = (HOME_CSS_VER if HOME_CSS_VER is defined and HOME_CSS_VER else '164')|string|trim %}
 
-  {# ✅ Canonical limpio (sin querystring) #}
-  {% set _canonical = (_req.base_url if _req and _req.base_url else '/') %}
-  {% set _root = (_req.url_root if _req and _req.url_root else '/') %}
+  {# ✅ Canonical limpio (sin querystring) y absoluto si hay request #}
+  {% set _canonical = (_req.base_url if _req and _req.base_url else 'https://skyline-style.onrender.com/') %}
+  {% set _root = (_req.url_root if _req and _req.url_root else 'https://skyline-style.onrender.com/') %}
 
-  {# ✅ Root absoluto robusto (JSON-LD) #}
+  {# ✅ Root absoluto robusto #}
   {% set _root_abs = _root %}
-  {% if _root_abs == '/' %}
+  {% if not _root_abs or _root_abs == '/' %}
     {% set _root_abs = 'https://skyline-style.onrender.com/' %}
   {% endif %}
 
-  {# ---------------- Assets (MEJORA: prefer webp) ---------------- #}
+  {# ---------------- Assets ---------------- #}
   {% set hero_png = url_for('static', filename='img/banners/hero_home.png') %}
   {% set hero_webp = url_for('static', filename='img/banners/hero_home.webp') %}
-  {# Si no existe webp, el browser fallará el source y usará png #}
-  {% set hero_img = hero_png %}
 
   {% set og_img_local = url_for('static', filename='img/og.png', _external=True) %}
   {% set og_img = (og_image if og_image is defined and og_image else og_img_local) %}
@@ -42,7 +40,6 @@
   <link rel="canonical" href="{{ _canonical|e }}">
   <meta property="og:url" content="{{ _canonical|e }}">
   <meta property="og:site_name" content="Skyline Store">
-
   <meta property="og:title" content="{{ _t|e }}">
   <meta property="og:description" content="{{ _desc|e }}">
   <meta property="og:type" content="website">
@@ -54,24 +51,40 @@
   <meta name="twitter:description" content="{{ _desc|e }}">
   <meta name="twitter:image" content="{{ og_img|e }}">
 
-  {# PERF: preload hero real (usa webp y cae a png) #}
-  <link rel="preload" as="image" href="{{ hero_webp|e }}" fetchpriority="high" imagesizes="(max-width: 900px) 92vw, 720px">
-  <link rel="preload" as="image" href="{{ hero_png|e }}" fetchpriority="high" imagesizes="(max-width: 900px) 92vw, 720px">
+  {# ✅ Extra perf: dns-prefetch/preconnect (solo tu dominio) #}
+  <link rel="dns-prefetch" href="//skyline-style.onrender.com">
+  <link rel="preconnect" href="https://skyline-style.onrender.com" crossorigin>
 
+  {# PERF: preload hero (mejor compat) #}
+  <link rel="preload" as="image" href="{{ hero_webp|e }}" fetchpriority="high"
+        imagesrcset="{{ hero_webp|e }} 1600w, {{ hero_webp|e }} 800w"
+        imagesizes="(max-width: 900px) 92vw, 720px">
+  <link rel="preload" as="image" href="{{ hero_png|e }}" fetchpriority="high"
+        imagesrcset="{{ hero_png|e }} 1600w, {{ hero_png|e }} 800w"
+        imagesizes="(max-width: 900px) 92vw, 720px">
+
+  {# ✅ CSS home con cache bust #}
   <link rel="stylesheet" href="{{ url_for('static', filename='css/home.css') }}?v={{ _home_ver|e }}">
 
   {# PERF: prefetch tienda (seguro) #}
-  {# shop_routes nuevo: endpoint shop.shop con url_prefix /shop => url_for suele devolver /shop/ #}
   {% set _shop_prefetch = (url_for('shop.shop') if 'shop.shop' in _vf else '/shop') %}
+  {% if _shop_prefetch and not _shop_prefetch.startswith('/') %}
+    {% set _shop_prefetch = '/shop' %}
+  {% endif %}
   <link rel="prefetch" href="{{ _shop_prefetch|e }}" as="document">
 
   {# CSP nonce #}
   {% set _csp_nonce = (csp_nonce if csp_nonce is defined and csp_nonce else (nonce if nonce is defined and nonce else '')) %}
 
-  {# JSON-LD robusto #}
+  {# JSON-LD robusto + URLs absolutas #}
   {% set _shop_abs = _shop_prefetch %}
   {% if _shop_abs and _shop_abs.startswith('/') and _root_abs and _root_abs.startswith('http') %}
     {% set _shop_abs = _root_abs ~ _shop_abs.lstrip('/') %}
+  {% endif %}
+
+  {% set _hero_abs = hero_png %}
+  {% if _hero_abs and _hero_abs.startswith('/') and _root_abs and _root_abs.startswith('http') %}
+    {% set _hero_abs = _root_abs ~ _hero_abs.lstrip('/') %}
   {% endif %}
 
   <script type="application/ld+json"{% if _csp_nonce %} nonce="{{ _csp_nonce|e }}"{% endif %}>
@@ -83,20 +96,19 @@
         "potentialAction":{"@type":"SearchAction","target":"{{ (_shop_abs ~ '?q={search_term_string}')|e }}","query-input":"required name=search_term_string"}
       },
       {"@type":"WebPage","name":"{{ _t|e }}","url":"{{ _canonical|e }}",
-        "primaryImageOfPage":{"@type":"ImageObject","url":"{{ hero_png|e }}"}
+        "primaryImageOfPage":{"@type":"ImageObject","url":"{{ _hero_abs|e }}"}
       }
     ]
   }
   </script>
 
-  {# MINI CSS patch (15 DESIGN mejoras sin tocar home.css) #}
+  {# ✅ MINI CSS patch + fallback de emergencia si el home.css no carga #}
   <style>
-    /* v16.3 micro polish: focus + smoother + safe */
+    /* micro polish */
     .hp .btn{ transform: translateZ(0); }
     .hp :focus-visible{ outline:none; box-shadow: 0 0 0 4px rgba(37,99,235,.18); border-radius: 14px; }
     .hp-heroFull{ isolation:isolate; }
     .hp-heroCard{ overflow:hidden; }
-    .hp-heroCard.is-fallback .hp-heroCap{ opacity:.98; }
     .hp-verified{ backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
     .hp-pill{ border:1px solid rgba(15,23,42,.10); }
     .hp-pill:active{ transform: translateY(1px); }
@@ -104,24 +116,32 @@
     @media (prefers-reduced-motion: reduce){
       .hp [data-reveal]{ transition:none!important; }
     }
+
+    /* EMERGENCY fallback: si por alguna razón home.css no aplicó, evitá “texto roto” */
+    .hp.hp-v15.hp-v163 .hp-wrap{ max-width: 1120px; margin: 0 auto; padding: 0 16px; }
+    .hp.hp-v15.hp-v163 .hp-ctas{ display:flex; gap:12px; flex-wrap:wrap; }
+    .hp.hp-v15.hp-v163 .hp-topTrust{ list-style:none; padding:0; margin:0; display:flex; gap:14px; flex-wrap:wrap; }
+    .hp.hp-v15.hp-v163 .hp-topTrust__item{ display:flex; gap:10px; align-items:center; }
   </style>
 {% endblock %}
 
 {% block content %}
-  {# ---------------- SAFE routing ---------------- #}
+  {# ---------------- SAFE routing + env ---------------- #}
+  {% set _env = (ENV if ENV is defined and ENV else 'production')|string|lower|trim %}
   {% set _vf = (view_functions if view_functions is defined and view_functions else {}) %}
-  {% set _home_ver = (HOME_CSS_VER if HOME_CSS_VER is defined and HOME_CSS_VER else '163')|string|trim %}
+  {% set _home_ver = (HOME_CSS_VER if HOME_CSS_VER is defined and HOME_CSS_VER else '164')|string|trim %}
   {% set _req = (request if request is defined and request else none) %}
 
   {% set hero_png = url_for('static', filename='img/banners/hero_home.png') %}
   {% set hero_webp = url_for('static', filename='img/banners/hero_home.webp') %}
 
   {% set shop_url = (url_for('shop.shop') if 'shop.shop' in _vf else '/shop') %}
+  {% if not shop_url %}{% set shop_url = '/shop' %}{% endif %}
 
-  {# ✅ MEJORA FUNC: offers_url NO depende de endpoint "ofertas" #}
-  {# Usa query safe que tu shop ya soporta: sort + available #}
+  {# offers_url safe: sort + available #}
   {% set offers_url = shop_url ~ ('?sort=new&available=1' if '?' not in shop_url else '&sort=new&available=1') %}
 
+  {# account links safe #}
   {% set account_url =
       (url_for('main.account') if 'main.account' in _vf
         else (url_for('account.account') if 'account.account' in _vf
@@ -134,7 +154,6 @@
   {% set featured_list = (featured if featured is defined and featured else []) %}
   {% if featured_list is none %}{% set featured_list = [] %}{% endif %}
 
-  {# ✅ Overlay más pro: se adapta a dark mode con variable #}
   {% set _hero_overlay =
     "linear-gradient(90deg, rgba(255,255,255,.94) 0%, rgba(255,255,255,.86) 46%, rgba(255,255,255,.42) 72%, rgba(255,255,255,0) 100%)"
   %}
@@ -220,9 +239,10 @@
                 loading="eager"
                 decoding="async"
                 fetchpriority="high"
+                referrerpolicy="no-referrer-when-downgrade"
                 class="hp-heroImg"
                 style="aspect-ratio: 16 / 9;"
-                onerror="this.onerror=null; this.closest('.hp-heroCard')?.classList.add('is-fallback');">
+                onerror="this.onerror=null; try{ this.closest('.hp-heroCard') && this.closest('.hp-heroCard').classList.add('is-fallback'); }catch(e){}">
             </picture>
 
             <figcaption class="hp-heroCap">
@@ -378,23 +398,23 @@
 {% endblock %}
 
 {% block extra_js %}
-  {% set _home_ver = (HOME_CSS_VER if HOME_CSS_VER is defined and HOME_CSS_VER else '163')|string|trim %}
+  {% set _home_ver = (HOME_CSS_VER if HOME_CSS_VER is defined and HOME_CSS_VER else '164')|string|trim %}
   <script src="{{ url_for('static', filename='js/home.js') }}?v={{ _home_ver|e }}" defer></script>
 
-  {# JS fallback si home.js no maneja pills (10 FUNC mejoras) #}
+  {# JS fallback si home.js no maneja pills #}
   <script defer>
   (() => {
     const root = document.getElementById('hp');
     if (!root) return;
 
-    // Pills scroll con offset + aria-expanded real
     const pills = root.querySelectorAll('[data-pill][data-target]');
-    const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const prefersReduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 
     const scrollToTarget = (sel) => {
+      if (!sel) return;
       const el = document.querySelector(sel);
       if (!el) return;
-      const y = el.getBoundingClientRect().top + window.pageYOffset - 86; // offset header
+      const y = el.getBoundingClientRect().top + (window.pageYOffset || 0) - 86;
       window.scrollTo({ top: Math.max(0, y), behavior: prefersReduced ? 'auto' : 'smooth' });
     };
 
@@ -403,18 +423,14 @@
         const target = btn.getAttribute('data-target');
         pills.forEach(b => b.setAttribute('aria-expanded','false'));
         btn.setAttribute('aria-expanded','true');
-        if (target) scrollToTarget(target);
+        scrollToTarget(target);
         window.setTimeout(() => btn.setAttribute('aria-expanded','false'), 1200);
       }, { passive:true });
     });
 
-    // ToTop mínimo (si home.js falla)
     const toTop = document.getElementById('toTop');
     if (toTop) {
-      const onScroll = () => {
-        const show = window.scrollY > 800;
-        toTop.hidden = !show;
-      };
+      const onScroll = () => { toTop.hidden = !((window.scrollY || 0) > 800); };
       window.addEventListener('scroll', onScroll, { passive:true });
       onScroll();
       toTop.addEventListener('click', () => window.scrollTo({ top:0, behavior: prefersReduced ? 'auto' : 'smooth' }));
