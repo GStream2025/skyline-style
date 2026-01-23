@@ -17,21 +17,16 @@
   {% set _cssv = (BASE_CSS_VER if BASE_CSS_VER is defined and BASE_CSS_VER else (ASSET_VER if ASSET_VER is defined and ASSET_VER else '6'))|string|trim %}
   {% set _nonce = (csp_nonce if csp_nonce is defined and csp_nonce else (nonce if nonce is defined and nonce else '')) %}
 
+  {% set _vf = (view_functions if view_functions is defined and view_functions else {}) %}
+
   {% macro safe_static(filename) -%}
     {%- if url_for is defined -%}{{ url_for('static', filename=filename) ~ '?v=' ~ _cssv }}{%- else -%}{{ '' }}{%- endif -%}
   {%- endmacro %}
 
-  {% macro safe_url(endpoint, fallback='/') -%}
-    {%- if not url_for is defined -%}{{ fallback }}{%- else -%}
-      {%- if has_endpoint is defined and has_endpoint and endpoint -%}
-        {%- if has_endpoint(endpoint) -%}{{ url_for(endpoint) }}{%- else -%}{{ fallback }}{%- endif -%}
-      {%- else -%}
-        {%- set _u = fallback -%}
-        {%- if endpoint -%}
-          {%- try -%}{%- set _u = url_for(endpoint) -%}{%- except -%}{%- set _u = fallback -%}{%- endtry -%}
-        {%- endif -%}
-        {{ _u }}
-      {%- endif -%}
+  {% macro safe_url(endpoint, fallback='/', **kwargs) -%}
+    {%- if url_for is not defined or not endpoint -%}{{ fallback }}
+    {%- elif endpoint in _vf -%}{{ url_for(endpoint, **kwargs) }}
+    {%- else -%}{{ fallback }}
     {%- endif -%}
   {%- endmacro %}
 
@@ -49,7 +44,7 @@
   {% set _canonical = (_req.base_url if _req and _req.base_url else 'https://skyline-style.onrender.com/') %}
   {% set _url_root = (_req.url_root if _req and _req.url_root else 'https://skyline-style.onrender.com/') %}
 
-  {% set _og = (og_image if og_image is defined and og_image else (url_for('static', filename='img/og/og-home.png') if url_for is defined else '')) %}
+  {% set _og = (og_image if og_image is defined and og_image else (safe_url('static', '', filename='img/og/og-home.png') if url_for is defined else '')) %}
   {% if _og and _og.startswith('/') and _url_root and _url_root.startswith('http') %}
     {% set _og = _url_root ~ _og.lstrip('/') %}
   {% endif %}
@@ -124,14 +119,8 @@
     img{ max-width:100%; height:auto; }
     a{ color:inherit; }
     :focus-visible{ outline:none; box-shadow: var(--sb-ring); border-radius: 14px; }
-
-    .skip{
-      position:absolute; left:-9999px; top:10px;
-      background:#fff; color:#111; padding:10px 12px; border-radius:12px; z-index:9999;
-      box-shadow: var(--sb-sh);
-    }
+    .skip{ position:absolute; left:-9999px; top:10px; background:#fff; color:#111; padding:10px 12px; border-radius:12px; z-index:9999; box-shadow: var(--sb-sh); }
     .skip:focus{ left:10px; }
-
     .container{ max-width: var(--sb-max); margin: 0 auto; padding: 0 16px; }
     .topbar{
       position: sticky; top: 0; z-index: 50;
@@ -149,7 +138,6 @@
       gap: var(--sb-gap);
       flex-wrap: wrap;
     }
-
     .brand{
       display:flex; align-items:center; gap:12px;
       text-decoration:none; color: var(--sb-ink);
@@ -164,7 +152,6 @@
     .brand-txt{ display:flex; flex-direction:column; line-height:1.05; }
     .brand-name{ font-weight: 900; letter-spacing: .2px; }
     .brand-sub{ font-size: .82rem; color: var(--sb-muted); font-weight:700; }
-
     .nav{ display:flex; gap: 10px; align-items:center; flex-wrap: wrap; }
     .nav a{
       text-decoration:none;
@@ -179,7 +166,6 @@
     }
     .nav a:hover{ background: rgba(37,99,235,.10); color: var(--sb-ink); transform: translateY(-1px); }
     .nav a.active{ background: rgba(37,99,235,.14); color: var(--sb-ink); }
-
     .search{
       flex:1 1 320px;
       display:flex;
@@ -202,7 +188,6 @@
       min-height: 24px;
     }
     .search input::placeholder{ color: var(--sb-muted); font-weight: 700; }
-
     .btn{
       appearance:none;
       border:0;
@@ -226,7 +211,6 @@
     }
     .btn.primary:hover{ transform: translateY(-1px); filter: brightness(1.03); }
     .btn.primary:active{ transform: translateY(0); filter: brightness(.98); }
-
     .topbar-actions{ display:flex; gap: 10px; align-items:center; margin-left: auto; }
     .icon-btn{
       position: relative;
@@ -253,7 +237,6 @@
       display:flex; align-items:center; justify-content:center;
       box-shadow: 0 10px 24px rgba(239,68,68,.25);
     }
-
     .account-link{
       display:flex;
       gap:10px;
@@ -272,9 +255,7 @@
     .account-link .txt{ display:flex; flex-direction:column; line-height:1.05; }
     .account-link strong{ font-weight: 900; font-size: .92rem; }
     .account-link small{ color: var(--sb-muted); font-weight: 800; font-size: .78rem; }
-
     main.container{ padding-top: 18px; padding-bottom: 40px; min-height: 50vh; }
-
     .footer{
       border-top: 1px solid var(--sb-br);
       background: linear-gradient(180deg, var(--sb-surface2), rgba(255,255,255,.40));
@@ -293,7 +274,6 @@
     .footer a:hover{ color: var(--sb-ink); text-decoration: underline; }
     .small{ color: var(--sb-muted); font-weight: 700; font-size: .92rem; }
     .muted{ color: var(--sb-muted); }
-
     @media (max-width: 980px){
       .grid-4{ grid-template-columns: repeat(2, minmax(0,1fr)); }
     }
@@ -319,7 +299,7 @@
 {% set home = safe_url('main.home', '/') %}
 {% set shop = safe_url('shop.shop', '/shop') %}
 {% set cart = safe_url('cart.cart_view', '/cart') %}
-{% set account = '/auth/account' %}
+{% set account = safe_url('auth.account', '/auth/account') %}
 {% set login = account ~ '?tab=login' %}
 {% set register = account ~ '?tab=register' %}
 
@@ -413,7 +393,6 @@
   const meta = document.querySelector('meta[name="csrf-token"]');
   const token = meta && meta.content ? String(meta.content) : '';
   const badge = document.querySelector('[data-cart-badge]');
-
   const setBadge = (n) => {
     if (!badge) return;
     const v = Number(n || 0);
@@ -421,12 +400,10 @@
     if (v > 0) badge.removeAttribute('hidden');
     else badge.setAttribute('hidden','');
   };
-
   const sameOrigin = (u) => {
     try { return new URL(u, window.location.href).origin === window.location.origin; }
     catch { return false; }
   };
-
   const origFetch = window.fetch;
   if (typeof origFetch === 'function') {
     window.fetch = (url, opts) => {
@@ -446,9 +423,7 @@
       }
     };
   }
-
   try { document.documentElement.classList.add('js'); } catch {}
-
   window.Skyline = window.Skyline || {};
   window.Skyline.setCartBadge = setBadge;
 })();

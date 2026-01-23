@@ -7,7 +7,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Type
 
-from flask import Flask, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, jsonify, redirect, render_template, request, url_for
 from flask_wtf import CSRFProtect
 from werkzeug.exceptions import HTTPException
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -16,6 +16,7 @@ from app.config import get_config
 from app.models import db, init_models
 
 _TRUE = {"1", "true", "yes", "y", "on", "checked"}
+_FALSE = {"0", "false", "no", "n", "off"}
 
 
 def _env_str(name: str, default: str = "") -> str:
@@ -29,7 +30,7 @@ def _env_bool(name: str, default: bool = False) -> bool:
     s = v.lower().strip()
     if s in _TRUE:
         return True
-    if s in {"0", "false", "no", "n", "off"}:
+    if s in _FALSE:
         return False
     return default
 
@@ -103,13 +104,11 @@ def resp_error(status: int, code: str, message: str):
 def setup_logging(app: Flask) -> None:
     level = logging.DEBUG if bool(app.debug) else logging.INFO
     root = logging.getLogger()
-
     if not root.handlers:
         logging.basicConfig(
             level=level,
             format="%(asctime)s | %(levelname)s | %(name)s:%(lineno)d — %(message)s",
         )
-
     root.setLevel(level)
     app.logger.setLevel(level)
 
@@ -155,9 +154,26 @@ def create_app() -> Flask:
     app.config.setdefault("SESSION_COOKIE_SAMESITE", "Lax")
     app.config.setdefault("SESSION_COOKIE_SECURE", _is_prod(app))
     app.config.setdefault("PERMANENT_SESSION_LIFETIME", timedelta(days=7))
+    app.config.setdefault("SESSION_REFRESH_EACH_REQUEST", False)
+
+    app.config.setdefault("PREFERRED_URL_SCHEME", "https" if _is_prod(app) else "http")
 
     csrf = CSRFProtect()
     csrf.init_app(app)
+
+    @app.context_processor
+    def _inject_globals():
+        try:
+            vf = dict(app.view_functions)
+        except Exception:
+            vf = {}
+        return {
+            "ENV": _env_name(app),
+            "APP_NAME": app.config.get("APP_NAME", "Skyline Store"),
+            "ASSET_VER": app.config.get("ASSET_VER", app.config.get("BASE_CSS_VER", "1")),
+            "now_year": utcnow().year,
+            "view_functions": vf,
+        }
 
     @app.before_request
     def _before():
@@ -172,9 +188,13 @@ def create_app() -> Flask:
             p = request.path
             nxt = _safe_next_url() or "/"
             if p in {"/login", "/auth/login"}:
-                return redirect(url_for("auth.account", tab="login", next=nxt))
+                if "auth.account" in app.view_functions:
+                    return redirect(url_for("auth.account", tab="login", next=nxt))
+                return redirect("/auth/account?tab=login&next=" + nxt)
             if p in {"/register", "/auth/register"}:
-                return redirect(url_for("auth.account", tab="register", next=nxt))
+                if "auth.account" in app.view_functions:
+                    return redirect(url_for("auth.account", tab="register", next=nxt))
+                return redirect("/auth/account?tab=register&next=" + nxt)
 
     @app.after_request
     def _after(resp):
@@ -187,9 +207,13 @@ def create_app() -> Flask:
         resp.headers.setdefault("X-Content-Type-Options", "nosniff")
         resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
         resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+        resp.headers.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
 
         if _is_prod(app):
             resp.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+            resp.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+            resp.headers.setdefault("Cross-Origin-Resource-Policy", "same-origin")
+            resp.headers.setdefault("Cross-Origin-Embedder-Policy", "unsafe-none")
 
         return resp
 
@@ -210,6 +234,8 @@ def create_app() -> Flask:
 
         @app.get("/")
         def root():
+            if "main.home" in app.view_functions:
+                return redirect(url_for("main.home"))
             if "shop.shop" in app.view_functions:
                 return redirect(url_for("shop.shop"))
             return "Skyline Store"
