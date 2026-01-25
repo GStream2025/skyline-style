@@ -1,326 +1,225 @@
 {% extends "base.html" %}
-{% block title %}Mi cuenta | {{ (APP_NAME or "Skyline Store")|e }}{% endblock %}
+{% block title %}Mi cuenta · {{ (APP_NAME or "Skyline Store")|e }}{% endblock %}
 
 {% block extra_head %}
-  <link rel="preload" as="style" href="{{ url_for('static', filename='css/account.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/account.css') }}">
-
-  {% set _env = (ENV|default('production')|string|lower|trim) %}
-  <meta name="robots" content="{{ 'index,follow' if _env == 'production' else 'noindex,nofollow' }}">
-
-  {% set _csp_nonce = (csp_nonce if csp_nonce is defined and csp_nonce else (nonce if nonce is defined and nonce else '')) %}
-
-  {% set _csrf_val = '' %}
-  {% if csrf_token is defined and csrf_token %}
-    {% if csrf_token is callable %}
-      {% set _csrf_val = csrf_token() %}
-    {% else %}
-      {% set _csrf_val = csrf_token %}
-    {% endif %}
-  {% elif csrf_token_value is defined and csrf_token_value %}
-    {% set _csrf_val = csrf_token_value %}
-  {% endif %}
-  <meta name="csrf-token" content="{{ (_csrf_val|string)|e }}">
+  {% set _vf = (view_functions if view_functions is defined and view_functions else {}) %}
+  {% set _shop = (url_for('shop.shop') if 'shop.shop' in _vf else '/shop') %}
+  {% if not _shop or not _shop.startswith('/') %}{% set _shop = '/shop' %}{% endif %}
+  {% set _offers = _shop ~ ('?ofertas=1' if '?' not in _shop else '&ofertas=1') %}
+  {% set _new = _shop ~ ('?sort=new' if '?' not in _shop else '&sort=new') %}
+  {% set _featured = '/#destacados' %}
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="theme-color" content="#2563eb">
 {% endblock %}
 
 {% block content %}
+{% set _vf = (view_functions if view_functions is defined and view_functions else {}) %}
+{% set _shop = (url_for('shop.shop') if 'shop.shop' in _vf else '/shop') %}
+{% if not _shop or not _shop.startswith('/') %}{% set _shop = '/shop' %}{% endif %}
+{% set _offers = _shop ~ ('?ofertas=1' if '?' not in _shop else '&ofertas=1') %}
+{% set _new = _shop ~ ('?sort=new' if '?' not in _shop else '&sort=new') %}
+{% set _featured = '/#destacados' %}
 
-{% set _req = (request if request is defined and request else none) %}
-{% set _args = (_req.args if _req and _req.args else {}) %}
-{% set _raw_next = (next|default((_args.get('next','') if _args else ''), true)|string).strip() %}
-{% set nxt = _raw_next if _raw_next.startswith('/') and not _raw_next.startswith('//') and ('\n' not in _raw_next) and ('\r' not in _raw_next) and ('\x00' not in _raw_next) and ('\\' not in _raw_next) else '' %}
+{% set name = (user_name if user_name is defined and user_name else 'Skyline Guest')|string|trim %}
+{% set orders = (orders_count if orders_count is defined and orders_count is not none else 0) %}
+{% set favs = (favorites_count if favorites_count is defined and favorites_count is not none else 0) %}
+{% set points = (skyline_points if skyline_points is defined and skyline_points is not none else 0) %}
+{% set next_pts = (next_level_points if next_level_points is defined and next_level_points is not none else 500) %}
+{% if next_pts < 1 %}{% set next_pts = 1 %}{% endif %}
+{% set pct = ((points / next_pts) * 100)|round(0) %}
+{% if pct < 0 %}{% set pct = 0 %}{% endif %}
+{% if pct > 100 %}{% set pct = 100 %}{% endif %}
 
-{% set qtab = ((_args.get('tab','') if _args else '')|string|lower|trim) %}
-{% set initial_tab = (active_tab|default('login')|string|lower|trim) %}
-{% if qtab in ['login','register'] %}{% set initial_tab = qtab %}{% endif %}
-{% if initial_tab not in ['login','register'] %}{% set initial_tab = 'login' %}{% endif %}
+<main class="ss-page ss-profile" id="account" role="main" aria-label="Mi cuenta">
+  <a class="ss-skip" href="#accountMain">Saltar al contenido</a>
 
-{% set _method = (_req.method if _req else '') %}
-{% set _is_post = (_method == 'POST') %}
-{% set _form = (_req.form if (_req and _is_post) else {}) %}
-{% set _post_tab = ((_form.get('_tab','') if _form else '')|string|lower|trim) %}
-
-{% set _login_email = ((_form.get('email','') if (_form and _post_tab == 'login') else (prefill_email|default('',true)))|string) %}
-{% set _reg_name  = ((_form.get('name','') if (_form and _post_tab == 'register') else '')|string) %}
-{% set _reg_email = ((_form.get('email','') if (_form and _post_tab == 'register') else '')|string) %}
-
-{% set login_action = '/auth/login' %}
-{% set register_action = '/auth/register' %}
-{% set account_url = '/auth/account' %}
-{% set forgot_url = '/auth/forgot-password' %}
-
-{% set shop_url = '/shop' %}
-{% if url_for is defined %}
-  {% set shop_url = (url_for('shop.shop') if ('shop.shop' in (view_functions or {})) else '/shop') %}
-{% endif %}
-
-{% set _msgs = (get_flashed_messages(with_categories=true) if get_flashed_messages is defined else []) %}
-
-<section class="ss-account" data-page="account">
-  <div class="auth-wrap">
-    <div class="auth-shell">
-
-      <div class="auth-card" aria-labelledby="authTitle">
-        <header class="auth-brand">
-          <span class="auth-brand__dot" aria-hidden="true"></span>
-          <div class="auth-brand__title" id="authTitle">{{ (APP_NAME or "Skyline Store")|e }}</div>
-          <p class="auth-brand__sub">Ingresá o creá tu cuenta para comprar y guardar tus datos.</p>
-        </header>
-
-        <nav class="auth-tabs" role="tablist" aria-label="Acceso a cuenta">
-          <button type="button" class="auth-tab" id="tab-login" role="tab"
-                  aria-controls="panel-login"
-                  aria-selected="{{ 'true' if initial_tab == 'login' else 'false' }}"
-                  tabindex="{{ '0' if initial_tab == 'login' else '-1' }}"
-                  data-tab="login">Ingresar</button>
-
-          <button type="button" class="auth-tab" id="tab-register" role="tab"
-                  aria-controls="panel-register"
-                  aria-selected="{{ 'true' if initial_tab == 'register' else 'false' }}"
-                  tabindex="{{ '0' if initial_tab == 'register' else '-1' }}"
-                  data-tab="register">Crear cuenta</button>
-        </nav>
-
-        {% if _msgs %}
-          <div class="auth-card__pad auth-pad--flash" aria-live="polite" aria-atomic="true">
-            {% for category, msg in _msgs %}
-              {% set cat = (category|string|lower|trim) %}
-              {% set cat = cat if cat in ['error','warning','success','info'] else 'info' %}
-              <div class="auth-flash {{ cat }}" role="alert">{{ msg }}</div>
-            {% endfor %}
+  <section class="container ss-profile__wrap" id="accountMain" tabindex="-1">
+    <header class="ss-hero ss-hero--profile" aria-label="Resumen de cuenta">
+      <div class="ss-hero__inner">
+        <div class="ss-hero__left">
+          <div class="ss-kicker" aria-label="Sección">
+            <span class="ss-kicker__dot" aria-hidden="true"></span>
+            <span>MI CUENTA</span>
           </div>
-        {% endif %}
 
-        <div class="auth-card__pad">
-          <section id="panel-login" role="tabpanel" aria-labelledby="tab-login"
-                   {% if initial_tab != 'login' %}hidden aria-hidden="true"{% endif %}>
-            <form method="post" action="{{ login_action }}" novalidate id="loginForm" class="auth-form" data-auth-form>
-              <input type="hidden" name="_tab" value="login">
-              <input type="hidden" name="csrf_token" value="{{ (_csrf_val|string)|e }}">
-              {% if nxt %}<input type="hidden" name="next" value="{{ nxt|e }}">{% endif %}
+          <h1 class="ss-title">
+            Hola, <span class="ss-title__name">{{ name|e }}</span>
+          </h1>
 
-              <div class="hp-field" aria-hidden="true">
-                <label class="sr-only" for="hp1">Website</label>
-                <input id="hp1" type="text" name="website" tabindex="-1" autocomplete="off" inputmode="url">
-              </div>
+          <p class="ss-subtitle">
+            Tu panel premium tipo marketplace: pedidos, puntos, accesos rápidos y actividad.
+          </p>
 
-              <div class="auth-field">
-                <label for="loginEmail">Email</label>
-                <input class="auth-input" id="loginEmail" type="email" name="email"
-                       value="{{ _login_email|trim|e }}"
-                       required autocomplete="username" inputmode="email"
-                       aria-describedby="loginHint loginErr">
-                <div class="field-hint" id="loginHint">Usá el email con el que te registraste.</div>
-                <div class="field-error" id="loginErr" role="status" aria-live="polite"></div>
-              </div>
+          <div class="ss-chiprow" role="list" aria-label="Indicadores rápidos">
+            <span class="ss-chip" role="listitem">Pedidos: <b>{{ orders }}</b></span>
+            <span class="ss-chip" role="listitem">Favoritos: <b>{{ favs }}</b></span>
+            <span class="ss-chip" role="listitem">Nivel: <b>Standard</b></span>
+            <span class="ss-chip ss-chip--soft" role="listitem">Soporte: <b>24/7</b></span>
+          </div>
 
-              <div class="auth-field">
-                <label for="loginPass">Contraseña</label>
-                <div class="ss-pw-wrap">
-                  <input class="auth-input" id="loginPass" type="password" name="password"
-                         required minlength="8" autocomplete="current-password">
-                  <button type="button" class="ss-pw-btn" id="toggleLoginPass"
-                          aria-label="Mostrar u ocultar contraseña" aria-pressed="false">👁</button>
-                </div>
-              </div>
+          <div class="ss-btnrow" role="group" aria-label="Acciones principales">
+            <a class="ss-btn ss-btn--primary" href="{{ _shop|e }}" aria-label="Ir a la tienda">🛒 Ir a la tienda</a>
+            <a class="ss-btn ss-btn--soft" href="{{ _featured|e }}" aria-label="Ver destacados">🔥 Destacados</a>
+            <a class="ss-btn ss-btn--warn" href="{{ _offers|e }}" aria-label="Ver ofertas">⚡ Ofertas</a>
+            <a class="ss-btn ss-btn--ghost" href="{{ _new|e }}" aria-label="Ver novedades">🆕 Novedades</a>
+          </div>
 
-              <div class="auth-actions">
-                <button class="btn-primary" id="loginSubmit" type="submit">
-                  <span class="btn-label">Entrar</span>
-                  <span class="btn-spinner" aria-hidden="true"></span>
-                </button>
-                <a class="btn-ghost" href="{{ shop_url }}">Seguir como invitado</a>
-              </div>
-
-              <div class="auth-links">
-                <a href="{{ forgot_url }}">¿Olvidaste tu contraseña?</a>
-                <a href="{{ account_url }}?tab=register{% if nxt %}&next={{ nxt|urlencode }}{% endif %}">Crear cuenta</a>
-              </div>
-            </form>
-          </section>
-
-          <section id="panel-register" role="tabpanel" aria-labelledby="tab-register"
-                   {% if initial_tab != 'register' %}hidden aria-hidden="true"{% endif %}>
-            <form method="post" action="{{ register_action }}" novalidate id="registerForm" class="auth-form" data-auth-form>
-              <input type="hidden" name="_tab" value="register">
-              <input type="hidden" name="csrf_token" value="{{ (_csrf_val|string)|e }}">
-              {% if nxt %}<input type="hidden" name="next" value="{{ nxt|e }}">{% endif %}
-
-              <div class="hp-field" aria-hidden="true">
-                <label class="sr-only" for="hp2">Website</label>
-                <input id="hp2" type="text" name="website" tabindex="-1" autocomplete="off" inputmode="url">
-              </div>
-
-              <div class="auth-field">
-                <label for="regName">Nombre</label>
-                <input class="auth-input" id="regName" type="text" name="name"
-                       value="{{ _reg_name|trim|e }}"
-                       autocomplete="name" maxlength="80">
-              </div>
-
-              <div class="auth-field">
-                <label for="regEmail">Email</label>
-                <input class="auth-input" id="regEmail" type="email" name="email"
-                       value="{{ _reg_email|trim|e }}"
-                       required autocomplete="username" inputmode="email"
-                       aria-describedby="regHint regErr">
-                <div class="field-hint" id="regHint">Te vamos a enviar confirmaciones y avisos de compra.</div>
-                <div class="field-error" id="regErr" role="status" aria-live="polite"></div>
-              </div>
-
-              <div class="auth-field">
-                <label for="regPass">Contraseña</label>
-                <div class="ss-pw-wrap">
-                  <input class="auth-input" id="regPass" type="password" name="password"
-                         required minlength="8" autocomplete="new-password"
-                         aria-describedby="pwHint">
-                  <button type="button" class="ss-pw-btn" id="toggleRegPass"
-                          aria-label="Mostrar u ocultar contraseña" aria-pressed="false">👁</button>
-                </div>
-                <div class="field-hint" id="pwHint">Mínimo 8 caracteres.</div>
-              </div>
-
-              <div class="auth-field">
-                <label for="regPass2">Confirmar contraseña</label>
-                <div class="ss-pw-wrap">
-                  <input class="auth-input" id="regPass2" type="password" name="password2"
-                         required minlength="8" autocomplete="new-password">
-                  <button type="button" class="ss-pw-btn" id="toggleRegPass2"
-                          aria-label="Mostrar u ocultar confirmación" aria-pressed="false">👁</button>
-                </div>
-              </div>
-
-              <fieldset class="auth-field ss-choice" role="group" aria-label="Tipo de cuenta">
-                <legend>Tipo de cuenta</legend>
-                <label><input type="radio" name="role" value="customer" checked> Comprador</label>
-                <label><input type="radio" name="role" value="affiliate"> Afiliado</label>
-              </fieldset>
-
-              <div class="auth-actions">
-                <button class="btn-primary" id="regSubmit" type="submit">
-                  <span class="btn-label">Crear cuenta</span>
-                  <span class="btn-spinner" aria-hidden="true"></span>
-                </button>
-                <a class="btn-ghost" href="{{ shop_url }}">Seguir como invitado</a>
-              </div>
-
-              <div class="auth-links">
-                <a href="{{ account_url }}?tab=login{% if nxt %}&next={{ nxt|urlencode }}{% endif %}">Ya tengo cuenta</a>
-                <a href="{{ forgot_url }}">Recuperar contraseña</a>
-              </div>
-            </form>
-          </section>
-
+          <div class="ss-inline-info" role="list" aria-label="Garantías rápidas">
+            <div class="ss-inline-info__item" role="listitem">
+              <span class="ss-mini-dot" aria-hidden="true"></span>
+              <span>Compras protegidas</span>
+            </div>
+            <div class="ss-inline-info__item" role="listitem">
+              <span class="ss-mini-dot" aria-hidden="true"></span>
+              <span>Seguimiento de pedidos</span>
+            </div>
+            <div class="ss-inline-info__item" role="listitem">
+              <span class="ss-mini-dot" aria-hidden="true"></span>
+              <span>Pagos seguros</span>
+            </div>
+          </div>
         </div>
+
+        <aside class="ss-card ss-card--points" aria-label="Puntos Skyline" aria-live="polite">
+          <div class="ss-card__head">
+            <div class="ss-card__eyebrow">Puntos Skyline</div>
+            <div class="ss-points" aria-label="Puntos acumulados">
+              <div class="ss-points__value">{{ points }}</div>
+              <div class="ss-points__unit">pts</div>
+            </div>
+          </div>
+
+          <div class="ss-progress" role="progressbar" aria-label="Progreso al próximo nivel"
+               aria-valuemin="0" aria-valuemax="{{ next_pts }}" aria-valuenow="{{ points }}">
+            <div class="ss-progress__bar" style="width: {{ pct }}%"></div>
+          </div>
+
+          <div class="ss-card__hint">
+            <b>{{ points }}</b> / {{ next_pts }} pts para el próximo nivel
+          </div>
+
+          <div class="ss-divider" aria-hidden="true"></div>
+
+          <div class="ss-points-actions" role="group" aria-label="Acciones de puntos">
+            <a class="ss-mini-btn" href="{{ _shop|e }}">Ganar puntos</a>
+            <a class="ss-mini-btn ss-mini-btn--primary" href="{{ _offers|e }}">Canjear ofertas</a>
+          </div>
+        </aside>
       </div>
+    </header>
 
-      <aside class="auth-side" aria-label="Beneficios Skyline Store">
-        <h3>Comprá con confianza</h3>
-        <ul class="auth-perks">
-          <li><span aria-hidden="true">🔒</span> Pagos seguros</li>
-          <li><span aria-hidden="true">🚚</span> Envíos rápidos</li>
-          <li><span aria-hidden="true">💎</span> Ofertas exclusivas</li>
-        </ul>
-        <div class="auth-side__cta">
-          <a class="btn-ghost" href="{{ shop_url }}">Ir a la tienda</a>
-          <p class="auth-side__note">Podés navegar como invitado y comprar cuando quieras.</p>
+    <section class="ss-metrics" aria-label="Métricas" role="list">
+      <div class="ss-metric" role="listitem">
+        <div class="ss-metric__k">Pedidos</div>
+        <div class="ss-metric__v">{{ orders }}</div>
+        <div class="ss-metric__d">Compras realizadas</div>
+      </div>
+      <div class="ss-metric" role="listitem">
+        <div class="ss-metric__k">Favoritos</div>
+        <div class="ss-metric__v">{{ favs }}</div>
+        <div class="ss-metric__d">Guardados</div>
+      </div>
+      <div class="ss-metric" role="listitem">
+        <div class="ss-metric__k">Puntos</div>
+        <div class="ss-metric__v">{{ points }}</div>
+        <div class="ss-metric__d">Beneficios</div>
+      </div>
+      <div class="ss-metric" role="listitem">
+        <div class="ss-metric__k">Nivel</div>
+        <div class="ss-metric__v">Standard</div>
+        <div class="ss-metric__d">Perks & accesos</div>
+      </div>
+    </section>
+
+    <section class="ss-grid2" aria-label="Paneles de actividad">
+      <section class="ss-card" aria-label="Acciones rápidas">
+        <h2 class="ss-card__title">Acciones rápidas</h2>
+        <p class="ss-card__subtitle">Atajos para moverte como en un marketplace grande</p>
+
+        <div class="ss-list" role="list">
+          <a class="ss-row" href="{{ _shop|e }}" role="listitem" aria-label="Comprar ahora">
+            <div>
+              <div class="ss-row__title">Comprar ahora</div>
+              <div class="ss-row__desc">Abrir catálogo completo</div>
+            </div>
+            <span class="ss-pill ss-pill--ok" aria-hidden="true">Ir</span>
+          </a>
+
+          <a class="ss-row" href="{{ _offers|e }}" role="listitem" aria-label="Ver ofertas">
+            <div>
+              <div class="ss-row__title">Ofertas</div>
+              <div class="ss-row__desc">Promos por tiempo limitado</div>
+            </div>
+            <span class="ss-pill ss-pill--wait" aria-hidden="true">Ver</span>
+          </a>
+
+          <a class="ss-row" href="{{ _featured|e }}" role="listitem" aria-label="Abrir destacados">
+            <div>
+              <div class="ss-row__title">Destacados</div>
+              <div class="ss-row__desc">Selección premium</div>
+            </div>
+            <span class="ss-pill ss-pill--info" aria-hidden="true">Abrir</span>
+          </a>
+
+          <a class="ss-row" href="{{ _new|e }}" role="listitem" aria-label="Abrir novedades">
+            <div>
+              <div class="ss-row__title">Novedades</div>
+              <div class="ss-row__desc">Lo último agregado</div>
+            </div>
+            <span class="ss-pill ss-pill--info" aria-hidden="true">Nuevo</span>
+          </a>
         </div>
-      </aside>
 
-    </div>
-  </div>
-</section>
+        <div class="ss-notice" role="status" aria-live="polite">
+          Tip: agregá productos a favoritos para verlos acá rápido.
+        </div>
+      </section>
 
-<script{% if _csp_nonce %} nonce="{{ _csp_nonce|e }}"{% endif %}>
-(() => {
-  const root = document.querySelector('[data-page="account"]') || document;
-  const tabs = Array.from(root.querySelectorAll('.auth-tab'));
-  const panelLogin = root.querySelector('#panel-login');
-  const panelRegister = root.querySelector('#panel-register');
-  const panels = { login: panelLogin, register: panelRegister };
+      <section class="ss-card" aria-label="Últimos pedidos">
+        <h2 class="ss-card__title">Últimos pedidos</h2>
+        <p class="ss-card__subtitle">Demo (se reemplaza por tus pedidos reales)</p>
 
-  const setTab = (t, focusBtn = true) => {
-    tabs.forEach(b => {
-      const on = b.dataset.tab === t;
-      b.setAttribute('aria-selected', on ? 'true' : 'false');
-      b.tabIndex = on ? 0 : -1;
-      const p = panels[b.dataset.tab];
-      if (p) {
-        p.hidden = !on;
-        p.setAttribute('aria-hidden', (!on).toString());
-      }
-      if (on && focusBtn) b.focus({ preventScroll: true });
-    });
-    try {
-      const u = new URL(location.href);
-      u.searchParams.set('tab', t);
-      history.replaceState({}, '', u.toString());
-    } catch {}
-  };
+        <div class="ss-list" role="list">
+          <div class="ss-row ss-row--static" role="listitem" aria-label="Pedido SKY-1041">
+            <div>
+              <div class="ss-row__title">SKY-1041</div>
+              <div class="ss-row__desc">Seguimiento activo</div>
+            </div>
+            <span class="ss-pill ss-pill--ok" aria-hidden="true">En camino</span>
+          </div>
 
-  tabs.forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab, false)));
+          <div class="ss-row ss-row--static" role="listitem" aria-label="Pedido SKY-1029">
+            <div>
+              <div class="ss-row__title">SKY-1029</div>
+              <div class="ss-row__desc">Preparando paquete</div>
+            </div>
+            <span class="ss-pill ss-pill--wait" aria-hidden="true">Procesando</span>
+          </div>
 
-  const order = ['login', 'register'];
-  root.querySelector('.auth-tabs')?.addEventListener('keydown', (e) => {
-    const cur = document.activeElement?.dataset?.tab;
-    if (!cur || !order.includes(cur)) return;
+          <div class="ss-row ss-row--static" role="listitem" aria-label="Pedido SKY-1014">
+            <div>
+              <div class="ss-row__title">SKY-1014</div>
+              <div class="ss-row__desc">Pedido completado</div>
+            </div>
+            <span class="ss-pill ss-pill--info" aria-hidden="true">Entregado</span>
+          </div>
+        </div>
 
-    let idx = order.indexOf(cur);
-    if (e.key === 'ArrowRight') idx = (idx + 1) % order.length;
-    else if (e.key === 'ArrowLeft') idx = (idx - 1 + order.length) % order.length;
-    else if (e.key === 'Home') idx = 0;
-    else if (e.key === 'End') idx = order.length - 1;
-    else return;
+        <div class="ss-notice" role="status" aria-live="polite">
+          Modo demo activo. Cuando conectes backend real, esto se llena solo.
+        </div>
+      </section>
+    </section>
 
-    e.preventDefault();
-    setTab(order[idx], true);
-  });
+    <section class="ss-card ss-card--compact" aria-label="Ayuda y soporte">
+      <h2 class="ss-card__title">¿Necesitás ayuda?</h2>
+      <p class="ss-card__subtitle">Soporte rápido y políticas claras para comprar con confianza.</p>
+      <div class="ss-btnrow" role="group" aria-label="Acciones de soporte">
+        <a class="ss-btn ss-btn--soft" href="{{ _shop|e }}">Centro de ayuda</a>
+        <a class="ss-btn ss-btn--ghost" href="{{ _offers|e }}">Ver promos</a>
+      </div>
+    </section>
 
-  const bindToggle = (btnId, inpId) => {
-    const b = root.getElementById ? root.getElementById(btnId) : document.getElementById(btnId);
-    const i = root.getElementById ? root.getElementById(inpId) : document.getElementById(inpId);
-    const bb = document.getElementById(btnId);
-    const ii = document.getElementById(inpId);
-    const btn = b || bb;
-    const inp = i || ii;
-    if (!btn || !inp) return;
-
-    const setState = (show) => {
-      inp.type = show ? 'text' : 'password';
-      btn.setAttribute('aria-pressed', show ? 'true' : 'false');
-      btn.textContent = show ? '🙈' : '👁';
-    };
-    btn.addEventListener('click', () => setState(inp.type === 'password'));
-  };
-
-  bindToggle('toggleLoginPass','loginPass');
-  bindToggle('toggleRegPass','regPass');
-  bindToggle('toggleRegPass2','regPass2');
-
-  const lockForm = (formId, btnId) => {
-    const f = document.getElementById(formId);
-    const b = document.getElementById(btnId);
-    if (!f || !b) return;
-
-    let locked = false;
-    f.addEventListener('submit', () => {
-      if (locked) return;
-      locked = true;
-      b.disabled = true;
-      b.classList.add('is-loading');
-      const lbl = b.querySelector('.btn-label');
-      if (lbl) lbl.textContent = (formId === 'loginForm') ? 'Entrando…' : 'Creando…';
-      setTimeout(() => {
-        locked = false;
-        b.disabled = false;
-        b.classList.remove('is-loading');
-      }, 12000);
-    }, { passive: true });
-  };
-
-  lockForm('loginForm','loginSubmit');
-  lockForm('registerForm','regSubmit');
-})();
-</script>
-
+  </section>
+</main>
 {% endblock %}
