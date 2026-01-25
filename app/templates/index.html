@@ -1,41 +1,39 @@
-{# app/templates/index.html — Skyline Store (ULTRA PRO v16.4 · FIX + 10 EXTRA · NO-500 / Render-safe) #}
 {% extends "base.html" %}
 
-{% block title %}{{ meta_title | default("Skyline Store · Tech + Streetwear premium", true) }}{% endblock %}
+{% block title %}{{ (meta_title if meta_title is defined and meta_title else "Skyline Store · Tech + Streetwear premium")|e }}{% endblock %}
 
 {% block extra_head %}
-  {# ---------------- SAFE env/request ---------------- #}
   {% set _env = (ENV if ENV is defined and ENV else 'production')|string|lower|trim %}
   {% set _req = (request if request is defined and request else none) %}
+  {% set _args = (_req.args if _req and _req.args else {}) %}
+  {% set _path = (_req.path if _req and _req.path else '') %}
   {% set _vf  = (view_functions if view_functions is defined and view_functions else {}) %}
+  {% set _home_ver = (HOME_CSS_VER if HOME_CSS_VER is defined and HOME_CSS_VER else (ASSET_VER if ASSET_VER is defined and ASSET_VER else '165'))|string|trim %}
 
-  {# ✅ Cache-bust REAL #}
-  {% set _home_ver = (HOME_CSS_VER if HOME_CSS_VER is defined and HOME_CSS_VER else '164')|string|trim %}
-
-  {# ✅ Canonical limpio (sin querystring) y absoluto si hay request #}
   {% set _canonical = (_req.base_url if _req and _req.base_url else 'https://skyline-style.onrender.com/') %}
   {% set _root = (_req.url_root if _req and _req.url_root else 'https://skyline-style.onrender.com/') %}
+  {% set _root_abs = (_root if _root and _root.startswith('http') else 'https://skyline-style.onrender.com/') %}
 
-  {# ✅ Root absoluto robusto #}
-  {% set _root_abs = _root %}
-  {% if not _root_abs or _root_abs == '/' %}
-    {% set _root_abs = 'https://skyline-style.onrender.com/' %}
-  {% endif %}
-
-  {# ---------------- Assets ---------------- #}
-  {% set hero_png = url_for('static', filename='img/banners/hero_home.png') %}
-  {% set hero_webp = url_for('static', filename='img/banners/hero_home.webp') %}
-
-  {% set og_img_local = url_for('static', filename='img/og.png', _external=True) %}
+  {% set hero_png = (url_for('static', filename='img/banners/hero_home.png') if url_for is defined else '/static/img/banners/hero_home.png') %}
+  {% set hero_webp = (url_for('static', filename='img/banners/hero_home.webp') if url_for is defined else hero_png) %}
+  {% set og_img_local = (url_for('static', filename='img/og.png', _external=True) if url_for is defined else (_root_abs ~ 'static/img/og.png')) %}
   {% set og_img = (og_image if og_image is defined and og_image else og_img_local) %}
 
-  {# SEO safe strings #}
-  {% set _desc = (meta_description | default('Moda urbana premium, accesorios y tecnología.', true))|string|trim %}
-  {% set _t = (meta_title | default('Skyline Store · Tech + Streetwear premium', true))|string|trim %}
+  {% set _desc = (meta_description if meta_description is defined and meta_description else 'Moda urbana premium, accesorios y tecnología.')|string|trim %}
+  {% set _t = (meta_title if meta_title is defined and meta_title else 'Skyline Store · Tech + Streetwear premium')|string|trim %}
+
+  {% set _shop_url = (url_for('shop.shop') if url_for is defined and 'shop.shop' in _vf else '/shop') %}
+  {% if not _shop_url or not _shop_url.startswith('/') %}{% set _shop_url = '/shop' %}{% endif %}
+  {% set _shop_abs = (_root_abs ~ _shop_url.lstrip('/')) %}
+
+  {% set _hero_abs = hero_png %}
+  {% if _hero_abs and _hero_abs.startswith('/') %}{% set _hero_abs = (_root_abs ~ _hero_abs.lstrip('/')) %}{% endif %}
 
   <meta name="description" content="{{ _desc|e }}">
   <meta name="robots" content="{{ 'index,follow' if _env == 'production' else 'noindex,nofollow' }}">
   <meta name="theme-color" content="#2563eb">
+  <meta name="color-scheme" content="light">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
 
   <link rel="canonical" href="{{ _canonical|e }}">
   <meta property="og:url" content="{{ _canonical|e }}">
@@ -43,55 +41,35 @@
   <meta property="og:title" content="{{ _t|e }}">
   <meta property="og:description" content="{{ _desc|e }}">
   <meta property="og:type" content="website">
-  <meta property="og:image" content="{{ og_img|e }}">
+  {% if og_img %}<meta property="og:image" content="{{ og_img|e }}">{% endif %}
   <meta property="og:image:alt" content="Skyline Store · Tech + Streetwear premium">
 
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="{{ _t|e }}">
   <meta name="twitter:description" content="{{ _desc|e }}">
-  <meta name="twitter:image" content="{{ og_img|e }}">
+  {% if og_img %}<meta name="twitter:image" content="{{ og_img|e }}">{% endif %}
 
-  {# ✅ Extra perf: dns-prefetch/preconnect (solo tu dominio) #}
   <link rel="dns-prefetch" href="//skyline-style.onrender.com">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://skyline-style.onrender.com" crossorigin>
 
-  {# PERF: preload hero (mejor compat) #}
   <link rel="preload" as="image" href="{{ hero_webp|e }}" fetchpriority="high"
-        imagesrcset="{{ hero_webp|e }} 1600w, {{ hero_webp|e }} 800w"
         imagesizes="(max-width: 900px) 92vw, 720px">
   <link rel="preload" as="image" href="{{ hero_png|e }}" fetchpriority="high"
-        imagesrcset="{{ hero_png|e }} 1600w, {{ hero_png|e }} 800w"
         imagesizes="(max-width: 900px) 92vw, 720px">
 
-  {# ✅ CSS home con cache bust #}
   <link rel="stylesheet" href="{{ url_for('static', filename='css/home.css') }}?v={{ _home_ver|e }}">
 
-  {# PERF: prefetch tienda (seguro) #}
-  {% set _shop_prefetch = (url_for('shop.shop') if 'shop.shop' in _vf else '/shop') %}
-  {% if _shop_prefetch and not _shop_prefetch.startswith('/') %}
-    {% set _shop_prefetch = '/shop' %}
-  {% endif %}
-  <link rel="prefetch" href="{{ _shop_prefetch|e }}" as="document">
+  <link rel="prefetch" href="{{ _shop_url|e }}" as="document">
 
-  {# CSP nonce #}
   {% set _csp_nonce = (csp_nonce if csp_nonce is defined and csp_nonce else (nonce if nonce is defined and nonce else '')) %}
-
-  {# JSON-LD robusto + URLs absolutas #}
-  {% set _shop_abs = _shop_prefetch %}
-  {% if _shop_abs and _shop_abs.startswith('/') and _root_abs and _root_abs.startswith('http') %}
-    {% set _shop_abs = _root_abs ~ _shop_abs.lstrip('/') %}
-  {% endif %}
-
-  {% set _hero_abs = hero_png %}
-  {% if _hero_abs and _hero_abs.startswith('/') and _root_abs and _root_abs.startswith('http') %}
-    {% set _hero_abs = _root_abs ~ _hero_abs.lstrip('/') %}
-  {% endif %}
 
   <script type="application/ld+json"{% if _csp_nonce %} nonce="{{ _csp_nonce|e }}"{% endif %}>
   {
     "@context":"https://schema.org",
     "@graph":[
-      {"@type":"Organization","name":"Skyline Store","url":"{{ _root_abs|e }}","logo":"{{ url_for('static', filename='img/og.png', _external=True) }}"},
+      {"@type":"Organization","name":"Skyline Store","url":"{{ _root_abs|e }}","logo":"{{ (url_for('static', filename='img/og.png', _external=True) if url_for is defined else (_root_abs ~ 'static/img/og.png'))|e }}"},
       {"@type":"WebSite","name":"Skyline Store","url":"{{ _root_abs|e }}",
         "potentialAction":{"@type":"SearchAction","target":"{{ (_shop_abs ~ '?q={search_term_string}')|e }}","query-input":"required name=search_term_string"}
       },
@@ -102,51 +80,29 @@
   }
   </script>
 
-  {# ✅ MINI CSS patch + fallback de emergencia si el home.css no carga #}
   <style>
-    /* micro polish */
-    .hp .btn{ transform: translateZ(0); }
-    .hp :focus-visible{ outline:none; box-shadow: 0 0 0 4px rgba(37,99,235,.18); border-radius: 14px; }
-    .hp-heroFull{ isolation:isolate; }
-    .hp-heroCard{ overflow:hidden; }
-    .hp-verified{ backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
-    .hp-pill{ border:1px solid rgba(15,23,42,.10); }
-    .hp-pill:active{ transform: translateY(1px); }
-    .hp-topTrust__item small{ opacity:.86; }
-    @media (prefers-reduced-motion: reduce){
-      .hp [data-reveal]{ transition:none!important; }
-    }
-
-    /* EMERGENCY fallback: si por alguna razón home.css no aplicó, evitá “texto roto” */
-    .hp.hp-v15.hp-v163 .hp-wrap{ max-width: 1120px; margin: 0 auto; padding: 0 16px; }
-    .hp.hp-v15.hp-v163 .hp-ctas{ display:flex; gap:12px; flex-wrap:wrap; }
-    .hp.hp-v15.hp-v163 .hp-topTrust{ list-style:none; padding:0; margin:0; display:flex; gap:14px; flex-wrap:wrap; }
-    .hp.hp-v15.hp-v163 .hp-topTrust__item{ display:flex; gap:10px; align-items:center; }
+    :root{color-scheme:light}
+    html,body{background:#f6f8fc;color:#0b1220}
+    .hp :focus-visible{outline:none;box-shadow:0 0 0 4px rgba(37,99,235,.18);border-radius:14px}
   </style>
 {% endblock %}
 
 {% block content %}
-  {# ---------------- SAFE routing + env ---------------- #}
   {% set _env = (ENV if ENV is defined and ENV else 'production')|string|lower|trim %}
   {% set _vf = (view_functions if view_functions is defined and view_functions else {}) %}
-  {% set _home_ver = (HOME_CSS_VER if HOME_CSS_VER is defined and HOME_CSS_VER else '164')|string|trim %}
-  {% set _req = (request if request is defined and request else none) %}
+  {% set _home_ver = (HOME_CSS_VER if HOME_CSS_VER is defined and HOME_CSS_VER else (ASSET_VER if ASSET_VER is defined and ASSET_VER else '165'))|string|trim %}
 
-  {% set hero_png = url_for('static', filename='img/banners/hero_home.png') %}
-  {% set hero_webp = url_for('static', filename='img/banners/hero_home.webp') %}
+  {% set hero_png = (url_for('static', filename='img/banners/hero_home.png') if url_for is defined else '/static/img/banners/hero_home.png') %}
+  {% set hero_webp = (url_for('static', filename='img/banners/hero_home.webp') if url_for is defined else hero_png) %}
 
-  {% set shop_url = (url_for('shop.shop') if 'shop.shop' in _vf else '/shop') %}
-  {% if not shop_url %}{% set shop_url = '/shop' %}{% endif %}
-
-  {# offers_url safe: sort + available #}
+  {% set shop_url = (url_for('shop.shop') if url_for is defined and 'shop.shop' in _vf else '/shop') %}
+  {% if not shop_url or not shop_url.startswith('/') %}{% set shop_url = '/shop' %}{% endif %}
   {% set offers_url = shop_url ~ ('?sort=new&available=1' if '?' not in shop_url else '&sort=new&available=1') %}
 
-  {# account links safe #}
   {% set account_url =
-      (url_for('main.account') if 'main.account' in _vf
-        else (url_for('account.account') if 'account.account' in _vf
-          else (url_for('cuenta.account') if 'cuenta.account' in _vf
-            else '/account')))
+      (url_for('auth.account') if url_for is defined and 'auth.account' in _vf
+        else (url_for('main.account') if url_for is defined and 'main.account' in _vf
+          else '/auth/account'))
   %}
   {% set account_login_url = account_url ~ ('?tab=login' if '?' not in account_url else '&tab=login') %}
   {% set account_register_url = account_url ~ ('?tab=register' if '?' not in account_url else '&tab=register') %}
@@ -154,13 +110,9 @@
   {% set featured_list = (featured if featured is defined and featured else []) %}
   {% if featured_list is none %}{% set featured_list = [] %}{% endif %}
 
-  {% set _hero_overlay =
-    "linear-gradient(90deg, rgba(255,255,255,.94) 0%, rgba(255,255,255,.86) 46%, rgba(255,255,255,.42) 72%, rgba(255,255,255,0) 100%)"
-  %}
+  {% set _hero_overlay = "linear-gradient(90deg, rgba(255,255,255,.97) 0%, rgba(255,255,255,.90) 44%, rgba(255,255,255,.56) 72%, rgba(255,255,255,0) 100%)" %}
 
-  <div class="hp hp-v15 hp-v163" id="hp" role="main" aria-label="Inicio Skyline Store"
-       data-home-ver="{{ _home_ver|e }}" data-env="{{ _env|e }}">
-
+  <div class="hp hp-v15 hp-v161" id="hp" role="main" aria-label="Inicio Skyline Store" data-home-ver="{{ _home_ver|e }}" data-env="{{ _env|e }}">
     <section class="hp-top" aria-label="Beneficios">
       <div class="hp-wrap">
         <ul class="hp-topTrust" role="list">
@@ -172,28 +124,25 @@
             <span class="hp-ico" aria-hidden="true">🚚</span>
             <div><b>Envíos con tracking</b><small>Seguimiento del pedido</small></div>
           </li>
+          <li class="hp-topTrust__item" role="listitem">
+            <span class="hp-ico" aria-hidden="true">✅</span>
+            <div><b>Políticas claras</b><small>Comprá con confianza</small></div>
+          </li>
         </ul>
       </div>
     </section>
 
-    <section class="hp-hero hp-heroFull" aria-labelledby="hpTitle"
-      style="--hero-url:url('{{ hero_png|e }}'); --hero-overlay: {{ _hero_overlay }};">
+    <section class="hp-hero hp-heroFull" aria-labelledby="hpTitle" style="--hero-url:url('{{ hero_png|e }}'); --hero-overlay: {{ _hero_overlay }};">
       <div class="hp-wrap hp-hero__grid">
-
         <div class="hp-hero__copy">
           <div class="hp-kickerRow">
             <span class="hp-kicker">SKYLINE STORE</span>
             <span class="hp-verified" aria-label="Verificado">Verificado</span>
-
-            <button class="hp-pill" type="button" data-pill data-target="#hpCats"
-                    aria-controls="hpCats" aria-expanded="false" aria-label="Ir a categorías">Categorías</button>
-            <button class="hp-pill" type="button" data-pill data-target="#hpGrid"
-                    aria-controls="hpGrid" aria-expanded="false" aria-label="Ir a destacados">Destacados</button>
+            <button class="hp-pill" type="button" data-pill data-target="#hpCats" aria-controls="hpCats" aria-expanded="false">Categorías</button>
+            <button class="hp-pill" type="button" data-pill data-target="#hpGrid" aria-controls="hpGrid" aria-expanded="false">Destacados</button>
           </div>
 
-          <h1 id="hpTitle" class="hp-title">
-            Tech + Streetwear <span class="hp-grad">premium</span>
-          </h1>
+          <h1 id="hpTitle" class="hp-title">Tech + Streetwear <span class="hp-grad">premium</span></h1>
 
           <p class="hp-sub">
             Una selección real de <b>moda urbana</b>, <b>accesorios</b> y <b>tecnología</b>.
@@ -225,26 +174,15 @@
         </div>
 
         <div class="hp-hero__media" aria-label="Imagen principal">
-          <figure class="hp-heroCard is-heroFull" data-reveal style="--hero-url:url('{{ hero_png|e }}');">
+          <figure class="hp-heroCard is-heroFull" data-reveal>
             <div class="hp-heroGlow" aria-hidden="true"></div>
-
             <picture>
               <source srcset="{{ hero_webp|e }}" type="image/webp">
-              <img
-                src="{{ hero_png|e }}"
-                alt="Skyline Store: tecnología y streetwear premium"
-                width="1600"
-                height="900"
-                sizes="(max-width: 900px) 92vw, 720px"
-                loading="eager"
-                decoding="async"
-                fetchpriority="high"
-                referrerpolicy="no-referrer-when-downgrade"
-                class="hp-heroImg"
-                style="aspect-ratio: 16 / 9;"
-                onerror="this.onerror=null; try{ this.closest('.hp-heroCard') && this.closest('.hp-heroCard').classList.add('is-fallback'); }catch(e){}">
+              <img src="{{ hero_png|e }}" alt="Skyline Store: tecnología y streetwear premium" width="1600" height="900"
+                   sizes="(max-width: 900px) 92vw, 720px" loading="eager" decoding="async" fetchpriority="high"
+                   referrerpolicy="no-referrer-when-downgrade" class="hp-heroImg"
+                   onerror="this.onerror=null; try{ this.closest('.hp-heroCard') && this.closest('.hp-heroCard').classList.add('is-fallback'); }catch(e){}">
             </picture>
-
             <figcaption class="hp-heroCap">
               <b>Curado por calidad</b>
               <span>Productos elegidos + ofertas reales</span>
@@ -257,7 +195,6 @@
             <div class="hp-stat" role="listitem"><b>Compra segura</b><span>Soporte y políticas claras</span></div>
           </div>
         </div>
-
       </div>
     </section>
 
@@ -398,39 +335,36 @@
 {% endblock %}
 
 {% block extra_js %}
-  {% set _home_ver = (HOME_CSS_VER if HOME_CSS_VER is defined and HOME_CSS_VER else '164')|string|trim %}
+  {% set _home_ver = (HOME_CSS_VER if HOME_CSS_VER is defined and HOME_CSS_VER else (ASSET_VER if ASSET_VER is defined and ASSET_VER else '165'))|string|trim %}
   <script src="{{ url_for('static', filename='js/home.js') }}?v={{ _home_ver|e }}" defer></script>
 
-  {# JS fallback si home.js no maneja pills #}
-  <script defer>
+  <script{% if csp_nonce is defined and csp_nonce %} nonce="{{ csp_nonce|e }}"{% elif nonce is defined and nonce %} nonce="{{ nonce|e }}"{% endif %} defer>
   (() => {
     const root = document.getElementById('hp');
     if (!root) return;
 
-    const pills = root.querySelectorAll('[data-pill][data-target]');
     const prefersReduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 
     const scrollToTarget = (sel) => {
-      if (!sel) return;
-      const el = document.querySelector(sel);
+      const el = sel ? document.querySelector(sel) : null;
       if (!el) return;
-      const y = el.getBoundingClientRect().top + (window.pageYOffset || 0) - 86;
+      const y = el.getBoundingClientRect().top + (window.pageYOffset || 0) - 92;
       window.scrollTo({ top: Math.max(0, y), behavior: prefersReduced ? 'auto' : 'smooth' });
     };
 
-    pills.forEach(btn => {
+    root.querySelectorAll('[data-pill][data-target]').forEach(btn => {
       btn.addEventListener('click', () => {
         const target = btn.getAttribute('data-target');
-        pills.forEach(b => b.setAttribute('aria-expanded','false'));
+        root.querySelectorAll('[data-pill]').forEach(b => b.setAttribute('aria-expanded','false'));
         btn.setAttribute('aria-expanded','true');
         scrollToTarget(target);
-        window.setTimeout(() => btn.setAttribute('aria-expanded','false'), 1200);
+        window.setTimeout(() => btn.setAttribute('aria-expanded','false'), 800);
       }, { passive:true });
     });
 
     const toTop = document.getElementById('toTop');
     if (toTop) {
-      const onScroll = () => { toTop.hidden = !((window.scrollY || 0) > 800); };
+      const onScroll = () => { toTop.hidden = !((window.scrollY || 0) > 700); };
       window.addEventListener('scroll', onScroll, { passive:true });
       onScroll();
       toTop.addEventListener('click', () => window.scrollTo({ top:0, behavior: prefersReduced ? 'auto' : 'smooth' }));

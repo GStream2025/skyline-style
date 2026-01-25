@@ -7,33 +7,22 @@ import time
 from typing import Optional, Set
 from urllib.parse import urlencode, urlparse
 
-from flask import (
-    Blueprint,
-    flash,
-    jsonify,
-    make_response,
-    redirect,
-    render_template,
-    request,
-    session,
-    url_for,
-)
+from flask import Blueprint, flash, jsonify, make_response, redirect, render_template, request, session, url_for
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
 from app.models import User, db
 
 try:
-    from flask_login import login_user, logout_user  # type: ignore
+    from flask_login import login_user as _login_user, logout_user as _logout_user  # type: ignore
 except Exception:
-    login_user = None  # type: ignore
-    logout_user = None  # type: ignore
+    _login_user = None  # type: ignore
+    _logout_user = None  # type: ignore
 
 try:
     from app.models import AffiliateProfile  # type: ignore
 except Exception:
     AffiliateProfile = None  # type: ignore
-
 
 log = logging.getLogger("auth_routes")
 
@@ -45,8 +34,7 @@ auth_bp = Blueprint(
 )
 
 _TRUE: Set[str] = {"1", "true", "yes", "y", "on", "checked"}
-EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _ALLOWED_PUBLIC_ROLES: Set[str] = {"customer", "affiliate"}
 
 _RL_LOGIN_KEY = "rl:login"
@@ -68,7 +56,8 @@ def _safe_email(v: str) -> str:
 
 
 def _valid_email(v: str) -> bool:
-    return bool(v and EMAIL_RE.match(v))
+    v = _safe_email(v)
+    return bool(v and _EMAIL_RE.match(v))
 
 
 def _safe_next(nxt: str) -> str:
@@ -79,6 +68,15 @@ def _safe_next(nxt: str) -> str:
         return ""
     p = urlparse(nxt)
     return nxt if not p.scheme and not p.netloc else ""
+
+
+def _wants_json() -> bool:
+    accept = request.headers.get("Accept") or ""
+    return (
+        request.headers.get("X-Requested-With") == "XMLHttpRequest"
+        or "application/json" in accept
+        or (request.content_type or "").startswith("application/json")
+    )
 
 
 def _rate_limit(key: str) -> bool:
@@ -107,33 +105,34 @@ def _rate_limit(key: str) -> bool:
 
 
 def _clear_auth_session() -> None:
+    keep = set()
     for k in list(session.keys()):
-        if k.startswith("rl:") or k in {
-            "user_id",
-            "user_email",
-            "is_admin",
-            "login_at",
-            "login_nonce",
-        }:
+        if k.startswith("rl:"):
             session.pop(k, None)
+            continue
+        if k in {"user_id", "user_email", "is_admin", "login_at", "login_nonce"}:
+            session.pop(k, None)
+            continue
+        if k in keep:
+            continue
     session.modified = True
 
 
 def _set_user_session(user: User) -> None:
     _clear_auth_session()
     session["user_id"] = int(user.id)
-    session["user_email"] = (user.email or "").lower()
+    session["user_email"] = (getattr(user, "email", "") or "").lower()
     session["is_admin"] = bool(getattr(user, "is_admin", False))
     session["login_at"] = _now()
     session["login_nonce"] = secrets.token_urlsafe(16)
     session.permanent = True
     session.modified = True
 
-    if login_user:
+    if _login_user:
         try:
-            login_user(user, remember=False)
+            _login_user(user, remember=False)
         except Exception:
-            log.exception("login_user failed")
+            log.exception("flask_login login_user failed")
 
 
 def _get_user_by_email(email: str) -> Optional[User]:
@@ -141,27 +140,26 @@ def _get_user_by_email(email: str) -> Optional[User]:
     if not email:
         return None
     try:
-        return db.session.execute(
-            select(User).where(func.lower(User.email) == email)
-        ).scalar_one_or_none()
+        return db.session.execute(select(User).where(func.lower(User.email) == email)).scalar_one_or_none()
     except Exception:
         log.exception("get_user_by_email failed")
         return None
 
 
-def _wants_json() -> bool:
-    return (
-        request.headers.get("X-Requested-With") == "XMLHttpRequest"
-        or "application/json" in (request.headers.get("Accept") or "")
-        or (request.content_type or "").startswith("application/json")
-    )
-
-
-def _json_or_redirect(message: str, category: str, *, tab: str, nxt: str, redirect_to: str = ""):
+def _json_or_redirect(
+    message: str,
+    category: str,
+    *,
+    tab: str,
+    nxt: str,
+    redirect_to: str = "",
+    status_ok: int = 200,
+    status_err: int = 400,
+):
     ok = category != "error"
 
     if _wants_json():
-        return jsonify({"ok": ok, "message": message, "tab": tab}), (200 if ok else 400)
+        return jsonify({"ok": ok, "message": message, "tab": tab}), (status_ok if ok else status_err)
 
     flash(message, "success" if ok else category)
 
@@ -186,11 +184,17 @@ def _extract_role() -> str:
 
 
 def _normalize_name(name: str) -> str:
-    return re.sub(r"\s+", " ", _norm(name))[:120]
+    name = re.sub(r"\s+", " ", _norm(name))
+    return name[:120]
 
 
 def _is_honeypot_triggered() -> bool:
     return bool(_norm(request.form.get("website", "")))
+
+
+def _bad_auth_response(tab: str, nxt: str):
+    msg = "Credenciales incorrectas." if tab == "login" else "No se pudo crear la cuenta."
+    return _json_or_redirect(msg, "error", tab=tab, nxt=nxt)
 
 
 @auth_bp.get("/account")
@@ -218,35 +222,44 @@ def account():
 
 
 @auth_bp.get("/login")
+@auth_bp.get("/login/")
 def login_get():
     qs = urlencode({"tab": "login", "next": _safe_next(request.args.get("next", ""))})
-    return redirect(url_for("auth.account") + f"?{qs}")
+    return redirect(url_for("auth.account") + f"?{qs}", code=302)
 
 
 @auth_bp.get("/register")
+@auth_bp.get("/register/")
 def register_get():
     qs = urlencode({"tab": "register", "next": _safe_next(request.args.get("next", ""))})
-    return redirect(url_for("auth.account") + f"?{qs}")
+    return redirect(url_for("auth.account") + f"?{qs}", code=302)
 
 
 @auth_bp.post("/login")
 def login():
+    nxt = _safe_next(request.form.get("next", ""))
+
     if not _rate_limit(_RL_LOGIN_KEY) or _is_honeypot_triggered():
-        return _json_or_redirect("Credenciales incorrectas.", "error", tab="login", nxt="")
+        return _bad_auth_response("login", nxt)
 
     email = _safe_email(request.form.get("email", ""))
     password = request.form.get("password", "") or ""
-    nxt = _safe_next(request.form.get("next", ""))
+    if not email or not password:
+        return _bad_auth_response("login", nxt)
 
     user = _get_user_by_email(email)
+
     ok = False
     try:
-        ok = bool(user and user.check_password(password))  # type: ignore
+        ok = bool(user and user.check_password(password))  # type: ignore[attr-defined]
     except Exception:
         ok = False
 
-    if not ok or (hasattr(user, "is_active") and not user.is_active):
-        return _json_or_redirect("Credenciales incorrectas.", "error", tab="login", nxt=nxt)
+    if not ok:
+        return _bad_auth_response("login", nxt)
+
+    if hasattr(user, "is_active") and not bool(getattr(user, "is_active", True)):
+        return _bad_auth_response("login", nxt)
 
     _set_user_session(user)  # type: ignore[arg-type]
     return _json_or_redirect("Bienvenido 👋", "success", tab="login", nxt=nxt, redirect_to=nxt or "/")
@@ -254,37 +267,39 @@ def login():
 
 @auth_bp.post("/register")
 def register():
+    nxt = _safe_next(request.form.get("next", ""))
+
     if not _rate_limit(_RL_REG_KEY) or _is_honeypot_triggered():
-        return _json_or_redirect("No se pudo crear la cuenta.", "error", tab="register", nxt="")
+        return _bad_auth_response("register", nxt)
 
     email = _safe_email(request.form.get("email", ""))
     password = request.form.get("password", "") or ""
     password2 = request.form.get("password2", "") or ""
     name = _normalize_name(request.form.get("name", ""))
-    nxt = _safe_next(request.form.get("next", ""))
 
-    if not _valid_email(email) or password != password2 or len(password) < 8:
+    if not _valid_email(email) or len(password) < 8 or password != password2:
         return _json_or_redirect("Datos inválidos.", "error", tab="register", nxt=nxt)
 
-    if _get_user_by_email(email):
+    existing = _get_user_by_email(email)
+    if existing:
         return _json_or_redirect("Ese email ya existe.", "error", tab="login", nxt=nxt)
 
     role = _extract_role()
     user = User(email=email)
 
     if hasattr(user, "name"):
-        user.name = name
+        setattr(user, "name", name)
     if hasattr(user, "is_active"):
-        user.is_active = True
+        setattr(user, "is_active", True)
     if hasattr(user, "email_verified"):
-        user.email_verified = False
+        setattr(user, "email_verified", False)
     if hasattr(user, "role"):
-        user.role = role
+        setattr(user, "role", role)
 
     try:
-        user.set_password(password)  # type: ignore
+        user.set_password(password)  # type: ignore[attr-defined]
     except Exception:
-        return _json_or_redirect("No se pudo crear la cuenta.", "error", tab="register", nxt=nxt)
+        return _bad_auth_response("register", nxt)
 
     try:
         db.session.add(user)
@@ -294,10 +309,10 @@ def register():
         return _json_or_redirect("Ese email ya existe.", "error", tab="login", nxt=nxt)
     except Exception:
         db.session.rollback()
-        log.exception("register failed")
-        return _json_or_redirect("No se pudo crear la cuenta.", "error", tab="register", nxt=nxt)
+        log.exception("register commit failed")
+        return _bad_auth_response("register", nxt)
 
-    if role == "affiliate" and AffiliateProfile:
+    if role == "affiliate" and AffiliateProfile is not None:
         try:
             db.session.add(AffiliateProfile(user_id=int(user.id), status="pending"))
             db.session.commit()
@@ -313,11 +328,11 @@ def logout():
     nxt = _safe_next(request.values.get("next", ""))
     _clear_auth_session()
 
-    if logout_user:
+    if _logout_user:
         try:
-            logout_user()
+            _logout_user()
         except Exception:
-            log.exception("logout_user failed")
+            log.exception("flask_login logout_user failed")
 
     flash("Sesión cerrada.", "info")
     return redirect(nxt or "/")
