@@ -1,13 +1,15 @@
 ﻿from __future__ import annotations
 
+import importlib
 import logging
 import os
 import secrets
 import time
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Type
+from typing import Any, Optional, Type
+from urllib.parse import urlencode
 
-from flask import Flask, jsonify, redirect, render_template, request, url_for
+from flask import Flask, jsonify, redirect, render_template, request, session, url_for
 from flask_wtf import CSRFProtect
 from werkzeug.exceptions import HTTPException
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -86,19 +88,19 @@ def wants_json() -> bool:
 
 def resp_error(status: int, code: str, message: str):
     status = int(status or 500)
-    code = (code or "error").strip().lower()[:64] or "error"
-    message = (message or "Error").strip()
+    err = (code or "error").strip().lower()[:64] or "error"
+    msg = (message or "Error").strip()
 
     if wants_json():
-        return jsonify({"ok": False, "error": code, "message": message, "status": status}), status
+        return jsonify({"ok": False, "error": err, "message": msg, "status": status}), status
 
     for tpl in (f"errors/{status}.html", "error.html"):
         try:
-            return render_template(tpl, message=message, status=status, code=code), status
+            return render_template(tpl, message=msg, status=status, code=err), status
         except Exception:
             continue
 
-    return message, status
+    return msg, status
 
 
 def setup_logging(app: Flask) -> None:
@@ -124,18 +126,37 @@ def _safe_next_url(v: str) -> str:
     return nxt[:512]
 
 
-def _route_exists(app: Flask, endpoint: str) -> bool:
+def _endpoint_exists(app: Flask, endpoint: str) -> bool:
     try:
         return endpoint in (app.view_functions or {})
     except Exception:
         return False
 
 
-def _register_blueprints_fail_safe(app: Flask) -> dict:
-    stats = {
+def _rule_exists(app: Flask, rule: str) -> bool:
+    try:
+        for r in app.url_map.iter_rules():
+            if r.rule == rule:
+                return True
+        return False
+    except Exception:
+        return False
+
+
+def _import_bp(module_name: str, attr: str):
+    try:
+        mod = importlib.import_module(module_name)
+        return getattr(mod, attr, None), ""
+    except Exception as e:
+        return None, f"{type(e).__name__}: {e}"
+
+
+def _register_blueprints_fail_safe(app: Flask) -> dict[str, Any]:
+    stats: dict[str, Any] = {
         "registered": 0,
         "failed": 0,
         "failed_names": [],
+        "errors": {},
     }
 
     try:
@@ -146,36 +167,41 @@ def _register_blueprints_fail_safe(app: Flask) -> dict:
         return stats
     except Exception as e:
         app.logger.exception("register_blueprints() falló: %s", e)
+        stats["errors"]["app.routes.register_blueprints"] = f"{type(e).__name__}: {e}"
 
     candidates = [
-        ("app.routes.auth_routes", "auth_bp"),
         ("app.routes.main_routes", "main_bp"),
         ("app.routes.shop_routes", "shop_bp"),
+        ("app.routes.auth_routes", "auth_bp"),
+        ("app.routes.account_routes", "account_bp"),
+        ("app.routes.cuenta_routes", "cuenta_bp"),
         ("app.routes.cart_routes", "cart_bp"),
         ("app.routes.checkout_routes", "checkout_bp"),
-        ("app.routes.admin_routes", "admin_bp"),
-        ("app.routes.account_routes", "account_bp"),
-        ("app.routes.profile_routes", "profile_bp"),
-        ("app.routes.marketing_routes", "marketing_bp"),
         ("app.routes.api_routes", "api_bp"),
-        ("app.routes.webhook_routes", "webhook_bp"),
         ("app.routes.affiliate_routes", "affiliate_bp"),
+        ("app.routes.marketing_routes", "marketing_bp"),
+        ("app.routes.webhook_routes", "webhook_bp"),
+        ("app.routes.webhooks_routes", "webhooks_bp"),
+        ("app.routes.admin_routes", "admin_bp"),
+        ("app.routes.admin_payments_routes", "admin_payments_bp"),
         ("app.routes.printful_routes", "printful_bp"),
         ("app.routes.address_routes", "address_bp"),
-        ("app.routes.admin_payments_routes", "admin_payments_bp"),
+        ("app.routes.profile_routes", "profile_bp"),
     ]
 
     for mod_name, bp_name in candidates:
+        bp, err = _import_bp(mod_name, bp_name)
+        if bp is None:
+            if err:
+                stats["errors"][f"{mod_name}:{bp_name}"] = err
+            continue
         try:
-            mod = __import__(mod_name, fromlist=[bp_name])
-            bp = getattr(mod, bp_name, None)
-            if bp is None:
-                continue
             app.register_blueprint(bp)
             stats["registered"] += 1
-        except Exception:
+        except Exception as e:
             stats["failed"] += 1
             stats["failed_names"].append(f"{mod_name}:{bp_name}")
+            stats["errors"][f"{mod_name}:{bp_name}"] = f"{type(e).__name__}: {e}"
 
     return stats
 
@@ -189,13 +215,14 @@ def create_app() -> Flask:
         static_folder="static",
         instance_relative_config=True,
     )
-
     app.config.from_mapping(cfg.as_flask_config())
 
     app.config.setdefault(
         "MAX_CONTENT_LENGTH",
         _env_int("MAX_CONTENT_LENGTH", 2_000_000, min_v=200_000, max_v=25_000_000),
     )
+    app.config.setdefault("JSON_SORT_KEYS", False)
+    app.config.setdefault("JSONIFY_PRETTYPRINT_REGULAR", False)
 
     setup_logging(app)
 
@@ -221,16 +248,16 @@ def create_app() -> Flask:
     @app.context_processor
     def _inject_globals():
         try:
-            vf = dict(app.view_functions)
+            vf = set(app.view_functions.keys())
         except Exception:
-            vf = {}
+            vf = set()
         return {
             "ENV": _env_name(app),
             "APP_NAME": app.config.get("APP_NAME", "Skyline Store"),
             "ASSET_VER": app.config.get("ASSET_VER", app.config.get("BASE_CSS_VER", "1")),
             "HOME_CSS_VER": app.config.get("HOME_CSS_VER", app.config.get("ASSET_VER", "1")),
             "now_year": utcnow().year,
-            "view_functions": vf,
+            "view_functions": {k: True for k in vf},
         }
 
     @app.before_request
@@ -242,19 +269,23 @@ def create_app() -> Flask:
         request._rid = rid[:128] if rid else secrets.token_urlsafe(8)  # type: ignore[attr-defined]
         request._t0 = time.time()  # type: ignore[attr-defined]
 
-        if request.method in {"GET", "HEAD"}:
-            p = request.path.rstrip("/") or "/"
-            nxt = _safe_next_url(request.args.get("next", "")) or "/"
+        if request.method not in {"GET", "HEAD"}:
+            return None
 
-            if p in {"/login", "/auth/login"}:
-                if _route_exists(app, "auth.account"):
-                    return redirect(url_for("auth.account", tab="login", next=nxt))
-                return redirect("/auth/account?tab=login&next=" + nxt)
+        p = request.path.rstrip("/") or "/"
+        nxt = _safe_next_url(request.args.get("next", "")) or "/"
 
-            if p in {"/register", "/auth/register"}:
-                if _route_exists(app, "auth.account"):
-                    return redirect(url_for("auth.account", tab="register", next=nxt))
-                return redirect("/auth/account?tab=register&next=" + nxt)
+        if p in {"/login", "/auth/login"}:
+            if _endpoint_exists(app, "auth.account"):
+                return redirect(url_for("auth.account", tab="login", next=nxt), code=302)
+            return redirect("/auth/account?" + urlencode({"tab": "login", "next": nxt}), code=302)
+
+        if p in {"/register", "/auth/register"}:
+            if _endpoint_exists(app, "auth.account"):
+                return redirect(url_for("auth.account", tab="register", next=nxt), code=302)
+            return redirect("/auth/account?" + urlencode({"tab": "register", "next": nxt}), code=302)
+
+        return None
 
     @app.after_request
     def _after(resp):
@@ -287,23 +318,36 @@ def create_app() -> Flask:
 
     stats = _register_blueprints_fail_safe(app)
 
-    if not _route_exists(app, "auth.account"):
-        app.logger.error("❌ auth.account NO registrado. Revisá app/routes/__init__.py o imports de auth_routes.py")
+    auth_ok = _endpoint_exists(app, "auth.account")
+    if not auth_ok:
+        app.logger.error("❌ auth.account NO registrado. El blueprint auth no está cargando.")
+    else:
+        app.logger.info("✅ auth.account OK")
 
-    if not _route_exists(app, "main.home") and not _route_exists(app, "main.index"):
-        app.logger.warning("⚠️ main blueprint no detectado (home/index).")
+    if not _rule_exists(app, "/auth/register") and auth_ok:
+        @app.get("/auth/register")
+        @app.get("/auth/register/")
+        def _auth_register_alias():
+            nxt = _safe_next_url(request.args.get("next", "")) or "/"
+            return redirect(url_for("auth.account", tab="register", next=nxt), code=302)
 
-    if "/" not in app.view_functions:
+    if not _rule_exists(app, "/auth/login") and auth_ok:
+        @app.get("/auth/login")
+        @app.get("/auth/login/")
+        def _auth_login_alias():
+            nxt = _safe_next_url(request.args.get("next", "")) or "/"
+            return redirect(url_for("auth.account", tab="login", next=nxt), code=302)
 
+    if not _rule_exists(app, "/"):
         @app.get("/")
-        def root():
-            if _route_exists(app, "main.home"):
-                return redirect(url_for("main.home"))
-            if _route_exists(app, "main.index"):
-                return redirect(url_for("main.index"))
-            if _route_exists(app, "shop.shop"):
-                return redirect(url_for("shop.shop"))
-            return "Skyline Store"
+        def _root():
+            if _endpoint_exists(app, "main.home"):
+                return redirect(url_for("main.home"), code=302)
+            if _endpoint_exists(app, "main.index"):
+                return redirect(url_for("main.index"), code=302)
+            if _endpoint_exists(app, "shop.shop"):
+                return redirect(url_for("shop.shop"), code=302)
+            return "Skyline Store", 200
 
     @app.get("/health")
     def health():
@@ -316,9 +360,21 @@ def create_app() -> Flask:
             "bp_registered": int(stats.get("registered", 0)),
             "bp_failed": int(stats.get("failed", 0)),
             "bp_failed_names": stats.get("failed_names", []),
-            "auth_account": bool(_route_exists(app, "auth.account")),
+            "auth_account": bool(auth_ok),
+            "errors": stats.get("errors", {}),
             "ts": int(time.time()),
         }
+
+    @app.get("/ready")
+    def ready():
+        ok = True
+        db_ok = True
+        try:
+            db.session.execute(db.text("SELECT 1"))  # type: ignore[attr-defined]
+        except Exception:
+            db_ok = False
+            ok = False
+        return {"ok": ok, "db": db_ok, "env": _env_name(app), "ts": int(time.time())}, (200 if ok else 503)
 
     @app.errorhandler(HTTPException)
     def http_error(e: HTTPException):
@@ -332,7 +388,12 @@ def create_app() -> Flask:
         app.logger.exception("Fatal error: %s", e)
         return resp_error(500, "server_error", "Error interno del servidor")
 
-    app.logger.info("✅ Skyline Store iniciado correctamente (%s) | blueprints=%s", _env_name(app), list((app.blueprints or {}).keys()))
+    app.logger.info(
+        "✅ Skyline Store iniciado (%s) | auth=%s | blueprints=%s",
+        _env_name(app),
+        "OK" if auth_ok else "MISSING",
+        list((app.blueprints or {}).keys()),
+    )
     return app
 
 
