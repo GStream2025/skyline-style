@@ -7,7 +7,7 @@ import secrets
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional, Type
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 from flask import Flask, jsonify, redirect, render_template, request, session, url_for
 from flask_wtf import CSRFProtect
@@ -16,6 +16,11 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 
 from app.config import get_config
 from app.models import db, init_models
+
+try:
+    from sqlalchemy import text as sql_text  # type: ignore
+except Exception:
+    sql_text = None  # type: ignore
 
 _TRUE = {"1", "true", "yes", "y", "on", "checked"}
 _FALSE = {"0", "false", "no", "n", "off"}
@@ -87,20 +92,20 @@ def wants_json() -> bool:
 
 
 def resp_error(status: int, code: str, message: str):
-    status = int(status or 500)
+    status_i = int(status or 500)
     err = (code or "error").strip().lower()[:64] or "error"
     msg = (message or "Error").strip()
 
     if wants_json():
-        return jsonify({"ok": False, "error": err, "message": msg, "status": status}), status
+        return jsonify({"ok": False, "error": err, "message": msg, "status": status_i}), status_i
 
-    for tpl in (f"errors/{status}.html", "error.html"):
+    for tpl in (f"errors/{status_i}.html", "error.html"):
         try:
-            return render_template(tpl, message=msg, status=status, code=err), status
+            return render_template(tpl, message=msg, status=status_i, code=err), status_i
         except Exception:
             continue
 
-    return msg, status
+    return msg, status_i
 
 
 def setup_logging(app: Flask) -> None:
@@ -117,11 +122,12 @@ def setup_logging(app: Flask) -> None:
 
 def _safe_next_url(v: str) -> str:
     nxt = (v or "").strip()
-    if not nxt:
-        return ""
-    if not nxt.startswith("/") or nxt.startswith("//"):
+    if not nxt or not nxt.startswith("/") or nxt.startswith("//"):
         return ""
     if any(c in nxt for c in ("\x00", "\r", "\n", "\\")):
+        return ""
+    p = urlparse(nxt)
+    if p.scheme or p.netloc:
         return ""
     return nxt[:512]
 
@@ -155,6 +161,7 @@ def _register_blueprints_fail_safe(app: Flask) -> dict[str, Any]:
     stats: dict[str, Any] = {
         "registered": 0,
         "failed": 0,
+        "skipped": 0,
         "failed_names": [],
         "errors": {},
     }
@@ -180,7 +187,6 @@ def _register_blueprints_fail_safe(app: Flask) -> dict[str, Any]:
         ("app.routes.api_routes", "api_bp"),
         ("app.routes.affiliate_routes", "affiliate_bp"),
         ("app.routes.marketing_routes", "marketing_bp"),
-        ("app.routes.webhook_routes", "webhook_bp"),
         ("app.routes.webhooks_routes", "webhooks_bp"),
         ("app.routes.admin_routes", "admin_bp"),
         ("app.routes.admin_payments_routes", "admin_payments_bp"),
@@ -195,7 +201,12 @@ def _register_blueprints_fail_safe(app: Flask) -> dict[str, Any]:
             if err:
                 stats["errors"][f"{mod_name}:{bp_name}"] = err
             continue
+
         try:
+            bp_real_name = getattr(bp, "name", "") or ""
+            if bp_real_name and bp_real_name in (app.blueprints or {}):
+                stats["skipped"] += 1
+                continue
             app.register_blueprint(bp)
             stats["registered"] += 1
         except Exception as e:
@@ -229,7 +240,7 @@ def create_app() -> Flask:
     if not app.config.get("SECRET_KEY"):
         if _is_prod(app):
             raise RuntimeError("SECRET_KEY requerido en producción")
-        app.config["SECRET_KEY"] = secrets.token_urlsafe(32)
+        app.config["SECRET_KEY"] = secrets.token_urlsafe(48)
 
     if not getattr(app, "_proxyfix", False):
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
@@ -238,7 +249,7 @@ def create_app() -> Flask:
     app.config.setdefault("SESSION_COOKIE_HTTPONLY", True)
     app.config.setdefault("SESSION_COOKIE_SAMESITE", "Lax")
     app.config.setdefault("SESSION_COOKIE_SECURE", _is_prod(app))
-    app.config.setdefault("PERMANENT_SESSION_LIFETIME", timedelta(days=7))
+    app.config.setdefault("PERMANENT_SESSION_LIFETIME", timedelta(days=14))
     app.config.setdefault("SESSION_REFRESH_EACH_REQUEST", False)
     app.config.setdefault("PREFERRED_URL_SCHEME", "https" if _is_prod(app) else "http")
 
@@ -266,7 +277,7 @@ def create_app() -> Flask:
             return "", 204
 
         rid = (request.headers.get("X-Request-Id") or "").strip()
-        request._rid = rid[:128] if rid else secrets.token_urlsafe(8)  # type: ignore[attr-defined]
+        request._rid = rid[:128] if rid else secrets.token_urlsafe(10)  # type: ignore[attr-defined]
         request._t0 = time.time()  # type: ignore[attr-defined]
 
         if request.method not in {"GET", "HEAD"}:
@@ -276,14 +287,10 @@ def create_app() -> Flask:
         nxt = _safe_next_url(request.args.get("next", "")) or "/"
 
         if p in {"/login", "/auth/login"}:
-            if _endpoint_exists(app, "auth.account"):
-                return redirect(url_for("auth.account", tab="login", next=nxt), code=302)
-            return redirect("/auth/account?" + urlencode({"tab": "login", "next": nxt}), code=302)
+            return redirect(url_for("_fallback_auth_login", next=nxt), code=302)
 
         if p in {"/register", "/auth/register"}:
-            if _endpoint_exists(app, "auth.account"):
-                return redirect(url_for("auth.account", tab="register", next=nxt), code=302)
-            return redirect("/auth/account?" + urlencode({"tab": "register", "next": nxt}), code=302)
+            return redirect(url_for("_fallback_auth_register", next=nxt), code=302)
 
         return None
 
@@ -318,25 +325,66 @@ def create_app() -> Flask:
 
     stats = _register_blueprints_fail_safe(app)
 
-    auth_ok = _endpoint_exists(app, "auth.account")
-    if not auth_ok:
-        app.logger.error("❌ auth.account NO registrado. El blueprint auth no está cargando.")
-    else:
-        app.logger.info("✅ auth.account OK")
+    def _redir_account(tab: str):
+        nxt = _safe_next_url(request.args.get("next", "")) or "/"
+        if _endpoint_exists(app, "auth.account"):
+            return redirect(url_for("auth.account", tab=tab, next=nxt), code=302)
+        return redirect("/auth/account?" + urlencode({"tab": tab, "next": nxt}), code=302)
 
-    if not _rule_exists(app, "/auth/register") and auth_ok:
-        @app.get("/auth/register")
-        @app.get("/auth/register/")
-        def _auth_register_alias():
-            nxt = _safe_next_url(request.args.get("next", "")) or "/"
-            return redirect(url_for("auth.account", tab="register", next=nxt), code=302)
+    if not _endpoint_exists(app, "_fallback_auth_login"):
+        app.add_url_rule(
+            "/auth/login",
+            "_fallback_auth_login",
+            lambda: _redir_account("login"),
+            methods=["GET", "HEAD"],
+        )
+        app.add_url_rule(
+            "/auth/login/",
+            "_fallback_auth_login_slash",
+            lambda: _redir_account("login"),
+            methods=["GET", "HEAD"],
+        )
 
-    if not _rule_exists(app, "/auth/login") and auth_ok:
-        @app.get("/auth/login")
-        @app.get("/auth/login/")
-        def _auth_login_alias():
+    if not _endpoint_exists(app, "_fallback_auth_register"):
+        app.add_url_rule(
+            "/auth/register",
+            "_fallback_auth_register",
+            lambda: _redir_account("register"),
+            methods=["GET", "HEAD"],
+        )
+        app.add_url_rule(
+            "/auth/register/",
+            "_fallback_auth_register_slash",
+            lambda: _redir_account("register"),
+            methods=["GET", "HEAD"],
+        )
+
+    for rule, endpoint, tab in (
+        ("/login", "_fallback_login", "login"),
+        ("/login/", "_fallback_login_slash", "login"),
+        ("/register", "_fallback_register", "register"),
+        ("/register/", "_fallback_register_slash", "register"),
+    ):
+        if not _endpoint_exists(app, endpoint) and not _rule_exists(app, rule):
+            app.add_url_rule(rule, endpoint, lambda t=tab: _redir_account(t), methods=["GET", "HEAD"])
+
+    if not _endpoint_exists(app, "auth.account") and not _rule_exists(app, "/auth/account"):
+        @app.get("/auth/account")
+        def _emergency_account():
+            tab = (request.args.get("tab") or "login").strip().lower()
+            if tab not in {"login", "register"}:
+                tab = "login"
             nxt = _safe_next_url(request.args.get("next", "")) or "/"
-            return redirect(url_for("auth.account", tab="login", next=nxt), code=302)
+            return (
+                render_template(
+                    "auth/account.html",
+                    active_tab=tab,
+                    next=nxt,
+                    prefill_email="",
+                ),
+                200,
+                {"Cache-Control": "no-store"},
+            )
 
     if not _rule_exists(app, "/"):
         @app.get("/")
@@ -359,8 +407,9 @@ def create_app() -> Flask:
             "routes": len(list(app.url_map.iter_rules())),
             "bp_registered": int(stats.get("registered", 0)),
             "bp_failed": int(stats.get("failed", 0)),
+            "bp_skipped": int(stats.get("skipped", 0)),
             "bp_failed_names": stats.get("failed_names", []),
-            "auth_account": bool(auth_ok),
+            "auth_account": bool(_endpoint_exists(app, "auth.account") or _rule_exists(app, "/auth/account")),
             "errors": stats.get("errors", {}),
             "ts": int(time.time()),
         }
@@ -370,10 +419,13 @@ def create_app() -> Flask:
         ok = True
         db_ok = True
         try:
-            db.session.execute(db.text("SELECT 1"))  # type: ignore[attr-defined]
+            if sql_text is not None:
+                db.session.execute(sql_text("SELECT 1"))
+            else:
+                db.session.execute("SELECT 1")  # type: ignore[arg-type]
         except Exception:
-            db_ok = False
             ok = False
+            db_ok = False
         return {"ok": ok, "db": db_ok, "env": _env_name(app), "ts": int(time.time())}, (200 if ok else 503)
 
     @app.errorhandler(HTTPException)
@@ -389,10 +441,10 @@ def create_app() -> Flask:
         return resp_error(500, "server_error", "Error interno del servidor")
 
     app.logger.info(
-        "✅ Skyline Store iniciado (%s) | auth=%s | blueprints=%s",
+        "✅ Skyline Store iniciado (%s) | blueprints=%s | auth.account=%s",
         _env_name(app),
-        "OK" if auth_ok else "MISSING",
         list((app.blueprints or {}).keys()),
+        "OK" if _endpoint_exists(app, "auth.account") else "MISSING",
     )
     return app
 
