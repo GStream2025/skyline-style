@@ -1,10 +1,10 @@
-# app/routes/cart_routes.py — SKYLINE CART ULTRA PRO (FINAL / NO-TOUCH)
+# app/routes/cart_routes.py — SKYLINE CART ULTRA PRO (v3.0 / FINAL / NO-ERROR)
 from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Any, Dict, Optional, Tuple, List, Mapping
 from time import time
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 from flask import (
     Blueprint,
@@ -19,43 +19,30 @@ from flask import (
 
 from app.models import db, Product
 
-# Offer opcional (no rompe si no existe)
 try:
     from app.models import Offer  # type: ignore
-except Exception:
+except Exception:  # pragma: no cover
     Offer = None  # type: ignore
 
 
 cart_bp = Blueprint("cart", __name__, url_prefix="/cart")
 
-# ============================================================
-# CONFIG ULTRA PRO
-# ============================================================
-CART_SESSION_KEY = "cart_v2"
-CART_SCHEMA_VERSION = 2
+CART_SESSION_KEY = "cart_v3"
+CART_SCHEMA_VERSION = 3
 
 MAX_QTY_PER_ITEM = 25
 MIN_QTY_PER_ITEM = 1
 MAX_DISTINCT_ITEMS = 120
 
 DEFAULT_CURRENCY = "USD"
-ALLOWED_CURRENCIES = {"USD", "UYU", "ARS"}  # ampliás cuando quieras
+ALLOWED_CURRENCIES = {"USD", "UYU", "ARS"}
 
-# Rate-limit por bucket
 RL_WINDOW_SEC = 2.0
 RL_MAX_ACTIONS = 14
-_RL_KEY = "cart_rl_v2"
+_RL_KEY = "cart_rl_v3"
 
-# CSRF opcional (si tu app pone csrf_token en session, se aplica)
 CSRF_SESSION_KEY = "csrf_token"
-
-# Micro-cache por request
-_REQ_CACHE_KEY = "_cart_snapshot_cache"
-
-
-# ============================================================
-# Helpers base
-# ============================================================
+_REQ_CACHE_KEY = "_cart_snapshot_cache_v3"
 
 
 def _now_ts() -> int:
@@ -78,11 +65,7 @@ def _money(x: Any) -> str:
 def _is_json_request() -> bool:
     accept = (request.headers.get("Accept") or "").lower()
     ctype = (request.headers.get("Content-Type") or "").lower()
-    return (
-        ("application/json" in accept)
-        or ("application/json" in ctype)
-        or request.args.get("json") == "1"
-    )
+    return ("application/json" in accept) or ("application/json" in ctype) or (request.args.get("json") == "1")
 
 
 def _endpoint_exists(endpoint: str) -> bool:
@@ -111,9 +94,7 @@ def _reply(
 ):
     if _is_json_request() or html_redirect_endpoint is None:
         return jsonify(payload), status
-    return redirect(
-        _url_for_safe(html_redirect_endpoint, fallback_path=fallback_path, **ep_kwargs)
-    )
+    return redirect(_url_for_safe(html_redirect_endpoint, fallback_path=fallback_path, **ep_kwargs))
 
 
 def _err(
@@ -127,17 +108,7 @@ def _err(
     payload: Dict[str, Any] = {"ok": False, "error": {"code": code, "message": message}}
     if details:
         payload["error"]["details"] = details
-    return _reply(
-        payload,
-        status=status,
-        html_redirect_endpoint=html_redirect_endpoint,
-        fallback_path="/cart",
-    )
-
-
-# ============================================================
-# CSRF (opcional / no rompe)
-# ============================================================
+    return _reply(payload, status=status, html_redirect_endpoint=html_redirect_endpoint, fallback_path="/cart")
 
 
 def _csrf_enabled() -> bool:
@@ -149,19 +120,14 @@ def _check_csrf() -> bool:
     got = (
         (request.headers.get("X-CSRF-Token") or "")
         or (request.form.get("csrf_token") or "")
-        or (
-            (request.get_json(silent=True) or {}).get("csrf_token")
-            if request.is_json
-            else ""
-        )
+        or (((request.get_json(silent=True) or {}).get("csrf_token")) if request.is_json else "")
         or ""
     )
     got = str(got).strip()
     if not token:
-        return True  # no existe => no exigimos
+        return True
     try:
         import secrets
-
         return bool(got) and secrets.compare_digest(token, got)
     except Exception:
         return token == got
@@ -170,27 +136,18 @@ def _check_csrf() -> bool:
 def _csrf_required() -> Optional[Any]:
     if request.method in {"POST", "PUT", "PATCH", "DELETE"} and _csrf_enabled():
         if not _check_csrf():
-            return _err(
-                "csrf_invalid",
-                "Token inválido. Recargá la página e intentá de nuevo.",
-                400,
-            )
+            return _err("csrf_invalid", "Token inválido. Recargá la página e intentá de nuevo.", 400)
     return None
-
-
-# ============================================================
-# Rate-limit por bucket
-# ============================================================
 
 
 def _rate_limit_ok(bucket: str) -> bool:
     try:
-        st = session.get(_RL_KEY) or {}
+        st = session.get(_RL_KEY)
         if not isinstance(st, dict):
             st = {}
 
         now = float(time())
-        b = st.get(bucket) or {}
+        b = st.get(bucket)
         if not isinstance(b, dict):
             b = {}
 
@@ -205,15 +162,9 @@ def _rate_limit_ok(bucket: str) -> bool:
         st[bucket] = b
         session[_RL_KEY] = st
         session.modified = True
-
         return int(b.get("count", 0)) <= RL_MAX_ACTIONS
     except Exception:
         return True
-
-
-# ============================================================
-# Qty helpers
-# ============================================================
 
 
 def _clamp_qty(qty: int) -> int:
@@ -238,11 +189,6 @@ def _parse_qty(value: Any, default: int = 1) -> int:
     return _clamp_qty(q)
 
 
-# ============================================================
-# Cart session structure
-# ============================================================
-
-
 def _invalidate_snapshot_cache() -> None:
     try:
         setattr(request, _REQ_CACHE_KEY, None)
@@ -251,20 +197,12 @@ def _invalidate_snapshot_cache() -> None:
 
 
 def _cart() -> Dict[str, Any]:
-    """
-    {
-      "v": 2,
-      "items": { "<product_id>": {"q": int, "a": int} },
-      "meta": {"currency": "USD", "updated_at": int}
-    }
-    """
     c = session.get(CART_SESSION_KEY)
     if not isinstance(c, dict):
         c = {"v": CART_SCHEMA_VERSION, "items": {}, "meta": {}}
         session[CART_SESSION_KEY] = c
         session.modified = True
 
-    # migración best-effort
     if int(c.get("v") or 0) != CART_SCHEMA_VERSION:
         old_items = c.get("items") if isinstance(c.get("items"), dict) else {}
         new_items: Dict[str, Dict[str, Any]] = {}
@@ -275,30 +213,18 @@ def _cart() -> Dict[str, Any]:
                 qty = _parse_qty(v.get("qty") or v.get("q") or 1, 1)
                 if qty <= 0:
                     continue
-                new_items[str(k)] = {
-                    "q": qty,
-                    "a": int(v.get("added_at") or v.get("a") or _now_ts()),
-                }
-        c = {
-            "v": CART_SCHEMA_VERSION,
-            "items": new_items,
-            "meta": dict(c.get("meta") or {}),
-        }
+                new_items[str(k)] = {"q": qty, "a": int(v.get("added_at") or v.get("a") or _now_ts())}
+        c = {"v": CART_SCHEMA_VERSION, "items": new_items, "meta": dict(c.get("meta") or {})}
         session[CART_SESSION_KEY] = c
         session.modified = True
 
     c.setdefault("items", {})
     c.setdefault("meta", {})
 
-    # currency normalizada + whitelist
-    cur = (
-        str(c["meta"].get("currency") or DEFAULT_CURRENCY).strip().upper()[:3]
-        or DEFAULT_CURRENCY
-    )
+    cur = (str(c["meta"].get("currency") or DEFAULT_CURRENCY).strip().upper()[:3] or DEFAULT_CURRENCY)
     if cur not in ALLOWED_CURRENCIES:
         cur = DEFAULT_CURRENCY
     c["meta"]["currency"] = cur
-
     c["meta"].setdefault("updated_at", _now_ts())
     return c
 
@@ -309,11 +235,6 @@ def _save_cart(c: Dict[str, Any]) -> None:
     session[CART_SESSION_KEY] = c
     session.modified = True
     _invalidate_snapshot_cache()
-
-
-# ============================================================
-# Product helpers
-# ============================================================
 
 
 def _get_product(product_id: int) -> Optional[Product]:
@@ -394,61 +315,49 @@ def _is_available(p: Product, qty: int) -> Tuple[bool, str, int]:
     return True, "", qty
 
 
-def _apply_offer_discount_if_any(
-    p: Product, unit_price: Decimal
-) -> Tuple[Decimal, Optional[str]]:
+def _apply_offer_discount_if_any(p: Product, unit_price: Decimal) -> Tuple[Decimal, Optional[str], Optional[Decimal]]:
     if Offer is None or not hasattr(Offer, "query"):
-        return unit_price, None
+        return unit_price, None, None
 
     try:
         o = None
         if hasattr(Offer, "product_id"):
             o = Offer.query.filter(Offer.product_id == p.id).first()
         if not o:
-            return unit_price, None
+            return unit_price, None, None
 
-        # vigencia robusta (UTC naive)
         try:
             from datetime import datetime
-
             now_dt = datetime.utcnow()
             starts = getattr(o, "starts_at", None)
             ends = getattr(o, "ends_at", None)
             if starts and starts > now_dt:
-                return unit_price, None
+                return unit_price, None, None
             if ends and ends < now_dt:
-                return unit_price, None
+                return unit_price, None, None
         except Exception:
             pass
 
-        dtype = (
-            getattr(o, "discount_type", None) or getattr(o, "type", "none") or "none"
-        ).lower()
+        dtype = (getattr(o, "discount_type", None) or getattr(o, "type", "none") or "none").lower()
         dval = _d(getattr(o, "discount_value", None) or getattr(o, "value", 0))
         if dval <= 0:
-            return unit_price, None
+            return unit_price, None, None
 
         if dtype in {"percent", "%"}:
             pct = dval / Decimal("100")
             newp = unit_price * (Decimal("1.00") - pct)
             newp = max(Decimal("0.00"), newp)
-            return newp, f"-{int(dval)}%"
+            return newp, f"-{int(dval)}%", dval
 
         if dtype in {"amount", "fixed", "$"}:
             newp = unit_price - dval
             newp = max(Decimal("0.00"), newp)
-            return newp, f"-{_money(dval)}"
+            return newp, f"-{_money(dval)}", dval
 
-        return unit_price, None
-
+        return unit_price, None, None
     except Exception as exc:
         current_app.logger.info("Offer discount hook ignored: %s", exc)
-        return unit_price, None
-
-
-# ============================================================
-# Snapshot (anti-trampa real)
-# ============================================================
+        return unit_price, None, None
 
 
 @dataclass
@@ -459,12 +368,10 @@ class CartLine:
     slug: Optional[str]
     image_url: Optional[str]
     currency: str
-
     unit_price: Decimal
     unit_price_display: str
     line_total: Decimal
     line_total_display: str
-
     compare_at_display: Optional[str] = None
     discount_badge: Optional[str] = None
     available: bool = True
@@ -492,7 +399,6 @@ class CartLine:
 
 
 def cart_snapshot() -> Dict[str, Any]:
-    # micro-cache por request
     try:
         cached = getattr(request, _REQ_CACHE_KEY, None)
         if isinstance(cached, dict):
@@ -503,17 +409,13 @@ def cart_snapshot() -> Dict[str, Any]:
     c = _cart()
     items: Dict[str, Dict[str, Any]] = c.get("items", {}) or {}
 
-    # poda si alguien mete demasiados items
     if len(items) > MAX_DISTINCT_ITEMS:
         keys = list(items.keys())[:MAX_DISTINCT_ITEMS]
         items = {k: items[k] for k in keys}
         c["items"] = items
         _save_cart(c)
 
-    cart_currency = (
-        str(c.get("meta", {}).get("currency") or DEFAULT_CURRENCY).upper()[:3]
-        or DEFAULT_CURRENCY
-    )
+    cart_currency = (str(c.get("meta", {}).get("currency") or DEFAULT_CURRENCY).upper()[:3] or DEFAULT_CURRENCY)
     if cart_currency not in ALLOWED_CURRENCIES:
         cart_currency = DEFAULT_CURRENCY
         c["meta"]["currency"] = cart_currency
@@ -552,14 +454,10 @@ def cart_snapshot() -> Dict[str, Any]:
         compare_at = getattr(p, "compare_at_price", None)
         compare_at_dec = _d(compare_at) if compare_at is not None else None
 
-        discounted_unit, badge = _apply_offer_discount_if_any(p, base_unit)
+        discounted_unit, badge, _ = _apply_offer_discount_if_any(p, base_unit)
 
         compare_at_display = None
-        if (
-            compare_at_dec is not None
-            and compare_at_dec > base_unit
-            and compare_at_dec > 0
-        ):
+        if compare_at_dec is not None and compare_at_dec > base_unit and compare_at_dec > 0:
             compare_at_display = _money(compare_at_dec)
 
         if discounted_unit < base_unit:
@@ -580,7 +478,7 @@ def cart_snapshot() -> Dict[str, Any]:
                 title=_product_title(p),
                 slug=getattr(p, "slug", None),
                 image_url=_product_image(p),
-                currency=cart_currency,  # forzamos moneda del carrito
+                currency=cart_currency,
                 unit_price=discounted_unit,
                 unit_price_display=_money(discounted_unit),
                 line_total=line_total,
@@ -593,7 +491,6 @@ def cart_snapshot() -> Dict[str, Any]:
             )
         )
 
-        # normaliza session
         items[str(pid)] = {"q": qty, "a": added_at}
 
     for k in to_delete:
@@ -626,37 +523,21 @@ def cart_snapshot() -> Dict[str, Any]:
     return out
 
 
-# ============================================================
-# Public hook (futuro carrito en DB)
-# ============================================================
-
-
 def merge_cart_items(into_user_id: int) -> None:
     _ = into_user_id
     return
-
-
-# ============================================================
-# ROUTES
-# ============================================================
 
 
 @cart_bp.get("/")
 def cart_view():
     snap = cart_snapshot()
 
-    # templates fallback (no rompe si cambias estructura)
-    try:
-        current_app.jinja_env.get_template("cart/cart.html")
-        return render_template("cart/cart.html", cart=snap)
-    except Exception:
-        pass
-
-    try:
-        current_app.jinja_env.get_template("cart.html")
-        return render_template("cart.html", cart=snap)
-    except Exception:
-        pass
+    for tpl in ("cart/cart.html", "cart.html"):
+        try:
+            current_app.jinja_env.get_template(tpl)
+            return render_template(tpl, cart=snap)
+        except Exception:
+            continue
 
     return jsonify(ok=True, cart=snap)
 
@@ -669,50 +550,25 @@ def cart_json():
 @cart_bp.get("/count")
 def cart_count():
     snap = cart_snapshot()
-    return jsonify(
-        ok=True,
-        items_count=int(snap.get("items_count") or 0),
-        distinct_items=int(snap.get("distinct_items") or 0),
-    )
+    return jsonify(ok=True, items_count=int(snap.get("items_count") or 0), distinct_items=int(snap.get("distinct_items") or 0))
 
 
-# ✅ PRO: EL LINK ÚNICO PARA “FINALIZAR COMPRA”
 @cart_bp.get("/checkout")
 def cart_checkout_bridge():
-    """
-    /cart/checkout (PRO)
-    - Si carrito vacío => vuelve al carrito (o JSON error)
-    - Si existe checkout nuevo => checkout.checkout_home
-    - Si no existe => fallbacks
-    - Nunca explota si endpoints cambian
-    """
     snap = cart_snapshot()
     if not snap.get("has_items"):
         if _is_json_request():
             return jsonify(ok=False, error="cart_empty"), 400
         return redirect(_url_for_safe("cart.cart_view", fallback_path="/cart"))
 
-    # preferimos el checkout blueprint nuevo
     if _endpoint_exists("checkout.checkout_home"):
         return redirect(url_for("checkout.checkout_home"))
 
-    # fallbacks (si alguna vez tuviste otros nombres)
-    for ep in (
-        "shop.checkout",
-        "shop.checkout_home",
-        "main.checkout",
-        "main.checkout_home",
-    ):
+    for ep in ("shop.checkout", "shop.checkout_home", "main.checkout", "main.checkout_home"):
         if _endpoint_exists(ep):
             return redirect(url_for(ep))
 
-    # ultimo recurso
     return redirect("/checkout/")
-
-
-# ============================================================
-# ACTIONS
-# ============================================================
 
 
 @cart_bp.post("/add")
@@ -721,14 +577,12 @@ def cart_add():
     if gate:
         return gate
     if not _rate_limit_ok("add"):
-        return _err(
-            "rate_limited", "Demasiadas acciones. Probá de nuevo en un momento.", 429
-        )
+        return _err("rate_limited", "Demasiadas acciones. Probá de nuevo en un momento.", 429)
 
     data = request.get_json(silent=True) or request.form
     pid = data.get("product_id") or data.get("id")
     qty = _parse_qty(data.get("qty") or 1, 1)
-    mode = str(data.get("mode") or "inc").strip().lower()  # inc|set
+    mode = str(data.get("mode") or "inc").strip().lower()
 
     try:
         pid_int = int(pid)
@@ -750,11 +604,7 @@ def cart_add():
     if new_qty <= 0:
         items.pop(str(pid_int), None)
         _save_cart(c)
-        return _reply(
-            {"ok": True, "cart": cart_snapshot()},
-            status=200,
-            html_redirect_endpoint="cart.cart_view",
-        )
+        return _reply({"ok": True, "cart": cart_snapshot()}, status=200, html_redirect_endpoint="cart.cart_view")
 
     ok, msg, allowed = _is_available(p, new_qty)
     if not ok:
@@ -767,11 +617,7 @@ def cart_add():
     c["items"] = items
     _save_cart(c)
 
-    return _reply(
-        {"ok": True, "cart": cart_snapshot()},
-        status=200,
-        html_redirect_endpoint="cart.cart_view",
-    )
+    return _reply({"ok": True, "cart": cart_snapshot()}, status=200, html_redirect_endpoint="cart.cart_view")
 
 
 @cart_bp.post("/update")
@@ -780,9 +626,7 @@ def cart_update():
     if gate:
         return gate
     if not _rate_limit_ok("update"):
-        return _err(
-            "rate_limited", "Demasiadas acciones. Probá de nuevo en un momento.", 429
-        )
+        return _err("rate_limited", "Demasiadas acciones. Probá de nuevo en un momento.", 429)
 
     data = request.get_json(silent=True) or request.form
 
@@ -818,11 +662,7 @@ def cart_update():
             if allowed > 0:
                 qty = _clamp_qty(allowed)
             else:
-                return (
-                    "not_available",
-                    400,
-                    msg or "Producto no disponible o sin stock.",
-                )
+                return ("not_available", 400, msg or "Producto no disponible o sin stock.")
 
         items[str(pid_int)]["q"] = qty
         items[str(pid_int)].setdefault("a", _now_ts())
@@ -847,11 +687,7 @@ def cart_update():
     c["items"] = items
     _save_cart(c)
 
-    return _reply(
-        {"ok": True, "cart": cart_snapshot()},
-        status=200,
-        html_redirect_endpoint="cart.cart_view",
-    )
+    return _reply({"ok": True, "cart": cart_snapshot()}, status=200, html_redirect_endpoint="cart.cart_view")
 
 
 @cart_bp.post("/remove")
@@ -860,9 +696,7 @@ def cart_remove():
     if gate:
         return gate
     if not _rate_limit_ok("remove"):
-        return _err(
-            "rate_limited", "Demasiadas acciones. Probá de nuevo en un momento.", 429
-        )
+        return _err("rate_limited", "Demasiadas acciones. Probá de nuevo en un momento.", 429)
 
     data = request.get_json(silent=True) or request.form
     pid = data.get("product_id") or data.get("id")
@@ -876,11 +710,7 @@ def cart_remove():
     c["items"].pop(str(pid_int), None)
     _save_cart(c)
 
-    return _reply(
-        {"ok": True, "cart": cart_snapshot()},
-        status=200,
-        html_redirect_endpoint="cart.cart_view",
-    )
+    return _reply({"ok": True, "cart": cart_snapshot()}, status=200, html_redirect_endpoint="cart.cart_view")
 
 
 @cart_bp.post("/clear")
@@ -889,19 +719,13 @@ def cart_clear():
     if gate:
         return gate
     if not _rate_limit_ok("clear"):
-        return _err(
-            "rate_limited", "Demasiadas acciones. Probá de nuevo en un momento.", 429
-        )
+        return _err("rate_limited", "Demasiadas acciones. Probá de nuevo en un momento.", 429)
 
     session.pop(CART_SESSION_KEY, None)
     session.modified = True
     _invalidate_snapshot_cache()
 
-    return _reply(
-        {"ok": True, "cart": cart_snapshot()},
-        status=200,
-        html_redirect_endpoint="cart.cart_view",
-    )
+    return _reply({"ok": True, "cart": cart_snapshot()}, status=200, html_redirect_endpoint="cart.cart_view")
 
 
 __all__ = ["cart_bp", "cart_snapshot", "merge_cart_items"]

@@ -1,4 +1,3 @@
-# app/routes/main_routes.py — Skyline Store (ULTRA PRO / NO BREAK / FAIL-SAFE v3.9.0)
 from __future__ import annotations
 
 import hashlib
@@ -10,21 +9,30 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
 from urllib.parse import urlencode, urlparse
 
-from flask import Blueprint, current_app, jsonify, make_response, redirect, render_template, request, url_for
+from flask import (
+    Blueprint,
+    current_app,
+    jsonify,
+    make_response,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
 
 try:
-    from sqlalchemy import text as sql_text
-except Exception:
+    from sqlalchemy import text as sql_text  # type: ignore
+except Exception:  # pragma: no cover
     sql_text = None  # type: ignore
 
 try:
     from app.models import db  # type: ignore
-except Exception:
+except Exception:  # pragma: no cover
     db = None  # type: ignore
 
 try:
     from app.models import Category, Product  # type: ignore
-except Exception:
+except Exception:  # pragma: no cover
     Category = None  # type: ignore
     Product = None  # type: ignore
 
@@ -142,21 +150,19 @@ def _safe_next_from_args() -> str:
 HOME_REDIRECT_TO_SHOP = _env_bool("HOME_REDIRECT_TO_SHOP", False)
 HOME_CANONICAL_PATH = (os.getenv("HOME_CANONICAL_PATH") or "/").strip() or "/"
 
-_HOME_CACHE_TTL_RAW = os.getenv("HOME_CACHE_TTL", "120")
 try:
-    HOME_CACHE_TTL = int(str(_HOME_CACHE_TTL_RAW).strip() or "120")
+    HOME_CACHE_TTL = int((os.getenv("HOME_CACHE_TTL") or "120").strip() or "120")
 except Exception:
     HOME_CACHE_TTL = 120
 HOME_CACHE_TTL = max(0, min(HOME_CACHE_TTL, 3600))
 
 ENABLE_HOME_CACHE = _env_bool("ENABLE_HOME_CACHE", True)
-
 HOME_ASSET_VER = (os.getenv("HOME_CSS_VER") or os.getenv("HOME_ASSET_VER") or "162").strip() or "162"
 
 _HOME_CACHE: Dict[str, Tuple[float, Dict[str, Any]]] = {}
-_HOME_CACHE_MAX_KEYS_RAW = os.getenv("HOME_CACHE_MAX_KEYS", "32")
+
 try:
-    _HOME_CACHE_MAX_KEYS = int(str(_HOME_CACHE_MAX_KEYS_RAW).strip() or "32")
+    _HOME_CACHE_MAX_KEYS = int((os.getenv("HOME_CACHE_MAX_KEYS") or "32").strip() or "32")
 except Exception:
     _HOME_CACHE_MAX_KEYS = 32
 _HOME_CACHE_MAX_KEYS = max(8, min(_HOME_CACHE_MAX_KEYS, 256))
@@ -170,12 +176,12 @@ class SeoDefaults:
 
 
 SEO_DEFAULTS = SeoDefaults(
-    title=os.getenv("SEO_TITLE", "Skyline Store · Tech + Streetwear premium"),
-    description=os.getenv(
-        "SEO_DESCRIPTION",
-        "Comprá moda urbana, accesorios y tecnología en un solo lugar. Envíos rápidos y pagos seguros.",
-    ),
-    og_image=os.getenv("OG_IMAGE", "img/og/og-home.png"),
+    title=(os.getenv("SEO_TITLE") or "Skyline Store · Tech + Streetwear premium").strip(),
+    description=(
+        os.getenv("SEO_DESCRIPTION")
+        or "Comprá moda urbana, accesorios y tecnología en un solo lugar. Envíos rápidos y pagos seguros."
+    ).strip(),
+    og_image=(os.getenv("OG_IMAGE") or "img/og/og-home.png").strip(),
 )
 
 
@@ -186,7 +192,10 @@ def _cache_get(key: str) -> Optional[Dict[str, Any]]:
     if not item:
         return None
     expires_at, payload = item
-    if time.time() > expires_at:
+    if time.time() > float(expires_at):
+        _HOME_CACHE.pop(key, None)
+        return None
+    if not isinstance(payload, dict):
         _HOME_CACHE.pop(key, None)
         return None
     return payload
@@ -196,17 +205,23 @@ def _cache_set(key: str, payload: Dict[str, Any]) -> None:
     if not (ENABLE_HOME_CACHE and HOME_CACHE_TTL > 0):
         return
     now = time.time()
+
     for k in list(_HOME_CACHE.keys()):
-        exp, _ = _HOME_CACHE[k]
-        if now > exp:
+        try:
+            exp, _ = _HOME_CACHE[k]
+            if now > float(exp):
+                _HOME_CACHE.pop(k, None)
+        except Exception:
             _HOME_CACHE.pop(k, None)
+
     while len(_HOME_CACHE) >= _HOME_CACHE_MAX_KEYS:
         try:
             _HOME_CACHE.pop(next(iter(_HOME_CACHE)))
         except Exception:
             _HOME_CACHE.clear()
             break
-    _HOME_CACHE[key] = (now + HOME_CACHE_TTL, payload)
+
+    _HOME_CACHE[key] = (now + float(HOME_CACHE_TTL), dict(payload))
 
 
 def _safe_og_image(value: str) -> str:
@@ -263,6 +278,7 @@ def _render(template: str, *, status: int = 200, **ctx: Any):
                     error_code=500,
                     error_title="Error",
                     error_message="Ocurrió un error.",
+                    meta_title=f"Error | {SEO_DEFAULTS.title}",
                 ),
                 500,
             )
@@ -290,10 +306,12 @@ def _security_headers(resp):
 @main_bp.get("/")
 def home():
     if HOME_REDIRECT_TO_SHOP:
-        try:
-            return redirect(url_for("shop.shop"), code=302)
-        except Exception:
-            return redirect("/shop", code=302)
+        for ep in ("shop.shop_home", "shop.shop", "shop.home"):
+            try:
+                return redirect(url_for(ep), code=302)
+            except Exception:
+                continue
+        return redirect("/shop", code=302)
 
     try:
         if HOME_CANONICAL_PATH and HOME_CANONICAL_PATH != "/" and request.path == "/":
@@ -303,7 +321,7 @@ def home():
 
     lang = _accept_language()
     cache_enabled = bool(ENABLE_HOME_CACHE and HOME_CACHE_TTL > 0)
-    key = f"home:v3.9.0:lang={lang}:ver={HOME_ASSET_VER}"
+    key = f"home:v3.10.0:lang={lang}:ver={HOME_ASSET_VER}"
 
     cached = _cache_get(key) if cache_enabled else None
     if cached:
@@ -524,6 +542,7 @@ def favicon():
 
 @main_bp.app_errorhandler(404)
 def not_found(e):
+    _ = e
     return _render(
         "error.html",
         status=404,

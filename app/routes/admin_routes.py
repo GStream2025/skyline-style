@@ -1,31 +1,4 @@
-# app/routes/admin_routes.py
 from __future__ import annotations
-
-"""
-Admin Routes — Skyline Store (ULTRA PRO MAX / BULLETPROOF / FINAL v4)
-
-+20 mejoras EXTRA (sobre tu v3):
-1) before_request SOLO /admin (evita overhead global)
-2) CSRF constant-time compare + soporta JSON body (fetch) + headers alternativos
-3) Respuestas JSON opcionales en acciones POST (si Accept: json)
-4) Session hardening: permanent + marca “fresh” + no-store headers admin
-5) Rate-limit backoff más estable (crece suave, cap)
-6) Lockout robusto: persistencia por sesión + retry_after
-7) _safe_url_for con fallback para evitar BuildError
-8) Slug unique con retry multi-intento (reduce colisiones)
-9) Sanitización de inputs: trim + length caps + allowlists
-10) Uploads: path traversal safe + extensión/mimetype + size check doble
-11) Upload delete-safe (no rompe si falta archivo)
-12) Paginate fallback calcula total/pages sin mentir
-13) Query ilike seguro sin rollback innecesario
-14) DB safe: commit con rollback + expunge en fallos raros
-15) Commission tiers: tolera distintos retornos de sanity_check_overlaps()
-16) Payments: normaliza keys y asegura dict shape
-17) Atomic write: fsync best-effort (más resistente en crash)
-18) Headers anti-cache admin (no-store)
-19) per_page/q caps (anti abuso)
-20) Logs sin filtrar secretos (no imprime password)
-"""
 
 import json
 import os
@@ -35,10 +8,13 @@ import time
 import unicodedata
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, Dict, Optional, List, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Tuple
+from urllib.parse import urlencode, urlparse
 
 from flask import (
     Blueprint,
+    Response,
+    abort,
     current_app,
     flash,
     jsonify,
@@ -47,31 +23,17 @@ from flask import (
     request,
     session,
     url_for,
-    abort,
 )
 from werkzeug.utils import secure_filename
 
 from app.models import db
-from app.models.product import Product
 from app.models.category import Category
-from app.models.offer import Offer
 from app.models.commission import CommissionTier
-from app.utils.auth import admin_required, admin_creds_ok
+from app.models.offer import Offer
+from app.models.product import Product
+from app.utils.auth import admin_creds_ok, admin_required
 
-# ============================================================
-# Blueprint
-# ============================================================
-
-admin_bp = Blueprint(
-    "admin",
-    __name__,
-    url_prefix="/admin",
-    template_folder="../templates",
-)
-
-# ============================================================
-# Config / constants
-# ============================================================
+admin_bp = Blueprint("admin", __name__, url_prefix="/admin", template_folder="../templates")
 
 _TRUE = {"1", "true", "yes", "y", "on", "checked"}
 SAFE_STATUSES = {"active", "inactive", "draft"}
@@ -79,7 +41,7 @@ SAFE_STATUSES = {"active", "inactive", "draft"}
 MAX_ADMIN_ATTEMPTS = int(os.getenv("ADMIN_MAX_ATTEMPTS", "6") or "6")
 ADMIN_LOCK_SECONDS = int(os.getenv("ADMIN_LOCK_SECONDS", "600") or "600")
 ADMIN_RATE_SECONDS = float(os.getenv("ADMIN_RATE_SECONDS", "1.5") or "1.5")
-ADMIN_FRESH_SECONDS = int(os.getenv("ADMIN_FRESH_SECONDS", "1800") or "1800")  # 30 min
+ADMIN_FRESH_SECONDS = int(os.getenv("ADMIN_FRESH_SECONDS", "1800") or "1800")
 
 UPLOAD_MAX_MB_PRODUCTS = int(os.getenv("UPLOAD_MAX_MB_PRODUCTS", "8") or "8")
 UPLOAD_MAX_MB_OFFERS = int(os.getenv("UPLOAD_MAX_MB_OFFERS", "25") or "25")
@@ -93,10 +55,12 @@ MIME_ALLOW: Dict[str, set] = {
 }
 
 _slug_pat = re.compile(r"[^a-z0-9]+")
+_MAX_Q = 80
+_MAX_EMAIL = 160
+_MAX_URL = 500
+_MAX_NOTE = 500
+_MAX_INFO = 3000
 
-# ============================================================
-# Small helpers
-# ============================================================
 
 def _log(msg: str) -> None:
     try:
@@ -104,11 +68,13 @@ def _log(msg: str) -> None:
     except Exception:
         pass
 
+
 def _log_exc(msg: str) -> None:
     try:
         current_app.logger.exception(msg)
     except Exception:
         pass
+
 
 def _bool(v: Any) -> bool:
     if v is None:
@@ -120,32 +86,49 @@ def _bool(v: Any) -> bool:
         return False
     return s in _TRUE or s == "1"
 
+
+def _wants_json() -> bool:
+    try:
+        if request.is_json:
+            return True
+        if (request.args.get("format") or "").strip().lower() == "json":
+            return True
+        accept = (request.headers.get("Accept") or "").lower()
+        if "application/json" in accept:
+            return True
+        if (request.headers.get("X-Requested-With") or "").lower() == "xmlhttprequest":
+            return True
+        best = request.accept_mimetypes.best_match(["application/json", "text/html"])
+        if best == "application/json" and request.accept_mimetypes[best] > request.accept_mimetypes["text/html"]:
+            return True
+    except Exception:
+        return False
+    return False
+
+
 def _safe_url_for(endpoint: str, **kwargs) -> Optional[str]:
     try:
         return url_for(endpoint, **kwargs)
     except Exception:
         return None
 
+
 def _redir(endpoint: str, **kwargs):
     u = _safe_url_for(endpoint, **kwargs)
     return redirect(u or "/admin")
 
+
 def _flash_ok(msg: str) -> None:
     flash(msg, "success")
+
 
 def _flash_warn(msg: str) -> None:
     flash(msg, "warning")
 
+
 def _flash_err(msg: str) -> None:
     flash(msg, "error")
 
-def _wants_json() -> bool:
-    if request.is_json:
-        return True
-    if (request.args.get("format") or "").strip().lower() == "json":
-        return True
-    accept = (request.headers.get("Accept") or "").lower()
-    return "application/json" in accept
 
 def as_int(v: Any, default: int = 0, *, min_value: Optional[int] = None, max_value: Optional[int] = None) -> int:
     try:
@@ -158,12 +141,14 @@ def as_int(v: Any, default: int = 0, *, min_value: Optional[int] = None, max_val
         n = max_value
     return n
 
+
 def as_float(v: Any, default: Optional[float] = 0.0) -> Optional[float]:
     try:
         s = str(v).strip().replace(",", ".")
         return float(s) if s else default
     except Exception:
         return default
+
 
 def as_decimal(v: Any, default: Decimal = Decimal("0.00")) -> Decimal:
     try:
@@ -172,14 +157,16 @@ def as_decimal(v: Any, default: Decimal = Decimal("0.00")) -> Decimal:
     except Exception:
         return default
 
-def slugify(text: str) -> str:
-    text = (text or "").strip().lower()
-    text = unicodedata.normalize("NFKD", text)
-    text = "".join(c for c in text if not unicodedata.combining(c))
-    text = _slug_pat.sub("-", text).strip("-")
-    return text or "item"
 
-def _unique_slug(model, slug: str, *, id_exclude: Optional[int] = None, max_tries: int = 8) -> str:
+def slugify(text: str) -> str:
+    t = (text or "").strip().lower()
+    t = unicodedata.normalize("NFKD", t)
+    t = "".join(c for c in t if not unicodedata.combining(c))
+    t = _slug_pat.sub("-", t).strip("-")
+    return t or "item"
+
+
+def _unique_slug(model, slug: str, *, id_exclude: Optional[int] = None, max_tries: int = 10) -> str:
     base = slugify(slug)
     cand = base
     for _ in range(max_tries):
@@ -190,10 +177,14 @@ def _unique_slug(model, slug: str, *, id_exclude: Optional[int] = None, max_trie
             if not q.first():
                 return cand
         except Exception:
-            db.session.rollback()
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
             return cand
         cand = f"{base}-{secrets.token_hex(2)}"
     return cand
+
 
 def _safe_set(obj: Any, attr: str, value: Any) -> bool:
     if not hasattr(obj, attr):
@@ -204,6 +195,7 @@ def _safe_set(obj: Any, attr: str, value: Any) -> bool:
     except Exception:
         return False
 
+
 def _template_exists(name: str) -> bool:
     try:
         current_app.jinja_env.get_template(name)
@@ -211,29 +203,34 @@ def _template_exists(name: str) -> bool:
     except Exception:
         return False
 
+
 def _render_safe(template: str, **ctx):
     if _template_exists(template):
-        return render_template(template, **ctx)
-    title = ctx.get("title") or "Admin"
-    body = f"""<!doctype html>
-<html lang="es"><head><meta charset="utf-8"><title>{title}</title></head>
-<body style="font-family:system-ui;padding:24px">
-<h1>{title}</h1>
-<p style="opacity:.7">Template faltante: <code>{template}</code></p>
-</body></html>"""
-    return body, 200, {"Content-Type": "text/html; charset=utf-8"}
+        try:
+            return render_template(template, **ctx)
+        except Exception as e:
+            _log_exc(f"render_template failed: {template} :: {e}")
+    title = (ctx.get("title") or "Admin").__str__()
+    body = (
+        "<!doctype html><html lang='es'><head><meta charset='utf-8'>"
+        f"<title>{title}</title></head><body style='font-family:system-ui;padding:24px'>"
+        f"<h1>{title}</h1><p style='opacity:.7'>Template faltante o error: <code>{template}</code></p>"
+        "</body></html>"
+    )
+    return body, 200, {"Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store"}
 
-def _no_store(resp):
+
+def _no_store(resp: Response) -> Response:
     try:
         resp.headers["Cache-Control"] = "no-store"
         resp.headers["Pragma"] = "no-cache"
+        resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+        resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+        resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     except Exception:
         pass
     return resp
 
-# ============================================================
-# CSRF (sin libs) — robusto
-# ============================================================
 
 def _ensure_csrf() -> str:
     tok = session.get("csrf_token")
@@ -244,8 +241,10 @@ def _ensure_csrf() -> str:
     session.modified = True
     return tok
 
+
 def _csrf_token() -> str:
     return _ensure_csrf()
+
 
 def _safe_get_json() -> Dict[str, Any]:
     try:
@@ -256,13 +255,10 @@ def _safe_get_json() -> Dict[str, Any]:
         pass
     return {}
 
+
 def _require_csrf() -> None:
-    """
-    Valida CSRF:
-      - form csrf_token
-      - header X-CSRF-Token / X-CSRFToken
-      - JSON {csrf_token}
-    """
+    if request.method in {"GET", "HEAD", "OPTIONS"}:
+        return
     sess_tok = str(session.get("csrf_token") or "").strip()
     if not sess_tok:
         abort(400)
@@ -275,28 +271,32 @@ def _require_csrf() -> None:
         data = _safe_get_json()
         tok = str(data.get("csrf_token") or "").strip()
 
-    if not tok or not secrets.compare_digest(tok, sess_tok):
+    if not tok:
         abort(400)
+    try:
+        if not secrets.compare_digest(tok, sess_tok):
+            abort(400)
+    except Exception:
+        abort(400)
+
 
 @admin_bp.before_request
 def _admin_before_request():
-    # ✅ solo /admin
     try:
         _ensure_csrf()
     except Exception:
         pass
 
+
 @admin_bp.after_request
-def _admin_after_request(resp):
+def _admin_after_request(resp: Response):
     return _no_store(resp)
+
 
 @admin_bp.context_processor
 def _inject_csrf():
     return {"csrf_token": session.get("csrf_token", "")}
 
-# ============================================================
-# DB safe helpers
-# ============================================================
 
 def _commit_ok() -> bool:
     try:
@@ -310,6 +310,7 @@ def _commit_ok() -> bool:
         _log_exc("DB commit failed")
         return False
 
+
 def _commit_or_flash(msg_ok: str, msg_err: str, category_ok: str = "success") -> bool:
     if _commit_ok():
         flash(msg_ok, category_ok)
@@ -317,9 +318,6 @@ def _commit_or_flash(msg_ok: str, msg_err: str, category_ok: str = "success") ->
     flash(msg_err, "error")
     return False
 
-# ============================================================
-# Admin login hardening
-# ============================================================
 
 def _admin_rate_ok() -> bool:
     now = time.time()
@@ -328,13 +326,12 @@ def _admin_rate_ok() -> bool:
         last_f = float(last)
     except Exception:
         last_f = 0.0
-
     if (now - last_f) < ADMIN_RATE_SECONDS:
         return False
-
     session["admin_last_try"] = now
     session.modified = True
     return True
+
 
 def _admin_locked() -> Tuple[bool, int]:
     until = session.get("admin_locked_until", 0)
@@ -345,11 +342,12 @@ def _admin_locked() -> Tuple[bool, int]:
     left = int(max(0, until_f - time.time()))
     return (left > 0), left
 
+
 def _admin_lock(fails: int) -> None:
-    # backoff suave, cap
     extra = min(ADMIN_LOCK_SECONDS, max(0, fails - MAX_ADMIN_ATTEMPTS) * 30)
     session["admin_locked_until"] = time.time() + ADMIN_LOCK_SECONDS + extra
     session.modified = True
+
 
 def _admin_failed_inc() -> int:
     n = as_int(session.get("admin_failed", 0), 0, min_value=0, max_value=10_000)
@@ -358,27 +356,24 @@ def _admin_failed_inc() -> int:
     session.modified = True
     return n
 
+
 def _admin_failed_reset() -> None:
     session["admin_failed"] = 0
     session["admin_locked_until"] = 0
     session.modified = True
 
+
 def _admin_login_success(email: str) -> None:
-    """
-    Mitiga session fixation:
-    - limpia session
-    - setea flags admin
-    - regenera csrf
-    """
-    old_csrf = session.get("csrf_token")
+    old = session.get("csrf_token")
     session.clear()
     session["admin_logged_in"] = True
-    session["admin_email"] = email
+    session["admin_email"] = (email or "").strip().lower()[:_MAX_EMAIL]
     session["is_admin"] = True
     session["admin_login_at"] = int(time.time())
-    session["csrf_token"] = secrets.token_urlsafe(32) if not old_csrf else secrets.token_urlsafe(32)
+    session["csrf_token"] = secrets.token_urlsafe(32) if not old else secrets.token_urlsafe(32)
     session.permanent = True
     _admin_failed_reset()
+
 
 def _admin_is_fresh() -> bool:
     ts = session.get("admin_login_at")
@@ -388,9 +383,6 @@ def _admin_is_fresh() -> bool:
         return False
     return (int(time.time()) - ts_i) <= ADMIN_FRESH_SECONDS
 
-# ============================================================
-# Uploads (SEGUROS)
-# ============================================================
 
 def uploads_dir(kind: str) -> Path:
     base = (current_app.config.get("UPLOADS_DIR") or "").strip()
@@ -399,17 +391,20 @@ def uploads_dir(kind: str) -> Path:
     path.mkdir(parents=True, exist_ok=True)
     return path
 
+
 def _random_filename(original: str) -> str:
     name = secure_filename(original or "")
     stem = Path(name).stem[:30] if name else "file"
     ext = Path(name).suffix.lower()
+    if ext and not re.fullmatch(r"\.[a-z0-9]{1,6}", ext):
+        ext = ""
     token = secrets.token_urlsafe(8).replace("-", "").replace("_", "")
     return f"{stem}_{int(time.time() * 1000)}_{token}{ext}"
+
 
 def _file_too_large(file, max_mb: int) -> bool:
     try:
         max_bytes = int(max_mb) * 1024 * 1024
-
         cl = getattr(file, "content_length", None)
         if cl is not None:
             try:
@@ -417,7 +412,6 @@ def _file_too_large(file, max_mb: int) -> bool:
                     return True
             except Exception:
                 pass
-
         stream = getattr(file, "stream", None)
         if stream and hasattr(stream, "tell") and hasattr(stream, "seek"):
             pos = stream.tell()
@@ -428,6 +422,7 @@ def _file_too_large(file, max_mb: int) -> bool:
     except Exception:
         return False
     return False
+
 
 def save_upload(file, kind: str, allow_ext: set) -> Optional[str]:
     if not file or not getattr(file, "filename", ""):
@@ -447,25 +442,20 @@ def save_upload(file, kind: str, allow_ext: set) -> Optional[str]:
 
     mimetype = (getattr(file, "mimetype", "") or "").lower().strip()
     allowed_m = MIME_ALLOW["images"] if kind == "products" else MIME_ALLOW["media"]
-    # Si mimetype viene vacío (algunos browsers), no rompemos, pero si viene, lo exigimos
     if mimetype and mimetype not in allowed_m:
         raise ValueError("Tipo de archivo no permitido.")
 
     final = _random_filename(filename)
     dest = uploads_dir(kind) / final
     file.save(dest)
-
-    # devolvemos URL pública
     return url_for("static", filename=f"uploads/{kind}/{final}")
 
-# ============================================================
-# Payments (SIN DB) — ATÓMICO
-# ============================================================
 
 def payments_path() -> Path:
     p = Path(current_app.instance_path)
     p.mkdir(parents=True, exist_ok=True)
     return p / "payments.json"
+
 
 def payments_defaults() -> Dict[str, Dict[str, Any]]:
     return {
@@ -475,17 +465,18 @@ def payments_defaults() -> Dict[str, Dict[str, Any]]:
         "transfer": {"active": False, "info": ""},
     }
 
+
 def _atomic_write_text(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + f".{secrets.token_hex(6)}.tmp")
     tmp.write_text(text, encoding="utf-8")
-    # fsync best-effort
     try:
         with open(tmp, "rb") as f:
             os.fsync(f.fileno())
     except Exception:
         pass
     os.replace(str(tmp), str(path))
+
 
 def load_payments() -> Dict[str, Any]:
     base = payments_defaults()
@@ -503,6 +494,7 @@ def load_payments() -> Dict[str, Any]:
             pass
     return base
 
+
 def save_payments(data: Dict[str, Any]) -> None:
     base = payments_defaults()
     safe = payments_defaults()
@@ -518,15 +510,13 @@ def save_payments(data: Dict[str, Any]) -> None:
 
     _atomic_write_text(payments_path(), json.dumps(safe, indent=2, ensure_ascii=False))
 
-# ============================================================
-# AUTH
-# ============================================================
 
 @admin_bp.get("/login")
 def login():
     if session.get("admin_logged_in"):
         return _redir("admin.dashboard")
     return _render_safe("admin/login.html", csrf_token=_csrf_token())
+
 
 @admin_bp.post("/login")
 def login_post():
@@ -546,10 +536,9 @@ def login_post():
         _flash_warn("Esperá un momento antes de intentar de nuevo.")
         return _redir("admin.login")
 
-    email = (request.form.get("email") or "").strip().lower()[:160]
+    email = (request.form.get("email") or "").strip().lower()[:_MAX_EMAIL]
     password = (request.form.get("password") or "").strip()
 
-    # NO logueamos password jamás
     if not admin_creds_ok(email, password):
         n = _admin_failed_inc()
         if n >= MAX_ADMIN_ATTEMPTS:
@@ -565,6 +554,7 @@ def login_post():
     _flash_ok("Bienvenido al panel admin")
     return _redir("admin.dashboard")
 
+
 @admin_bp.get("/logout")
 def logout():
     session.clear()
@@ -573,30 +563,23 @@ def logout():
     _flash_ok("Sesión cerrada")
     return _redir("admin.login")
 
-# ============================================================
-# DASHBOARD
-# ============================================================
 
 @admin_bp.get("/")
 @admin_required
 def dashboard():
-    try:
-        prod_count = Product.query.count()
-    except Exception:
-        prod_count = 0
-        db.session.rollback()
+    def _count(q) -> int:
+        try:
+            return int(q.count())
+        except Exception:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            return 0
 
-    try:
-        cat_count = Category.query.count()
-    except Exception:
-        cat_count = 0
-        db.session.rollback()
-
-    try:
-        offer_count = Offer.query.count()
-    except Exception:
-        offer_count = 0
-        db.session.rollback()
+    prod_count = _count(Product.query)
+    cat_count = _count(Category.query)
+    offer_count = _count(Offer.query)
 
     return _render_safe(
         "admin/dashboard.html",
@@ -607,14 +590,12 @@ def dashboard():
         admin_fresh=_admin_is_fresh(),
     )
 
-# ============================================================
-# PAYMENTS
-# ============================================================
 
 @admin_bp.get("/payments")
 @admin_required
 def payments():
     return _render_safe("admin/payments.html", data=load_payments(), csrf_token=_csrf_token())
+
 
 @admin_bp.post("/payments/save")
 @admin_required
@@ -625,16 +606,16 @@ def payments_save():
     for k in data:
         data[k]["active"] = _bool(request.form.get(f"{k}_active"))
 
-    data["mercadopago_uy"]["link"] = (request.form.get("mercadopago_uy_link") or "").strip()[:500]
-    data["mercadopago_uy"]["note"] = (request.form.get("mercadopago_uy_note") or "").strip()[:500]
+    data["mercadopago_uy"]["link"] = (request.form.get("mercadopago_uy_link") or "").strip()[:_MAX_URL]
+    data["mercadopago_uy"]["note"] = (request.form.get("mercadopago_uy_note") or "").strip()[:_MAX_NOTE]
 
-    data["mercadopago_ar"]["link"] = (request.form.get("mercadopago_ar_link") or "").strip()[:500]
-    data["mercadopago_ar"]["note"] = (request.form.get("mercadopago_ar_note") or "").strip()[:500]
+    data["mercadopago_ar"]["link"] = (request.form.get("mercadopago_ar_link") or "").strip()[:_MAX_URL]
+    data["mercadopago_ar"]["note"] = (request.form.get("mercadopago_ar_note") or "").strip()[:_MAX_NOTE]
 
-    data["paypal"]["email"] = (request.form.get("paypal_email") or "").strip()[:160]
+    data["paypal"]["email"] = (request.form.get("paypal_email") or "").strip()[:_MAX_EMAIL]
     data["paypal"]["paypal_me"] = (request.form.get("paypal_me") or "").strip()[:200]
 
-    data["transfer"]["info"] = (request.form.get("transfer_info") or "").strip()[:3000]
+    data["transfer"]["info"] = (request.form.get("transfer_info") or "").strip()[:_MAX_INFO]
 
     try:
         save_payments(data)
@@ -645,14 +626,10 @@ def payments_save():
 
     return _redir("admin.payments")
 
-# ============================================================
-# COMMISSION TIERS (LIST / SEED / VALIDATE + CRUD)
-# ============================================================
 
 def _tiers_sanity() -> Tuple[bool, List[str]]:
     try:
         out = CommissionTier.sanity_check_overlaps()
-        # tolerante a distintos retornos
         if isinstance(out, tuple) and len(out) == 2:
             ok, issues = out
             return bool(ok), list(issues or [])
@@ -660,8 +637,12 @@ def _tiers_sanity() -> Tuple[bool, List[str]]:
             return (len(out) == 0), list(out)
         return True, []
     except Exception:
-        db.session.rollback()
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         return False, ["No se pudo ejecutar sanity_check_overlaps()."]
+
 
 @admin_bp.get("/commission-tiers")
 @admin_required
@@ -669,12 +650,13 @@ def commission_tiers():
     items: List[CommissionTier] = []
     ok, issues = True, []
     try:
-        items = CommissionTier.query.order_by(
-            CommissionTier.sort_order.asc(), CommissionTier.min_sales.asc()
-        ).all()
+        items = CommissionTier.query.order_by(CommissionTier.sort_order.asc(), CommissionTier.min_sales.asc()).all()
         ok, issues = _tiers_sanity()
     except Exception:
-        db.session.rollback()
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         ok = False
         issues = ["No se pudo cargar tiers."]
     return _render_safe(
@@ -684,6 +666,7 @@ def commission_tiers():
         issues=issues,
         csrf_token=_csrf_token(),
     )
+
 
 @admin_bp.post("/commission-tiers/seed")
 @admin_required
@@ -697,6 +680,7 @@ def commission_tiers_seed():
         _flash_err("No se pudo hacer seed de tiers.")
     return _redir("admin.commission_tiers")
 
+
 @admin_bp.post("/commission-tiers/validate")
 @admin_required
 def commission_tiers_validate():
@@ -707,6 +691,7 @@ def commission_tiers_validate():
     except Exception as e:
         _flash_err(str(e))
     return _redir("admin.commission_tiers")
+
 
 @admin_bp.post("/commission-tiers/new")
 @admin_required
@@ -746,9 +731,13 @@ def commission_tiers_new():
             _flash_warn(f"Tier creado, pero revisá integridad: {e}")
 
     except Exception:
-        db.session.rollback()
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         _flash_err("No se pudo crear el tier")
     return _redir("admin.commission_tiers")
+
 
 @admin_bp.post("/commission-tiers/edit/<int:id>")
 @admin_required
@@ -797,6 +786,7 @@ def commission_tiers_edit(id: int):
 
     return _redir("admin.commission_tiers")
 
+
 @admin_bp.post("/commission-tiers/delete/<int:id>")
 @admin_required
 def commission_tiers_delete(id: int):
@@ -815,14 +805,14 @@ def commission_tiers_delete(id: int):
             except Exception as e:
                 _flash_warn(f"Eliminado, pero revisá integridad: {e}")
     except Exception:
-        db.session.rollback()
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         _flash_err("No se pudo eliminar el tier")
 
     return _redir("admin.commission_tiers")
 
-# ============================================================
-# CATEGORIES
-# ============================================================
 
 @admin_bp.get("/categories")
 @admin_required
@@ -831,8 +821,12 @@ def categories():
     try:
         cats = Category.query.order_by(Category.name.asc()).all()
     except Exception:
-        db.session.rollback()
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
     return _render_safe("admin/categories.html", categories=cats, csrf_token=_csrf_token())
+
 
 @admin_bp.post("/categories/new")
 @admin_required
@@ -850,10 +844,14 @@ def categories_new():
         db.session.add(Category(name=name, slug=slug))
         _commit_or_flash("Categoría creada", "No se pudo crear la categoría")
     except Exception:
-        db.session.rollback()
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         _flash_err("No se pudo crear la categoría")
 
     return _redir("admin.categories")
+
 
 @admin_bp.post("/categories/edit/<int:id>")
 @admin_required
@@ -878,6 +876,7 @@ def categories_edit(id: int):
     _commit_or_flash("Categoría actualizada", "No se pudo actualizar la categoría")
     return _redir("admin.categories")
 
+
 @admin_bp.post("/categories/delete/<int:id>")
 @admin_required
 def categories_delete(id: int):
@@ -889,40 +888,52 @@ def categories_delete(id: int):
             db.session.delete(c)
             _commit_or_flash("Categoría eliminada", "No se pudo eliminar la categoría")
         except Exception:
-            db.session.rollback()
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
             _flash_err("No se pudo eliminar la categoría")
     return _redir("admin.categories")
 
-# ============================================================
-# PRODUCTS (paginación + búsqueda)
-# ============================================================
 
 def _paginate(query, page: int, per_page: int):
     page = max(1, int(page))
     per_page = max(1, min(int(per_page), 200))
     try:
-        pag = query.paginate(page=page, per_page=per_page, error_out=False)
-        return pag
+        return query.paginate(page=page, per_page=per_page, error_out=False)
     except Exception:
-        # fallback con total aproximado (si count falla, no miente)
         try:
             total = int(query.order_by(None).count())
         except Exception:
-            db.session.rollback()
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
             total = None
 
-        items = query.limit(per_page).offset((page - 1) * per_page).all()
+        try:
+            items = query.limit(per_page).offset((page - 1) * per_page).all()
+        except Exception:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            items = []
+
         if total is None:
-            pages = page if len(items) == per_page else page
+            pages = max(1, page)
+            total_out = len(items)
         else:
             pages = max(1, (total + per_page - 1) // per_page)
+            total_out = total
 
-        return type("P", (), {"items": items, "page": page, "pages": pages, "total": (total if total is not None else len(items))})()
+        return type("P", (), {"items": items, "page": page, "pages": pages, "total": total_out})()
+
 
 @admin_bp.get("/products")
 @admin_required
 def products():
-    q = (request.args.get("q") or "").strip()[:80]
+    q = (request.args.get("q") or "").strip()[:_MAX_Q]
     page = as_int(request.args.get("page"), 1, min_value=1, max_value=1_000_000)
     per_page = as_int(request.args.get("per_page"), 50, min_value=1, max_value=200)
 
@@ -933,7 +944,10 @@ def products():
         try:
             query = query.filter(field.ilike(f"%{q}%"))
         except Exception:
-            db.session.rollback()
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
 
     try:
         pag = _paginate(query, page, per_page)
@@ -941,7 +955,10 @@ def products():
         total = getattr(pag, "total", len(items))
         pages = getattr(pag, "pages", 1)
     except Exception:
-        db.session.rollback()
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         items, total, pages = [], 0, 1
 
     return _render_safe(
@@ -955,6 +972,7 @@ def products():
         csrf_token=_csrf_token(),
     )
 
+
 @admin_bp.get("/products/new")
 @admin_required
 def products_new():
@@ -962,8 +980,12 @@ def products_new():
         cats = Category.query.order_by(Category.name.asc()).all()
     except Exception:
         cats = []
-        db.session.rollback()
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
     return _render_safe("admin/product_edit.html", product=None, categories=cats, csrf_token=_csrf_token())
+
 
 @admin_bp.post("/products/new")
 @admin_required
@@ -982,7 +1004,7 @@ def products_create():
     if status not in SAFE_STATUSES:
         status = "active"
 
-    image_url = None
+    image_url: Optional[str] = None
     try:
         image_url = save_upload(request.files.get("image"), "products", ALLOWED_IMAGES)
     except Exception as e:
@@ -998,7 +1020,8 @@ def products_create():
         _safe_set(p, "stock_qty", stock)
 
     _safe_set(p, "status", status)
-    _safe_set(p, "image_url", image_url)
+    if image_url:
+        _safe_set(p, "image_url", image_url)
 
     cat_id = as_int(request.form.get("category_id"), 0, min_value=0)
     if cat_id:
@@ -1010,9 +1033,13 @@ def products_create():
             return _redir("admin.products")
         return _redir("admin.products_new")
     except Exception:
-        db.session.rollback()
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         _flash_err("No se pudo crear el producto")
         return _redir("admin.products_new")
+
 
 @admin_bp.get("/products/edit/<int:id>")
 @admin_required
@@ -1026,9 +1053,13 @@ def products_edit(id: int):
         cats = Category.query.order_by(Category.name.asc()).all()
     except Exception:
         cats = []
-        db.session.rollback()
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
 
     return _render_safe("admin/product_edit.html", product=p, categories=cats, csrf_token=_csrf_token())
+
 
 @admin_bp.post("/products/edit/<int:id>")
 @admin_required
@@ -1077,6 +1108,7 @@ def products_update(id: int):
     _commit_or_flash("Producto actualizado", "No se pudo actualizar el producto")
     return _redir("admin.products_edit", id=id)
 
+
 @admin_bp.post("/products/delete/<int:id>")
 @admin_required
 def products_delete(id: int):
@@ -1087,13 +1119,13 @@ def products_delete(id: int):
             db.session.delete(p)
             _commit_or_flash("Producto eliminado", "No se pudo eliminar el producto")
         except Exception:
-            db.session.rollback()
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
             _flash_err("No se pudo eliminar el producto")
     return _redir("admin.products")
 
-# ============================================================
-# OFFERS
-# ============================================================
 
 @admin_bp.get("/offers")
 @admin_required
@@ -1102,8 +1134,12 @@ def offers():
     try:
         items = Offer.query.order_by(Offer.sort_order.asc()).all()
     except Exception:
-        db.session.rollback()
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
     return _render_safe("admin/offers.html", offers=items, csrf_token=_csrf_token())
+
 
 @admin_bp.post("/offers/new")
 @admin_required
@@ -1115,7 +1151,7 @@ def offers_new():
         _flash_warn("Título requerido")
         return _redir("admin.offers")
 
-    media = None
+    media: Optional[str] = None
     try:
         media = save_upload(request.files.get("media"), "offers", ALLOWED_MEDIA)
     except Exception as e:
@@ -1126,17 +1162,22 @@ def offers_new():
     _safe_set(o, "active", _bool(request.form.get("active")))
     _safe_set(o, "sort_order", as_int(request.form.get("sort_order"), 0, min_value=0, max_value=10_000))
 
-    if not _safe_set(o, "media_url", media):
-        _safe_set(o, "image_url", media)
+    if media:
+        if not _safe_set(o, "media_url", media):
+            _safe_set(o, "image_url", media)
 
     try:
         db.session.add(o)
         _commit_or_flash("Oferta creada", "No se pudo crear la oferta")
     except Exception:
-        db.session.rollback()
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         _flash_err("No se pudo crear la oferta")
 
     return _redir("admin.offers")
+
 
 @admin_bp.post("/offers/delete/<int:id>")
 @admin_required
@@ -1149,8 +1190,12 @@ def offers_delete(id: int):
             db.session.delete(o)
             _commit_or_flash("Oferta eliminada", "No se pudo eliminar la oferta")
         except Exception:
-            db.session.rollback()
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
             _flash_err("No se pudo eliminar la oferta")
     return _redir("admin.offers")
+
 
 __all__ = ["admin_bp"]
