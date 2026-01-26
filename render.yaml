@@ -6,124 +6,109 @@ services:
     plan: free
     branch: master
     autoDeploy: true
-
-    # Liveness
     healthCheckPath: /health
 
-    # -------------------------
-    # Build reproducible + rápido
-    # -------------------------
     buildCommand: |
+      set -euo pipefail
       python -m pip install --upgrade pip setuptools wheel
+      pip --version
+      python --version
       pip install --no-cache-dir -r requirements.txt
 
-    # (Opcional) si usás Flask-Migrate en prod:
-    # preDeployCommand: |
-    #   flask --app app db upgrade
-
-    # -------------------------
-    # Start (Gunicorn sólido para Render)
-    # -------------------------
     startCommand: >
       gunicorn wsgi:app
       --bind 0.0.0.0:${PORT}
       --workers ${WEB_CONCURRENCY:-2}
       --threads ${GUNICORN_THREADS:-4}
+      --worker-tmp-dir /dev/shm
       --timeout ${GUNICORN_TIMEOUT:-120}
       --graceful-timeout ${GUNICORN_GRACEFUL_TIMEOUT:-30}
       --keep-alive ${GUNICORN_KEEPALIVE:-5}
-      --max-requests ${GUNICORN_MAX_REQUESTS:-1000}
-      --max-requests-jitter ${GUNICORN_MAX_REQUESTS_JITTER:-100}
+      --max-requests ${GUNICORN_MAX_REQUESTS:-900}
+      --max-requests-jitter ${GUNICORN_MAX_REQUESTS_JITTER:-120}
       --access-logfile -
       --error-logfile -
       --log-level ${LOG_LEVEL:-info}
+      --capture-output
+      --preload
 
     envVars:
-      # -------------------------
-      # Runtime
-      # -------------------------
       - key: PYTHON_VERSION
         value: "3.12.9"
 
-      # -------------------------
-      # App env
-      # -------------------------
       - key: ENV
-        value: production
+        value: "production"
+      - key: FLASK_ENV
+        value: "production"
       - key: DEBUG
         value: "0"
       - key: LOG_LEVEL
-        value: info
+        value: "INFO"
 
-      # -------------------------
-      # Seguridad / HTTPS / Proxy
-      # IMPORTANTÍSIMO en Render para cookies/CSRF
-      # -------------------------
-      - key: FORCE_HTTPS
-        value: "1"
       - key: TRUST_PROXY_HEADERS
         value: "1"
+      - key: FORCE_HTTPS
+        value: "1"
+      - key: HSTS
+        value: "1"
+      - key: PREFERRED_URL_SCHEME
+        value: "https"
 
-      # Cookies (tu create_app debería leerlas)
+      - key: SESSION_COOKIE_SECURE
+        value: "1"
       - key: COOKIE_SECURE
         value: "1"
-      - key: SESSION_SAMESITE
-        value: "Lax"
       - key: SESSION_COOKIE_HTTPONLY
         value: "1"
+      - key: SESSION_COOKIE_SAMESITE
+        value: "Lax"
+      - key: SESSION_SAMESITE
+        value: "Lax"
+      - key: SESSION_DAYS
+        value: "14"
+      - key: SESSION_REFRESH_EACH_REQUEST
+        value: "0"
 
-      # CSRF: más tolerancia
+      - key: WTF_CSRF_ENABLED
+        value: "1"
       - key: WTF_CSRF_TIME_LIMIT
         value: "3600"
+      - key: WTF_CSRF_SSL_STRICT
+        value: "0"
 
-      # (Opcional ultra strict) bloquear sqlite en prod:
-      # - key: REQUIRE_POSTGRES
-      #   value: "1"
+      - key: SQLALCHEMY_ECHO
+        value: "0"
+      - key: DB_POOL_RECYCLE
+        value: "280"
+      - key: DB_POOL_SIZE
+        value: "5"
+      - key: DB_MAX_OVERFLOW
+        value: "10"
 
-      # -------------------------
-      # Secrets (solo dashboard / Render UI)
-      # -------------------------
-      - key: SECRET_KEY
-        sync: false
-      - key: DATABASE_URL
-        sync: false
+      - key: ENABLE_MINIFY
+        value: "1"
+      - key: ENABLE_COMPRESS
+        value: "1"
+      - key: JSON_SORT_KEYS
+        value: "0"
+      - key: TEMPLATES_AUTO_RELOAD
+        value: "0"
 
-      # -------------------------
-      # Uploads (FREE NO persiste en disco)
-      # Recomendado: S3/R2 en futuro
-      # -------------------------
+      - key: CACHE_TYPE
+        value: "SimpleCache"
+      - key: CACHE_DEFAULT_TIMEOUT
+        value: "300"
+      - key: CACHE_KEY_PREFIX
+        value: "skyline"
+
+      - key: MAX_UPLOAD_MB
+        value: "20"
       - key: UPLOADS_DIR
         value: "static/uploads"
 
-      # -------------------------
-      # Printful
-      # -------------------------
-      - key: PRINTFUL_API_KEY
-        sync: false
-      - key: PRINTFUL_STORE_ID
-        sync: false
       - key: PRINTFUL_CACHE_TTL
         value: "300"
 
-      # -------------------------
-      # Mercado Pago
-      # -------------------------
-      - key: MP_ACCESS_TOKEN
-        sync: false
-      - key: MP_PUBLIC_KEY
-        sync: false
-
-      # -------------------------
-      # Admin bootstrap
-      # -------------------------
-      - key: ADMIN_EMAIL
-        sync: false
-      - key: ADMIN_PASSWORD
-        sync: false
-
-      # -------------------------
-      # Gunicorn tuning
-      # -------------------------
       - key: WEB_CONCURRENCY
         value: "2"
       - key: GUNICORN_THREADS
@@ -135,6 +120,45 @@ services:
       - key: GUNICORN_KEEPALIVE
         value: "5"
       - key: GUNICORN_MAX_REQUESTS
-        value: "1000"
+        value: "900"
       - key: GUNICORN_MAX_REQUESTS_JITTER
-        value: "100"
+        value: "120"
+
+      - key: SECRET_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+
+      - key: PRINTFUL_API_KEY
+        sync: false
+      - key: PRINTFUL_STORE_ID
+        sync: false
+
+      - key: MP_ACCESS_TOKEN
+        sync: false
+      - key: MP_PUBLIC_KEY
+        sync: false
+
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_PUBLIC_KEY
+        sync: false
+
+      - key: PAYPAL_SECRET
+        sync: false
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+
+      - key: MAIL_SERVER
+        sync: false
+      - key: MAIL_USERNAME
+        sync: false
+      - key: MAIL_PASSWORD
+        sync: false
+      - key: MAIL_DEFAULT_SENDER
+        sync: false
+
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false

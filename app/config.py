@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import os
+import re
+import secrets
 from datetime import timedelta
 from typing import Any, Dict, Optional, Type
 from urllib.parse import urlparse
 
-_TRUE = {"1", "true", "yes", "y", "on", "checked"}
-_FALSE = {"0", "false", "no", "n", "off"}
+_TRUE = {"1", "true", "yes", "y", "on", "checked", "enable", "enabled"}
+_FALSE = {"0", "false", "no", "n", "off", "disable", "disabled"}
 
 
 def env_str(key: str, default: str = "") -> str:
@@ -20,11 +22,7 @@ def env_int(key: str, default: int, *, min_v: int = 0, max_v: int = 10**9) -> in
         v = int(s) if s else int(default)
     except Exception:
         v = int(default)
-    if v < min_v:
-        return min_v
-    if v > max_v:
-        return max_v
-    return v
+    return min(max(v, min_v), max_v)
 
 
 def env_opt_int(
@@ -41,10 +39,10 @@ def env_opt_int(
         v = int(s)
     except Exception:
         return default
-    if min_v is not None and v < min_v:
-        v = min_v
-    if max_v is not None and v > max_v:
-        v = max_v
+    if min_v is not None:
+        v = max(v, min_v)
+    if max_v is not None:
+        v = min(v, max_v)
     return v
 
 
@@ -58,6 +56,12 @@ def env_bool(key: str, default: bool = False) -> bool:
     if s in _FALSE:
         return False
     return default
+
+
+def _slug(s: str, fallback: str = "skyline") -> str:
+    s = (s or "").strip().lower()
+    s = re.sub(r"[^a-z0-9]+", "-", s).strip("-")
+    return (s or fallback)[:64]
 
 
 def normalize_db_any(raw: Optional[str]) -> str:
@@ -77,10 +81,8 @@ def normalize_database_url(raw: Optional[str]) -> str:
 
 
 def normalize_samesite(raw: str, default: str = "Lax") -> str:
-    s = (raw or default).strip()
-    if s not in {"Lax", "Strict", "None"}:
-        return default
-    return s
+    s = (raw or default).strip().title()
+    return s if s in {"Lax", "Strict", "None"} else default
 
 
 def normalize_scheme(raw: str, default: str = "http") -> str:
@@ -129,193 +131,251 @@ def csp_for_tailwind_cdn() -> Dict[str, list]:
     }
 
 
+def _computed_env() -> str:
+    flask_env = env_str("FLASK_ENV", env_str("ENV", "production")).lower()
+    debug = env_bool("DEBUG", env_bool("FLASK_DEBUG", False))
+    return "development" if (flask_env in {"dev", "development"} or debug) else "production"
+
+
 class BaseConfig:
-    FLASK_ENV: str = env_str("FLASK_ENV", env_str("ENV", "production")).lower()
-    DEBUG: bool = env_bool("DEBUG", env_bool("FLASK_DEBUG", False))
-    TESTING: bool = env_bool("TESTING", False)
-
-    ENV: str = "development" if (FLASK_ENV in {"dev", "development"} or DEBUG) else "production"
-    IS_PROD: bool = _is_prod(ENV)
-
-    APP_NAME: str = env_str("APP_NAME", "Skyline Store")
-
-    _raw_site = env_str("SITE_URL", env_str("APP_URL", env_str("RENDER_EXTERNAL_URL", "")))
-    SITE_URL: str = normalize_site_url(_raw_site)
-    APP_URL: str = SITE_URL
-
-    HOST: str = env_str("HOST", "0.0.0.0")
-    PORT: int = env_int("PORT", 5000, min_v=1, max_v=65535)
-
-    SERVER_NAME: str = env_str("SERVER_NAME", "")
-    PREFERRED_URL_SCHEME: str = normalize_scheme(
-        env_str("PREFERRED_URL_SCHEME", ("https" if (IS_PROD or SITE_URL.startswith("https://")) else "http"))
-    )
-
-    TRUST_PROXY_HEADERS: bool = env_bool("TRUST_PROXY_HEADERS", default=IS_PROD)
-    FORCE_HTTPS: bool = env_bool("FORCE_HTTPS", default=IS_PROD)
-    HSTS: bool = env_bool("HSTS", default=IS_PROD)
-
-    SECRET_KEY: str = env_str("SECRET_KEY", "dev_skyline_fallback_change_me_change_me_change_me")
-
-    SESSION_COOKIE_NAME: str = env_str("SESSION_COOKIE_NAME", "skyline_session")
-    SESSION_COOKIE_HTTPONLY: bool = env_bool("SESSION_COOKIE_HTTPONLY", True)
-    SESSION_COOKIE_SAMESITE: str = normalize_samesite(
-        env_str("SESSION_COOKIE_SAMESITE", env_str("SESSION_SAMESITE", "Lax")),
-        "Lax",
-    )
-    SESSION_COOKIE_SECURE: bool = env_bool("SESSION_COOKIE_SECURE", env_bool("COOKIE_SECURE", default=IS_PROD))
-    SESSION_COOKIE_DOMAIN: str = env_str("SESSION_COOKIE_DOMAIN", "").strip()
-
-    SESSION_DAYS: int = env_int("SESSION_DAYS", 7, min_v=1, max_v=90)
-    PERMANENT_SESSION_LIFETIME = timedelta(days=SESSION_DAYS)
-
-    WTF_CSRF_ENABLED: bool = env_bool("WTF_CSRF_ENABLED", True)
-    WTF_CSRF_TIME_LIMIT: Optional[int] = env_opt_int("WTF_CSRF_TIME_LIMIT", 3600, min_v=300, max_v=86400)
-    WTF_CSRF_SSL_STRICT: bool = env_bool("WTF_CSRF_SSL_STRICT", default=False)
-    WTF_CSRF_SECRET_KEY: str = env_str("WTF_CSRF_SECRET_KEY", "").strip()
-
-    UPLOADS_DIR: str = env_str("UPLOADS_DIR", "static/uploads")
-    MAX_UPLOAD_MB: int = env_int("MAX_UPLOAD_MB", 20, min_v=1, max_v=200)
-    MAX_CONTENT_LENGTH: int = MAX_UPLOAD_MB * 1024 * 1024
-
-    LOG_LEVEL: str = env_str("LOG_LEVEL", "DEBUG" if DEBUG else "INFO").upper()
-
-    DATABASE_URL: str = normalize_database_url(os.getenv("DATABASE_URL"))
-    SQLALCHEMY_DATABASE_URI: str = normalize_db_any(env_str("SQLALCHEMY_DATABASE_URI", DATABASE_URL)) or DATABASE_URL
-    SQLALCHEMY_TRACK_MODIFICATIONS: bool = False
-    SQLALCHEMY_ECHO: bool = env_bool("SQLALCHEMY_ECHO", default=False)
-
-    DB_POOL_RECYCLE: int = env_int("DB_POOL_RECYCLE", 280, min_v=30, max_v=3600)
-    DB_POOL_SIZE: int = env_int("DB_POOL_SIZE", 5, min_v=1, max_v=30)
-    DB_MAX_OVERFLOW: int = env_int("DB_MAX_OVERFLOW", 10, min_v=0, max_v=80)
-
-    ENABLE_MINIFY: bool = env_bool("ENABLE_MINIFY", default=IS_PROD)
-    ENABLE_COMPRESS: bool = env_bool("ENABLE_COMPRESS", default=True)
-
-    CACHE_TYPE: str = env_str("CACHE_TYPE", "SimpleCache")
-    CACHE_DEFAULT_TIMEOUT: int = env_int("CACHE_DEFAULT_TIMEOUT", 300, min_v=10, max_v=86400)
-    CACHE_KEY_PREFIX: str = env_str("CACHE_KEY_PREFIX", env_str("APP_NAME", "skyline")).strip()[:64] or "skyline"
-
-    SEO_TITLE: str = env_str("SEO_TITLE", "Skyline Store · Tech + Streetwear premium")
-    SEO_DESCRIPTION: str = env_str(
-        "SEO_DESCRIPTION",
-        "Comprá moda urbana, accesorios y tecnología en un solo lugar. Envíos rápidos y pagos seguros.",
-    )
-    OG_IMAGE: str = env_str("OG_IMAGE", "img/og/og-home.png")
-
-    PRINTFUL_API_KEY: str = env_str("PRINTFUL_API_KEY", env_str("PRINTFUL_KEY", env_str("PRINTFUL_API_TOKEN", "")))
-    PRINTFUL_STORE_ID: str = env_str("PRINTFUL_STORE_ID", "")
-    PRINTFUL_CACHE_TTL: int = env_int("PRINTFUL_CACHE_TTL", 300, min_v=30, max_v=86400)
-    ENABLE_PRINTFUL: bool = env_bool("ENABLE_PRINTFUL", default=bool(PRINTFUL_API_KEY))
-
-    MP_PUBLIC_KEY: str = env_str("MP_PUBLIC_KEY", "")
-    MP_ACCESS_TOKEN: str = env_str("MP_ACCESS_TOKEN", "")
-    ENABLE_PAYMENTS: bool = env_bool("ENABLE_PAYMENTS", default=False)
-
-    STRIPE_PUBLIC_KEY: str = env_str("STRIPE_PUBLIC_KEY", "")
-    STRIPE_SECRET_KEY: str = env_str("STRIPE_SECRET_KEY", "")
-
-    PAYPAL_CLIENT_ID: str = env_str("PAYPAL_CLIENT_ID", "")
-    PAYPAL_SECRET: str = env_str("PAYPAL_SECRET", "")
-
-    MAIL_SERVER: str = env_str("MAIL_SERVER", "")
-    MAIL_PORT: int = env_int("MAIL_PORT", 587, min_v=1, max_v=65535)
-    MAIL_USE_TLS: bool = env_bool("MAIL_USE_TLS", default=True)
-    MAIL_USE_SSL: bool = env_bool("MAIL_USE_SSL", default=False)
-    MAIL_USERNAME: str = env_str("MAIL_USERNAME", "")
-    MAIL_PASSWORD: str = env_str("MAIL_PASSWORD", "")
-    MAIL_DEFAULT_SENDER: str = env_str("MAIL_DEFAULT_SENDER", "")
+    @classmethod
+    def env_name(cls) -> str:
+        return _computed_env()
 
     @classmethod
-    def _engine_options(cls) -> Dict[str, Any]:
-        uri = cls.SQLALCHEMY_DATABASE_URI
+    def is_prod(cls) -> bool:
+        return _is_prod(cls.env_name())
+
+    @classmethod
+    def debug(cls) -> bool:
+        return env_bool("DEBUG", env_bool("FLASK_DEBUG", False))
+
+    @classmethod
+    def testing(cls) -> bool:
+        return env_bool("TESTING", False)
+
+    @classmethod
+    def site_url(cls) -> str:
+        raw = env_str("SITE_URL", env_str("APP_URL", env_str("RENDER_EXTERNAL_URL", "")))
+        return normalize_site_url(raw)
+
+    @classmethod
+    def preferred_url_scheme(cls) -> str:
+        prod = cls.is_prod()
+        site = cls.site_url()
+        forced = env_bool("FORCE_HTTPS", default=prod)
+        scheme = normalize_scheme(
+            env_str("PREFERRED_URL_SCHEME", "https" if (prod or site.startswith("https://")) else "http")
+        )
+        if forced or site.startswith("https://"):
+            scheme = "https"
+        return scheme
+
+    @classmethod
+    def secret_key(cls) -> str:
+        k = env_str("SECRET_KEY", "").strip()
+        if k:
+            return k
+        if cls.is_prod():
+            return ""
+        return env_str("DEV_SECRET_KEY", "dev_skyline_fallback_change_me")
+
+    @classmethod
+    def session_cookie_domain(cls) -> str:
+        d = env_str("SESSION_COOKIE_DOMAIN", "").strip()
+        if not d:
+            return ""
+        if d in {"localhost", "127.0.0.1"}:
+            return ""
+        return d
+
+    @classmethod
+    def database_uri(cls) -> str:
+        db_url = normalize_database_url(os.getenv("DATABASE_URL"))
+        uri = normalize_db_any(env_str("SQLALCHEMY_DATABASE_URI", db_url)) or db_url
+        return uri
+
+    @classmethod
+    def engine_options(cls) -> Dict[str, Any]:
+        uri = cls.database_uri()
         if _is_sqlite(uri):
             return {"pool_pre_ping": True}
         return {
             "pool_pre_ping": True,
-            "pool_recycle": cls.DB_POOL_RECYCLE,
-            "pool_size": cls.DB_POOL_SIZE,
-            "max_overflow": cls.DB_MAX_OVERFLOW,
+            "pool_recycle": env_int("DB_POOL_RECYCLE", 280, min_v=30, max_v=3600),
+            "pool_size": env_int("DB_POOL_SIZE", 5, min_v=1, max_v=30),
+            "max_overflow": env_int("DB_MAX_OVERFLOW", 10, min_v=0, max_v=80),
         }
 
     @classmethod
+    def validate_required(cls) -> None:
+        if cls.is_prod():
+            k = cls.secret_key()
+            if not k or len(k) < 32:
+                raise RuntimeError("SECRET_KEY faltante o muy corto (>=32). Setealo en Render.")
+            if not cls.site_url():
+                raise RuntimeError("SITE_URL faltante. Setealo en Render (ej: https://tu-app.onrender.com).")
+
+    @classmethod
     def as_flask_config(cls) -> Dict[str, Any]:
-        cfg: Dict[str, Any] = {}
-        for base in reversed(cls.mro()):
-            for k, v in getattr(base, "__dict__", {}).items():
-                if k.isupper():
-                    cfg[k] = v
+        env_name = cls.env_name()
+        is_prod = cls.is_prod()
+        debug = cls.debug()
+        testing = cls.testing()
+        site = cls.site_url()
+        scheme = cls.preferred_url_scheme()
 
-        cfg["SQLALCHEMY_ENGINE_OPTIONS"] = cls._engine_options()
-        cfg["PERMANENT_SESSION_LIFETIME"] = cls.PERMANENT_SESSION_LIFETIME
-        cfg["MAX_CONTENT_LENGTH"] = cls.MAX_CONTENT_LENGTH
-        cfg["CONTENT_SECURITY_POLICY"] = csp_for_tailwind_cdn()
+        app_name = env_str("APP_NAME", "Skyline Store")
+        host = env_str("HOST", "0.0.0.0")
+        port = env_int("PORT", 5000, min_v=1, max_v=65535)
 
-        if not str(cfg.get("SERVER_NAME") or "").strip():
-            cfg.pop("SERVER_NAME", None)
+        session_days = env_int("SESSION_DAYS", 7, min_v=1, max_v=90)
+        max_upload_mb = env_int("MAX_UPLOAD_MB", 20, min_v=1, max_v=200)
 
-        if not str(cfg.get("WTF_CSRF_SECRET_KEY") or "").strip():
+        mp_public = env_str("MP_PUBLIC_KEY", "")
+        mp_token = env_str("MP_ACCESS_TOKEN", "")
+        stripe_pk = env_str("STRIPE_PUBLIC_KEY", "")
+        stripe_sk = env_str("STRIPE_SECRET_KEY", "")
+        paypal_id = env_str("PAYPAL_CLIENT_ID", "")
+        paypal_secret = env_str("PAYPAL_SECRET", "")
+
+        enable_payments = env_bool(
+            "ENABLE_PAYMENTS",
+            default=bool(mp_token or stripe_sk or paypal_secret),
+        )
+
+        printful_key = env_str("PRINTFUL_API_KEY", env_str("PRINTFUL_KEY", env_str("PRINTFUL_API_TOKEN", "")))
+        enable_printful = env_bool("ENABLE_PRINTFUL", default=bool(printful_key))
+
+        cache_prefix = _slug(env_str("CACHE_KEY_PREFIX", env_str("APP_NAME", "skyline")), "skyline")
+
+        server_name = env_str("SERVER_NAME", "").strip()
+        cookie_domain = cls.session_cookie_domain()
+
+        csrf_secret = env_str("WTF_CSRF_SECRET_KEY", "").strip()
+        if not csrf_secret and not is_prod:
+            csrf_secret = secrets.token_urlsafe(24)
+
+        cfg: Dict[str, Any] = {
+            "ENV": env_name,
+            "DEBUG": debug,
+            "TESTING": testing,
+            "FLASK_ENV": env_str("FLASK_ENV", env_str("ENV", env_name)).lower(),
+            "APP_NAME": app_name,
+            "SITE_URL": site,
+            "APP_URL": site,
+            "HOST": host,
+            "PORT": port,
+            "PREFERRED_URL_SCHEME": scheme,
+            "SECRET_KEY": cls.secret_key(),
+            "TRUST_PROXY_HEADERS": env_bool("TRUST_PROXY_HEADERS", default=is_prod),
+            "FORCE_HTTPS": env_bool("FORCE_HTTPS", default=is_prod),
+            "HSTS": env_bool("HSTS", default=is_prod),
+            "SESSION_COOKIE_NAME": env_str("SESSION_COOKIE_NAME", "skyline_session"),
+            "SESSION_COOKIE_HTTPONLY": env_bool("SESSION_COOKIE_HTTPONLY", True),
+            "SESSION_COOKIE_SAMESITE": normalize_samesite(
+                env_str("SESSION_COOKIE_SAMESITE", env_str("SESSION_SAMESITE", "Lax")),
+                "Lax",
+            ),
+            "SESSION_COOKIE_SECURE": env_bool("SESSION_COOKIE_SECURE", env_bool("COOKIE_SECURE", default=is_prod)),
+            "PERMANENT_SESSION_LIFETIME": timedelta(days=session_days),
+            "SESSION_REFRESH_EACH_REQUEST": env_bool("SESSION_REFRESH_EACH_REQUEST", default=not is_prod),
+            "MAX_CONTENT_LENGTH": int(max_upload_mb) * 1024 * 1024,
+            "UPLOADS_DIR": env_str("UPLOADS_DIR", "static/uploads"),
+            "WTF_CSRF_ENABLED": env_bool("WTF_CSRF_ENABLED", True),
+            "WTF_CSRF_TIME_LIMIT": env_opt_int("WTF_CSRF_TIME_LIMIT", 3600, min_v=300, max_v=86400),
+            "WTF_CSRF_SSL_STRICT": env_bool("WTF_CSRF_SSL_STRICT", default=False),
+            "WTF_CSRF_SECRET_KEY": csrf_secret or None,
+            "SQLALCHEMY_DATABASE_URI": cls.database_uri(),
+            "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+            "SQLALCHEMY_ECHO": env_bool("SQLALCHEMY_ECHO", default=False),
+            "SQLALCHEMY_ENGINE_OPTIONS": cls.engine_options(),
+            "ENABLE_MINIFY": env_bool("ENABLE_MINIFY", default=is_prod),
+            "ENABLE_COMPRESS": env_bool("ENABLE_COMPRESS", default=True),
+            "CACHE_TYPE": env_str("CACHE_TYPE", "SimpleCache"),
+            "CACHE_DEFAULT_TIMEOUT": env_int("CACHE_DEFAULT_TIMEOUT", 300, min_v=10, max_v=86400),
+            "CACHE_KEY_PREFIX": cache_prefix,
+            "SEO_TITLE": env_str("SEO_TITLE", "Skyline Store · Tech + Streetwear premium"),
+            "SEO_DESCRIPTION": env_str(
+                "SEO_DESCRIPTION",
+                "Comprá moda urbana, accesorios y tecnología en un solo lugar. Envíos rápidos y pagos seguros.",
+            ),
+            "OG_IMAGE": env_str("OG_IMAGE", "img/og/og-home.png"),
+            "PRINTFUL_API_KEY": printful_key,
+            "PRINTFUL_STORE_ID": env_str("PRINTFUL_STORE_ID", ""),
+            "PRINTFUL_CACHE_TTL": env_int("PRINTFUL_CACHE_TTL", 300, min_v=30, max_v=86400),
+            "ENABLE_PRINTFUL": enable_printful,
+            "MP_PUBLIC_KEY": mp_public,
+            "MP_ACCESS_TOKEN": mp_token,
+            "STRIPE_PUBLIC_KEY": stripe_pk,
+            "STRIPE_SECRET_KEY": stripe_sk,
+            "PAYPAL_CLIENT_ID": paypal_id,
+            "PAYPAL_SECRET": paypal_secret,
+            "ENABLE_PAYMENTS": enable_payments,
+            "MAIL_SERVER": env_str("MAIL_SERVER", ""),
+            "MAIL_PORT": env_int("MAIL_PORT", 587, min_v=1, max_v=65535),
+            "MAIL_USE_TLS": env_bool("MAIL_USE_TLS", default=True),
+            "MAIL_USE_SSL": env_bool("MAIL_USE_SSL", default=False),
+            "MAIL_USERNAME": env_str("MAIL_USERNAME", ""),
+            "MAIL_PASSWORD": env_str("MAIL_PASSWORD", ""),
+            "MAIL_DEFAULT_SENDER": env_str("MAIL_DEFAULT_SENDER", ""),
+            "CONTENT_SECURITY_POLICY": csp_for_tailwind_cdn(),
+            "JSON_SORT_KEYS": env_bool("JSON_SORT_KEYS", default=False),
+            "TEMPLATES_AUTO_RELOAD": env_bool("TEMPLATES_AUTO_RELOAD", default=debug),
+        }
+
+        if server_name:
+            cfg["SERVER_NAME"] = server_name
+
+        if cookie_domain:
+            cfg["SESSION_COOKIE_DOMAIN"] = cookie_domain
+
+        if not cfg.get("WTF_CSRF_SECRET_KEY"):
             cfg.pop("WTF_CSRF_SECRET_KEY", None)
 
-        samesite = normalize_samesite(str(cfg.get("SESSION_COOKIE_SAMESITE") or "Lax"), "Lax")
-        cfg["SESSION_COOKIE_SAMESITE"] = samesite
-
-        scheme = normalize_scheme(str(cfg.get("PREFERRED_URL_SCHEME") or ("https" if cls.IS_PROD else "http")))
-        if cfg.get("FORCE_HTTPS") or (cls.SITE_URL.startswith("https://")):
-            scheme = "https"
-        cfg["PREFERRED_URL_SCHEME"] = scheme
-
-        db_uri = normalize_db_any(str(cfg.get("SQLALCHEMY_DATABASE_URI") or ""))
-        cfg["SQLALCHEMY_DATABASE_URI"] = db_uri or cls.DATABASE_URL
-
-        if not str(cfg.get("SESSION_COOKIE_DOMAIN") or "").strip():
-            cfg.pop("SESSION_COOKIE_DOMAIN", None)
+        if not cfg.get("SERVER_NAME"):
+            cfg.pop("SERVER_NAME", None)
 
         return cfg
 
 
 class DevelopmentConfig(BaseConfig):
-    ENV = "development"
-    IS_PROD = False
-    DEBUG = True
-    LOG_LEVEL = env_str("LOG_LEVEL", "DEBUG").upper()
+    @classmethod
+    def env_name(cls) -> str:
+        return "development"
 
-    SESSION_COOKIE_SECURE = False
-    PREFERRED_URL_SCHEME = normalize_scheme(env_str("PREFERRED_URL_SCHEME", "http"))
-    WTF_CSRF_SSL_STRICT = env_bool("WTF_CSRF_SSL_STRICT", default=False)
-    ENABLE_MINIFY = env_bool("ENABLE_MINIFY", default=False)
-    FORCE_HTTPS = env_bool("FORCE_HTTPS", default=False)
-    HSTS = env_bool("HSTS", default=False)
+    @classmethod
+    def is_prod(cls) -> bool:
+        return False
+
+    @classmethod
+    def debug(cls) -> bool:
+        return env_bool("DEBUG", True)
 
 
 class ProductionConfig(BaseConfig):
-    ENV = "production"
-    IS_PROD = True
-    DEBUG = False
-    LOG_LEVEL = env_str("LOG_LEVEL", "INFO").upper()
-
-    SECRET_KEY = env_str("SECRET_KEY", "").strip()
-    SESSION_COOKIE_SECURE = env_bool("SESSION_COOKIE_SECURE", default=True)
-    SESSION_COOKIE_SAMESITE = normalize_samesite(env_str("SESSION_COOKIE_SAMESITE", "Lax"), "Lax")
-    ENABLE_MINIFY = env_bool("ENABLE_MINIFY", default=True)
+    @classmethod
+    def env_name(cls) -> str:
+        return "production"
 
     @classmethod
-    def validate_required(cls) -> None:
-        if not cls.SECRET_KEY or len(cls.SECRET_KEY) < 32:
-            raise RuntimeError("ProductionConfig: SECRET_KEY faltante o muy corto (>=32). Setealo en Render.")
-        if not cls.SITE_URL:
-            raise RuntimeError("ProductionConfig: SITE_URL faltante. Setealo en Render (ej: https://skyline-style.onrender.com).")
+    def is_prod(cls) -> bool:
+        return True
+
+    @classmethod
+    def debug(cls) -> bool:
+        return env_bool("DEBUG", False)
 
 
 def get_config(env_name: Optional[str] = None) -> Type[BaseConfig]:
-    e = (str(env_name).strip().lower() if env_name else env_str("FLASK_ENV", env_str("ENV", "")).lower())
+    e = (env_name or env_str("FLASK_ENV", env_str("ENV", "")) or "").strip().lower()
     debug = env_bool("DEBUG", env_bool("FLASK_DEBUG", False))
     if e in {"development", "dev"} or debug:
         return DevelopmentConfig
     return ProductionConfig
 
 
-config = {
+config: Dict[str, Type[BaseConfig]] = {
     "development": DevelopmentConfig,
     "production": ProductionConfig,
 }

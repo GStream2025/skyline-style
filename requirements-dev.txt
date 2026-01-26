@@ -1,123 +1,36 @@
-# ============================================================
-# Skyline Store — Development / Testing Requirements
-# ULTRA PRO · FINAL · NO BREAK · v2.1
-# ============================================================
-# ✔ Hereda TODO de producción
-# ✔ Testing rápido, estable y reproducible
-# ✔ Lint / Format / Types PRO
-# ✔ Debug UX sin afectar prod
-# ✔ CI-friendly (Linux / Windows / Render)
-# ============================================================
-
-
-# =========================
-# Base (Producción)
-# =========================
 -r requirements.txt
 
-
-# =========================
-# Testing (robusto + rápido)
-# =========================
 pytest==8.3.4
 pytest-cov==6.0.0
 pytest-mock==3.14.0
 pytest-env==1.1.5
-
-# ✅ Mejora 1: tests en paralelo (seguro con pytest>=7)
 pytest-xdist==3.6.1
-
-# ✅ Mejora 2: orden aleatorio (detecta dependencias ocultas)
 pytest-randomly==3.16.0
-
-# ✅ Mejora 3: control de tiempo (tokens, expiraciones, promos)
 freezegun==1.5.1
-
-# ✅ Mejora 4: evita cuelgues en CI/local
 pytest-timeout==2.3.1
-
-# ⚠️ opcional visual (no rompe)
-# pytest-sugar==1.0.0
-
-
-# =========================
-# Coverage / Reportes
-# =========================
 coverage[toml]==7.6.9
-
-# ✅ reporte HTML local (no afecta CI)
 pytest-html==4.1.1
 
-
-# =========================
-# Lint / Format / Types (Flask 3 SAFE)
-# =========================
 ruff==0.8.4
 black==24.10.0
 mypy==1.13.0
 
-# Tipos útiles (compatibles con py311)
 types-requests==2.32.0.20241016
 types-python-dateutil==2.9.0.20241206
 types-six==1.17.0.20241205
 
-# ⚠️ Nota PRO:
-# Flask/Werkzeug stubs oficiales NO están alineados con Flask 3.
-# Mejor estrategia: typing inline + mypy --install-types
-# types-Flask / types-Werkzeug NO recomendados.
-
-
-# =========================
-# Debug / Dev UX
-# =========================
 ipython==8.31.0
 rich==13.9.4
-
-# ✅ Mejora 5: watchdog solo en dev, evita reloads rotos en Windows
 watchdog==6.0.0; platform_system != "Windows"
 debugpy==1.8.11
 
-
-# =========================
-# Seguridad / Quality Gates (DEV)
-# =========================
 bandit==1.7.10
-
-# Auditoría de dependencias (solo dev)
 pip-audit==2.7.3
-
-# Árbol de dependencias (detecta duplicados/conflictos)
 pipdeptree==2.23.4
 
-
-# =========================
-# DB / Factories / Seeds
-# =========================
 sqlalchemy-utils==0.41.2
 faker==33.1.0
 factory-boy==3.3.1
 
-
-# =========================
-# Tooling PRO / CI
-# =========================
 tox==4.23.2
-
-
-# =========================
-# Tooling opcional (NO obligatorio)
-# =========================
 pip-tools==7.4.1
-
-# Pre-commit (si automatizás ruff/black)
-# pre-commit==4.0.1
-
-# HTTP mocking clásico
-# responses==0.25.3
-
-# Mocking async moderno (opcional)
-# httpx==0.27.2
-# respx==0.21.1
-
-# Profiling
-# py-spy==0.3.14
