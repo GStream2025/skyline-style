@@ -1,156 +1,160 @@
-{# app/templates/admin/dashboard.html — Skyline Admin Dashboard (ULTRA PRO v3 FINAL / NO-500 / FAIL-SAFE) #}
 {% extends "admin/base_admin.html" %}
 {% block title %}Dashboard · Skyline Admin{% endblock %}
 
 {% block content %}
+{% set _vf = (view_functions if view_functions is defined and view_functions else {}) %}
+{% macro safe_url(ep, fb) -%}{{ url_for(ep) if (ep and ep in _vf) else fb }}{%- endmacro %}
+
+{% set url_products_list = safe_url('admin.products_list','/admin/products') %}
+{% set url_products_new  = safe_url('admin.products_new','/admin/products/new') %}
+{% set url_categories    = safe_url('admin.categories','/admin/categories') %}
+{% set url_offers        = safe_url('admin.offers','/admin/offers') %}
+{% set url_payments      = safe_url('admin.payments','/admin/payments') %}
+{% set url_printful      = safe_url('printful.products','/printful/productos') %}
+
+{% set prod_count  = (prod_count|default(0, true))|int %}
+{% set cat_count   = (cat_count|default(0, true))|int %}
+{% set offer_count = (offer_count|default(0, true))|int %}
+{% set order_count = (order_count|default(0, true))|int %}
+{% set recent_products = (recent_products|default([], true)) %}
+{% set has_recent = (recent_products and (recent_products|length > 0)) %}
+
 <style>
-/* ==========================================================
-   SKYLINE ADMIN DASHBOARD — ULTRA PRO (Modern marketplace) — FINAL
-   ✅ mejoras clave (sin romper):
-   - NO usa current_app.* (evita UndefinedError si no lo pasás)
-   - URLs safe con view_functions (vienen desde inject_globals)
-   - data defaults a prueba de balas
-   - filtros + search + copy + estados online/csrf
-========================================================== */
-
-:root{
-  --ad-bg0: rgba(255,255,255,.06);
-  --ad-bg1: rgba(255,255,255,.04);
-  --ad-stroke: rgba(148,163,184,.18);
-  --ad-stroke2: rgba(148,163,184,.12);
-  --ad-ink: rgba(255,255,255,.92);
-  --ad-muted: rgba(255,255,255,.64);
-  --ad-muted2: rgba(255,255,255,.52);
-
-  --ad-a: #2f7bff;
-  --ad-b: #10b8d6;
-  --ad-c: #ffb547;
-
-  --ad-grad: linear-gradient(90deg, var(--ad-a), var(--ad-b), var(--ad-c));
-  --ad-shadow1: 0 16px 48px rgba(0,0,0,.28);
-  --ad-shadow2: 0 26px 90px rgba(0,0,0,.36);
-
-  --ad-r: 18px;
-  --ad-r2: 22px;
-  --ad-ease: cubic-bezier(.2,.9,.2,1);
+.ad-page{
+  --ad-bg0:rgba(255,255,255,.06);
+  --ad-bg1:rgba(255,255,255,.04);
+  --ad-stroke:rgba(148,163,184,.18);
+  --ad-stroke2:rgba(148,163,184,.12);
+  --ad-ink:rgba(255,255,255,.92);
+  --ad-muted:rgba(255,255,255,.64);
+  --ad-muted2:rgba(255,255,255,.52);
+  --ad-a:#2f7bff;
+  --ad-b:#10b8d6;
+  --ad-c:#ffb547;
+  --ad-grad:linear-gradient(90deg,var(--ad-a),var(--ad-b),var(--ad-c));
+  --ad-shadow1:0 16px 48px rgba(0,0,0,.28);
+  --ad-shadow2:0 26px 90px rgba(0,0,0,.36);
+  --ad-r:18px;
+  --ad-r2:22px;
+  --ad-ease:cubic-bezier(.2,.9,.2,1);
+  --ad-ring:0 0 0 4px rgba(47,123,255,.22);
 }
-
+.ad-page *{box-sizing:border-box}
 .ad-wrap{display:flex;flex-direction:column;gap:14px;padding-bottom:16px}
-
 .ad-hero{
   position:relative;overflow:hidden;
   border:1px solid var(--ad-stroke);
-  border-radius: var(--ad-r2);
+  border-radius:var(--ad-r2);
   background:
     radial-gradient(1200px 520px at 18% 18%, rgba(47,123,255,.22), transparent 62%),
     radial-gradient(1100px 520px at 86% 22%, rgba(255,181,71,.18), transparent 64%),
     radial-gradient(900px 520px at 50% 95%, rgba(16,184,214,.16), transparent 62%),
     linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
-  box-shadow: var(--ad-shadow1);
-  padding: 14px;
+  box-shadow:var(--ad-shadow1);
+  padding:14px;
+  contain:layout paint;
 }
-@media(min-width: 900px){ .ad-hero{ padding: 16px; } }
+@media(min-width:900px){.ad-hero{padding:16px}}
 .ad-hero::after{
   content:"";
-  position:absolute; inset:0; pointer-events:none; opacity:.05;
+  position:absolute;inset:0;pointer-events:none;opacity:.05;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='260' height='260' filter='url(%23n)' opacity='.85'/%3E%3C/svg%3E");
-  mix-blend-mode: overlay;
+  mix-blend-mode:overlay;
 }
-
 .ad-head{position:relative;display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:12px}
 .ad-title{margin:0;font-weight:1000;letter-spacing:-.6px;font-size:clamp(1.25rem,2.4vw,1.8rem);color:var(--ad-ink)}
 .ad-sub{margin:.45rem 0 0;max-width:70ch;color:var(--ad-muted);line-height:1.5;font-weight:750}
-
 .ad-badges{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
 .ad-pill{
   display:inline-flex;align-items:center;gap:8px;
   padding:8px 10px;border-radius:999px;
   border:1px solid var(--ad-stroke2);
-  background: rgba(255,255,255,.06);
-  color: rgba(255,255,255,.86);
-  font-weight: 900;
-  font-size: .82rem;
+  background:rgba(255,255,255,.06);
+  color:rgba(255,255,255,.86);
+  font-weight:900;
+  font-size:.82rem;
+  white-space:nowrap;
 }
 .ad-dot{width:10px;height:10px;border-radius:999px;background:var(--ad-grad);box-shadow:0 12px 22px rgba(0,0,0,.25)}
-
 .ad-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;align-items:center}
 .ad-btn{
   display:inline-flex;align-items:center;justify-content:center;gap:10px;
   padding:10px 12px;border-radius:999px;
   border:1px solid var(--ad-stroke2);
-  background: rgba(255,255,255,.06);
-  color: rgba(255,255,255,.92);
+  background:rgba(255,255,255,.06);
+  color:rgba(255,255,255,.92);
   text-decoration:none;
-  font-weight: 950;
-  transition: transform .18s var(--ad-ease), box-shadow .18s var(--ad-ease), background .18s var(--ad-ease);
+  font-weight:950;
+  transition:transform .18s var(--ad-ease),box-shadow .18s var(--ad-ease),background .18s var(--ad-ease),filter .18s var(--ad-ease);
+  user-select:none;
+  min-height:44px;
 }
 .ad-btn:hover{transform:translateY(-1px);background:rgba(255,255,255,.08);box-shadow:0 18px 40px rgba(0,0,0,.20)}
+.ad-btn:active{transform:translateY(0)}
 .ad-btn.primary{background:var(--ad-grad);border-color:transparent;color:#0b1220}
-.ad-btn.primary:hover{filter:saturate(1.05)}
+.ad-btn.primary:hover{filter:saturate(1.06)}
 .ad-btn svg{width:18px;height:18px;opacity:.95}
-
 .ad-grid{display:grid;grid-template-columns:1fr;gap:14px}
-@media(min-width:980px){ .ad-grid{ grid-template-columns: 1.2fr .8fr; } }
-
+@media(min-width:980px){.ad-grid{grid-template-columns:1.2fr .8fr}}
 .ad-card{
   border:1px solid var(--ad-stroke);
-  border-radius: var(--ad-r2);
-  background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
-  box-shadow: var(--ad-shadow1);
+  border-radius:var(--ad-r2);
+  background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+  box-shadow:var(--ad-shadow1);
   overflow:hidden;
+  content-visibility:auto;
+  contain-intrinsic-size:720px;
 }
 .ad-card-h{
   padding:12px 14px;
   display:flex;align-items:center;justify-content:space-between;gap:10px;
-  border-bottom: 1px solid rgba(148,163,184,.12);
+  border-bottom:1px solid rgba(148,163,184,.12);
 }
 .ad-card-h h2{margin:0;font-size:1.02rem;font-weight:1000;letter-spacing:-.3px;color:rgba(255,255,255,.92)}
 .ad-card-h .hint{color:var(--ad-muted2);font-weight:850;font-size:.85rem}
 .ad-card-b{padding:12px 14px 14px}
-
-.kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
-@media(min-width:600px){ .kpis{grid-template-columns:repeat(4,1fr)} }
+.kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:12px}
+@media(min-width:600px){.kpis{grid-template-columns:repeat(4,1fr)}}
 .kpi{
   border:1px solid rgba(148,163,184,.14);
-  background: rgba(255,255,255,.05);
-  border-radius: 18px;
-  padding: 12px;
+  background:rgba(255,255,255,.05);
+  border-radius:18px;
+  padding:12px;
   position:relative;
   overflow:hidden;
+  min-height:94px;
 }
 .kpi::after{
-  content:"";position:absolute;inset:auto -40px -40px auto;
+  content:"";
+  position:absolute;inset:auto -40px -40px auto;
   width:120px;height:120px;border-radius:999px;background:rgba(47,123,255,.14);
 }
-.kpi .label{color:var(--ad-muted2);font-weight:900;font-size:.80rem;display:flex;align-items:center;gap:8px}
+.kpi .label{color:var(--ad-muted2);font-weight:900;font-size:.80rem;display:flex;align-items:center;gap:8px;white-space:nowrap}
 .kpi .value{margin-top:6px;font-weight:1000;letter-spacing:-.4px;font-size:1.35rem;color:rgba(255,255,255,.92)}
-.kpi .delta{margin-top:6px;color:rgba(255,255,255,.72);font-weight:850;font-size:.82rem}
-
+.kpi .delta{margin-top:6px;color:rgba(255,255,255,.72);font-weight:850;font-size:.82rem;line-height:1.25}
 .badge-mini{
   display:inline-flex;align-items:center;justify-content:center;
   padding:2px 8px;border-radius:999px;
   border:1px solid rgba(255,255,255,.18);
-  background: rgba(255,255,255,.08);
-  color: rgba(255,255,255,.86);
-  font-weight: 900;
-  font-size: .74rem;
+  background:rgba(255,255,255,.08);
+  color:rgba(255,255,255,.86);
+  font-weight:900;
+  font-size:.74rem;
 }
 .badge-mini.ok{border-color:rgba(34,197,94,.26);background:rgba(34,197,94,.12)}
 .badge-mini.warn{border-color:rgba(255,181,71,.26);background:rgba(255,181,71,.12)}
 .badge-mini.bad{border-color:rgba(239,68,68,.26);background:rgba(239,68,68,.12)}
-
 .tools{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
 .tool{
-  flex: 1 1 180px; min-width: 180px;
+  flex:1 1 180px;min-width:180px;
   border:1px solid rgba(148,163,184,.14);
-  background: rgba(255,255,255,.05);
-  border-radius: 18px;
-  padding: 12px;
+  background:rgba(255,255,255,.05);
+  border-radius:18px;
+  padding:12px;
 }
 .tool .t{font-weight:1000;color:rgba(255,255,255,.92);letter-spacing:-.2px}
 .tool .d{margin-top:6px;color:var(--ad-muted);font-weight:780;line-height:1.35;font-size:.88rem}
-.tool .a{margin-top:10px;display:flex;gap:10px;flex-wrap:wrap}
-
+.tool .a{margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .table-wrap{border:1px solid rgba(148,163,184,.12);border-radius:18px;overflow:hidden;background:rgba(255,255,255,.03)}
 .table-top{
   padding:10px 12px;display:flex;flex-wrap:wrap;gap:10px;
@@ -161,390 +165,415 @@
   display:flex;align-items:center;gap:10px;
   padding:10px 12px;border-radius:999px;
   border:1px solid rgba(148,163,184,.14);
-  background: rgba(255,255,255,.06);
-  min-width: min(420px, 100%);
+  background:rgba(255,255,255,.06);
+  min-width:min(420px,100%);
 }
 .search-mini input{
   border:0;outline:0;background:transparent;width:100%;
-  color: rgba(255,255,255,.92);font-weight:850;
+  color:rgba(255,255,255,.92);font-weight:850;
 }
 .search-mini input::placeholder{color:rgba(255,255,255,.55);font-weight:800}
-
 .chips{display:flex;gap:8px;flex-wrap:wrap}
 .chip{
   border-radius:999px;padding:8px 10px;
   border:1px solid rgba(148,163,184,.14);
-  background: rgba(255,255,255,.05);
-  color: rgba(255,255,255,.84);
-  font-weight: 900;font-size:.80rem;
+  background:rgba(255,255,255,.05);
+  color:rgba(255,255,255,.84);
+  font-weight:900;font-size:.80rem;
   cursor:pointer;user-select:none;
+  min-height:40px;
 }
 .chip[aria-pressed="true"]{background:var(--ad-grad);color:#0b1220;border-color:transparent}
-
-table{width:100%;border-collapse:collapse}
-th,td{padding:10px 12px;text-align:left;border-bottom:1px solid rgba(148,163,184,.10)}
-th{font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.65);font-weight:950}
-td{color:rgba(255,255,255,.86);font-weight:820}
+.chip:focus-visible{outline:none;box-shadow:var(--ad-ring);border-radius:999px}
+.table-scroll{overflow:auto;max-width:100%}
+.ad-page table{width:100%;border-collapse:collapse}
+.ad-page th,.ad-page td{padding:10px 12px;text-align:left;border-bottom:1px solid rgba(148,163,184,.10);vertical-align:top}
+.ad-page th{
+  font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;
+  color:rgba(255,255,255,.65);font-weight:950;
+  position:sticky;top:0;background:rgba(10,14,25,.72);
+  backdrop-filter:blur(10px);
+}
+.ad-page td{color:rgba(255,255,255,.86);font-weight:820}
 .tr-muted{color:rgba(255,255,255,.60);font-weight:780}
 .row-actions{display:flex;gap:8px;flex-wrap:wrap}
 .a-link{
   text-decoration:none;color:rgba(255,255,255,.92);font-weight:950;
-  border:1px solid rgba(148,163,184,.14);background: rgba(255,255,255,.05);
+  border:1px solid rgba(148,163,184,.14);background:rgba(255,255,255,.05);
   padding:7px 10px;border-radius:999px;
+  display:inline-flex;align-items:center;justify-content:center;
+  min-height:38px;
 }
 .a-link:hover{background:rgba(255,255,255,.08)}
-
 .empty-pro{padding:16px;color:rgba(255,255,255,.72);font-weight:850;line-height:1.45}
 .codepath{
   display:inline-flex;align-items:center;gap:8px;
   padding:8px 10px;border-radius:999px;
   border:1px solid rgba(148,163,184,.16);
-  background: rgba(255,255,255,.05);
-  font-weight: 900;
-  color: rgba(255,255,255,.82);
+  background:rgba(255,255,255,.05);
+  font-weight:900;
+  color:rgba(255,255,255,.82);
+  font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
 }
-
 .sticky-actions{position:sticky;bottom:10px;z-index:20;display:flex;justify-content:center;margin-top:10px}
 .sticky-actions .bar{
-  width:min(860px, 100%);
+  width:min(860px,100%);
   display:flex;gap:10px;flex-wrap:wrap;
   justify-content:space-between;align-items:center;
   padding:10px 12px;border-radius:999px;
   border:1px solid rgba(148,163,184,.14);
-  background: rgba(10,14,25,.55);
-  backdrop-filter: blur(10px);
-  box-shadow: var(--ad-shadow2);
+  background:rgba(10,14,25,.55);
+  backdrop-filter:blur(10px);
+  box-shadow:var(--ad-shadow2);
 }
-@media(min-width:980px){ .sticky-actions{display:none} }
-
-:focus-visible{outline:none;box-shadow:0 0 0 4px rgba(47,123,255,.22);border-radius:14px}
-@media (prefers-reduced-motion: reduce){ *{transition:none!important;animation:none!important;} }
+@media(min-width:980px){.sticky-actions{display:none}}
+.ad-page :focus-visible{outline:none;box-shadow:var(--ad-ring);border-radius:14px}
+@media (prefers-reduced-motion: reduce){.ad-page *{transition:none!important;animation:none!important}}
+@media (forced-colors: active){
+  .ad-page .ad-btn.primary{forced-color-adjust:none;background:ButtonText;color:ButtonFace;border:1px solid ButtonText}
+  .ad-page .ad-btn,.ad-page .a-link{forced-color-adjust:auto}
+  .ad-page .table-wrap,.ad-page .ad-card,.ad-page .ad-hero{forced-color-adjust:auto}
+}
 </style>
 
-{# ------------------------------
-   SAFE URLs (NO usa current_app)
------------------------------- #}
-{% set _vf = (view_functions if view_functions is defined and view_functions else {}) %}
-{% macro safe_url(endpoint, fallback='#') -%}
-  {%- if endpoint and endpoint in _vf -%}
-    {{- url_for(endpoint) -}}
-  {%- else -%}
-    {{- fallback -}}
-  {%- endif -%}
-{%- endmacro %}
+<div class="ad-page">
+  <div class="ad-wrap">
 
-{% set url_products_list = safe_url('admin.products_list', '/admin/products') %}
-{% set url_products_new  = safe_url('admin.products_new',  '/admin/products/new') %}
-{% set url_categories    = safe_url('admin.categories',    '/admin/categories') %}
-{% set url_offers        = safe_url('admin.offers',        '/admin/offers') %}
-{% set url_payments      = safe_url('admin.payments',      '/admin/payments') %}
-{% set url_printful      = safe_url('printful.products',   '/printful/productos') %}
+    <section class="ad-hero" aria-label="Dashboard Skyline Admin">
+      <div class="ad-head">
+        <div>
+          <h1 class="ad-title">Dashboard</h1>
+          <p class="ad-sub">Centro de control de Skyline Store: catálogo, categorías, ofertas, media e integraciones.</p>
+          <div class="ad-badges" aria-label="Estado del sistema">
+            <span class="ad-pill"><span class="ad-dot" aria-hidden="true"></span> Panel Admin activo</span>
+            <span class="ad-pill">🛡️ CSRF <span class="badge-mini ok" id="csrfState">OK</span></span>
+            <span class="ad-pill">🌐 Conexión <span class="badge-mini ok" id="netState">Online</span></span>
+          </div>
+        </div>
 
-{# ------------------------------
-   SAFE DATA DEFAULTS
------------------------------- #}
-{% set prod_count  = (prod_count|default(0)) %}
-{% set cat_count   = (cat_count|default(0)) %}
-{% set offer_count = (offer_count|default(0)) %}
-{% set order_count = (order_count|default(0)) %}
-{% set recent_products = (recent_products|default([])) %}
-
-<div class="ad-wrap">
-
-  <section class="ad-hero" aria-label="Dashboard Skyline Admin">
-    <div class="ad-head">
-      <div>
-        <h1 class="ad-title">Dashboard</h1>
-        <p class="ad-sub">
-          Centro de control de Skyline Store: catálogo, categorías, ofertas, media e integraciones (Printful / dropship).
-        </p>
-
-        <div class="ad-badges" aria-label="Estado del sistema">
-          <span class="ad-pill"><span class="ad-dot" aria-hidden="true"></span> Panel Admin activo</span>
-          <span class="ad-pill">🛡️ CSRF <span class="badge-mini ok" id="csrfState">OK</span></span>
-          <span class="ad-pill">🌐 Conexión <span class="badge-mini ok" id="netState">Online</span></span>
+        <div class="ad-actions" aria-label="Acciones principales">
+          <a class="ad-btn primary" href="{{ url_products_new|e }}">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            Crear producto
+          </a>
+          <a class="ad-btn" href="{{ url_products_list|e }}">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            Productos
+          </a>
+          <a class="ad-btn" href="{{ url_offers|e }}">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-7" stroke="currentColor" stroke-width="2"/><path d="M12 3v10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7 7l5-4 5 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Ofertas
+          </a>
         </div>
       </div>
 
-      <div class="ad-actions" aria-label="Acciones principales">
-        <a class="ad-btn primary" href="{{ url_products_new }}">
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-          Crear producto
-        </a>
-        <a class="ad-btn" href="{{ url_products_list }}">
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-          Productos
-        </a>
-        <a class="ad-btn" href="{{ url_offers }}">
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-7" stroke="currentColor" stroke-width="2"/><path d="M12 3v10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7 7l5-4 5 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          Ofertas
-        </a>
-      </div>
-    </div>
-
-    <div class="kpis" style="margin-top:12px" aria-label="Indicadores">
-      <div class="kpi">
-        <div class="label">📦 Productos <span class="badge-mini" title="Total en catálogo">CAT</span></div>
-        <div class="value">{{ prod_count }}</div>
-        <div class="delta">Gestioná, editá y publicá.</div>
-      </div>
-
-      <div class="kpi">
-        <div class="label">🧩 Categorías <span class="badge-mini" title="Filtros del shop">SHOP</span></div>
-        <div class="value">{{ cat_count }}</div>
-        <div class="delta">Orden y navegación.</div>
+      <div class="kpis" aria-label="Indicadores">
+        <div class="kpi">
+          <div class="label">📦 Productos <span class="badge-mini" title="Total en catálogo">CAT</span></div>
+          <div class="value">{{ prod_count }}</div>
+          <div class="delta">Gestioná, editá y publicá.</div>
+        </div>
+        <div class="kpi">
+          <div class="label">🧩 Categorías <span class="badge-mini" title="Filtros del shop">SHOP</span></div>
+          <div class="value">{{ cat_count }}</div>
+          <div class="delta">Orden y navegación.</div>
+        </div>
+        <div class="kpi">
+          <div class="label">🔥 Ofertas <span class="badge-mini warn" title="Promos activas o programadas">PROMO</span></div>
+          <div class="value">{{ offer_count }}</div>
+          <div class="delta">Banners y cards.</div>
+        </div>
+        <div class="kpi">
+          <div class="label">🧾 Pedidos <span class="badge-mini" title="Si aún no está conectado, queda en 0">ORD</span></div>
+          <div class="value">{{ order_count }}</div>
+          <div class="delta">Estado comercial.</div>
+        </div>
       </div>
 
-      <div class="kpi">
-        <div class="label">🔥 Ofertas <span class="badge-mini warn" title="Promos activas o programadas">PROMO</span></div>
-        <div class="value">{{ offer_count }}</div>
-        <div class="delta">Banners y cards.</div>
+      <div class="sticky-actions">
+        <div class="bar" aria-label="Accesos rápidos">
+          <span class="ad-pill">⚡ Accesos rápidos</span>
+          <a class="ad-btn primary" href="{{ url_products_new|e }}">+ Producto</a>
+          <a class="ad-btn" href="{{ url_products_list|e }}">Ver catálogo</a>
+        </div>
       </div>
+    </section>
 
-      <div class="kpi">
-        <div class="label">🧾 Pedidos <span class="badge-mini" title="Si aún no lo tenés conectado, queda en 0">ORD</span></div>
-        <div class="value">{{ order_count }}</div>
-        <div class="delta">Estado comercial.</div>
-      </div>
-    </div>
+    <div class="ad-grid">
 
-    <div class="sticky-actions" aria-hidden="false">
-      <div class="bar">
-        <span class="ad-pill">⚡ Accesos rápidos</span>
-        <a class="ad-btn primary" href="{{ url_products_new }}">+ Producto</a>
-        <a class="ad-btn" href="{{ url_products_list }}">Ver catálogo</a>
-      </div>
-    </div>
-  </section>
+      <section class="ad-card" aria-label="Recientes">
+        <div class="ad-card-h">
+          <h2>Productos recientes</h2>
+          <span class="hint" id="recentHint">Búsqueda y acciones rápidas</span>
+        </div>
 
-  <div class="ad-grid">
+        <div class="ad-card-b">
+          <div class="table-wrap" aria-describedby="recentHint">
+            <div class="table-top">
+              <div class="search-mini" role="search" aria-label="Buscar en recientes">
+                <span aria-hidden="true">🔎</span>
+                <input id="recentSearch" type="search" autocomplete="off" inputmode="search" placeholder="Buscar por nombre / categoría / estado…" aria-controls="recentBody">
+              </div>
 
-    <!-- LEFT: Recent + Control -->
-    <section class="ad-card" aria-label="Recientes">
-      <div class="ad-card-h">
-        <h2>Productos recientes</h2>
-        <span class="hint">Búsqueda y acciones rápidas</span>
-      </div>
-
-      <div class="ad-card-b">
-        <div class="table-wrap">
-          <div class="table-top">
-            <div class="search-mini" role="search" aria-label="Buscar en recientes">
-              <span aria-hidden="true">🔎</span>
-              <input id="recentSearch" type="search" placeholder="Buscar por nombre / categoría / estado…">
-            </div>
-
-            <div class="chips" role="group" aria-label="Filtros rápidos">
-              <button class="chip" type="button" data-chip="all" aria-pressed="true">Todos</button>
-              <button class="chip" type="button" data-chip="active" aria-pressed="false">Activos</button>
-              <button class="chip" type="button" data-chip="draft" aria-pressed="false">Borrador</button>
-              <button class="chip" type="button" data-chip="sale" aria-pressed="false">Oferta</button>
-            </div>
-          </div>
-
-          {% if recent_products and recent_products|length > 0 %}
-            <table aria-label="Tabla de productos recientes">
-              <thead>
-                <tr>
-                  <th>Producto</th>
-                  <th>Categoría</th>
-                  <th>Estado</th>
-                  <th>Precio</th>
-                  <th>Acciones</th>
-                </tr>
-              </thead>
-              <tbody id="recentBody">
-                {% for p in recent_products %}
-                  {% set pid = (p.id if p is not mapping else p.get('id'))|default('') %}
-                  {% set name = (p.name if p is not mapping else p.get('name'))|default((p.title if p is not mapping else p.get('title'))|default('Producto')) %}
-                  {% set cat  = (p.category if p is not mapping else p.get('category'))|default('otros') %}
-                  {% set status = (p.status if p is not mapping else p.get('status'))|default('active') %}
-                  {% set price = (p.price if p is not mapping else p.get('price'))|default('0') %}
-                  {% set is_sale = (p.is_sale if p is not mapping else p.get('is_sale'))|default(false) %}
-
-                  <tr data-row
-                      data-name="{{ (name|string)|lower }}"
-                      data-cat="{{ (cat|string)|lower }}"
-                      data-status="{{ (status|string)|lower }}"
-                      data-sale="{{ '1' if is_sale else '0' }}">
-                    <td>
-                      <div style="font-weight:1000">{{ name }}</div>
-                      <div class="tr-muted">ID: {{ pid if pid else '—' }}</div>
-                    </td>
-                    <td class="tr-muted">{{ cat }}</td>
-                    <td>
-                      {% if (status|string)|lower in ['active','enabled','published'] %}
-                        <span class="badge-mini ok">Activo</span>
-                      {% elif (status|string)|lower in ['draft','disabled','pending'] %}
-                        <span class="badge-mini warn">Borrador</span>
-                      {% else %}
-                        <span class="badge-mini">{{ status }}</span>
-                      {% endif %}
-                      {% if is_sale %}
-                        <span class="badge-mini bad" style="margin-left:6px">Oferta</span>
-                      {% endif %}
-                    </td>
-                    <td class="tr-muted">{{ price }}</td>
-                    <td>
-                      <div class="row-actions">
-                        <a class="a-link" href="{{ url_products_list }}">Ver</a>
-                        <a class="a-link" href="{{ url_products_new }}">Nuevo</a>
-                      </div>
-                    </td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          {% else %}
-            <div class="empty-pro" id="recentEmpty">
-              <b style="color:rgba(255,255,255,.92)">Sin productos recientes</b><br>
-              Creá tu primer producto o importá desde Printful para poblar el catálogo.
-              <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap">
-                <a class="ad-btn primary" href="{{ url_products_new }}">Crear producto</a>
-                <a class="ad-btn" href="{{ url_printful }}">Ver Printful</a>
+              <div class="chips" role="group" aria-label="Filtros rápidos">
+                <button class="chip" type="button" data-chip="all" aria-pressed="true">Todos</button>
+                <button class="chip" type="button" data-chip="active" aria-pressed="false">Activos</button>
+                <button class="chip" type="button" data-chip="draft" aria-pressed="false">Borrador</button>
+                <button class="chip" type="button" data-chip="sale" aria-pressed="false">Oferta</button>
               </div>
             </div>
-          {% endif %}
-        </div>
 
-        <div class="tools" aria-label="Herramientas rápidas">
+            {% if has_recent %}
+              <div class="table-scroll" role="region" aria-label="Tabla de productos recientes" tabindex="0">
+                <table>
+                  <thead>
+                    <tr>
+                      <th scope="col">Producto</th>
+                      <th scope="col">Categoría</th>
+                      <th scope="col">Estado</th>
+                      <th scope="col">Precio</th>
+                      <th scope="col">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody id="recentBody">
+                    {% for p in recent_products %}
+                      {% set _pid = (p.id if p is not mapping else p.get('id'))|default('', true) %}
+                      {% set _title = (p.name if p is not mapping else p.get('name'))|default((p.title if p is not mapping else p.get('title'))|default('Producto', true), true) %}
+                      {% set _cat = (p.category if p is not mapping else p.get('category'))|default('otros', true) %}
+                      {% set _status = (p.status if p is not mapping else p.get('status'))|default('active', true) %}
+                      {% set _price = (p.price if p is not mapping else p.get('price'))|default('0', true) %}
+                      {% set _sale = (p.is_sale if p is not mapping else p.get('is_sale'))|default(false, true) %}
+
+                      <tr data-row
+                          data-name="{{ (_title|string)|lower|e }}"
+                          data-cat="{{ (_cat|string)|lower|e }}"
+                          data-status="{{ (_status|string)|lower|e }}"
+                          data-sale="{{ '1' if _sale else '0' }}">
+                        <td>
+                          <div style="font-weight:1000">{{ _title|e }}</div>
+                          <div class="tr-muted">ID: {{ (_pid if _pid else '—')|e }}</div>
+                        </td>
+                        <td class="tr-muted">{{ _cat|e }}</td>
+                        <td>
+                          {% set _st = (_status|string)|lower %}
+                          {% if _st in ['active','enabled','published'] %}
+                            <span class="badge-mini ok">Activo</span>
+                          {% elif _st in ['draft','disabled','pending'] %}
+                            <span class="badge-mini warn">Borrador</span>
+                          {% else %}
+                            <span class="badge-mini">{{ _status|e }}</span>
+                          {% endif %}
+                          {% if _sale %}
+                            <span class="badge-mini bad" style="margin-left:6px">Oferta</span>
+                          {% endif %}
+                        </td>
+                        <td class="tr-muted">{{ _price|e }}</td>
+                        <td>
+                          <div class="row-actions">
+                            <a class="a-link" href="{{ url_products_list|e }}">Ver</a>
+                            <a class="a-link" href="{{ url_products_new|e }}">Nuevo</a>
+                          </div>
+                        </td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+
+              <div class="empty-pro" id="recentEmpty" hidden aria-live="polite">
+                <b style="color:rgba(255,255,255,.92)">Sin resultados</b><br>
+                Probá otro término o cambiá el filtro.
+              </div>
+            {% else %}
+              <div class="empty-pro" id="recentEmpty">
+                <b style="color:rgba(255,255,255,.92)">Sin productos recientes</b><br>
+                Creá tu primer producto o importá desde Printful para poblar el catálogo.
+                <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap">
+                  <a class="ad-btn primary" href="{{ url_products_new|e }}">Crear producto</a>
+                  <a class="ad-btn" href="{{ url_printful|e }}">Ver Printful</a>
+                </div>
+              </div>
+            {% endif %}
+          </div>
+
+          <div class="tools" aria-label="Herramientas rápidas">
+            <div class="tool">
+              <div class="t">🧩 Categorías</div>
+              <div class="d">Controlá los filtros del shop y mantené ordenado el catálogo.</div>
+              <div class="a">
+                <a class="ad-btn" href="{{ url_categories|e }}">Gestionar</a>
+              </div>
+            </div>
+
+            <div class="tool">
+              <div class="t">🔥 Ofertas & Banners</div>
+              <div class="d">Cards y promos para home / shop. Activá ofertas flash.</div>
+              <div class="a">
+                <a class="ad-btn" href="{{ url_offers|e }}">Abrir ofertas</a>
+              </div>
+            </div>
+
+            <div class="tool">
+              <div class="t">🎨 Media</div>
+              <div class="d">Uploads de productos en <span class="codepath" id="mediaPath">/static/uploads/products</span></div>
+              <div class="a">
+                <button class="ad-btn" type="button" id="copyMedia">Copiar ruta</button>
+                <a class="ad-btn" href="{{ url_products_list|e }}">Ver catálogo</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="ad-card" aria-label="Integraciones y salud">
+        <div class="ad-card-h">
+          <h2>Integraciones</h2>
+          <span class="hint">Printful · Dropship · Pagos</span>
+        </div>
+        <div class="ad-card-b">
+
           <div class="tool">
-            <div class="t">🧩 Categorías</div>
-            <div class="d">Controlá los filtros del shop y mantené ordenado el catálogo.</div>
+            <div class="t">🧵 Printful</div>
+            <div class="d">Importá productos como borrador para editar y publicar con fotos pro.</div>
             <div class="a">
-              <a class="ad-btn" href="{{ url_categories }}">Gestionar</a>
+              <a class="ad-btn primary" href="{{ url_printful|e }}">Ver Printful</a>
+              <a class="ad-btn" href="{{ url_products_new|e }}">Crear manual</a>
             </div>
           </div>
 
-          <div class="tool">
-            <div class="t">🔥 Ofertas & Banners</div>
-            <div class="d">Cards y promos para home / shop. Activá ofertas flash.</div>
+          <div class="tool" style="margin-top:10px">
+            <div class="t">🛒 Dropship</div>
+            <div class="d">Cargá productos con source=dropship/temu y link externo para escalar rápido.</div>
             <div class="a">
-              <a class="ad-btn" href="{{ url_offers }}">Abrir ofertas</a>
+              <a class="ad-btn primary" href="{{ url_products_new|e }}">Nuevo dropship</a>
+              <a class="ad-btn" href="{{ url_products_list|e }}">Catálogo</a>
             </div>
           </div>
 
-          <div class="tool">
-            <div class="t">🎨 Media</div>
-            <div class="d">Uploads de productos en <span class="codepath" id="mediaPath">/static/uploads/products</span></div>
+          <div class="tool" style="margin-top:10px">
+            <div class="t">💳 Pagos</div>
+            <div class="d">Panel de pagos (si está conectado). Preparado para integrar MercadoPago.</div>
             <div class="a">
-              <button class="ad-btn" type="button" id="copyMedia">Copiar ruta</button>
-              <a class="ad-btn" href="{{ url_products_list }}">Ver catálogo</a>
+              <a class="ad-btn" href="{{ url_payments|e }}">Abrir pagos</a>
             </div>
           </div>
-        </div>
-      </div>
-    </section>
 
-    <!-- RIGHT: Integrations + Health -->
-    <section class="ad-card" aria-label="Integraciones y salud">
-      <div class="ad-card-h">
-        <h2>Integraciones</h2>
-        <span class="hint">Printful · Dropship · Pagos</span>
-      </div>
-      <div class="ad-card-b">
-
-        <div class="tool">
-          <div class="t">🧵 Printful</div>
-          <div class="d">Importá productos como borrador para editar y publicar con fotos pro.</div>
-          <div class="a">
-            <a class="ad-btn primary" href="{{ url_printful }}">Ver Printful</a>
-            <a class="ad-btn" href="{{ url_products_new }}">Crear manual</a>
+          <div class="tool" style="margin-top:10px">
+            <div class="t">✅ Salud del panel</div>
+            <div class="d">Chequeo rápido: conexión, CSRF y UI.</div>
+            <div class="a">
+              <span class="ad-pill">CSRF <span class="badge-mini ok" id="csrfState2">OK</span></span>
+              <span class="ad-pill">NET <span class="badge-mini ok" id="netState2">Online</span></span>
+            </div>
           </div>
+
         </div>
+      </section>
 
-        <div class="tool" style="margin-top:10px">
-          <div class="t">🛒 Dropship / Temu</div>
-          <div class="d">Cargá productos con source=dropship/temu y link externo. Ideal para escalar.</div>
-          <div class="a">
-            <a class="ad-btn primary" href="{{ url_products_new }}">Nuevo dropship</a>
-            <a class="ad-btn" href="{{ url_products_list }}">Catálogo</a>
-          </div>
-        </div>
-
-        <div class="tool" style="margin-top:10px">
-          <div class="t">💳 Pagos</div>
-          <div class="d">Panel de pagos (si está conectado). Si no, queda listo para integrar MercadoPago.</div>
-          <div class="a">
-            <a class="ad-btn" href="{{ url_payments }}">Abrir pagos</a>
-          </div>
-        </div>
-
-        <div class="tool" style="margin-top:10px">
-          <div class="t">✅ Salud del panel</div>
-          <div class="d">Chequeo rápido: conexión, CSRF y UI.</div>
-          <div class="a">
-            <span class="ad-pill">CSRF <span class="badge-mini ok" id="csrfState2">OK</span></span>
-            <span class="ad-pill">NET <span class="badge-mini ok" id="netState2">Online</span></span>
-          </div>
-        </div>
-
-      </div>
-    </section>
-
+    </div>
   </div>
 </div>
 
 <script>
 (function(){
-  const csrfMeta = document.querySelector('meta[name="csrf-token"]');
-  const csrfOk = !!(csrfMeta && (csrfMeta.getAttribute('content')||'').trim().length > 10);
+  const $ = (s, r=document) => r.querySelector(s);
+  const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
 
-  const setBadge = (id, ok, txtOk, txtBad) => {
+  const setBadge = (id, ok, okTxt, badTxt) => {
     const el = document.getElementById(id);
     if(!el) return;
-    el.textContent = ok ? txtOk : txtBad;
+    el.textContent = ok ? okTxt : badTxt;
     el.classList.remove('ok','warn','bad');
     el.classList.add(ok ? 'ok' : 'bad');
   };
+
+  const csrfMeta = $('meta[name="csrf-token"]');
+  const csrfVal = (csrfMeta && (csrfMeta.getAttribute('content') || '').trim()) || '';
+  const csrfOk = csrfVal.length >= 10;
+
   setBadge('csrfState', csrfOk, 'OK', 'FALTA');
   setBadge('csrfState2', csrfOk, 'OK', 'FALTA');
 
   const setNet = () => {
-    const online = navigator.onLine;
+    const online = navigator.onLine !== false;
     setBadge('netState', online, 'Online', 'Offline');
     setBadge('netState2', online, 'Online', 'Offline');
   };
-  window.addEventListener('online', setNet);
-  window.addEventListener('offline', setNet);
+  window.addEventListener('online', setNet, {passive:true});
+  window.addEventListener('offline', setNet, {passive:true});
   setNet();
 
-  const btn = document.getElementById('copyMedia');
-  const pathEl = document.getElementById('mediaPath');
+  const copyText = async (text) => {
+    const t = (text || '').trim();
+    if(!t) return false;
+    try{
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        await navigator.clipboard.writeText(t);
+        return true;
+      }
+    }catch(e){}
+    try{
+      const ta = document.createElement('textarea');
+      ta.value = t;
+      ta.setAttribute('readonly','');
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      return true;
+    }catch(e){}
+    return false;
+  };
+
+  const btn = $('#copyMedia');
+  const pathEl = $('#mediaPath');
   if(btn && pathEl){
     btn.addEventListener('click', async () => {
       const text = (pathEl.textContent || '/static/uploads/products').trim();
-      try{
-        await navigator.clipboard.writeText(text);
-        if(window.toast) window.toast('Copiado', text);
-      }catch(e){
-        if(window.toast) window.toast('Copiá manual', text);
-      }
+      const ok = await copyText(text);
+      if(window.toast) window.toast(ok ? 'Copiado' : 'Copiá manual', text);
     });
   }
 
-  const input = document.getElementById('recentSearch');
-  const chips = Array.from(document.querySelectorAll('.chip[data-chip]'));
-  const rows = Array.from(document.querySelectorAll('tr[data-row]'));
+  const input = $('#recentSearch');
+  const chips = $$('.chip[data-chip]');
+  const rows = $$('tr[data-row]');
+  const empty = $('#recentEmpty');
 
   let mode = 'all';
-  const setPressed = (m) => chips.forEach(c => c.setAttribute('aria-pressed', c.dataset.chip === m ? 'true':'false'));
+  const setPressed = (m) => chips.forEach(c => c.setAttribute('aria-pressed', (c.dataset.chip === m) ? 'true' : 'false'));
 
   const matchesChip = (r) => {
     const st = (r.dataset.status || '');
     if(mode === 'all') return true;
     if(mode === 'active') return st.includes('active') || st.includes('published') || st.includes('enabled');
-    if(mode === 'draft')  return st.includes('draft') || st.includes('pending') || st.includes('disabled');
-    if(mode === 'sale')   return (r.dataset.sale || '0') === '1';
+    if(mode === 'draft') return st.includes('draft') || st.includes('pending') || st.includes('disabled');
+    if(mode === 'sale') return (r.dataset.sale || '0') === '1';
     return true;
   };
 
   const apply = () => {
     const q = (input && input.value ? input.value.trim().toLowerCase() : '');
+    let visible = 0;
     rows.forEach(r => {
       const hit = !q || (r.dataset.name||'').includes(q) || (r.dataset.cat||'').includes(q) || (r.dataset.status||'').includes(q);
-      r.style.display = (hit && matchesChip(r)) ? '' : 'none';
+      const show = hit && matchesChip(r);
+      r.style.display = show ? '' : 'none';
+      if(show) visible++;
     });
+    if(empty){
+      if(visible === 0){
+        empty.hidden = false;
+      }else{
+        empty.hidden = true;
+      }
+    }
   };
 
   if(input){

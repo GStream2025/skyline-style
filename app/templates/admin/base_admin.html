@@ -1,4 +1,3 @@
-{# app/templates/admin/base_admin.html — Skyline Admin (ULTRA FINAL PRO / NO-500 / FAIL-SAFE / vNEXT) #}
 <!doctype html>
 <html lang="es" data-theme="dark">
 <head>
@@ -6,28 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
 
-  {# ✅ Safe helpers (NO-500 aunque falte un bp) #}
   {% set _vf = (view_functions if view_functions is defined and view_functions else {}) %}
-  {% macro safe_url(endpoint, fallback='#') -%}
-    {%- if endpoint and endpoint in _vf -%}
-      {{- url_for(endpoint) -}}
-    {%- else -%}
-      {{- fallback -}}
-    {%- endif -%}
-  {%- endmacro %}
+  {% macro safe_url(endpoint, fallback='#') -%}{{ url_for(endpoint) if (endpoint and endpoint in _vf) else fallback }}{%- endmacro %}
 
-  {# ✅ CSRF token (si estás usando inject_globals en app/__init__.py) #}
   {% set _csrf = (csrf_token_value if csrf_token_value is defined and csrf_token_value else '') %}
-  <meta name="csrf-token" content="{{ _csrf }}">
+  <meta name="csrf-token" content="{{ _csrf|e }}">
+  <meta name="color-scheme" content="dark light">
+  <meta name="theme-color" content="#0b1120" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f8fafc" media="(prefers-color-scheme: light)">
 
-  <title>{% block title %}Admin · {{ APP_NAME or "Skyline Store" }}{% endblock %}</title>
+  <title>{% block title %}Admin · {{ (APP_NAME or "Skyline Store")|e }}{% endblock %}</title>
 
   <style>
     :root{
       --bg:#0b1120;
-      --panel: rgba(255,255,255,.06);
-      --panel2: rgba(255,255,255,.08);
-      --stroke: rgba(148,163,184,.16);
+      --panel:rgba(255,255,255,.06);
+      --panel2:rgba(255,255,255,.08);
+      --stroke:rgba(148,163,184,.16);
+      --stroke2:rgba(148,163,184,.12);
       --text:#e5e7eb;
       --muted:#9ca3af;
       --a:#38bdf8;
@@ -35,11 +30,16 @@
       --ok:#22c55e;
       --warn:#f59e0b;
       --bad:#ef4444;
-      --r: 18px;
-      --shadow: 0 22px 60px rgba(0,0,0,.45);
-      --ease: cubic-bezier(.16,1,.3,1);
-      --ring: 0 0 0 4px rgba(56,189,248,.18);
-      --focus: 0 0 0 4px rgba(56,189,248,.22);
+      --r:18px;
+      --r2:22px;
+      --shadow:0 22px 60px rgba(0,0,0,.45);
+      --shadow2:0 28px 90px rgba(0,0,0,.52);
+      --ease:cubic-bezier(.16,1,.3,1);
+      --ring:0 0 0 4px rgba(56,189,248,.18);
+      --focus:0 0 0 4px rgba(56,189,248,.22);
+      --grad:linear-gradient(135deg,var(--a),var(--b));
+      --glass:blur(10px) saturate(160%);
+      --tap:44px;
     }
 
     :root[data-theme="light"]{
@@ -47,37 +47,47 @@
       --panel:#ffffff;
       --panel2:#f1f5f9;
       --stroke:#e5e7eb;
+      --stroke2:#e2e8f0;
       --text:#020617;
       --muted:#475569;
-      --shadow: 0 18px 40px rgba(0,0,0,.12);
+      --shadow:0 18px 40px rgba(0,0,0,.12);
+      --shadow2:0 22px 60px rgba(0,0,0,.14);
     }
 
     *{box-sizing:border-box}
     html{scroll-behavior:smooth}
     body{
       margin:0;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial;
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial;
       color:var(--text);
       background:
         radial-gradient(900px 600px at 0% 0%, rgba(56,189,248,.20), transparent 55%),
         radial-gradient(900px 600px at 100% 0%, rgba(37,99,235,.22), transparent 60%),
         linear-gradient(160deg, #0f172a 0%, #0b1120 40%, #020617 100%);
       min-height:100vh;
-      overflow-x:hidden;
+      overflow-x:clip;
+      text-rendering:optimizeLegibility;
+      -webkit-font-smoothing:antialiased;
+      scrollbar-gutter:stable both-edges;
+    }
+
+    :root[data-theme="light"] body{
+      background:
+        radial-gradient(900px 600px at 0% 0%, rgba(56,189,248,.14), transparent 55%),
+        radial-gradient(900px 600px at 100% 0%, rgba(37,99,235,.12), transparent 60%),
+        linear-gradient(160deg, #f8fafc 0%, #eef2ff 45%, #f8fafc 100%);
     }
 
     a{color:inherit;text-decoration:none}
-    a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible{
-      outline:none; box-shadow: var(--focus); border-radius: 12px;
+    a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{
+      outline:none;box-shadow:var(--focus);border-radius:12px
     }
 
     .wrap{max-width:1200px;margin:0 auto;padding:22px 16px}
-
     .skip{
       position:absolute;left:12px;top:12px;z-index:9999;
       padding:10px 12px;border-radius:14px;
-      background:rgba(255,255,255,.92);
-      color:#0b1120;
+      background:rgba(255,255,255,.92);color:#0b1120;
       border:1px solid rgba(8,16,34,.14);
       box-shadow:0 18px 50px rgba(8,16,34,.18);
       transform:translateY(-160%);
@@ -90,16 +100,17 @@
       padding:14px 16px;
       border:1px solid var(--stroke);
       background:linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.04));
-      border-radius:var(--r);
-      box-shadow: var(--shadow);
-      position:sticky; top:14px; z-index:10;
-      backdrop-filter: blur(10px) saturate(160%);
+      border-radius:var(--r2);
+      box-shadow:var(--shadow);
+      position:sticky;top:14px;z-index:10;
+      backdrop-filter:var(--glass);
+      -webkit-backdrop-filter:var(--glass);
+      contain:layout paint;
     }
 
     .brand{display:flex;align-items:center;gap:10px;font-weight:950;letter-spacing:-.3px}
-    .dot{width:10px;height:10px;border-radius:999px;background:linear-gradient(135deg,var(--a),var(--b))}
-
-    .nav{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+    .dot{width:10px;height:10px;border-radius:999px;background:var(--grad)}
+    .nav{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:flex-end}
 
     .pill{
       display:inline-flex;align-items:center;gap:8px;
@@ -107,25 +118,37 @@
       background:rgba(255,255,255,.06);
       border:1px solid var(--stroke);
       font-weight:850;
-      transition: transform .18s var(--ease), border-color .18s var(--ease), box-shadow .18s var(--ease);
+      transition:transform .18s var(--ease),border-color .18s var(--ease),box-shadow .18s var(--ease),background .18s var(--ease);
       white-space:nowrap;
       cursor:pointer;
+      min-height:var(--tap);
+      user-select:none;
+      touch-action:manipulation;
     }
     .pill:hover{
       transform:translateY(-2px);
       border-color:rgba(56,189,248,.35);
-      box-shadow: 0 14px 26px rgba(0,0,0,.25)
+      background:rgba(255,255,255,.08);
+      box-shadow:0 14px 26px rgba(0,0,0,.25);
+    }
+    .pill:active{transform:translateY(0)}
+    .pill[aria-current="page"]{
+      background:var(--grad);
+      border-color:transparent;
+      color:#001018;
     }
 
-    .grid{display:grid;grid-template-columns: 1fr;gap:14px;margin-top:16px}
-    @media(min-width:900px){.grid{grid-template-columns: 290px 1fr}}
+    .grid{display:grid;grid-template-columns:1fr;gap:14px;margin-top:16px}
+    @media(min-width:900px){.grid{grid-template-columns:290px 1fr}}
 
     .side,.main{
       border:1px solid var(--stroke);
-      border-radius:var(--r);
-      background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.04));
-      box-shadow: var(--shadow);
+      border-radius:var(--r2);
+      background:linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.04));
+      box-shadow:var(--shadow);
       padding:14px;
+      content-visibility:auto;
+      contain-intrinsic-size:720px;
     }
 
     .h{margin:0 0 8px;font-size:1.1rem;font-weight:950}
@@ -136,52 +159,42 @@
       padding:10px 14px;border-radius:12px;
       font-weight:900;
       cursor:pointer;
-      transition: transform .18s var(--ease), border-color .18s var(--ease), box-shadow .18s var(--ease);
+      transition:transform .18s var(--ease),border-color .18s var(--ease),box-shadow .18s var(--ease),background .18s var(--ease);
+      min-height:var(--tap);
+      touch-action:manipulation;
+      user-select:none;
     }
     .btn{
-      background: linear-gradient(135deg,var(--a),var(--b));
+      background:var(--grad);
       border:0;color:#001018;
-      box-shadow: 0 16px 40px rgba(56,189,248,.25);
+      box-shadow:0 16px 40px rgba(56,189,248,.25);
     }
     .btn2{
-      background: rgba(255,255,255,.06);
+      background:rgba(255,255,255,.06);
       border:1px solid var(--stroke);
       color:var(--text);
     }
     .btn:hover,.btn2:hover{transform:translateY(-2px)}
-
+    .btn:active,.btn2:active{transform:translateY(0)}
     .ic{
       width:26px;height:26px;border-radius:10px;
       display:grid;place-items:center;
-      background: rgba(255,255,255,.12);
+      background:rgba(255,255,255,.12);
       border:1px solid rgba(255,255,255,.18);
       flex:0 0 auto;
     }
 
     .flash{margin:10px 0;display:grid;gap:8px}
-    .msg{padding:10px 12px;border-radius:12px;border:1px solid var(--stroke);background:rgba(255,255,255,.06)}
+    .msg{
+      padding:10px 12px;border-radius:12px;
+      border:1px solid var(--stroke);
+      background:rgba(255,255,255,.06);
+      word-break:break-word;
+    }
     .msg.success{border-color:rgba(34,197,94,.35)}
     .msg.error{border-color:rgba(239,68,68,.40)}
     .msg.warning{border-color:rgba(245,158,11,.40)}
     .msg.info{border-color:rgba(56,189,248,.35)}
-
-    table{width:100%;border-collapse:collapse;border-radius:14px;overflow:hidden;border:1px solid var(--stroke)}
-    th,td{padding:10px 12px;border-bottom:1px solid rgba(148,163,184,.12)}
-    th{background:rgba(255,255,255,.04);font-weight:950}
-    tr:hover td{background:rgba(255,255,255,.03)}
-
-    input, select, textarea{
-      width:100%;
-      background: rgba(255,255,255,.06);
-      border:1px solid rgba(148,163,184,.22);
-      border-radius:12px;
-      color: var(--text);
-      padding: 10px 12px;
-    }
-    textarea{ min-height: 110px; resize: vertical; }
-    input:focus-visible, select:focus-visible, textarea:focus-visible{ outline:none; box-shadow: var(--ring) }
-
-    code{background:rgba(0,0,0,.25);padding:2px 6px;border-radius:8px}
 
     .badge{
       display:inline-flex;align-items:center;gap:6px;
@@ -191,9 +204,46 @@
       font-weight:850;font-size:.85rem
     }
 
+    .hr{border:0;border-top:1px solid var(--stroke);margin:14px 0}
+
+    table{width:100%;border-collapse:collapse;border-radius:14px;overflow:hidden;border:1px solid var(--stroke)}
+    th,td{padding:10px 12px;border-bottom:1px solid rgba(148,163,184,.12);vertical-align:top}
+    th{background:rgba(255,255,255,.04);font-weight:950}
+    tr:hover td{background:rgba(255,255,255,.03)}
+
+    input,select,textarea{
+      width:100%;
+      background:rgba(255,255,255,.06);
+      border:1px solid rgba(148,163,184,.22);
+      border-radius:12px;
+      color:var(--text);
+      padding:10px 12px;
+      min-height:var(--tap);
+      touch-action:manipulation;
+    }
+    textarea{min-height:110px;resize:vertical}
+    input:focus-visible,select:focus-visible,textarea:focus-visible{outline:none;box-shadow:var(--ring)}
+    input::placeholder,textarea::placeholder{color:rgba(156,163,175,.70)}
+    :root[data-theme="light"] input::placeholder,:root[data-theme="light"] textarea::placeholder{color:rgba(71,85,105,.72)}
+
+    code{
+      background:rgba(0,0,0,.25);
+      padding:2px 6px;border-radius:8px;
+      font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
+    }
+
+    @supports not (overflow: clip){
+      body{overflow-x:hidden}
+    }
+
     @media (prefers-reduced-motion: reduce){
       html{scroll-behavior:auto}
-      .pill,.btn,.btn2{transition:none}
+      .pill,.btn,.btn2,.skip{transition:none}
+    }
+
+    @media (forced-colors: active){
+      .pill[aria-current="page"],.btn{forced-color-adjust:none;background:ButtonText;color:ButtonFace;border:1px solid ButtonText}
+      input,select,textarea{forced-color-adjust:none;background:Canvas;color:CanvasText;border-color:CanvasText}
     }
   </style>
 
@@ -204,6 +254,13 @@
   <a class="skip" href="#adminMain">Saltar al contenido</a>
 
   <div class="wrap">
+    {% set url_dash = safe_url('admin.dashboard','/admin') %}
+    {% set url_prod = safe_url('admin.products_list','/admin/products') %}
+    {% set url_cat  = safe_url('admin.categories','/admin/categories') %}
+    {% set url_pay  = safe_url('admin.payments','/admin/payments') %}
+    {% set url_shop = safe_url('main.home','/') %}
+    {% set url_out  = safe_url('admin.logout','/admin/logout') %}
+    {% set url_printful = safe_url('printful.products','/printful/productos') %}
 
     <div class="topbar" role="banner">
       <div class="brand" aria-label="Skyline Admin">
@@ -211,28 +268,15 @@
         Skyline Admin <span class="badge">PRO</span>
       </div>
 
-      {# ✅ URLs fail-safe (si falta un endpoint no rompe) #}
-      {% set url_dash = safe_url('admin.dashboard', '/admin') %}
-      {% set url_prod = safe_url('admin.products_list', '/admin/products') %}
-      {% set url_cat  = safe_url('admin.categories', '/admin/categories') %}
-      {% set url_pay  = safe_url('admin.payments', '/admin/payments') %}
-      {% set url_shop = safe_url('main.home', '/') %}
-      {% set url_out  = safe_url('admin.logout', '/admin/logout') %}
-
       <nav class="nav" aria-label="Navegación admin">
-        <a class="pill" href="{{ url_dash }}">Dashboard</a>
-        <a class="pill" href="{{ url_prod }}">Productos</a>
-        <a class="pill" href="{{ url_cat }}">Categorías</a>
-        <a class="pill" href="{{ url_pay }}">Pagos</a>
-
-        {# Printful: si tenés blueprint, usalo; si no, fallback estable #}
-        {% set url_printful = safe_url('printful.products', '/printful/productos') %}
-        <a class="pill" href="{{ url_printful }}">Printful</a>
-
-        <a class="pill" href="{{ url_shop }}">Ver tienda</a>
-
+        <a class="pill" href="{{ url_dash|e }}" data-nav="dash">Dashboard</a>
+        <a class="pill" href="{{ url_prod|e }}" data-nav="prod">Productos</a>
+        <a class="pill" href="{{ url_cat|e }}" data-nav="cat">Categorías</a>
+        <a class="pill" href="{{ url_pay|e }}" data-nav="pay">Pagos</a>
+        <a class="pill" href="{{ url_printful|e }}" data-nav="printful">Printful</a>
+        <a class="pill" href="{{ url_shop|e }}" data-nav="shop">Ver tienda</a>
         <button class="pill" id="themeToggle" type="button" aria-label="Cambiar tema">🌙</button>
-        <a class="pill" href="{{ url_out }}">Salir</a>
+        <a class="pill" href="{{ url_out|e }}">Salir</a>
       </nav>
     </div>
 
@@ -242,7 +286,7 @@
           {% for category, message in messages %}
             {% set cat = (category|string|lower|trim) %}
             {% set cat = cat if cat in ['success','error','warning','info'] else 'info' %}
-            <div class="msg {{ cat }}" role="alert">{{ message }}</div>
+            <div class="msg {{ cat }}" role="alert">{{ (message|string)|e }}</div>
           {% endfor %}
         {% endif %}
       {% endwith %}
@@ -254,24 +298,24 @@
         <p class="muted">Operación lista: catálogo + métodos de cobro.</p>
 
         <div style="display:grid;gap:10px;margin-top:10px">
-          <a class="btn" href="{{ safe_url('admin.products_new', '/admin/products/new') }}">
+          <a class="btn" href="{{ safe_url('admin.products_new','/admin/products/new')|e }}">
             <span class="ic" aria-hidden="true">＋</span> Nuevo producto
           </a>
 
-          <a class="btn2" href="{{ url_prod }}">
+          <a class="btn2" href="{{ url_prod|e }}">
             <span class="ic" aria-hidden="true">📋</span> Ver catálogo
           </a>
 
-          <a class="btn2" href="{{ url_cat }}">
+          <a class="btn2" href="{{ url_cat|e }}">
             <span class="ic" aria-hidden="true">🏷️</span> Categorías
           </a>
 
-          <a class="btn2" href="{{ url_pay }}">
+          <a class="btn2" href="{{ url_pay|e }}">
             <span class="ic" aria-hidden="true">💳</span> Configurar pagos
           </a>
         </div>
 
-        <hr style="border:0;border-top:1px solid var(--stroke);margin:14px 0">
+        <hr class="hr">
 
         <div class="h">Checklist</div>
         <p class="muted" style="margin:0">
@@ -293,20 +337,38 @@
     (() => {
       const root = document.documentElement;
       const btn = document.getElementById("themeToggle");
-      if (!btn) return;
+      if(!btn) return;
 
       const KEY = "admin-theme";
-      const saved = (() => { try { return localStorage.getItem(KEY) || ""; } catch(e){ return ""; } })();
-      if (saved === "light" || saved === "dark") root.dataset.theme = saved;
+      const safeGet = () => { try { return localStorage.getItem(KEY) || ""; } catch(e){ return ""; } };
+      const safeSet = (v) => { try { localStorage.setItem(KEY, v); } catch(e){} };
 
-      const sync = () => { btn.textContent = root.dataset.theme === "light" ? "🌞" : "🌙"; };
-      sync();
+      const saved = safeGet();
+      if(saved === "light" || saved === "dark") root.dataset.theme = saved;
+
+      const syncBtn = () => { btn.textContent = (root.dataset.theme === "light") ? "🌞" : "🌙"; };
+      syncBtn();
 
       btn.addEventListener("click", () => {
-        const next = root.dataset.theme === "light" ? "dark" : "light";
+        const next = (root.dataset.theme === "light") ? "dark" : "light";
         root.dataset.theme = next;
-        try { localStorage.setItem(KEY, next); } catch(e) {}
-        sync();
+        safeSet(next);
+        syncBtn();
+      }, {passive:true});
+
+      const path = (location && location.pathname ? location.pathname : "/").toLowerCase();
+      const map = [
+        ["dash", [/^\/admin\/?$/,/dashboard/]],
+        ["prod", [/\/admin\/products/]],
+        ["cat", [/\/admin\/categories/]],
+        ["pay", [/\/admin\/payments/]],
+        ["printful", [/\/printful/]]
+      ];
+      map.forEach(([key, regs]) => {
+        if(regs.some(r => r.test(path))){
+          const a = document.querySelector(`.pill[data-nav="${key}"]`);
+          if(a) a.setAttribute("aria-current","page");
+        }
       });
     })();
   </script>
