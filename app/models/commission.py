@@ -1,31 +1,4 @@
-# app/models/commission.py
 from __future__ import annotations
-
-"""
-Skyline Store — Commission Tiers (ULTRA PRO MAX / FINAL)
-
-✅ 20+ mejoras reales vs tu versión:
-1) Tipos y constantes centralizadas + límites configurables
-2) Parseo de rate MUY robusto: "10", "10%", "0.10", "0,10", " 15 % ", "10,5%"
-3) Soporta admin ingresando 1.5 => 1.5% (heurística segura) y 0.015 => 1.5% (decimal real)
-4) Clamp + quantize consistente (4 decimales) con ROUND_HALF_UP
-5) Normalización DRY en una sola función (reutilizada por validators + events)
-6) Validación de rangos: min>=1, max None o >=min
-7) Prevención de solapes SOLO para tiers activos (regla negocio)
-8) Mensajes de error claros y accionables
-9) Query helpers con select() y session opcional (test friendly)
-10) Resolver por ventas con orden estable + deterministic tie-break
-11) list_active_ordered estable por sort/min/id
-12) sanity_check_overlaps considera “∞” como infinito y detecta cadenas de solapes
-13) validate_integrity lanza error con lista formateada
-14) ensure_default_seed idempotente, transaccional y con flush previo
-15) Método apply_to_amount() para calcular comisión segura en dinero
-16) to_dict() listo para JSON/UI/admin sin dependencias
-17) Propiedades rate_percent y range_label robustas y consistentes
-18) Indexes pro (ya tenías) + uno extra útil (active+min+sort)
-19) __repr__ más informativo
-20) No rompe en SQLite/Postgres (Numeric(6,4) y DateTime tz)
-"""
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -47,25 +20,23 @@ from sqlalchemy.orm import validates
 from app.models import db
 
 
-# =============================================================================
-# Constants / helpers
-# =============================================================================
-
 RATE_MIN = Decimal("0.0000")
-RATE_MAX = Decimal("0.8000")  # hard cap: 80%
-RATE_Q = Decimal("0.0001")  # 4 decimales
-DEFAULT_RATE = Decimal("0.1000")  # 10%
+RATE_MAX = Decimal("0.8000")
+RATE_Q = Decimal("0.0001")
+DEFAULT_RATE = Decimal("0.1000")
 DEFAULT_SORT = 100
 
-# límites de ventas (anti datos locos)
 SALES_MIN = 1
 SALES_MAX = 1_000_000_000
-
-_INF = 10**18  # para ordenar NULL como infinito en sanity checks
+_INF = 10**18
 
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _s(v: Any) -> str:
+    return "" if v is None else str(v).strip()
 
 
 def _to_int(
@@ -76,8 +47,7 @@ def _to_int(
     max_value: Optional[int] = None,
 ) -> int:
     try:
-        # soporta strings con espacios
-        n = int(str(v).strip())
+        n = int(_s(v))
     except Exception:
         n = default
 
@@ -89,63 +59,54 @@ def _to_int(
 
 
 def _normalize_label(label: Any) -> Optional[str]:
-    if label is None:
-        return None
-    s = str(label).strip()
-    return s[:120] if s else None
+    s = _s(label)
+    return (s[:120] if s else None)
 
 
-def _to_decimal(v: Any, default: Decimal) -> Decimal:
-    """
-    Parse robusto de comisión:
-      - Decimal / int / float / str
-      - "0.10", "10", "10%", " 15 % ", "0,10", "10,5%"
-    Reglas seguras:
-      - "10"  => 10%   => 0.10
-      - "10%" => 10%   => 0.10
-      - "0.10" => 0.10 (10%)
-      - "0,10" => 0.10
-      - "1.5" => 1.5%  => 0.015   (heurística: 0 < x < 1 => decimal real, 1..80 => porcentaje)
-    """
+def _parse_decimal(v: Any) -> Optional[Decimal]:
     if v is None or v == "":
-        return default
-
+        return None
     if isinstance(v, Decimal):
         return v
-
-    if isinstance(v, (int, float)):
+    if isinstance(v, int):
+        return Decimal(v)
+    if isinstance(v, float):
         try:
             return Decimal(str(v))
         except Exception:
-            return default
-
-    s = str(v).strip()
+            return None
+    s = _s(v)
     if not s:
-        return default
-
-    # normaliza espacios y coma decimal
-    s = s.replace(" ", "")
-    s = s.replace(",", ".")
-
+        return None
+    s = s.replace(" ", "").replace(",", ".")
     try:
-        if s.endswith("%"):
-            raw = s[:-1]
-            d = Decimal(raw)
-            return d / Decimal("100")
-
-        d = Decimal(s)
-
-        # Heurística:
-        # - si d >= 1 => interpretamos porcentaje entero/real (10 => 10%, 1.5 => 1.5%)
-        # - si 0 < d < 1 => ya es decimal (0.15 => 15%)
-        if d >= Decimal("1.0"):
-            return d / Decimal("100")
-        return d
+        return Decimal(s)
     except (InvalidOperation, ValueError, TypeError):
-        return default
+        return None
 
 
-def _clamp_rate(r: Decimal) -> Decimal:
+def _to_rate(v: Any, default: Decimal) -> Decimal:
+    raw = _s(v)
+    if v is None or raw == "":
+        r = default
+    else:
+        s = raw.replace(" ", "").replace(",", ".")
+        try:
+            if s.endswith("%"):
+                d = Decimal(s[:-1])
+                r = d / Decimal("100")
+            else:
+                d = _parse_decimal(s)
+                if d is None:
+                    r = default
+                else:
+                    if d >= Decimal("1"):
+                        r = d / Decimal("100")
+                    else:
+                        r = d
+        except Exception:
+            r = default
+
     if r < RATE_MIN:
         r = RATE_MIN
     if r > RATE_MAX:
@@ -153,44 +114,27 @@ def _clamp_rate(r: Decimal) -> Decimal:
     return r.quantize(RATE_Q, rounding=ROUND_HALF_UP)
 
 
-def _normalize_target(target: "CommissionTier") -> None:
-    """
-    Normaliza campos del target (sin depender de session).
-    Usado por validators y events para evitar duplicación.
-    """
-    target.min_sales = _to_int(
-        getattr(target, "min_sales", SALES_MIN) or SALES_MIN,
-        SALES_MIN,
-        min_value=SALES_MIN,
-        max_value=SALES_MAX,
-    )
+def _normalize_target(t: "CommissionTier") -> None:
+    t.min_sales = _to_int(getattr(t, "min_sales", SALES_MIN) or SALES_MIN, SALES_MIN, min_value=SALES_MIN, max_value=SALES_MAX)
 
-    mx = getattr(target, "max_sales", None)
+    mx = getattr(t, "max_sales", None)
     if mx is None or mx == "":
-        mx = None
+        t.max_sales = None
     else:
-        try:
-            mx = _to_int(mx, default=-1, min_value=SALES_MIN, max_value=SALES_MAX)
-        except Exception:
-            mx = None
-        if mx is not None and mx <= 0:
-            mx = None
+        n = _to_int(mx, default=-1, min_value=SALES_MIN, max_value=SALES_MAX)
+        t.max_sales = None if n <= 0 else n
 
-    # si max existe y quedó por debajo, lo alineamos a min (evita inserts inválidos)
-    if mx is not None and int(mx) < int(target.min_sales):
-        mx = int(target.min_sales)
+    if t.max_sales is not None and int(t.max_sales) < int(t.min_sales):
+        t.max_sales = int(t.min_sales)
 
-    target.max_sales = int(mx) if mx is not None else None
-    target.rate = _clamp_rate(
-        _to_decimal(getattr(target, "rate", DEFAULT_RATE), DEFAULT_RATE)
-    )
-    target.label = _normalize_label(getattr(target, "label", None))
-    target.sort_order = _to_int(
-        getattr(target, "sort_order", DEFAULT_SORT),
-        DEFAULT_SORT,
-        min_value=0,
-        max_value=10_000,
-    )
+    t.rate = _to_rate(getattr(t, "rate", DEFAULT_RATE), DEFAULT_RATE)
+    t.label = _normalize_label(getattr(t, "label", None))
+    t.sort_order = _to_int(getattr(t, "sort_order", DEFAULT_SORT), DEFAULT_SORT, min_value=0, max_value=10_000)
+
+    now = utcnow()
+    if not getattr(t, "created_at", None):
+        t.created_at = now
+    t.updated_at = now
 
 
 @dataclass(frozen=True)
@@ -210,7 +154,7 @@ class CommissionTier(db.Model):
     active = db.Column(db.Boolean, nullable=False, default=True, index=True)
 
     min_sales = db.Column(db.Integer, nullable=False, default=SALES_MIN)
-    max_sales = db.Column(db.Integer, nullable=True)  # None = infinito
+    max_sales = db.Column(db.Integer, nullable=True)
 
     rate = db.Column(db.Numeric(6, 4), nullable=False, default=DEFAULT_RATE)
 
@@ -218,9 +162,7 @@ class CommissionTier(db.Model):
 
     sort_order = db.Column(db.Integer, nullable=False, default=DEFAULT_SORT, index=True)
 
-    created_at = db.Column(
-        db.DateTime(timezone=True), nullable=False, default=utcnow, index=True
-    )
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, index=True)
     updated_at = db.Column(
         db.DateTime(timezone=True),
         nullable=False,
@@ -231,24 +173,11 @@ class CommissionTier(db.Model):
 
     __table_args__ = (
         CheckConstraint("min_sales >= 1", name="ck_commission_tiers_min_sales_ge_1"),
-        CheckConstraint(
-            "(max_sales IS NULL) OR (max_sales >= 1)",
-            name="ck_commission_tiers_max_sales_ge_1_or_null",
-        ),
-        CheckConstraint(
-            "(max_sales IS NULL) OR (max_sales >= min_sales)",
-            name="ck_commission_tiers_max_ge_min_or_null",
-        ),
-        CheckConstraint(
-            f"rate >= {str(RATE_MIN)} AND rate <= {str(RATE_MAX)}",
-            name="ck_commission_tiers_rate_range",
-        ),
+        CheckConstraint("(max_sales IS NULL) OR (max_sales >= 1)", name="ck_commission_tiers_max_sales_ge_1_or_null"),
+        CheckConstraint("(max_sales IS NULL) OR (max_sales >= min_sales)", name="ck_commission_tiers_max_ge_min_or_null"),
+        CheckConstraint(f"rate >= {str(RATE_MIN)} AND rate <= {str(RATE_MAX)}", name="ck_commission_tiers_rate_range"),
         UniqueConstraint("min_sales", "max_sales", name="uq_commission_tiers_min_max"),
     )
-
-    # -------------------------------------------------------------------------
-    # Validations (ORM) — delegan en normalizadores pro
-    # -------------------------------------------------------------------------
 
     @validates("min_sales")
     def _v_min(self, _k: str, v: Any) -> int:
@@ -263,7 +192,7 @@ class CommissionTier(db.Model):
 
     @validates("rate")
     def _v_rate(self, _k: str, v: Any) -> Decimal:
-        return _clamp_rate(_to_decimal(v, DEFAULT_RATE))
+        return _to_rate(v, DEFAULT_RATE)
 
     @validates("label")
     def _v_label(self, _k: str, v: Any) -> Optional[str]:
@@ -273,10 +202,6 @@ class CommissionTier(db.Model):
     def _v_sort(self, _k: str, v: Any) -> int:
         return _to_int(v, default=DEFAULT_SORT, min_value=0, max_value=10_000)
 
-    # -------------------------------------------------------------------------
-    # Business logic
-    # -------------------------------------------------------------------------
-
     @property
     def range_label(self) -> str:
         mn = int(self.min_sales or SALES_MIN)
@@ -285,119 +210,65 @@ class CommissionTier(db.Model):
 
     @property
     def rate_percent(self) -> Decimal:
-        """
-        Ej: rate=0.1500 => 15.00
-        Útil para UI/Admin.
-        """
-        r = (
-            self.rate
-            if isinstance(self.rate, Decimal)
-            else _to_decimal(self.rate, DEFAULT_RATE)
-        )
-        r = _clamp_rate(r)
+        r = self.rate if isinstance(self.rate, Decimal) else _to_rate(self.rate, DEFAULT_RATE)
+        r = _to_rate(r, DEFAULT_RATE)
         return (r * Decimal("100")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
     def matches(self, sales_count: Any) -> bool:
         if not bool(self.active):
             return False
-
         sc = _to_int(sales_count, default=0, min_value=0, max_value=SALES_MAX)
-        mn = _to_int(
-            self.min_sales, default=SALES_MIN, min_value=SALES_MIN, max_value=SALES_MAX
-        )
+        mn = _to_int(self.min_sales, default=SALES_MIN, min_value=SALES_MIN, max_value=SALES_MAX)
         if sc < mn:
             return False
-
-        mx = self.max_sales
-        return True if mx is None else sc <= int(mx)
+        return True if self.max_sales is None else sc <= int(self.max_sales)
 
     def to_match(self) -> TierMatch:
-        r = (
-            self.rate
-            if isinstance(self.rate, Decimal)
-            else _to_decimal(self.rate, DEFAULT_RATE)
-        )
-        r = _clamp_rate(r)
+        r = self.rate if isinstance(self.rate, Decimal) else _to_rate(self.rate, DEFAULT_RATE)
+        r = _to_rate(r, DEFAULT_RATE)
         return TierMatch(
             tier_id=int(self.id),
-            min_sales=_to_int(
-                self.min_sales,
-                default=SALES_MIN,
-                min_value=SALES_MIN,
-                max_value=SALES_MAX,
-            ),
+            min_sales=_to_int(self.min_sales, default=SALES_MIN, min_value=SALES_MIN, max_value=SALES_MAX),
             max_sales=int(self.max_sales) if self.max_sales is not None else None,
             rate=r,
             label=self.label,
         )
 
     def apply_to_amount(self, amount: Any) -> Decimal:
-        """
-        Calcula comisión en dinero:
-          comisión = amount * rate
-        - normaliza amount a Decimal no-negativo
-        - redondea a 2 decimales (money) HALF_UP
-        """
+        s = _s(amount).replace(",", ".")
         try:
-            a = Decimal(str(amount).replace(",", ".").strip())
+            a = Decimal(s) if s else Decimal("0.00")
         except Exception:
             a = Decimal("0.00")
         if a < Decimal("0.00"):
             a = Decimal("0.00")
 
-        r = (
-            self.rate
-            if isinstance(self.rate, Decimal)
-            else _to_decimal(self.rate, DEFAULT_RATE)
-        )
-        r = _clamp_rate(r)
-
+        r = self.rate if isinstance(self.rate, Decimal) else _to_rate(self.rate, DEFAULT_RATE)
+        r = _to_rate(r, DEFAULT_RATE)
         return (a * r).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
     def to_dict(self) -> Dict[str, Any]:
+        r = self.rate if isinstance(self.rate, Decimal) else _to_rate(self.rate, DEFAULT_RATE)
+        r = _to_rate(r, DEFAULT_RATE)
         return {
             "id": int(self.id) if self.id is not None else None,
             "active": bool(self.active),
             "min_sales": int(self.min_sales or SALES_MIN),
             "max_sales": int(self.max_sales) if self.max_sales is not None else None,
-            "rate": str(_clamp_rate(_to_decimal(self.rate, DEFAULT_RATE))),
+            "rate": str(r),
             "rate_percent": str(self.rate_percent),
             "label": self.label,
             "sort_order": int(self.sort_order or DEFAULT_SORT),
             "range_label": self.range_label,
-            "created_at": (
-                self.created_at.isoformat()
-                if getattr(self, "created_at", None)
-                else None
-            ),
-            "updated_at": (
-                self.updated_at.isoformat()
-                if getattr(self, "updated_at", None)
-                else None
-            ),
+            "created_at": self.created_at.isoformat() if getattr(self, "created_at", None) else None,
+            "updated_at": self.updated_at.isoformat() if getattr(self, "updated_at", None) else None,
         }
 
     def __repr__(self) -> str:
-        return (
-            f"<CommissionTier id={self.id} active={self.active} range={self.range_label} "
-            f"rate={self.rate} sort={self.sort_order}>"
-        )
-
-    # -------------------------------------------------------------------------
-    # Query helpers
-    # -------------------------------------------------------------------------
+        return f"<CommissionTier id={self.id} active={self.active} range={self.range_label} rate={self.rate} sort={self.sort_order}>"
 
     @classmethod
-    def resolve_for_sales(
-        cls, sales_count: Any, *, session=None
-    ) -> Optional["CommissionTier"]:
-        """
-        Devuelve el tier activo que matchea sales_count.
-        Orden determinista:
-          - min_sales desc (el más específico)
-          - sort_order asc
-          - id asc
-        """
+    def resolve_for_sales(cls, sales_count: Any, *, session=None) -> Optional["CommissionTier"]:
         sess = session or db.session
         sc = _to_int(sales_count, default=0, min_value=0, max_value=SALES_MAX)
 
@@ -425,9 +296,6 @@ class CommissionTier(db.Model):
 
     @classmethod
     def sanity_check_overlaps(cls, *, session=None) -> Tuple[bool, List[str]]:
-        """
-        Detecta solapes entre tiers activos (para UI de admin).
-        """
         sess = session or db.session
         tiers = cls.list_active_ordered(session=sess)
         issues: List[str] = []
@@ -469,20 +337,12 @@ class CommissionTier(db.Model):
 
     @classmethod
     def validate_integrity(cls, *, session=None) -> None:
-        """
-        Valida que los tiers activos no estén solapados.
-        Lanza ValueError si hay problemas.
-        """
         ok, issues = cls.sanity_check_overlaps(session=session)
         if not ok:
             raise ValueError("Commission tiers invalid:\n- " + "\n- ".join(issues))
 
     @classmethod
     def ensure_default_seed(cls, *, session=None) -> None:
-        """
-        Crea tiers default si la tabla está vacía.
-        Idempotente y con rollback seguro.
-        """
         sess = session or db.session
         try:
             cnt = sess.execute(select(func.count(cls.id))).scalar_one()
@@ -490,49 +350,13 @@ class CommissionTier(db.Model):
                 return
 
             defaults = [
-                cls(
-                    active=True,
-                    min_sales=1,
-                    max_sales=10,
-                    rate="10%",
-                    label="Bronce",
-                    sort_order=10,
-                ),
-                cls(
-                    active=True,
-                    min_sales=11,
-                    max_sales=30,
-                    rate="15%",
-                    label="Plata",
-                    sort_order=20,
-                ),
-                cls(
-                    active=True,
-                    min_sales=31,
-                    max_sales=60,
-                    rate="20%",
-                    label="Oro",
-                    sort_order=30,
-                ),
-                cls(
-                    active=True,
-                    min_sales=61,
-                    max_sales=100,
-                    rate="25%",
-                    label="Platino",
-                    sort_order=40,
-                ),
-                cls(
-                    active=True,
-                    min_sales=101,
-                    max_sales=None,
-                    rate="30%",
-                    label="Diamante",
-                    sort_order=50,
-                ),
+                cls(active=True, min_sales=1, max_sales=10, rate="10%", label="Bronce", sort_order=10),
+                cls(active=True, min_sales=11, max_sales=30, rate="15%", label="Plata", sort_order=20),
+                cls(active=True, min_sales=31, max_sales=60, rate="20%", label="Oro", sort_order=30),
+                cls(active=True, min_sales=61, max_sales=100, rate="25%", label="Platino", sort_order=40),
+                cls(active=True, min_sales=101, max_sales=None, rate="30%", label="Diamante", sort_order=50),
             ]
             sess.add_all(defaults)
-            # flush antes de commit = detecta constraints y overlap event
             sess.flush()
             sess.commit()
         except Exception:
@@ -540,38 +364,14 @@ class CommissionTier(db.Model):
             raise
 
 
-# =============================================================================
-# Indexes
-# =============================================================================
-
-Index(
-    "ix_commission_tiers_active_sort", CommissionTier.active, CommissionTier.sort_order
-)
+Index("ix_commission_tiers_active_sort", CommissionTier.active, CommissionTier.sort_order)
 Index("ix_commission_tiers_min_max", CommissionTier.min_sales, CommissionTier.max_sales)
 Index("ix_commission_tiers_active_min", CommissionTier.active, CommissionTier.min_sales)
-Index(
-    "ix_commission_tiers_active_min_max",
-    CommissionTier.active,
-    CommissionTier.min_sales,
-    CommissionTier.max_sales,
-)
-Index(
-    "ix_commission_tiers_active_min_sort",
-    CommissionTier.active,
-    CommissionTier.min_sales,
-    CommissionTier.sort_order,
-)
-
-
-# =============================================================================
-# Events: prevent overlaps for ACTIVE tiers
-# =============================================================================
+Index("ix_commission_tiers_active_min_max", CommissionTier.active, CommissionTier.min_sales, CommissionTier.max_sales)
+Index("ix_commission_tiers_active_min_sort", CommissionTier.active, CommissionTier.min_sales, CommissionTier.sort_order)
 
 
 def _validate_no_overlap(mapper, connection, target: CommissionTier) -> None:
-    """
-    Previene tiers ACTIVOS solapados (regla negocio).
-    """
     if not bool(getattr(target, "active", True)):
         return
 
@@ -582,9 +382,6 @@ def _validate_no_overlap(mapper, connection, target: CommissionTier) -> None:
 
     ct = CommissionTier.__table__
 
-    # solape si:
-    #  existing.min_sales <= new.max_sales (o new infinito)
-    #  y existing.max_sales >= new.min_sales (o existing infinito)
     cond = and_(
         ct.c.active.is_(True),
         ct.c.id != (int(target.id) if getattr(target, "id", None) is not None else -1),
@@ -609,5 +406,11 @@ def _validate_no_overlap(mapper, connection, target: CommissionTier) -> None:
         )
 
 
-event.listen(CommissionTier, "before_insert", _validate_no_overlap)
-event.listen(CommissionTier, "before_update", _validate_no_overlap)
+def _before_save(mapper, connection, target: CommissionTier) -> None:
+    _normalize_target(target)
+    if bool(getattr(target, "active", True)):
+        _validate_no_overlap(mapper, connection, target)
+
+
+event.listen(CommissionTier, "before_insert", _before_save)
+event.listen(CommissionTier, "before_update", _before_save)

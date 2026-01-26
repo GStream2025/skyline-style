@@ -1,63 +1,101 @@
 ﻿from __future__ import annotations
 
 import re
+import unicodedata
 from datetime import datetime, timezone
-from typing import List
+from typing import Any, List, Optional
 
-from sqlalchemy import event
+from sqlalchemy import CheckConstraint, Index, UniqueConstraint, event
 from sqlalchemy.orm import validates
 
-from app.models import db  # ✅ db ÚNICO
+from app.models import db
+
+_SLUG_MAX = 160
+_NAME_MAX = 120
+_TITLE_MAX = 180
+_DESC_MAX = 260
+_PATH_MAX = 700
+
+_slug_re = re.compile(r"[^a-z0-9\-]+")
+_space_re = re.compile(r"\s+")
+_dash_re = re.compile(r"-{2,}")
 
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
-_slug_re = re.compile(r"[^a-z0-9\-]+")
+def _clip_str(v: Any, n: int) -> Optional[str]:
+    if v is None:
+        return None
+    s = str(v).strip()
+    return s[:n] if s else None
 
 
-def slugify(text: str, max_len: int = 160) -> str:
-    """Slug simple sin deps. Mantiene compat y evita basura."""
+def _clean_text(v: Any, n: int) -> str:
+    s = _clip_str(v, n) or ""
+    s = s.replace("\x00", "")
+    s = " ".join(s.split())
+    return s[:n]
+
+
+def _clamp_int(v: Any, default: int = 0, min_v: int = -1_000_000, max_v: int = 1_000_000) -> int:
+    try:
+        n = int(v)
+    except Exception:
+        return default
+    if n < min_v:
+        return min_v
+    if n > max_v:
+        return max_v
+    return n
+
+
+def _ascii_fold(s: str) -> str:
+    s2 = unicodedata.normalize("NFKD", s)
+    return "".join(ch for ch in s2 if not unicodedata.combining(ch))
+
+
+def slugify(text: Optional[str], max_len: int = _SLUG_MAX) -> str:
     s = (text or "").strip().lower()
-    s = (
-        s.replace("á", "a")
-        .replace("é", "e")
-        .replace("í", "i")
-        .replace("ó", "o")
-        .replace("ú", "u")
-        .replace("ñ", "n")
-    )
-    s = re.sub(r"\s+", "-", s)
+    if not s:
+        return "categoria"
+    s = _ascii_fold(s)
+    s = _space_re.sub("-", s)
     s = _slug_re.sub("", s)
-    s = re.sub(r"-{2,}", "-", s).strip("-")
+    s = _dash_re.sub("-", s).strip("-")
     if not s:
         s = "categoria"
     return s[:max_len]
 
 
+def _canon_slug(v: Any) -> str:
+    return slugify(str(v) if v is not None else "", _SLUG_MAX)
+
+
+def _canon_country_path_component(v: Any) -> str:
+    s = _canon_slug(v)
+    return s or "categoria"
+
+
+def _safe_parent_id(v: Any) -> Optional[int]:
+    try:
+        if v is None or v == "":
+            return None
+        n = int(v)
+        return n if n > 0 else None
+    except Exception:
+        return None
+
+
 class Category(db.Model):
-    """
-    Skyline Store — Category ULTRA PRO (FINAL)
-
-    ✅ Marketplace real:
-    - Árbol infinito (parent/children)
-    - active (soft hide)
-    - sort_order
-    - SEO
-    - slug_path jerárquico cacheado
-    - compat: status/is_active sin tocar DB
-    """
-
     __tablename__ = "categories"
 
     id = db.Column(db.Integer, primary_key=True)
 
-    # Base
-    name = db.Column(db.String(120), nullable=False)
-    slug = db.Column(db.String(160), nullable=False, unique=True, index=True)
+    name = db.Column(db.String(_NAME_MAX), nullable=False)
+    slug = db.Column(db.String(_SLUG_MAX), nullable=False, unique=True, index=True)
 
-    # Jerarquía
     parent_id = db.Column(
         db.Integer,
         db.ForeignKey("categories.id", ondelete="SET NULL"),
@@ -65,170 +103,171 @@ class Category(db.Model):
         index=True,
     )
 
-    # Control marketplace
     active = db.Column(db.Boolean, nullable=False, default=True, index=True)
     sort_order = db.Column(db.Integer, nullable=False, default=0, index=True)
 
-    # SEO opcional
-    seo_title = db.Column(db.String(180), nullable=True)
-    seo_description = db.Column(db.String(260), nullable=True)
+    seo_title = db.Column(db.String(_TITLE_MAX), nullable=True)
+    seo_description = db.Column(db.String(_DESC_MAX), nullable=True)
 
-    # Path cacheado (opcional)
-    slug_path = db.Column(db.String(700), nullable=True, index=True)
+    slug_path = db.Column(db.String(_PATH_MAX), nullable=True, index=True)
 
-    created_at = db.Column(
-        db.DateTime(timezone=True), nullable=False, default=utcnow, index=True
-    )
-    updated_at = db.Column(
-        db.DateTime(timezone=True),
-        nullable=False,
-        default=utcnow,
-        onupdate=utcnow,
-        index=True,
-    )
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, index=True)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow, index=True)
 
-    # Relación: parent -> children
     parent = db.relationship(
         "Category",
         remote_side=[id],
-        backref=db.backref(
-            "children",
-            lazy="select",
-            order_by="Category.sort_order.asc()",
-        ),
+        backref=db.backref("children", lazy="select", order_by="Category.sort_order.asc()"),
         lazy="select",
     )
 
-    # -------------------------
-    # Compat extra (sin tocar DB)
-    # -------------------------
+    __table_args__ = (
+        CheckConstraint("sort_order >= -1000000 AND sort_order <= 1000000", name="ck_categories_sort_range"),
+        CheckConstraint("slug <> ''", name="ck_categories_slug_nonempty"),
+        CheckConstraint("name <> ''", name="ck_categories_name_nonempty"),
+        UniqueConstraint("slug", name="uq_categories_slug"),
+        Index("ix_categories_active_sort", "active", "sort_order", "id"),
+        Index("ix_categories_parent_sort", "parent_id", "sort_order", "id"),
+        Index("ix_categories_slug_path", "slug_path"),
+    )
+
     @property
     def is_active(self) -> bool:
         return bool(self.active)
 
     @property
     def status(self) -> str:
-        # útil si alguna parte del código pide status
         return "active" if self.active else "hidden"
 
-    # -------------------------
-    # Validaciones suaves
-    # -------------------------
     @validates("name")
-    def _v_name(self, _k, v: str) -> str:
-        v = (v or "").strip()
-        return v[:120] if v else "Categoría"
+    def _v_name(self, _k: str, v: Any) -> str:
+        s = _clean_text(v, _NAME_MAX)
+        return s or "Categoría"
 
     @validates("slug")
-    def _v_slug(self, _k, v: str) -> str:
-        v = slugify(v or "")
-        return v[:160] if v else "categoria"
+    def _v_slug(self, _k: str, v: Any) -> str:
+        return _canon_slug(v)
+
+    @validates("parent_id")
+    def _v_parent(self, _k: str, v: Any) -> Optional[int]:
+        return _safe_parent_id(v)
 
     @validates("sort_order")
-    def _v_sort(self, _k, v: int) -> int:
-        try:
-            return int(v)
-        except Exception:
-            return 0
+    def _v_sort(self, _k: str, v: Any) -> int:
+        return _clamp_int(v, default=0)
 
-    # -------------------------
-    # Helpers PRO
-    # -------------------------
+    @validates("seo_title")
+    def _v_seo_title(self, _k: str, v: Any) -> Optional[str]:
+        s = _clean_text(v, _TITLE_MAX)
+        return s or None
+
+    @validates("seo_description")
+    def _v_seo_description(self, _k: str, v: Any) -> Optional[str]:
+        s = _clean_text(v, _DESC_MAX)
+        return s or None
+
+    @validates("slug_path")
+    def _v_slug_path(self, _k: str, v: Any) -> Optional[str]:
+        s = _clip_str(v, _PATH_MAX)
+        if not s:
+            return None
+        s2 = s.strip().strip("/")
+        s2 = _space_re.sub("-", s2)
+        s2 = s2.replace("\x00", "")
+        return s2[:_PATH_MAX] if s2 else None
+
     def is_root(self) -> bool:
         return self.parent_id is None
 
     def ancestors(self) -> List["Category"]:
-        """
-        root -> parent (sin incluir self)
-        """
         out: List["Category"] = []
         cur = self.parent
-        # loop guard por si hay ciclos por error humano
         seen: set[int] = set()
-        while cur is not None and (cur.id not in seen):
-            if cur.id is not None:
-                seen.add(cur.id)
+        while cur is not None:
+            cid = getattr(cur, "id", None)
+            if isinstance(cid, int):
+                if cid in seen:
+                    break
+                seen.add(cid)
             out.append(cur)
             cur = cur.parent
         out.reverse()
         return out
 
     def full_path_slugs(self) -> List[str]:
-        """root -> ... -> self"""
-        slugs = [c.slug for c in self.ancestors()] + [self.slug]
-        return [s for s in slugs if s]
+        parts = [c.slug for c in self.ancestors()] + [self.slug]
+        return [p for p in parts if p]
 
     def compute_slug_path(self) -> str:
-        return "/".join(self.full_path_slugs())
+        parts = self.full_path_slugs()
+        s = "/".join(parts) if parts else (self.slug or "categoria")
+        s = s[:_PATH_MAX]
+        return s
 
-    def ensure_slug_path(self) -> None:
-        """Recalcula slug_path (usalo si cambias parent/slug)."""
-        self.slug_path = self.compute_slug_path()
-
-    # ---- versión blindada para hooks (cuando parent no está cargado)
     def compute_slug_path_db_safe(self) -> str:
-        """
-        Calcula slug_path incluso si self.parent no está cargado,
-        usando parent_id con queries.
-        """
         parts: List[str] = []
         cur_id = self.parent_id
         seen: set[int] = set()
         while cur_id:
-            if cur_id in seen:
+            if int(cur_id) in seen:
                 break
-            seen.add(cur_id)
+            seen.add(int(cur_id))
             parent = db.session.get(Category, int(cur_id))
             if not parent:
                 break
-            parts.append(parent.slug)
+            if parent.slug:
+                parts.append(parent.slug)
             cur_id = parent.parent_id
         parts.reverse()
-        parts.append(self.slug)
-        parts = [p for p in parts if p]
-        return "/".join(parts) if parts else (self.slug or "categoria")
+        if self.slug:
+            parts.append(self.slug)
+        s = "/".join(parts) if parts else (self.slug or "categoria")
+        return s[:_PATH_MAX]
+
+    def ensure_slug_path(self) -> None:
+        self.slug_path = self.compute_slug_path()
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "slug": self.slug,
+            "parent_id": self.parent_id,
+            "active": bool(self.active),
+            "sort_order": int(self.sort_order or 0),
+            "seo_title": self.seo_title,
+            "seo_description": self.seo_description,
+            "slug_path": self.slug_path,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
 
     def __repr__(self) -> str:
         return f"<Category id={self.id} name={self.name!r} slug={self.slug!r} parent_id={self.parent_id}>"
 
 
-# ============================================================
-# Índices PRO
-# ============================================================
-
-db.Index("ix_categories_active_sort", Category.active, Category.sort_order)
-db.Index("ix_categories_parent_sort", Category.parent_id, Category.sort_order)
-
-
-# ============================================================
-# Hooks: mantener slug_path + updated_at
-# ============================================================
+def _touch_and_paths(target: Category) -> None:
+    if not (target.name or "").strip():
+        target.name = "Categoría"
+    target.slug = _canon_country_path_component(target.slug or target.name)
+    now = utcnow()
+    if not target.created_at:
+        target.created_at = now
+    target.updated_at = now
+    try:
+        target.slug_path = target.compute_slug_path_db_safe()
+    except Exception:
+        target.slug_path = (target.slug or "categoria")[:_PATH_MAX]
 
 
 @event.listens_for(Category, "before_insert", propagate=True)
-def _cat_before_insert(_mapper, _conn, target: Category):
-    # slug auto si faltó (mejora #1)
-    if not (target.slug or "").strip():
-        target.slug = slugify(target.name or "categoria")
-
-    # created/updated consistentes (mejora #2)
-    if not target.created_at:
-        target.created_at = utcnow()
-    target.updated_at = utcnow()
-
-    # slug_path robusto (mejora #3)
-    try:
-        target.slug_path = target.compute_slug_path_db_safe()
-    except Exception:
-        target.slug_path = target.slug
+def _cat_before_insert(_mapper, _conn, target: Category) -> None:
+    _touch_and_paths(target)
 
 
 @event.listens_for(Category, "before_update", propagate=True)
-def _cat_before_update(_mapper, _conn, target: Category):
-    target.updated_at = utcnow()
+def _cat_before_update(_mapper, _conn, target: Category) -> None:
+    _touch_and_paths(target)
 
-    # si cambia parent/slug, actualizamos path robusto
-    try:
-        target.slug_path = target.compute_slug_path_db_safe()
-    except Exception:
-        target.slug_path = target.slug
+
+__all__ = ["Category", "slugify", "utcnow"]

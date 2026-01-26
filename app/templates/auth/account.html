@@ -2,33 +2,64 @@
 {% block title %}Mi cuenta · {{ (APP_NAME or "Skyline Store")|e }}{% endblock %}
 
 {% block extra_head %}
-  <meta name="robots" content="noindex,nofollow">
-  <meta name="theme-color" content="#2563eb">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#2563eb">
 {% endblock %}
 
 {% block content %}
-{% set _shop = (url_for('shop.shop') if url_for is defined else '/shop') %}
-{% if not _shop or not _shop.startswith('/') %}{% set _shop = '/shop' %}{% endif %}
-{% set _offers = _shop ~ ('?ofertas=1' if '?' not in _shop else '&ofertas=1') %}
-{% set _new = _shop ~ ('?sort=new' if '?' not in _shop else '&sort=new') %}
-{% set _featured = '/#destacados' %}
+{% set _vf = (view_functions if view_functions is defined and view_functions else {}) %}
+{% macro safe_url(endpoint, fallback) -%}
+  {%- if endpoint and endpoint in _vf -%}{{ url_for(endpoint) }}{%- else -%}{{ fallback }}{%- endif -%}
+{%- endmacro %}
 
-{% set _is_auth = (is_authenticated if is_authenticated is defined else false) %}
+{% macro safe_next(path, default_path='/account') -%}
+  {%- set p = (path|string|trim) if path is not none else '' -%}
+  {%- if not p or not p.startswith('/') or '://' in p or p.startswith('//') -%}
+    {{- default_path -}}
+  {%- elif p.startswith('/auth/') or p.startswith('/logout') -%}
+    {{- default_path -}}
+  {%- else -%}
+    {{- p -}}
+  {%- endif -%}
+{%- endmacro %}
+
+{% set url_shop     = safe_url('shop.shop', '/shop') %}
+{% if not url_shop or not url_shop.startswith('/') %}{% set url_shop = '/shop' %}{% endif %}
+{% set url_offers   = url_shop ~ ('?ofertas=1' if '?' not in url_shop else '&ofertas=1') %}
+{% set url_new      = url_shop ~ ('?sort=new' if '?' not in url_shop else '&sort=new') %}
+{% set url_featured = '/#destacados' %}
+
+{% set url_login    = safe_url('auth.login', '/auth/login') %}
+{% set url_register = safe_url('auth.register', '/auth/register') %}
+{% set url_logout   = safe_url('auth.logout', '/auth/logout') %}
+{% set url_account  = safe_url('account.dashboard', '/account') %}
+
+{% set next_after_auth = safe_next(request.full_path if request is defined and request.full_path else url_account, url_account) %}
+{% if '?' in next_after_auth %}
+  {% set next_after_auth = next_after_auth.split('?')[0] %}
+{% endif %}
+
+{% set _is_auth = false %}
 {% if current_user is defined and current_user and current_user.is_authenticated is defined %}
   {% set _is_auth = current_user.is_authenticated %}
+{% elif is_authenticated is defined %}
+  {% set _is_auth = is_authenticated %}
 {% endif %}
 
 {% set name = (user_name if user_name is defined and user_name else '')|string|trim %}
 {% if not name and current_user is defined and current_user %}
-  {% set name = (current_user.name if current_user.name is defined and current_user.name else '')|string|trim %}
+  {% if current_user.name is defined and current_user.name %}
+    {% set name = (current_user.name|string)|trim %}
+  {% endif %}
 {% endif %}
-{% if not name and current_user is defined and current_user %}
-  {% set name = (current_user.email if current_user.email is defined and current_user.email else '')|string|trim %}
+{% if not name and current_user is defined and current_user and current_user.email is defined and current_user.email %}
+  {% set name = (current_user.email|string)|trim %}
 {% endif %}
+{% if not name %}{% set name = 'Usuario' %}{% endif %}
 
-{% set orders = (orders_count if orders_count is defined and orders_count is not none else 0)|int %}
-{% set favs = (favorites_count if favorites_count is defined and favorites_count is not none else 0)|int %}
-{% set points = (skyline_points if skyline_points is defined and skyline_points is not none else 0)|int %}
+{% set orders   = (orders_count if orders_count is defined and orders_count is not none else 0)|int %}
+{% set favs     = (favorites_count if favorites_count is defined and favorites_count is not none else 0)|int %}
+{% set points   = (skyline_points if skyline_points is defined and skyline_points is not none else 0)|int %}
 {% set next_pts = (next_level_points if next_level_points is defined and next_level_points is not none else 500)|int %}
 {% if next_pts < 1 %}{% set next_pts = 1 %}{% endif %}
 {% set pct = ((points / next_pts) * 100) %}
@@ -40,7 +71,6 @@
   <a class="ss-skip" href="#accountMain">Saltar al contenido</a>
 
   <section class="container ss-profile__wrap" id="accountMain" tabindex="-1">
-
     {% if not _is_auth %}
       <header class="ss-hero ss-hero--profile" aria-label="Acceso a cuenta">
         <div class="ss-hero__inner">
@@ -53,14 +83,14 @@
             <h1 class="ss-title">Bienvenido a <span class="ss-title__name">Skyline Store</span> 👋</h1>
 
             <p class="ss-subtitle">
-              Iniciá sesión o creá tu cuenta para acceder a pedidos, puntos, favoritos y beneficios exclusivos.
+              Iniciá sesión o creá tu cuenta para acceder a pedidos, puntos, favoritos y beneficios.
             </p>
 
             <div class="ss-btnrow" role="group" aria-label="Acciones principales">
-              <a class="ss-btn ss-btn--primary" href="{{ (url_for('auth.login') if url_for is defined else '/auth/login')|e }}">Iniciar sesión</a>
-              <a class="ss-btn ss-btn--soft" href="{{ (url_for('auth.register') if url_for is defined else '/auth/register')|e }}">Crear cuenta</a>
-              <a class="ss-btn ss-btn--ghost" href="{{ _shop|e }}" aria-label="Ir a la tienda">🛒 Ver tienda</a>
-              <a class="ss-btn ss-btn--warn" href="{{ _offers|e }}" aria-label="Ver ofertas">⚡ Ofertas</a>
+              <a class="ss-btn ss-btn--primary" href="{{ (url_login ~ '?next=' ~ next_after_auth)|e }}">Iniciar sesión</a>
+              <a class="ss-btn ss-btn--soft" href="{{ (url_register ~ '?next=' ~ next_after_auth)|e }}">Crear cuenta</a>
+              <a class="ss-btn ss-btn--ghost" href="{{ url_shop|e }}">🛒 Ver tienda</a>
+              <a class="ss-btn ss-btn--warn" href="{{ url_offers|e }}">⚡ Ofertas</a>
             </div>
 
             <div class="ss-inline-info" role="list" aria-label="Garantías rápidas">
@@ -86,13 +116,12 @@
             <div class="ss-divider" aria-hidden="true"></div>
 
             <div class="ss-points-actions" role="group" aria-label="Acciones rápidas">
-              <a class="ss-mini-btn" href="{{ _new|e }}">Ver novedades</a>
-              <a class="ss-mini-btn ss-mini-btn--primary" href="{{ _featured|e }}">Ver destacados</a>
+              <a class="ss-mini-btn" href="{{ url_new|e }}">Ver novedades</a>
+              <a class="ss-mini-btn ss-mini-btn--primary" href="{{ url_featured|e }}">Ver destacados</a>
             </div>
           </aside>
         </div>
       </header>
-
     {% else %}
       <header class="ss-hero ss-hero--profile" aria-label="Resumen de cuenta">
         <div class="ss-hero__inner">
@@ -103,7 +132,7 @@
             </div>
 
             <h1 class="ss-title">
-              Hola, <span class="ss-title__name">{{ (name or 'Usuario')|e }}</span>
+              Hola, <span class="ss-title__name">{{ name|e }}</span>
             </h1>
 
             <p class="ss-subtitle">
@@ -118,10 +147,11 @@
             </div>
 
             <div class="ss-btnrow" role="group" aria-label="Acciones principales">
-              <a class="ss-btn ss-btn--primary" href="{{ _shop|e }}" aria-label="Ir a la tienda">🛒 Ir a la tienda</a>
-              <a class="ss-btn ss-btn--soft" href="{{ _featured|e }}" aria-label="Ver destacados">🔥 Destacados</a>
-              <a class="ss-btn ss-btn--warn" href="{{ _offers|e }}" aria-label="Ver ofertas">⚡ Ofertas</a>
-              <a class="ss-btn ss-btn--ghost" href="{{ _new|e }}" aria-label="Ver novedades">🆕 Novedades</a>
+              <a class="ss-btn ss-btn--primary" href="{{ url_shop|e }}">🛒 Ir a la tienda</a>
+              <a class="ss-btn ss-btn--soft" href="{{ url_featured|e }}">🔥 Destacados</a>
+              <a class="ss-btn ss-btn--warn" href="{{ url_offers|e }}">⚡ Ofertas</a>
+              <a class="ss-btn ss-btn--ghost" href="{{ url_new|e }}">🆕 Novedades</a>
+              <a class="ss-btn ss-btn--ghost" href="{{ url_logout|e }}">Salir</a>
             </div>
 
             <div class="ss-inline-info" role="list" aria-label="Garantías rápidas">
@@ -152,8 +182,8 @@
             <div class="ss-divider" aria-hidden="true"></div>
 
             <div class="ss-points-actions" role="group" aria-label="Acciones de puntos">
-              <a class="ss-mini-btn" href="{{ _shop|e }}">Ganar puntos</a>
-              <a class="ss-mini-btn ss-mini-btn--primary" href="{{ _offers|e }}">Canjear ofertas</a>
+              <a class="ss-mini-btn" href="{{ url_shop|e }}">Ganar puntos</a>
+              <a class="ss-mini-btn ss-mini-btn--primary" href="{{ url_offers|e }}">Canjear ofertas</a>
             </div>
           </aside>
         </div>
@@ -194,7 +224,7 @@
           <p class="ss-card__subtitle">Atajos para moverte como en un marketplace grande</p>
 
           <div class="ss-list" role="list">
-            <a class="ss-row" href="{{ _shop|e }}" role="listitem" aria-label="Comprar ahora">
+            <a class="ss-row" href="{{ url_shop|e }}" role="listitem" aria-label="Comprar ahora">
               <div>
                 <div class="ss-row__title">Comprar ahora</div>
                 <div class="ss-row__desc">Abrir catálogo completo</div>
@@ -202,7 +232,7 @@
               <span class="ss-pill ss-pill--ok" aria-hidden="true">Ir</span>
             </a>
 
-            <a class="ss-row" href="{{ _offers|e }}" role="listitem" aria-label="Ver ofertas">
+            <a class="ss-row" href="{{ url_offers|e }}" role="listitem" aria-label="Ver ofertas">
               <div>
                 <div class="ss-row__title">Ofertas</div>
                 <div class="ss-row__desc">Promos por tiempo limitado</div>
@@ -210,7 +240,7 @@
               <span class="ss-pill ss-pill--wait" aria-hidden="true">Ver</span>
             </a>
 
-            <a class="ss-row" href="{{ _featured|e }}" role="listitem" aria-label="Abrir destacados">
+            <a class="ss-row" href="{{ url_featured|e }}" role="listitem" aria-label="Abrir destacados">
               <div>
                 <div class="ss-row__title">Destacados</div>
                 <div class="ss-row__desc">Selección premium</div>
@@ -218,7 +248,7 @@
               <span class="ss-pill ss-pill--info" aria-hidden="true">Abrir</span>
             </a>
 
-            <a class="ss-row" href="{{ _new|e }}" role="listitem" aria-label="Abrir novedades">
+            <a class="ss-row" href="{{ url_new|e }}" role="listitem" aria-label="Abrir novedades">
               <div>
                 <div class="ss-row__title">Novedades</div>
                 <div class="ss-row__desc">Lo último agregado</div>
@@ -244,8 +274,8 @@
             {% if orders > 0 %}
               <div class="ss-row ss-row--static" role="listitem" aria-label="Pedido reciente">
                 <div>
-                  <div class="ss-row__title">Pedido reciente</div>
-                  <div class="ss-row__desc">Revisá tu historial en la tienda</div>
+                  <div class="ss-row__title">Pedidos</div>
+                  <div class="ss-row__desc">Revisá tu historial desde la tienda</div>
                 </div>
                 <span class="ss-pill ss-pill--info" aria-hidden="true">Ver</span>
               </div>
@@ -261,7 +291,7 @@
           </div>
 
           <div class="ss-notice" role="status" aria-live="polite">
-            Todo se sincroniza automáticamente cuando tu backend de pedidos esté activo.
+            Todo se sincroniza automáticamente cuando el backend de pedidos esté activo.
           </div>
         </section>
       </section>
@@ -270,12 +300,11 @@
         <h2 class="ss-card__title">¿Necesitás ayuda?</h2>
         <p class="ss-card__subtitle">Soporte rápido y políticas claras para comprar con confianza.</p>
         <div class="ss-btnrow" role="group" aria-label="Acciones de soporte">
-          <a class="ss-btn ss-btn--soft" href="{{ _shop|e }}">Centro de ayuda</a>
-          <a class="ss-btn ss-btn--ghost" href="{{ _offers|e }}">Ver promos</a>
+          <a class="ss-btn ss-btn--soft" href="{{ url_shop|e }}">Centro de ayuda</a>
+          <a class="ss-btn ss-btn--ghost" href="{{ url_offers|e }}">Ver promos</a>
         </div>
       </section>
     {% endif %}
-
   </section>
 </main>
 {% endblock %}
