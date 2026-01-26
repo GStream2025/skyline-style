@@ -6,6 +6,7 @@ import logging
 import os
 import pkgutil
 import time
+from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 log = logging.getLogger("routes")
@@ -82,6 +83,7 @@ def _is_blueprint(obj: Any) -> bool:
         return False
     try:
         from flask.blueprints import Blueprint
+
         return isinstance(obj, Blueprint)
     except Exception:
         return hasattr(obj, "register") and hasattr(obj, "name")
@@ -148,6 +150,26 @@ def _scan_route_modules(exclude: List[str]) -> List[str]:
         return []
 
 
+@dataclass(frozen=True)
+class RoutesReport:
+    registered: List[str]
+    duplicates: List[str]
+    disabled: List[str]
+    imports_failed: List[str]
+    missing_required: List[str]
+    timing_ms: int
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "registered": list(self.registered),
+            "duplicates": list(self.duplicates),
+            "disabled": list(self.disabled),
+            "imports_failed": list(self.imports_failed),
+            "missing_required": list(self.missing_required),
+            "timing_ms": int(self.timing_ms),
+        }
+
+
 def register_blueprints(app) -> Dict[str, Any]:
     t0 = time.perf_counter()
 
@@ -166,7 +188,10 @@ def register_blueprints(app) -> Dict[str, Any]:
     for item in priority:
         if ":" in item:
             mod, sym = item.split(":", 1)
-            specs.append((mod.strip(), sym.strip() or None))
+            mod = mod.strip()
+            sym = sym.strip()
+            if mod:
+                specs.append((mod, sym or None))
         else:
             specs.append((item, None))
 
@@ -174,32 +199,26 @@ def register_blueprints(app) -> Dict[str, Any]:
         for mod in _scan_route_modules(scan_exclude):
             specs.append((mod, None))
 
-    report: Dict[str, Any] = {
-        "registered": [],
-        "duplicates": [],
-        "disabled": [],
-        "imports_failed": [],
-        "missing_required": [],
-        "timing_ms": 0,
-    }
+    registered: List[str] = []
+    duplicates: List[str] = []
+    disabled_out: List[str] = []
+    imports_failed: List[str] = []
 
-    seen_names: Set[str] = set()
+    seen_names: Set[str] = set(str(k).lower() for k in (getattr(app, "blueprints", {}) or {}).keys())
 
     for mod_path, symbol in specs:
         mod, err = _import_module(mod_path)
         if not mod:
             if err:
-                report["imports_failed"].append(f"{mod_path} :: {err}")
+                imports_failed.append(f"{mod_path} :: {err}")
             continue
 
-        candidates: List[Tuple[Any, str]] = []
         if symbol:
             try:
                 obj = getattr(mod, symbol, None)
             except Exception:
                 obj = None
-            if _is_blueprint(obj):
-                candidates = [(obj, symbol)]
+            candidates = [(obj, symbol)] if _is_blueprint(obj) else []
         else:
             candidates = list(_iter_blueprints_in_module(mod))
 
@@ -212,15 +231,15 @@ def register_blueprints(app) -> Dict[str, Any]:
             origin = f"{mod_path}.{sym}"
 
             if allow and name_l not in allow:
-                report["disabled"].append(f"{bp_name} <- {origin} (allowlist)")
+                disabled_out.append(f"{bp_name} <- {origin} (allowlist)")
                 continue
 
-            if _match(name_l, disable) or _match(origin.lower(), disable) or _match(sym.lower(), disable):
-                report["disabled"].append(f"{bp_name} <- {origin}")
+            if _match(name_l, disable) or _match(origin.lower(), disable) or _match(str(sym).lower(), disable):
+                disabled_out.append(f"{bp_name} <- {origin}")
                 continue
 
-            if name_l in seen_names or name_l in (app.blueprints or {}):
-                report["duplicates"].append(f"{bp_name} <- {origin}")
+            if name_l in seen_names:
+                duplicates.append(f"{bp_name} <- {origin}")
                 continue
 
             override = _env_prefix_for(bp_name)
@@ -230,30 +249,39 @@ def register_blueprints(app) -> Dict[str, Any]:
                 else:
                     app.register_blueprint(bp)
                 seen_names.add(name_l)
-                report["registered"].append(f"{bp_name} <- {origin}" + (f" (prefix={override})" if override else ""))
+                registered.append(f"{bp_name} <- {origin}" + (f" (prefix={override})" if override else ""))
             except Exception as e:
-                report["imports_failed"].append(f"{origin} :: {type(e).__name__}: {e}")
+                imports_failed.append(f"{origin} :: {type(e).__name__}: {e}")
 
+    missing_required: List[str] = []
     if require:
-        have = set((app.blueprints or {}).keys())
-        miss = sorted([x for x in require if x not in have])
-        report["missing_required"] = miss
+        have = set(str(k).lower() for k in (getattr(app, "blueprints", {}) or {}).keys())
+        missing_required = sorted([x for x in require if x not in have])
 
-    report["timing_ms"] = int((time.perf_counter() - t0) * 1000)
+    timing_ms = int((time.perf_counter() - t0) * 1000)
 
     try:
         log.info(
             "✅ Routes ready | registered=%d | dup=%d | disabled=%d | imports_failed=%d | %dms",
-            len(report["registered"]),
-            len(report["duplicates"]),
-            len(report["disabled"]),
-            len(report["imports_failed"]),
-            report["timing_ms"],
+            len(registered),
+            len(duplicates),
+            len(disabled_out),
+            len(imports_failed),
+            timing_ms,
         )
+        if missing_required:
+            log.warning("⚠ Missing required blueprints: %s", ", ".join(missing_required))
     except Exception:
         pass
 
-    return report
+    return RoutesReport(
+        registered=registered,
+        duplicates=duplicates,
+        disabled=disabled_out,
+        imports_failed=imports_failed,
+        missing_required=missing_required,
+        timing_ms=timing_ms,
+    ).to_dict()
 
 
 __all__ = ["register_blueprints"]
