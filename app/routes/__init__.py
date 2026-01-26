@@ -29,9 +29,7 @@ def _env_bool(key: str, default: bool = False) -> bool:
 
 def _split_csv(key: str) -> List[str]:
     raw = (os.getenv(key) or "").strip()
-    if not raw:
-        return []
-    return [x.strip() for x in raw.split(",") if x and x.strip()]
+    return [x.strip().lower() for x in raw.split(",") if x.strip()]
 
 
 def _match(value: str, patterns: List[str]) -> bool:
@@ -39,23 +37,13 @@ def _match(value: str, patterns: List[str]) -> bool:
     if not v:
         return False
     for p in patterns:
-        pat = (p or "").strip().lower()
-        if not pat:
-            continue
-        if any(ch in pat for ch in "*?[]"):
-            if fnmatch.fnmatch(v, pat):
-                return True
-        else:
-            if v == pat:
-                return True
+        if fnmatch.fnmatch(v, p):
+            return True
     return False
 
 
 def _bp_env_key(bp_name: str) -> str:
-    s = (bp_name or "").strip().upper().replace("-", "_").replace(" ", "_")
-    while "__" in s:
-        s = s.replace("__", "_")
-    return s or "BLUEPRINT"
+    return (bp_name or "BLUEPRINT").upper().replace("-", "_").replace(" ", "_")
 
 
 def _normalize_prefix(prefix: Optional[str]) -> Optional[str]:
@@ -64,90 +52,76 @@ def _normalize_prefix(prefix: Optional[str]) -> Optional[str]:
     p = str(prefix).strip()
     if not p:
         return None
-    while "//" in p:
-        p = p.replace("//", "/")
-    if not p.startswith("/"):
-        p = "/" + p
-    if p != "/" and p.endswith("/"):
-        p = p[:-1]
-    return p
+    p = "/" + p.lstrip("/")
+    return p.rstrip("/") if p != "/" else p
 
 
 def _env_prefix_for(bp_name: str) -> Optional[str]:
-    v = (os.getenv(f"ROUTES_PREFIX_{_bp_env_key(bp_name)}") or "").strip()
-    return _normalize_prefix(v)
+    return _normalize_prefix(os.getenv(f"ROUTES_PREFIX_{_bp_env_key(bp_name)}"))
 
 
 def _is_blueprint(obj: Any) -> bool:
-    if obj is None:
-        return False
     try:
         from flask.blueprints import Blueprint
-
         return isinstance(obj, Blueprint)
     except Exception:
-        return hasattr(obj, "register") and hasattr(obj, "name")
+        return False
 
 
-def _import_module(mod_path: str):
+def _import_module(path: str):
     try:
-        return importlib.import_module(mod_path), ""
+        return importlib.import_module(path), None
     except Exception as e:
         return None, f"{type(e).__name__}: {e}"
 
 
 def _iter_blueprints_in_module(mod: Any) -> Iterable[Tuple[Any, str]]:
-    if not mod:
-        return
-    for k in dir(mod):
-        if k.startswith("_"):
+    for name in dir(mod):
+        if name.startswith("_"):
             continue
         try:
-            obj = getattr(mod, k, None)
+            obj = getattr(mod, name)
         except Exception:
-            obj = None
+            continue
         if _is_blueprint(obj):
-            yield obj, k
+            yield obj, name
 
 
-def _default_specs() -> List[Tuple[str, Optional[str]]]:
+def _default_specs() -> List[str]:
     return [
-        ("app.routes.main_routes", None),
-        ("app.routes.shop_routes", None),
-        ("app.routes.auth_routes", None),
-        ("app.routes.account_routes", None),
-        ("app.routes.cuenta_routes", None),
-        ("app.routes.cart_routes", None),
-        ("app.routes.checkout_routes", None),
-        ("app.routes.api_routes", None),
-        ("app.routes.affiliate_routes", None),
-        ("app.routes.marketing_routes", None),
-        ("app.routes.webhooks_routes", None),
-        ("app.routes.admin_routes", None),
-        ("app.routes.admin_payments_routes", None),
-        ("app.routes.printful_routes", None),
-        ("app.routes.address_routes", None),
-        ("app.routes.profile_routes", None),
+        "app.routes.main_routes",
+        "app.routes.shop_routes",
+        "app.routes.auth_routes",
+        "app.routes.account_routes",
+        "app.routes.cuenta_routes",
+        "app.routes.cart_routes",
+        "app.routes.checkout_routes",
+        "app.routes.api_routes",
+        "app.routes.affiliate_routes",
+        "app.routes.marketing_routes",
+        "app.routes.webhooks_routes",
+        "app.routes.admin_routes",
+        "app.routes.admin_payments_routes",
+        "app.routes.printful_routes",
+        "app.routes.address_routes",
+        "app.routes.profile_routes",
     ]
 
 
 def _scan_route_modules(exclude: List[str]) -> List[str]:
+    out: Set[str] = set()
     try:
         pkg = importlib.import_module("app.routes")
-        pkg_path = getattr(pkg, "__path__", None)
-        if not pkg_path:
-            return []
-        out: List[str] = []
-        for m in pkgutil.iter_modules(pkg_path, "app.routes."):
-            tail = m.name.split(".")[-1].lower()
-            if tail.startswith("_") or tail in {"tests", "test", "conftest", "__init__"}:
+        for m in pkgutil.iter_modules(pkg.__path__, "app.routes."):
+            name = m.name.lower()
+            if name.endswith("__init__"):
                 continue
-            if _match(m.name, exclude) or _match(tail, exclude):
+            if _match(name, exclude):
                 continue
-            out.append(m.name)
-        return sorted(set(out))
-    except Exception:
-        return []
+            out.add(m.name)
+    except Exception as e:
+        log.error("Route scan failed: %s", e)
+    return sorted(out)
 
 
 @dataclass(frozen=True)
@@ -159,129 +133,75 @@ class RoutesReport:
     missing_required: List[str]
     timing_ms: int
 
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "registered": list(self.registered),
-            "duplicates": list(self.duplicates),
-            "disabled": list(self.disabled),
-            "imports_failed": list(self.imports_failed),
-            "missing_required": list(self.missing_required),
-            "timing_ms": int(self.timing_ms),
-        }
-
 
 def register_blueprints(app) -> Dict[str, Any]:
     t0 = time.perf_counter()
 
-    disable = [x.lower() for x in _split_csv("ROUTES_DISABLE")]
-    allow = {x.lower() for x in _split_csv("ROUTES_ALLOW")}
-    require = {x.lower() for x in _split_csv("ROUTES_REQUIRE")}
+    disable = _split_csv("ROUTES_DISABLE")
+    allow = set(_split_csv("ROUTES_ALLOW"))
+    require = set(_split_csv("ROUTES_REQUIRE"))
 
     scan_enabled = _env_bool("ROUTES_SCAN", False)
-    scan_exclude = [x.lower() for x in _split_csv("ROUTES_SCAN_EXCLUDE")]
+    scan_exclude = _split_csv("ROUTES_SCAN_EXCLUDE")
 
-    priority = [x.strip() for x in _split_csv("ROUTES_PRIORITY") if x.strip()]
-    specs: List[Tuple[str, Optional[str]]] = []
-
+    specs: List[str] = []
     specs.extend(_default_specs())
 
-    for item in priority:
-        if ":" in item:
-            mod, sym = item.split(":", 1)
-            mod = mod.strip()
-            sym = sym.strip()
-            if mod:
-                specs.append((mod, sym or None))
-        else:
-            specs.append((item, None))
-
     if scan_enabled:
-        for mod in _scan_route_modules(scan_exclude):
-            specs.append((mod, None))
+        specs.extend(_scan_route_modules(scan_exclude))
 
-    registered: List[str] = []
-    duplicates: List[str] = []
-    disabled_out: List[str] = []
-    imports_failed: List[str] = []
+    # 🔒 dedupe real
+    specs = list(dict.fromkeys(specs))
 
-    seen_names: Set[str] = set(str(k).lower() for k in (getattr(app, "blueprints", {}) or {}).keys())
+    registered, duplicates, disabled_out, imports_failed = [], [], [], []
+    seen = set((app.blueprints or {}).keys())
 
-    for mod_path, symbol in specs:
+    for mod_path in specs:
         mod, err = _import_module(mod_path)
-        if not mod:
-            if err:
-                imports_failed.append(f"{mod_path} :: {err}")
+        if err:
+            imports_failed.append(f"{mod_path} :: {err}")
+            log.error("IMPORT FAILED %s", err)
             continue
 
-        if symbol:
-            try:
-                obj = getattr(mod, symbol, None)
-            except Exception:
-                obj = None
-            candidates = [(obj, symbol)] if _is_blueprint(obj) else []
-        else:
-            candidates = list(_iter_blueprints_in_module(mod))
-
-        for bp, sym in candidates:
-            bp_name = (getattr(bp, "name", "") or "").strip()
-            if not bp_name:
-                continue
-
-            name_l = bp_name.lower()
+        for bp, sym in _iter_blueprints_in_module(mod):
+            name = bp.name
             origin = f"{mod_path}.{sym}"
 
-            if allow and name_l not in allow:
-                disabled_out.append(f"{bp_name} <- {origin} (allowlist)")
+            if allow and name not in allow:
+                disabled_out.append(origin)
                 continue
 
-            if _match(name_l, disable) or _match(origin.lower(), disable) or _match(str(sym).lower(), disable):
-                disabled_out.append(f"{bp_name} <- {origin}")
+            if _match(name, disable) or _match(origin, disable):
+                disabled_out.append(origin)
                 continue
 
-            if name_l in seen_names:
-                duplicates.append(f"{bp_name} <- {origin}")
+            if name in seen:
+                duplicates.append(origin)
                 continue
 
-            override = _env_prefix_for(bp_name)
             try:
-                if override:
-                    app.register_blueprint(bp, url_prefix=override)
-                else:
-                    app.register_blueprint(bp)
-                seen_names.add(name_l)
-                registered.append(f"{bp_name} <- {origin}" + (f" (prefix={override})" if override else ""))
+                prefix = _env_prefix_for(name)
+                app.register_blueprint(bp, url_prefix=prefix)
+                seen.add(name)
+                registered.append(origin)
             except Exception as e:
                 imports_failed.append(f"{origin} :: {type(e).__name__}: {e}")
+                log.exception("Blueprint register failed")
 
-    missing_required: List[str] = []
-    if require:
-        have = set(str(k).lower() for k in (getattr(app, "blueprints", {}) or {}).keys())
-        missing_required = sorted([x for x in require if x not in have])
-
+    missing_required = sorted(x for x in require if x not in seen)
     timing_ms = int((time.perf_counter() - t0) * 1000)
 
-    try:
-        log.info(
-            "✅ Routes ready | registered=%d | dup=%d | disabled=%d | imports_failed=%d | %dms",
-            len(registered),
-            len(duplicates),
-            len(disabled_out),
-            len(imports_failed),
-            timing_ms,
-        )
-        if missing_required:
-            log.warning("⚠ Missing required blueprints: %s", ", ".join(missing_required))
-    except Exception:
-        pass
+    log.info(
+        "✅ Routes ready | registered=%d | dup=%d | disabled=%d | imports_failed=%d | %dms",
+        len(registered), len(duplicates), len(disabled_out), len(imports_failed), timing_ms
+    )
+
+    if missing_required:
+        log.warning("⚠ Missing required blueprints: %s", ", ".join(missing_required))
 
     return RoutesReport(
-        registered=registered,
-        duplicates=duplicates,
-        disabled=disabled_out,
-        imports_failed=imports_failed,
-        missing_required=missing_required,
-        timing_ms=timing_ms,
-    ).to_dict()
+        registered, duplicates, disabled_out, imports_failed, missing_required, timing_ms
+    ).__dict__
 
 
 __all__ = ["register_blueprints"]
