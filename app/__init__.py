@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Optional, Type
 from urllib.parse import urlencode, urlparse
 
-from flask import Flask, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, jsonify, redirect, render_template, request, url_for
 from flask_wtf import CSRFProtect
 from werkzeug.exceptions import HTTPException
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -71,7 +71,7 @@ def _env_name(app: Flask) -> str:
         return "production"
     if env in {"dev", "development"}:
         return "development"
-    return "development" if bool(app.config.get("DEBUG")) else "production"
+    return "development" if bool(app.debug) else "production"
 
 
 def _is_prod(app: Flask) -> bool:
@@ -164,12 +164,14 @@ def _register_blueprints_fail_safe(app: Flask) -> dict[str, Any]:
         "skipped": 0,
         "failed_names": [],
         "errors": {},
+        "routes_report": {},
     }
 
     try:
         from app.routes import register_blueprints as _register_blueprints  # type: ignore
 
-        _register_blueprints(app)
+        report = _register_blueprints(app)
+        stats["routes_report"] = report if isinstance(report, dict) else {}
         stats["registered"] = len(app.blueprints or {})
         return stats
     except Exception as e:
@@ -188,6 +190,7 @@ def _register_blueprints_fail_safe(app: Flask) -> dict[str, Any]:
         ("app.routes.affiliate_routes", "affiliate_bp"),
         ("app.routes.marketing_routes", "marketing_bp"),
         ("app.routes.webhooks_routes", "webhooks_bp"),
+        ("app.routes.webhook_routes", "webhook_bp"),
         ("app.routes.admin_routes", "admin_bp"),
         ("app.routes.admin_payments_routes", "admin_payments_bp"),
         ("app.routes.printful_routes", "printful_bp"),
@@ -201,7 +204,6 @@ def _register_blueprints_fail_safe(app: Flask) -> dict[str, Any]:
             if err:
                 stats["errors"][f"{mod_name}:{bp_name}"] = err
             continue
-
         try:
             bp_real_name = getattr(bp, "name", "") or ""
             if bp_real_name and bp_real_name in (app.blueprints or {}):
@@ -280,7 +282,7 @@ def create_app() -> Flask:
         request._rid = rid[:128] if rid else secrets.token_urlsafe(10)  # type: ignore[attr-defined]
         request._t0 = time.time()  # type: ignore[attr-defined]
 
-        if request.method not in {"GET", "HEAD"}:
+        if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
             return None
 
         p = request.path.rstrip("/") or "/"
@@ -288,7 +290,6 @@ def create_app() -> Flask:
 
         if p in {"/login", "/auth/login"}:
             return redirect(url_for("_fallback_auth_login", next=nxt), code=302)
-
         if p in {"/register", "/auth/register"}:
             return redirect(url_for("_fallback_auth_register", next=nxt), code=302)
 
@@ -332,38 +333,15 @@ def create_app() -> Flask:
         return redirect("/auth/account?" + urlencode({"tab": tab, "next": nxt}), code=302)
 
     if not _endpoint_exists(app, "_fallback_auth_login"):
-        app.add_url_rule(
-            "/auth/login",
-            "_fallback_auth_login",
-            lambda: _redir_account("login"),
-            methods=["GET", "HEAD"],
-        )
-        app.add_url_rule(
-            "/auth/login/",
-            "_fallback_auth_login_slash",
-            lambda: _redir_account("login"),
-            methods=["GET", "HEAD"],
-        )
-
+        app.add_url_rule("/auth/login", "_fallback_auth_login", lambda: _redir_account("login"), methods=["GET", "HEAD"])
     if not _endpoint_exists(app, "_fallback_auth_register"):
         app.add_url_rule(
-            "/auth/register",
-            "_fallback_auth_register",
-            lambda: _redir_account("register"),
-            methods=["GET", "HEAD"],
-        )
-        app.add_url_rule(
-            "/auth/register/",
-            "_fallback_auth_register_slash",
-            lambda: _redir_account("register"),
-            methods=["GET", "HEAD"],
+            "/auth/register", "_fallback_auth_register", lambda: _redir_account("register"), methods=["GET", "HEAD"]
         )
 
     for rule, endpoint, tab in (
         ("/login", "_fallback_login", "login"),
-        ("/login/", "_fallback_login_slash", "login"),
         ("/register", "_fallback_register", "register"),
-        ("/register/", "_fallback_register_slash", "register"),
     ):
         if not _endpoint_exists(app, endpoint) and not _rule_exists(app, rule):
             app.add_url_rule(rule, endpoint, lambda t=tab: _redir_account(t), methods=["GET", "HEAD"])
@@ -376,12 +354,7 @@ def create_app() -> Flask:
                 tab = "login"
             nxt = _safe_next_url(request.args.get("next", "")) or "/"
             return (
-                render_template(
-                    "auth/account.html",
-                    active_tab=tab,
-                    next=nxt,
-                    prefill_email="",
-                ),
+                render_template("auth/account.html", active_tab=tab, next=nxt, prefill_email=""),
                 200,
                 {"Cache-Control": "no-store"},
             )
@@ -399,6 +372,8 @@ def create_app() -> Flask:
 
     @app.get("/health")
     def health():
+        rr = stats.get("routes_report") if isinstance(stats.get("routes_report"), dict) else {}
+        imports_failed = rr.get("imports_failed", []) if isinstance(rr, dict) else []
         return {
             "status": "ok",
             "env": _env_name(app),
@@ -411,6 +386,7 @@ def create_app() -> Flask:
             "bp_failed_names": stats.get("failed_names", []),
             "auth_account": bool(_endpoint_exists(app, "auth.account") or _rule_exists(app, "/auth/account")),
             "errors": stats.get("errors", {}),
+            "imports_failed": imports_failed,
             "ts": int(time.time()),
         }
 
