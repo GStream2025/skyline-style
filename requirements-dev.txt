@@ -1,16 +1,22 @@
 -r requirements.txt
 
+# -----------------------------
+# Testing
+# -----------------------------
 pytest==8.3.4
 pytest-cov==6.0.0
 pytest-mock==3.14.0
 pytest-env==1.1.5
 pytest-xdist==3.6.1
 pytest-randomly==3.16.0
-freezegun==1.5.1
 pytest-timeout==2.3.1
-coverage[toml]==7.6.9
 pytest-html==4.1.1
+freezegun==1.5.1
+coverage[toml]==7.6.9
 
+# -----------------------------
+# Lint / Format / Types
+# -----------------------------
 ruff==0.8.4
 black==24.10.0
 mypy==1.13.0
@@ -19,18 +25,30 @@ types-requests==2.32.0.20241016
 types-python-dateutil==2.9.0.20241206
 types-six==1.17.0.20241205
 
+# -----------------------------
+# DX (Dev Experience)
+# -----------------------------
 ipython==8.31.0
 rich==13.9.4
-watchdog==6.0.0; platform_system != "Windows"
 debugpy==1.8.11
+watchdog==6.0.0; platform_system != "Windows"
 
+# -----------------------------
+# Security / Auditing
+# -----------------------------
 bandit==1.7.10
 pip-audit==2.7.3
 pipdeptree==2.23.4
 
+# -----------------------------
+# DB / Factories
+# -----------------------------
 sqlalchemy-utils==0.41.2
 faker==33.1.0
 factory-boy==3.3.1
 
+# -----------------------------
+# Tooling
+# -----------------------------
 tox==4.23.2
 pip-tools==7.4.1

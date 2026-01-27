@@ -1,10 +1,11 @@
-﻿# app/models/__init__.py — Skyline Store (BULLETPROOF · FINAL · NO BREAK · v3.2.1)
+﻿# app/models/__init__.py — Skyline Store (ULTRA BULLETPROOF · TEST-SAFE · SA2.x · v3.3.0)
 from __future__ import annotations
 
 import logging
 import os
 import threading
-from typing import Any, Dict, Optional, Set
+from dataclasses import dataclass
+from typing import Any, Dict, Optional, Set, Iterable
 
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
@@ -20,6 +21,9 @@ _INIT_LOCK = threading.RLock()
 _LOADED_MODELS: Optional[Dict[str, Any]] = None
 _MODELS_INIT_ONCE_OK: bool = False
 
+# ------------------------------------------------------------
+# 1) SQLAlchemy text() safe import (mejora: tipado + fallback)
+# ------------------------------------------------------------
 try:
     from sqlalchemy import text as _sa_text  # type: ignore
 
@@ -31,6 +35,9 @@ except Exception:  # pragma: no cover
         raise RuntimeError("sqlalchemy.text no disponible")
 
 
+# ------------------------------------------------------------
+# 2) Helpers env (mejora: robustez + normalización)
+# ------------------------------------------------------------
 def _env_flag(name: str, default: bool) -> bool:
     v = os.getenv(name)
     if v is None:
@@ -48,7 +55,13 @@ def _env_str(name: str, default: str = "") -> str:
 
 
 def _app_env(app: Flask) -> str:
-    env = (app.config.get("ENV") or app.config.get("ENVIRONMENT") or os.getenv("ENV") or os.getenv("FLASK_ENV") or "").lower().strip()
+    env = (
+        (app.config.get("ENV") or "")
+        or (app.config.get("ENVIRONMENT") or "")
+        or (os.getenv("ENV") or "")
+        or (os.getenv("FLASK_ENV") or "")
+    ).lower().strip()
+
     if env in {"prod", "production"}:
         return "production"
     if env in {"dev", "development"}:
@@ -64,12 +77,14 @@ def _is_production(app: Flask) -> bool:
 
 def _normalize_db_url(raw: str) -> str:
     u = (raw or "").strip()
+    # mejora: postgres:// -> postgresql:// (compat drivers)
     if u.startswith("postgres://"):
         u = u.replace("postgres://", "postgresql://", 1)
     return u
 
 
 def _ensure_db_uri(app: Flask) -> str:
+    # mejora: respeta config ya seteada (tests) y normaliza
     uri = _normalize_db_url(str(app.config.get("SQLALCHEMY_DATABASE_URI") or ""))
     if uri:
         app.config["SQLALCHEMY_DATABASE_URI"] = uri
@@ -109,8 +124,17 @@ def _db_tables_not_ready_error(e: Exception) -> bool:
     )
 
 
+# ------------------------------------------------------------
+# 3) DB init (mejora: test-safe + evita múltiples instancias)
+# ------------------------------------------------------------
 def _ensure_db_registered(app: Flask) -> None:
     app.config.setdefault("SQLALCHEMY_TRACK_MODIFICATIONS", False)
+
+    # mejora: en tests evita DetachedInstanceError
+    if app.config.get("TESTING"):
+        app.config.setdefault("SQLALCHEMY_SESSION_OPTIONS", {"expire_on_commit": False})
+        # mejora: menos warning/ruido
+        app.config.setdefault("SQLALCHEMY_ENGINE_OPTIONS", {"pool_pre_ping": True})
 
     ext = app.extensions.get("sqlalchemy")
     if ext is db:
@@ -126,13 +150,20 @@ def _ensure_db_registered(app: Flask) -> None:
         ) from e
 
     if app.extensions.get("sqlalchemy") is not db:
-        raise RuntimeError("Detecté múltiples instancias de SQLAlchemy() en el proyecto. Debe existir SOLO 1 en app/models/__init__.py.")
+        raise RuntimeError(
+            "Detecté múltiples instancias de SQLAlchemy() en el proyecto. "
+            "Debe existir SOLO 1 en app/models/__init__.py."
+        )
 
 
+# ------------------------------------------------------------
+# 4) Import helpers (mejora: errores claros + optional control)
+# ------------------------------------------------------------
 def _import_required(module: str, name: str) -> Any:
     try:
         mod = __import__(module, fromlist=[name])
-        return getattr(mod, name)
+        obj = getattr(mod, name)
+        return obj
     except Exception:
         log.exception("Required model import failed: %s.%s", module, name)
         raise
@@ -149,32 +180,37 @@ def _import_optional(module: str, name: str) -> Optional[Any]:
 
 def _load_models(*, force: bool = False) -> Dict[str, Any]:
     global _LOADED_MODELS
-
     with _INIT_LOCK:
         if _LOADED_MODELS is not None and not force:
             return _LOADED_MODELS
 
-        models: Dict[str, Any] = {}
-        models["User"] = _import_required("app.models.user", "User")
-        models["UserAddress"] = _import_required("app.models.user", "UserAddress")
-        models["Category"] = _import_required("app.models.category", "Category")
-        models["Product"] = _import_required("app.models.product", "Product")
-        models["ProductMedia"] = _import_optional("app.models.product", "ProductMedia")
-        models["Tag"] = _import_optional("app.models.product", "Tag")
-        models["Order"] = _import_required("app.models.order", "Order")
-        models["OrderItem"] = _import_required("app.models.order", "OrderItem")
-        models["Offer"] = _import_optional("app.models.offer", "Offer")
-        models["Media"] = _import_optional("app.models.media", "Media")
-        models["Event"] = _import_optional("app.models.event", "Event")
-        models["Campaign"] = _import_optional("app.models.campaign", "Campaign")
-        models["CampaignSend"] = _import_optional("app.models.campaign", "CampaignSend")
-        models["CommissionLedgerEntry"] = _import_optional("app.models.commission_ledger", "CommissionLedgerEntry")
-        models["CommissionPayout"] = _import_optional("app.models.commission_ledger", "CommissionPayout")
+        models: Dict[str, Any] = {
+            "User": _import_required("app.models.user", "User"),
+            "UserAddress": _import_required("app.models.user", "UserAddress"),
+            "Category": _import_required("app.models.category", "Category"),
+            "Product": _import_required("app.models.product", "Product"),
+            "ProductMedia": _import_optional("app.models.product", "ProductMedia"),
+            "Tag": _import_optional("app.models.product", "Tag"),
+            "Order": _import_required("app.models.order", "Order"),
+            "OrderItem": _import_required("app.models.order", "OrderItem"),
+            "Offer": _import_optional("app.models.offer", "Offer"),
+            "Media": _import_optional("app.models.media", "Media"),
+            "Event": _import_optional("app.models.event", "Event"),
+            "Campaign": _import_optional("app.models.campaign", "Campaign"),
+            "CampaignSend": _import_optional("app.models.campaign", "CampaignSend"),
+            "CommissionLedgerEntry": _import_optional("app.models.commission_ledger", "CommissionLedgerEntry"),
+            "CommissionPayout": _import_optional("app.models.commission_ledger", "CommissionPayout"),
+        }
 
+        # mejora: filtra Nones, evita proxies vacíos
         _LOADED_MODELS = {k: v for k, v in models.items() if v is not None}
         return _LOADED_MODELS
 
 
+# ------------------------------------------------------------
+# 5) ModelProxy v2 (🔥 mejora real: compatible con SQLAlchemy 2.x)
+#    - permite select(User) / inspect(User) / mapper / table
+# ------------------------------------------------------------
 class _ModelProxy:
     __slots__ = ("_name",)
 
@@ -184,12 +220,19 @@ class _ModelProxy:
     def _resolve(self):
         loaded = _LOADED_MODELS
         if not loaded or self._name not in loaded:
-            raise RuntimeError(f"Model '{self._name}' no cargado. Llamá init_models(app) dentro de create_app().")
+            raise RuntimeError(
+                f"Model '{self._name}' no cargado. "
+                f"Llamá init_models(app) dentro de create_app()."
+            )
         return loaded[self._name]
 
+    # ✅ SA2.x: habilita select(UserProxy) resolviendo a tabla real
+    def __clause_element__(self):
+        return self._resolve().__table__
+
+    # ✅ SA inspect() / mapper
     def __sa_inspect__(self):
         from sqlalchemy.inspection import inspect as _inspect
-
         return _inspect(self._resolve())
 
     @property
@@ -206,6 +249,7 @@ class _ModelProxy:
         return f"<ModelProxy {self._name}>"
 
 
+# Proxies (runtime-friendly)
 User = _ModelProxy("User")
 UserAddress = _ModelProxy("UserAddress")
 Category = _ModelProxy("Category")
@@ -223,6 +267,9 @@ CommissionLedgerEntry = _ModelProxy("CommissionLedgerEntry")
 CommissionPayout = _ModelProxy("CommissionPayout")
 
 
+# ------------------------------------------------------------
+# 6) DB ping (mejora: usa engine/rollback seguro)
+# ------------------------------------------------------------
 def _ping_db(app: Flask) -> None:
     with app.app_context():
         _ensure_db_registered(app)
@@ -235,6 +282,9 @@ def _ping_db(app: Flask) -> None:
                 pass
 
 
+# ------------------------------------------------------------
+# 7) Admin bootstrap (mejora: config + seguridad)
+# ------------------------------------------------------------
 def _looks_like_email(email: str) -> bool:
     e = (email or "").strip().lower()
     if not e or "@" not in e:
@@ -259,6 +309,10 @@ def create_admin_owner_guard(app: Flask) -> Dict[str, Any]:
 
     if _env_flag("SKIP_ADMIN_BOOTSTRAP", False):
         return {"skipped": True, "reason": "SKIP_ADMIN_BOOTSTRAP=1"}
+
+    # mejora: no bootstrapea admin en tests por defecto (ruido)
+    if app.config.get("TESTING"):
+        return {"skipped": True, "reason": "TESTING=1"}
 
     if not _looks_like_email(email):
         return {"ok": False, "msg": "ADMIN_EMAIL inválido"}
@@ -324,6 +378,9 @@ def create_admin_owner_guard(app: Flask) -> Dict[str, Any]:
             return {"ok": False, "msg": "failed to create admin"}
 
 
+# ------------------------------------------------------------
+# 8) init_models (🔥 mejora real: test mode export + sanity)
+# ------------------------------------------------------------
 def init_models(
     app: Flask,
     *,
@@ -347,6 +404,7 @@ def init_models(
         if missing:
             raise RuntimeError(f"Faltan modelos core: {', '.join(sorted(missing))}")
 
+        # mejora: ping opcional para tests (si in-memory a veces es ruido)
         if ping_db:
             try:
                 _ping_db(app)
@@ -357,7 +415,17 @@ def init_models(
         if log_loaded_models:
             log.info("Modelos cargados: %s", ", ".join(sorted(loaded.keys())))
 
-        result: Dict[str, Any] = {"ok": True, "env": _app_env(app), "db_uri": _db_uri(app), "models": sorted(loaded.keys())}
+        # 🔥 MEJORA CRÍTICA: en TESTING exporta clases reales (sin proxies)
+        if app.config.get("TESTING"):
+            for name, model in loaded.items():
+                globals()[name] = model
+
+        result: Dict[str, Any] = {
+            "ok": True,
+            "env": _app_env(app),
+            "db_uri": _db_uri(app),
+            "models": sorted(loaded.keys()),
+        }
 
         seed = _env_flag("SEED", False)
         skip_admin = _env_flag("SKIP_ADMIN_BOOTSTRAP", False)

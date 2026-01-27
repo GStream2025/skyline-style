@@ -6,10 +6,11 @@ import os
 import secrets
 import time
 from datetime import datetime, timedelta, timezone
-from typing import Any, Optional, Type
+from functools import partial
+from typing import Any, Optional, Type, cast
 from urllib.parse import urlencode, urlparse
 
-from flask import Flask, Response, jsonify, redirect, render_template, request, url_for
+from flask import Flask, Response, g, jsonify, redirect, render_template, request, url_for
 from flask_wtf import CSRFProtect
 from werkzeug.exceptions import HTTPException
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -19,8 +20,9 @@ from app.models import db, init_models
 
 try:
     from sqlalchemy import text as sql_text  # type: ignore
-except Exception:
+except Exception:  # pragma: no cover
     sql_text = None  # type: ignore
+
 
 _TRUE = {"1", "true", "yes", "y", "on", "checked"}
 _FALSE = {"0", "false", "no", "n", "off"}
@@ -66,10 +68,10 @@ def _env_name(app: Flask) -> str:
         or _env_str("FLASK_ENV")
         or "production"
     )
-    env = str(env).lower().strip()
-    if env in {"prod", "production"}:
+    env_s = str(env).lower().strip()
+    if env_s in {"prod", "production"}:
         return "production"
-    if env in {"dev", "development"}:
+    if env_s in {"dev", "development"}:
         return "development"
     return "development" if bool(app.debug) else "production"
 
@@ -116,6 +118,7 @@ def setup_logging(app: Flask) -> None:
     level = logging.DEBUG if bool(app.debug) else logging.INFO
     root = logging.getLogger()
 
+    # (1) No dup handlers (evita logs repetidos con gunicorn / reloader)
     if not root.handlers:
         logging.basicConfig(
             level=level,
@@ -127,6 +130,7 @@ def setup_logging(app: Flask) -> None:
 
 
 def _safe_next_url(v: str) -> str:
+    # (2) Solo paths internos + anti header-injection + length cap
     nxt = (v or "").strip()
     if not nxt or not nxt.startswith("/") or nxt.startswith("//"):
         return ""
@@ -135,9 +139,7 @@ def _safe_next_url(v: str) -> str:
     p = urlparse(nxt)
     if p.scheme or p.netloc:
         return ""
-    if len(nxt) > 512:
-        nxt = nxt[:512]
-    return nxt
+    return nxt[:512] if len(nxt) > 512 else nxt
 
 
 def _endpoint_exists(app: Flask, endpoint: str) -> bool:
@@ -175,6 +177,7 @@ def _register_blueprints_fail_safe(app: Flask) -> dict[str, Any]:
         "routes_report": {},
     }
 
+    # (3) Preferimos un register_blueprints central si existe
     try:
         from app.routes import register_blueprints as _register_blueprints  # type: ignore
 
@@ -186,6 +189,7 @@ def _register_blueprints_fail_safe(app: Flask) -> dict[str, Any]:
         app.logger.exception("register_blueprints() falló: %s", e)
         stats["errors"]["app.routes.register_blueprints"] = f"{type(e).__name__}: {e}"
 
+    # (4) Fallback: lista segura (no rompe startup si falta un módulo)
     candidates = [
         ("app.routes.main_routes", "main_bp"),
         ("app.routes.shop_routes", "shop_bp"),
@@ -214,6 +218,7 @@ def _register_blueprints_fail_safe(app: Flask) -> dict[str, Any]:
             continue
 
         try:
+            # (5) Evita doble registro por name
             bp_real_name = str(getattr(bp, "name", "") or "").strip()
             if bp_real_name and bp_real_name in (app.blueprints or {}):
                 stats["skipped"] += 1
@@ -221,13 +226,85 @@ def _register_blueprints_fail_safe(app: Flask) -> dict[str, Any]:
 
             app.register_blueprint(bp)
             stats["registered"] += 1
-
         except Exception as e:
             stats["failed"] += 1
             stats["failed_names"].append(f"{mod_name}:{bp_name}")
             stats["errors"][f"{mod_name}:{bp_name}"] = f"{type(e).__name__}: {e}"
 
     return stats
+
+
+def _apply_default_runtime_config(app: Flask) -> None:
+    # (6) Defaults “seguros” + consistentes
+    app.config.setdefault("MAX_CONTENT_LENGTH", _env_int("MAX_CONTENT_LENGTH", 2_000_000, min_v=200_000, max_v=25_000_000))
+    app.config.setdefault("JSON_SORT_KEYS", False)
+    app.config.setdefault("JSONIFY_PRETTYPRINT_REGULAR", False)
+
+    # Cookies / sesiones (7-12)
+    app.config.setdefault("SESSION_COOKIE_HTTPONLY", True)
+    app.config.setdefault("SESSION_COOKIE_SAMESITE", "Lax")
+    app.config.setdefault("PERMANENT_SESSION_LIFETIME", timedelta(days=14))
+    app.config.setdefault("SESSION_REFRESH_EACH_REQUEST", False)
+    app.config.setdefault("PREFERRED_URL_SCHEME", "https" if _is_prod(app) else "http")
+
+    # Secure cookies solo prod (13)
+    app.config.setdefault("SESSION_COOKIE_SECURE", _is_prod(app))
+
+    # ProxyFix knobs por env/config (14)
+    app.config.setdefault("PROXYFIX_X_FOR", _env_int("PROXYFIX_X_FOR", 1, min_v=0, max_v=5))
+    app.config.setdefault("PROXYFIX_X_PROTO", _env_int("PROXYFIX_X_PROTO", 1, min_v=0, max_v=5))
+    app.config.setdefault("PROXYFIX_X_HOST", _env_int("PROXYFIX_X_HOST", 1, min_v=0, max_v=5))
+
+    # Security headers toggles (15-18)
+    app.config.setdefault("SEC_HEADERS_ENABLED", True)
+    app.config.setdefault("HSTS_ENABLED", _is_prod(app))
+    app.config.setdefault("HSTS_MAX_AGE", 31536000)
+    app.config.setdefault("NO_STORE_ERROR_PAGES", True)
+
+    # CSRF toggle (19)
+    app.config.setdefault("CSRF_ENABLED", True)
+
+
+def _ensure_secret_key(app: Flask) -> None:
+    # (20) Secret key: fail hard en prod, generar en dev
+    if app.config.get("SECRET_KEY"):
+        return
+    if _is_prod(app):
+        raise RuntimeError("SECRET_KEY requerido en producción")
+    app.config["SECRET_KEY"] = secrets.token_urlsafe(48)
+
+
+def _ensure_proxyfix_once(app: Flask) -> None:
+    # (21) ProxyFix una sola vez (anti-double wrap)
+    if getattr(app, "_proxyfix_applied", False):
+        return
+    app.wsgi_app = ProxyFix(
+        app.wsgi_app,
+        x_for=int(app.config.get("PROXYFIX_X_FOR", 1)),
+        x_proto=int(app.config.get("PROXYFIX_X_PROTO", 1)),
+        x_host=int(app.config.get("PROXYFIX_X_HOST", 1)),
+    )
+    app._proxyfix_applied = True  # type: ignore[attr-defined]
+
+
+def _security_headers_after_request(app: Flask, resp: Response) -> Response:
+    if not bool(app.config.get("SEC_HEADERS_ENABLED", True)):
+        return resp
+
+    # (22) Cabeceras seguras con setdefault (no pisa lo que ya pusiste)
+    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+    resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+    resp.headers.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+    resp.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+    resp.headers.setdefault("Cross-Origin-Resource-Policy", "same-origin")
+
+    # (23) HSTS solo prod (si no está detrás de HTTPS real, desactivalo)
+    if bool(app.config.get("HSTS_ENABLED", False)) and _is_prod(app):
+        max_age = int(app.config.get("HSTS_MAX_AGE", 31536000) or 31536000)
+        resp.headers.setdefault("Strict-Transport-Security", f"max-age={max_age}; includeSubDomains")
+
+    return resp
 
 
 def create_app() -> Flask:
@@ -239,62 +316,56 @@ def create_app() -> Flask:
         static_folder="static",
         instance_relative_config=True,
     )
-    app.config.from_mapping(cfg.as_flask_config())
 
-    app.config.setdefault(
-        "MAX_CONTENT_LENGTH",
-        _env_int("MAX_CONTENT_LENGTH", 2_000_000, min_v=200_000, max_v=25_000_000),
-    )
-    app.config.setdefault("JSON_SORT_KEYS", False)
-    app.config.setdefault("JSONIFY_PRETTYPRINT_REGULAR", False)
+    # (24) Config centralizado + defaults runtime
+    app.config.from_mapping(cfg.as_flask_config())
+    _apply_default_runtime_config(app)
 
     setup_logging(app)
 
     strict_startup = _env_bool("STRICT_STARTUP", _is_prod(app))
 
-    if not app.config.get("SECRET_KEY"):
-        if _is_prod(app):
-            raise RuntimeError("SECRET_KEY requerido en producción")
-        app.config["SECRET_KEY"] = secrets.token_urlsafe(48)
+    _ensure_secret_key(app)
+    _ensure_proxyfix_once(app)
 
-    if not getattr(app, "_proxyfix", False):
-        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
-        app._proxyfix = True  # type: ignore[attr-defined]
-
-    app.config.setdefault("SESSION_COOKIE_HTTPONLY", True)
-    app.config.setdefault("SESSION_COOKIE_SAMESITE", "Lax")
-    app.config.setdefault("SESSION_COOKIE_SECURE", _is_prod(app))
-    app.config.setdefault("PERMANENT_SESSION_LIFETIME", timedelta(days=14))
-    app.config.setdefault("SESSION_REFRESH_EACH_REQUEST", False)
-    app.config.setdefault("PREFERRED_URL_SCHEME", "https" if _is_prod(app) else "http")
-
+    # (25) CSRF opcional (para APIs / webhooks)
     csrf = CSRFProtect()
-    csrf.init_app(app)
+    if bool(app.config.get("CSRF_ENABLED", True)):
+        csrf.init_app(app)
 
+    # (26) Context globals robusto (no explota si faltan cosas)
     @app.context_processor
     def _inject_globals():
         try:
             vf = set((app.view_functions or {}).keys())
         except Exception:
             vf = set()
+
+        asset_ver = app.config.get("ASSET_VER", app.config.get("BASE_CSS_VER", "1"))
+        home_ver = app.config.get("HOME_CSS_VER", asset_ver)
+
         return {
             "ENV": _env_name(app),
             "APP_NAME": app.config.get("APP_NAME", "Skyline Store"),
-            "ASSET_VER": app.config.get("ASSET_VER", app.config.get("BASE_CSS_VER", "1")),
-            "HOME_CSS_VER": app.config.get("HOME_CSS_VER", app.config.get("ASSET_VER", "1")),
+            "ASSET_VER": asset_ver,
+            "HOME_CSS_VER": home_ver,
             "now_year": utcnow().year,
+            # Mapa booleando para Jinja (no filtra funciones reales)
             "view_functions": {k: True for k in vf},
         }
 
+    # (27-31) Observabilidad: request id + timing sin ensuciar request object
     @app.before_request
     def _before():
+        # OPTIONS rápido (útil para preflight, health checks, etc.)
         if request.method == "OPTIONS":
             return "", 204
 
         rid = (request.headers.get("X-Request-Id") or "").strip()
-        request._rid = rid[:128] if rid else secrets.token_urlsafe(10)  # type: ignore[attr-defined]
-        request._t0 = time.time()  # type: ignore[attr-defined]
+        g.request_id = (rid[:128] if rid else secrets.token_urlsafe(10))
+        g._t0 = time.time()
 
+        # (32-35) Canonicalización de login/register sin loops
         if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
             return None
 
@@ -315,28 +386,25 @@ def create_app() -> Flask:
 
     @app.after_request
     def _after(resp: Response):
+        # (36) Request id + response time
         try:
-            resp.headers.setdefault("X-Request-Id", getattr(request, "_rid", ""))
+            resp.headers.setdefault("X-Request-Id", cast(str, getattr(g, "request_id", "")))
         except Exception:
             pass
 
-        t0 = getattr(request, "_t0", None)
-        if isinstance(t0, (int, float)):
-            ms = int((time.time() - float(t0)) * 1000)
-            resp.headers.setdefault("X-Response-Time", f"{ms}ms")
+        try:
+            t0 = getattr(g, "_t0", None)
+            if isinstance(t0, (int, float)):
+                ms = int((time.time() - float(t0)) * 1000)
+                resp.headers.setdefault("X-Response-Time", f"{ms}ms")
+        except Exception:
+            pass
 
-        resp.headers.setdefault("X-Content-Type-Options", "nosniff")
-        resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
-        resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
-        resp.headers.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
-        resp.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
-        resp.headers.setdefault("Cross-Origin-Resource-Policy", "same-origin")
-
-        if _is_prod(app):
-            resp.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
-
+        # (37) Security headers centralizados
+        resp = _security_headers_after_request(app, resp)
         return resp
 
+    # (38-43) init_models fail-safe + strict_startup
     init_ok = True
     init_err: Optional[str] = None
     try:
@@ -351,6 +419,7 @@ def create_app() -> Flask:
 
     @app.teardown_appcontext
     def _shutdown(_exc):
+        # (44) Cierre de sesión DB seguro
         try:
             db.session.remove()
         except Exception:
@@ -359,16 +428,18 @@ def create_app() -> Flask:
     stats = _register_blueprints_fail_safe(app)
 
     def _redir_account(tab: str):
+        # (45) Redirección account robusta (endpoint si existe, si no hardlink)
         nxt = _safe_next_url(request.args.get("next", "")) or "/"
         if _endpoint_exists(app, "auth.account"):
             return redirect(url_for("auth.account", tab=tab, next=nxt), code=302)
         return redirect("/auth/account?" + urlencode({"tab": tab, "next": nxt}), code=302)
 
+    # Fallbacks /auth/login y /auth/register (GET/HEAD)
     if not _endpoint_exists(app, "_fallback_auth_login"):
         app.add_url_rule(
             "/auth/login",
             "_fallback_auth_login",
-            lambda: _redir_account("login"),
+            partial(_redir_account, "login"),
             methods=["GET", "HEAD"],
         )
 
@@ -376,17 +447,19 @@ def create_app() -> Flask:
         app.add_url_rule(
             "/auth/register",
             "_fallback_auth_register",
-            lambda: _redir_account("register"),
+            partial(_redir_account, "register"),
             methods=["GET", "HEAD"],
         )
 
+    # /login y /register legacy (solo si no existen)
     for rule, endpoint, tab in (
         ("/login", "_fallback_login", "login"),
         ("/register", "_fallback_register", "register"),
     ):
         if not _endpoint_exists(app, endpoint) and not _rule_exists(app, rule):
-            app.add_url_rule(rule, endpoint, lambda t=tab: _redir_account(t), methods=["GET", "HEAD"])
+            app.add_url_rule(rule, endpoint, partial(_redir_account, tab), methods=["GET", "HEAD"])
 
+    # Emergency /auth/account si falta el endpoint real
     if not _endpoint_exists(app, "auth.account") and not _rule_exists(app, "/auth/account"):
 
         @app.get("/auth/account")
@@ -395,12 +468,10 @@ def create_app() -> Flask:
             if tab not in {"login", "register"}:
                 tab = "login"
             nxt = _safe_next_url(request.args.get("next", "")) or "/"
-            return (
-                render_template("auth/account.html", active_tab=tab, next=nxt, prefill_email=""),
-                200,
-                {"Cache-Control": "no-store"},
-            )
+            headers = {"Cache-Control": "no-store"} if bool(app.config.get("NO_STORE_ERROR_PAGES", True)) else {}
+            return render_template("auth/account.html", active_tab=tab, next=nxt, prefill_email=""), 200, headers
 
+    # Root fallback si nadie definió "/"
     if not _rule_exists(app, "/"):
 
         @app.get("/")
@@ -439,6 +510,7 @@ def create_app() -> Flask:
     def ready():
         ok = True
         db_ok = True
+
         try:
             if sql_text is not None:
                 db.session.execute(sql_text("SELECT 1"))
@@ -451,9 +523,8 @@ def create_app() -> Flask:
         if not init_ok:
             ok = False
 
-        return {"ok": ok, "db": db_ok, "init": init_ok, "env": _env_name(app), "ts": int(time.time())}, (
-            200 if ok else 503
-        )
+        payload = {"ok": ok, "db": db_ok, "init": init_ok, "env": _env_name(app), "ts": int(time.time())}
+        return payload, (200 if ok else 503)
 
     @app.errorhandler(HTTPException)
     def http_error(e: HTTPException):
