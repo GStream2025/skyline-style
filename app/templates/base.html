@@ -17,14 +17,20 @@
   {% set _cssv = (BASE_CSS_VER if BASE_CSS_VER is defined else (ASSET_VER if ASSET_VER is defined else '1'))|string %}
   {% set _nonce = (csp_nonce if csp_nonce is defined else (nonce if nonce is defined else '')) %}
 
+  {# ================= SAFE URL HELPERS ================= #}
   {% macro safe_url(ep, fb='/') -%}
     {%- if url_for is defined and ep and ep in _vf -%}{{ url_for(ep) }}{%- else -%}{{ fb }}{%- endif -%}
   {%- endmacro %}
 
-  {% macro safe_static(f) -%}
-    {%- if url_for is defined -%}{{ url_for('static', filename=f) ~ '?v=' ~ _cssv }}{%- endif -%}
+  {% macro safe_urlq(ep, fb='/', **kwargs) -%}
+    {%- if url_for is defined and ep and ep in _vf -%}{{ url_for(ep, **kwargs) }}{%- else -%}{{ fb }}{%- endif -%}
   {%- endmacro %}
 
+  {% macro safe_static(f) -%}
+    {%- if url_for is defined -%}{{ url_for('static', filename=f) ~ '?v=' ~ _cssv }}{%- else -%}{{ '' }}{%- endif -%}
+  {%- endmacro %}
+
+  {# ================= CSRF SAFE ================= #}
   {% set _csrf = '' %}
   {% if csrf_token_value is defined and csrf_token_value %}
     {% set _csrf = csrf_token_value %}
@@ -32,8 +38,14 @@
     {% set _csrf = csrf_token() %}
   {% endif %}
 
-  {% set _canonical = (_req.base_url if _req and _req.base_url else 'https://skyline-style.onrender.com') %}
+  {# ================= CANONICAL CLEAN ================= #}
+  {% set _canonical = 'https://skyline-style.onrender.com' %}
+  {% if _req and _req.url_root %}
+    {% set _canonical = (_req.url_root.rstrip('/') ~ _path) %}
+  {% endif %}
+
   {% set _og = (og_image if og_image is defined else safe_static('img/og/og-home.png')) %}
+  {% set _q = (_args.get('q','') if _args else '') %}
 
   <title>{% block title %}{{ _title|e }}{% endblock %}</title>
   <meta name="description" content="{{ _desc|e }}">
@@ -48,10 +60,11 @@
 
   <meta name="twitter:card" content="summary_large_image">
   <meta name="theme-color" content="#2563eb">
-  <meta name="color-scheme" content="light">
+  <meta name="color-scheme" content="light dark">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta name="csrf-token" content="{{ _csrf|e }}">
 
+  {# Perf: fonts only if you really use them #}
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
@@ -68,12 +81,19 @@
 <body>
 <a href="#main" class="skip">Saltar al contenido</a>
 
+{# ================= NAV ROUTES (PRO) ================= #}
 {% set home = safe_url('main.home','/') %}
 {% set shop = safe_url('shop.shop','/shop') %}
 {% set cart = safe_url('cart.cart_view','/cart') %}
-{% set account = safe_url('auth.account','/auth/account') %}
-{% set login = account ~ '?tab=login' %}
-{% set register = account ~ '?tab=register' %}
+
+{# Panel (si logueado) #}
+{% set account_panel = safe_url('auth.account','/auth/account') %}
+
+{# LOGIN/REGISTER directos (si existen) con fallback al tab #}
+{% set login_url = safe_url('auth.login', account_panel ~ '?tab=login') %}
+{% set register_url = safe_url('auth.register', account_panel ~ '?tab=register') %}
+
+{# user state safe #}
 {% set user_ok = (current_user is defined and current_user and current_user.is_authenticated is defined and current_user.is_authenticated) %}
 
 <header class="topbar" role="banner">
@@ -86,30 +106,39 @@
       </span>
     </a>
 
+    <nav class="nav" aria-label="Navegación principal">
+      <a href="{{ home|e }}" {% if _path == '/' %}aria-current="page"{% endif %}>Inicio</a>
+      <a href="{{ shop|e }}" {% if _path.startswith('/shop') %}aria-current="page"{% endif %}>Tienda</a>
+      <a href="{{ (shop ~ '?ofertas=1')|e }}" {% if _args and _args.get('ofertas') %}aria-current="page"{% endif %}>Ofertas</a>
+    </nav>
+
+    <form class="search" action="{{ shop|e }}" method="get" role="search" autocomplete="off">
+      <label class="sr-only" for="q">Buscar productos</label>
+      <input id="q" type="search" name="q" placeholder="Buscar productos…" value="{{ _q|e }}" inputmode="search" maxlength="80">
+      <button class="btn primary" type="submit">Buscar</button>
+    </form>
+
     <div class="topbar-actions">
       <a href="{{ cart|e }}" class="icon-btn" aria-label="Carrito">
         🛒 <span class="cart-badge" data-cart-badge hidden>0</span>
       </a>
-      <a href="{{ (account if user_ok else login)|e }}" class="account-link">
-        👤 <span class="txt"><strong>Mi cuenta</strong><small>{{ 'Panel' if user_ok else 'Entrar / Crear' }}</small></span>
-      </a>
+
+      {# ====== BOTONES REALES LOGIN / REGISTER ====== #}
+      {% if user_ok %}
+        <a href="{{ account_panel|e }}" class="account-link" aria-label="Mi cuenta">
+          👤 <span class="txt"><strong>Mi cuenta</strong><small>Panel</small></span>
+        </a>
+      {% else %}
+        <div class="account-cta" role="group" aria-label="Acceso a cuenta">
+          <a href="{{ login_url|e }}" class="btn ghost" aria-label="Entrar">Entrar</a>
+          <a href="{{ register_url|e }}" class="btn primary" aria-label="Crear cuenta">Crear</a>
+        </div>
+      {% endif %}
     </div>
-
-    <nav class="nav" aria-label="Navegación principal">
-      <a href="{{ home|e }}" aria-current="{{ 'page' if _path == '/' else 'false' }}">Inicio</a>
-      <a href="{{ shop|e }}" aria-current="{{ 'page' if _path.startswith('/shop') else 'false' }}">Tienda</a>
-      <a href="{{ shop ~ '?ofertas=1'|e }}" aria-current="{{ 'page' if _args.get('ofertas') else 'false' }}">Ofertas</a>
-    </nav>
-
-    <form class="search" action="{{ shop|e }}" method="get" role="search">
-      <label class="sr-only" for="q">Buscar productos</label>
-      <input id="q" type="search" name="q" placeholder="Buscar productos…" value="{{ _args.get('q','')|e }}">
-      <button class="btn primary">Buscar</button>
-    </form>
   </div>
 </header>
 
-<main id="main" class="container" role="main">
+<main id="main" class="container" role="main" tabindex="-1">
   {% block content %}{% endblock %}
 </main>
 
@@ -122,12 +151,12 @@
     <div>
       <strong>Explorar</strong><br>
       <a href="{{ shop|e }}">Tienda</a><br>
-      <a href="{{ shop ~ '?ofertas=1'|e }}">Ofertas</a>
+      <a href="{{ (shop ~ '?ofertas=1')|e }}">Ofertas</a>
     </div>
     <div>
       <strong>Cuenta</strong><br>
-      <a href="{{ login|e }}">Ingresar</a><br>
-      <a href="{{ register|e }}">Crear cuenta</a>
+      <a href="{{ login_url|e }}">Ingresar</a><br>
+      <a href="{{ register_url|e }}">Crear cuenta</a>
     </div>
     <div>
       <strong>Legal</strong><br>
@@ -140,27 +169,43 @@
 
 <script{% if _nonce %} nonce="{{ _nonce|e }}"{% endif %}>
 (() => {
+  // CSRF meta
   const meta = document.querySelector('meta[name="csrf-token"]');
-  const token = meta?.content || '';
+  const token = (meta && meta.content) ? meta.content : '';
   const badge = document.querySelector('[data-cart-badge]');
 
+  // Namespace
   window.Skyline = window.Skyline || {};
-  window.Skyline.setCartBadge = (n=0) => {
-    if(!badge) return;
-    badge.textContent = String(n);
-    badge.toggleAttribute('hidden', !(n>0));
+
+  // Badge helper (safe)
+  window.Skyline.setCartBadge = (n = 0) => {
+    if (!badge) return;
+    const num = Number(n) || 0;
+    badge.textContent = String(num);
+    if (num > 0) badge.removeAttribute('hidden');
+    else badge.setAttribute('hidden', '');
   };
 
+  // Harden fetch (same-origin only)
   const _fetch = window.fetch;
-  if (_fetch) {
-    window.fetch = (url, opts={}) => {
-      const o = {...opts};
-      const m = String(o.method||'GET').toUpperCase();
-      const h = new Headers(o.headers||{});
-      if (token && m !== 'GET' && m !== 'HEAD') {
-        h.set('X-CSRFToken', token);
-        h.set('X-Requested-With','XMLHttpRequest');
-        o.credentials ||= 'same-origin';
+  if (_fetch && token) {
+    window.fetch = (url, opts = {}) => {
+      const o = Object.assign({}, opts);
+      const m = String(o.method || 'GET').toUpperCase();
+      const h = new Headers(o.headers || {});
+      // mark ajax
+      h.set('X-Requested-With', 'XMLHttpRequest');
+
+      // Only attach CSRF on non-GET to same-origin
+      try {
+        const u = new URL(String(url), window.location.href);
+        const sameOrigin = (u.origin === window.location.origin);
+        if (sameOrigin && m !== 'GET' && m !== 'HEAD' && m !== 'OPTIONS') {
+          h.set('X-CSRFToken', token);
+          if (!o.credentials) o.credentials = 'same-origin';
+        }
+      } catch (e) {
+        // if URL parsing fails, keep original behavior
       }
       o.headers = h;
       return _fetch(url, o);

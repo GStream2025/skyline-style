@@ -5,7 +5,7 @@ import re
 import secrets
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, Optional, Set, Tuple
 from urllib.parse import urlencode, urlparse
 
 from flask import (
@@ -54,13 +54,16 @@ TAB_LOGIN = "login"
 TAB_REGISTER = "register"
 _VALID_TABS: Set[str] = {TAB_LOGIN, TAB_REGISTER}
 
+# Rate limit
 _RL_WINDOW_SEC = 60
 _RL_MAX = 8
-_RL_STORE_CAP = 120
+_RL_STORE_CAP = 200  # global cap (all buckets)
 
-_RL_LOGIN_KEY = "rl:login"
-_RL_REG_KEY = "rl:register"
-_RL_VERIFY_SEND_KEY = "rl:verify_send"
+_RL_LOGIN_KEY = "login"
+_RL_REG_KEY = "register"
+_RL_VERIFY_SEND_KEY = "verify_send"
+
+_RL_STORE_SESSION_KEY = "rl_store"
 
 _MIN_PASS_LEN = 8
 
@@ -107,9 +110,15 @@ def _parse_bool(v: Any) -> bool:
 
 def _safe_next(nxt: Any) -> str:
     s = _norm(nxt, max_len=_MAX_NEXT_LEN)
-    if not s or not s.startswith("/") or s.startswith("//"):
+    if not s:
         return ""
-    if any(c in s for c in ("\x00", "\\", "\r", "\n")):
+    # must be a relative path
+    if not s.startswith("/") or s.startswith("//"):
+        return ""
+    # basic hardening
+    if any(c in s for c in ("\x00", "\\", "\r", "\n", "\t", " ")):
+        return ""
+    if ".." in s:
         return ""
     try:
         p = urlparse(s)
@@ -126,28 +135,48 @@ def _wants_json() -> bool:
             return True
     except Exception:
         pass
+
     accept = _norm(request.headers.get("Accept") or "", max_len=200).lower()
     xrw = _norm(request.headers.get("X-Requested-With") or "", max_len=60).lower()
     fmt = _norm(request.args.get("format") or "", max_len=40).lower()
-    return ("application/json" in accept) or (xrw == "xmlhttprequest") or (fmt == "json")
+
+    if "application/json" in accept:
+        return True
+    if xrw == "xmlhttprequest":
+        return True
+    if fmt == "json":
+        return True
+
+    try:
+        best = request.accept_mimetypes.best_match(["application/json", "text/html"])
+        if best == "application/json" and request.accept_mimetypes[best] > request.accept_mimetypes["text/html"]:
+            return True
+    except Exception:
+        pass
+    return False
 
 
 def _client_fingerprint() -> str:
     xff = _norm(request.headers.get("X-Forwarded-For") or "", max_len=400)
     ip = (xff.split(",")[0].strip() if xff else _norm(request.remote_addr or "unknown", max_len=80))[:80]
-    ua = _norm(request.headers.get("User-Agent") or "", max_len=140)[:120]
+    ua = _norm(request.headers.get("User-Agent") or "", max_len=200)[:120]
     return f"{ip}|{ua}"
 
 
-def _rate_limit(key: str) -> bool:
+def _rate_limit(bucket: str) -> Tuple[bool, int]:
+    """
+    Rate limit store en session["rl_store"] para evitar bugs de claves.
+    Devuelve (ok, retry_after_seconds).
+    """
     now = _now()
     fp = _client_fingerprint()
-    bucket_key = f"{key}:{fp}"
+    bucket_key = f"{bucket}:{fp}"
 
-    store = session.get(key)
+    store = session.get(_RL_STORE_SESSION_KEY)
     if not isinstance(store, dict):
         store = {}
 
+    # prune store si crece
     if len(store) > _RL_STORE_CAP:
         items = []
         for k, v in list(store.items()):
@@ -158,30 +187,31 @@ def _rate_limit(key: str) -> bool:
         for _, k in items[: max(0, len(store) - _RL_STORE_CAP)]:
             store.pop(k, None)
 
-    bucket = store.get(bucket_key)
-    if not isinstance(bucket, dict):
+    b = store.get(bucket_key)
+    if not isinstance(b, dict):
         store[bucket_key] = {"t": now, "n": 1}
-        session[key] = store
+        session[_RL_STORE_SESSION_KEY] = store
         session.modified = True
-        return True
+        return True, 0
 
-    t0 = int(bucket.get("t", now) or now)
-    n = int(bucket.get("n", 0) or 0)
+    t0 = int(b.get("t", now) or now)
+    n = int(b.get("n", 0) or 0)
 
     if now - t0 >= _RL_WINDOW_SEC:
         store[bucket_key] = {"t": now, "n": 1}
-        session[key] = store
+        session[_RL_STORE_SESSION_KEY] = store
         session.modified = True
-        return True
+        return True, 0
 
     if n >= _RL_MAX:
-        return False
+        retry = int(max(1, _RL_WINDOW_SEC - (now - t0)))
+        return False, retry
 
-    bucket["n"] = n + 1
-    store[bucket_key] = bucket
-    session[key] = store
+    b["n"] = n + 1
+    store[bucket_key] = b
+    session[_RL_STORE_SESSION_KEY] = store
     session.modified = True
-    return True
+    return True, 0
 
 
 def _is_honeypot_triggered() -> bool:
@@ -190,6 +220,7 @@ def _is_honeypot_triggered() -> bool:
 
 def _normalize_name(name: Any) -> str:
     v = re.sub(r"\s+", " ", _norm(name, max_len=180))
+    v = v.strip()
     return v[:120]
 
 
@@ -226,6 +257,8 @@ def _no_store(resp):
         for k, v in _CACHE_NO_STORE.items():
             resp.headers.setdefault(k, v)
         resp.headers.setdefault("Vary", "Cookie")
+        resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+        resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     except Exception:
         pass
     return resp
@@ -248,27 +281,30 @@ def _json_or_redirect(
     redirect_to: str = "",
     status_ok: int = 200,
     status_err: int = 400,
+    retry_after: int = 0,
 ):
     if _wants_json():
         status = status_ok if ok else status_err
-        return _json(ok, {"message": message, "tab": tab, "redirect": redirect_to or ""}, status)
+        payload: Dict[str, Any] = {"message": message, "tab": tab, "redirect": redirect_to or ""}
+        if retry_after:
+            payload["retry_after"] = int(retry_after)
+        return _json(ok, payload, status)
 
     _flash("success" if ok else "danger", message)
     if redirect_to:
         return redirect(redirect_to, code=302)
-
     return _redirect_account(tab, nxt)
 
 
-def _bad_auth(tab: str, nxt: str):
+def _bad_auth(tab: str, nxt: str, *, retry_after: int = 0):
     msg = "Credenciales incorrectas." if tab == TAB_LOGIN else "No se pudo crear la cuenta."
-    time.sleep(0.15)
-    return _json_or_redirect(ok=False, message=msg, tab=tab, nxt=nxt, status_err=401)
+    time.sleep(0.18)
+    return _json_or_redirect(ok=False, message=msg, tab=tab, nxt=nxt, status_err=401, retry_after=retry_after)
 
 
 def _clear_auth_session() -> None:
-    keep_exact = {_RL_LOGIN_KEY, _RL_REG_KEY, _RL_VERIFY_SEND_KEY}
-    keep_prefix = ("rl:", "verify_rl:")
+    keep_exact = {_RL_STORE_SESSION_KEY, _VERIFY_TOKEN_SESSION_KEY, _VERIFY_TOKEN_TS_SESSION_KEY}
+    keep_prefix = ("verify_rl:",)
     for k in list(session.keys()):
         ks = str(k)
         if ks in keep_exact or any(ks.startswith(p) for p in keep_prefix):
@@ -367,6 +403,10 @@ def _get_user_by_email(email: str) -> Optional[User]:
         stmt = select(User).where(func.lower(User.email) == e)
         return db.session.execute(stmt).scalar_one_or_none()
     except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         log.exception("get_user_by_email failed")
         return None
 
@@ -387,6 +427,7 @@ def _make_verify_token() -> str:
 
 
 def _send_verify_email(email: str, verify_url: str) -> None:
+    # stub: log only
     try:
         rid = _norm(request.headers.get("X-Request-Id") or "", max_len=80)
         current_app.logger.info("VERIFY_EMAIL rid=%s to=%s url=%s", rid or "-", email, verify_url)
@@ -394,32 +435,48 @@ def _send_verify_email(email: str, verify_url: str) -> None:
         pass
 
 
+def _csrf_from_headers_or_body() -> str:
+    # accepts X-CSRFToken / X-CSRF-Token
+    hdr = _norm(
+        request.headers.get("X-CSRFToken")
+        or request.headers.get("X-CSRF-Token")
+        or request.headers.get("X-CSRFToken".lower())
+        or "",
+        max_len=2048,
+    )
+    if hdr:
+        return hdr
+    try:
+        body = request.get_json(silent=True) or {}
+        if isinstance(body, dict):
+            tok = _norm(body.get("csrf_token") or "", max_len=2048)
+            return tok
+    except Exception:
+        pass
+    return ""
+
+
 def _is_csrf_ok_for_json() -> bool:
     if request.method != "POST":
         return True
+    sess = _norm(session.get("csrf_token") or "", max_len=2048)
+    if not sess:
+        return False
+    tok = _csrf_from_headers_or_body()
+    if not tok:
+        return False
     try:
-        hdr = _norm(request.headers.get("X-CSRF-Token") or "", max_len=2048)
-        if hdr and secrets.compare_digest(hdr, _norm(session.get("csrf_token") or "", max_len=2048)):
-            return True
+        return secrets.compare_digest(tok, sess)
     except Exception:
-        pass
-
-    # fallback: si usás flask-wtf, el CSRF se valida antes. Esto es “extra safe”.
-    # también aceptamos csrf_token en json body si te sirve
-    try:
-        body = request.get_json(silent=True) or {}
-        b = _norm((body.get("csrf_token") if isinstance(body, dict) else ""), max_len=2048)
-        if b:
-            return True
-    except Exception:
-        pass
-    return True
+        return False
 
 
 @auth_bp.get("/account")
 def account():
+    # si ya está logueado, respetamos next safe (si lo mandaron)
     if _is_authenticated():
-        return redirect(_safe_next(request.args.get("next", "")) or "/", code=302)
+        nxt = _safe_next(request.args.get("next", "")) or "/"
+        return redirect(nxt, code=302)
 
     tab = _norm(request.args.get("tab", TAB_LOGIN), max_len=24).lower()
     if tab not in _VALID_TABS:
@@ -439,17 +496,20 @@ def account():
 @auth_bp.get("/login/")
 def login_get():
     nxt = _safe_next(request.args.get("next", ""))
-    return redirect(_account_url() + ("?" + urlencode({"tab": TAB_LOGIN, "next": nxt}) if nxt else "?tab=login"), code=302)
+    qs = {"tab": TAB_LOGIN}
+    if nxt:
+        qs["next"] = nxt
+    return redirect(_account_url() + "?" + urlencode(qs), code=302)
 
 
 @auth_bp.get("/register")
 @auth_bp.get("/register/")
 def register_get():
     nxt = _safe_next(request.args.get("next", ""))
-    return redirect(
-        _account_url() + ("?" + urlencode({"tab": TAB_REGISTER, "next": nxt}) if nxt else "?tab=register"),
-        code=302,
-    )
+    qs = {"tab": TAB_REGISTER}
+    if nxt:
+        qs["next"] = nxt
+    return redirect(_account_url() + "?" + urlencode(qs), code=302)
 
 
 @auth_bp.get("/signup")
@@ -463,8 +523,9 @@ def compat_aliases():
 def login():
     nxt = _safe_next(request.form.get("next", ""))
 
-    if (not _rate_limit(_RL_LOGIN_KEY)) or _is_honeypot_triggered():
-        return _bad_auth(TAB_LOGIN, nxt)
+    ok_rl, retry = _rate_limit(_RL_LOGIN_KEY)
+    if (not ok_rl) or _is_honeypot_triggered():
+        return _bad_auth(TAB_LOGIN, nxt, retry_after=retry)
 
     email = _safe_email(request.form.get("email", ""))
     password = _norm(request.form.get("password", ""), max_len=512)
@@ -509,8 +570,9 @@ def login():
 def register():
     nxt = _safe_next(request.form.get("next", ""))
 
-    if (not _rate_limit(_RL_REG_KEY)) or _is_honeypot_triggered():
-        return _bad_auth(TAB_REGISTER, nxt)
+    ok_rl, retry = _rate_limit(_RL_REG_KEY)
+    if (not ok_rl) or _is_honeypot_triggered():
+        return _bad_auth(TAB_REGISTER, nxt, retry_after=retry)
 
     email = _safe_email(request.form.get("email", ""))
     password = _norm(request.form.get("password", ""), max_len=512)
@@ -545,7 +607,16 @@ def register():
 
     try:
         db.session.add(user)
+        db.session.flush()  # permite user.id sin commit todavía
+
+        if role == "affiliate" and AffiliateProfile is not None:
+            try:
+                db.session.add(AffiliateProfile(user_id=int(user.id), status="pending"))  # type: ignore[arg-type]
+            except Exception:
+                pass
+
         db.session.commit()
+
     except IntegrityError:
         db.session.rollback()
         return _json_or_redirect(ok=False, message="Ese email ya existe.", tab=TAB_LOGIN, nxt=nxt, status_err=409)
@@ -553,16 +624,6 @@ def register():
         db.session.rollback()
         log.exception("register commit failed")
         return _bad_auth(TAB_REGISTER, nxt)
-
-    if role == "affiliate" and AffiliateProfile is not None:
-        try:
-            db.session.add(AffiliateProfile(user_id=int(user.id), status="pending"))  # type: ignore[arg-type]
-            db.session.commit()
-        except Exception:
-            try:
-                db.session.rollback()
-            except Exception:
-                pass
 
     _set_user_session(user)  # type: ignore[arg-type]
     return _json_or_redirect(
@@ -577,12 +638,17 @@ def register():
 
 @auth_bp.route("/logout", methods=["GET", "POST"])
 def logout():
-    nxt = _safe_next(request.values.get("next", ""))
+    nxt = _safe_next(request.values.get("next", "")) or "/"
 
     if request.method == "POST":
-        # si tenés CSRFProtect activo, esto ya está validado; igual evitamos POST “libre”
         csrf = _norm(request.form.get("csrf_token") or "", max_len=2048)
-        if not csrf:
+        sess = _norm(session.get("csrf_token") or "", max_len=2048)
+        if not csrf or not sess:
+            return _json_or_redirect(ok=False, message="CSRF inválido.", tab=TAB_LOGIN, nxt=nxt, status_err=400)
+        try:
+            if not secrets.compare_digest(csrf, sess):
+                return _json_or_redirect(ok=False, message="CSRF inválido.", tab=TAB_LOGIN, nxt=nxt, status_err=400)
+        except Exception:
             return _json_or_redirect(ok=False, message="CSRF inválido.", tab=TAB_LOGIN, nxt=nxt, status_err=400)
 
     _clear_auth_session()
@@ -594,10 +660,10 @@ def logout():
             log.exception("flask_login logout_user failed")
 
     if _wants_json():
-        return _json(True, {"message": "Sesión cerrada.", "redirect": nxt or "/"}, 200)
+        return _json(True, {"message": "Sesión cerrada.", "redirect": nxt}, 200)
 
     _flash("info", "Sesión cerrada.")
-    return redirect(nxt or "/", code=302)
+    return redirect(nxt, code=302)
 
 
 @auth_bp.get("/verify/send")
@@ -637,10 +703,10 @@ def verify_send():
 
 @auth_bp.post("/resend-verification")
 def resend_verification():
-    # Fallback HTML (form submit)
     nxt = _safe_next(request.form.get("next", "")) or _safe_next(request.args.get("next", "")) or "/"
 
-    if (not _rate_limit(_RL_VERIFY_SEND_KEY)) or _is_honeypot_triggered():
+    ok_rl, _ = _rate_limit(_RL_VERIFY_SEND_KEY)
+    if (not ok_rl) or _is_honeypot_triggered():
         _flash("info", "Esperá un momento y reintentá.")
         return redirect(nxt, code=302)
 
@@ -679,12 +745,12 @@ def resend_verification():
 
 @auth_bp.post("/resend-verification.json")
 def resend_verification_json():
-    # JSON endpoint para tu JS (fetch + X-CSRF-Token)
     if not _is_csrf_ok_for_json():
         return _json(False, {"message": "CSRF inválido."}, 400)
 
-    if (not _rate_limit(_RL_VERIFY_SEND_KEY)) or _is_honeypot_triggered():
-        return _json(False, {"message": "Rate limit. Esperá un momento y reintentá."}, 429)
+    ok_rl, retry = _rate_limit(_RL_VERIFY_SEND_KEY)
+    if (not ok_rl) or _is_honeypot_triggered():
+        return _json(False, {"message": "Rate limit. Esperá un momento y reintentá.", "retry_after": retry}, 429)
 
     uid = int(session.get("user_id") or 0)
     email = _safe_email(session.get("user_email") or "")
