@@ -1,5 +1,6 @@
 ﻿from __future__ import annotations
 
+import json
 import secrets
 import time
 from datetime import datetime, timezone
@@ -14,6 +15,19 @@ from app.models import db
 MONEY_2 = Decimal("0.01")
 RATE_4 = Decimal("0.0001")
 MAX_RATE = Decimal("0.8000")
+
+_TITLE_MAX = 200
+_SKU_MAX = 80
+_EMAIL_MAX = 255
+_PHONE_MAX = 40
+_NOTE_MAX = 500
+_ADDR_MAX = 200
+_CITY_MAX = 80
+_STATE_MAX = 80
+_POSTAL_MAX = 20
+_CARRIER_MAX = 80
+_TRACKING_MAX = 120
+_TRACKING_URL_MAX = 500
 
 
 def utcnow() -> datetime:
@@ -31,11 +45,14 @@ def _d(v: Any, default: str = "0.00") -> Decimal:
         return Decimal(default)
 
 
-def _money(v: Any) -> Decimal:
-    dv = _d(v, "0.00")
+def _q_money(dv: Decimal) -> Decimal:
     if dv.is_nan() or dv.is_infinite() or dv < Decimal("0.00"):
         dv = Decimal("0.00")
     return dv.quantize(MONEY_2, rounding=ROUND_HALF_UP)
+
+
+def _money(v: Any) -> Decimal:
+    return _q_money(_d(v, "0.00"))
 
 
 def _rate(v: Any) -> Decimal:
@@ -52,27 +69,57 @@ def _rate(v: Any) -> Decimal:
 def _clip_str(v: Any, n: int) -> Optional[str]:
     if v is None:
         return None
-    s = str(v).strip()
+    s = str(v).replace("\x00", "").strip()
     if not s:
         return None
+    s = " ".join(s.split())
     return s[:n]
 
 
-def _slugish(v: Any, n: int) -> Optional[str]:
+def _lower_clip(v: Any, n: int) -> Optional[str]:
     s = _clip_str(v, n)
+    return s.lower() if s else None
+
+
+def _upper_clip(v: Any, n: int) -> Optional[str]:
+    s = _clip_str(v, n)
+    return s.upper() if s else None
+
+
+def _slugish(v: Any, n: int) -> Optional[str]:
+    s = _lower_clip(v, n)
     if not s:
         return None
-    s2 = s.strip().lower().replace(" ", "-")
-    cleaned = "".join(ch for ch in s2 if ch.isalnum() or ch in {"-", "_"}).strip("-_")
+    s = s.replace(" ", "-")
+    cleaned = "".join(ch for ch in s if ch.isalnum() or ch in {"-", "_"}).strip("-_")
     return cleaned[:n] if cleaned else None
 
 
-def _meta(base: Optional[dict], extra: Optional[dict]) -> dict:
-    out = dict(base or {})
-    for k, v in (extra or {}).items():
-        if v is not None:
-            out[k] = v
+def _canon_currency(v: Any) -> str:
+    s = (str(v).strip().upper() if v is not None else "USD")[:3]
+    return s if len(s) == 3 else "USD"
+
+
+def _canon_country2(v: Any) -> Optional[str]:
+    s = _upper_clip(v, 2)
+    return s if s and len(s) == 2 else None
+
+
+def _meta_merge(base: Any, extra: Optional[dict]) -> dict:
+    out: dict = dict(base) if isinstance(base, dict) else {}
+    if isinstance(extra, dict):
+        for k, v in extra.items():
+            if v is not None:
+                out[k] = v
     return out
+
+
+def _safe_json(obj: Any) -> Any:
+    try:
+        json.dumps(obj, ensure_ascii=False, separators=(",", ":"))
+        return obj
+    except Exception:
+        return {"_invalid_meta": True}
 
 
 MetaType = db.JSON().with_variant(db.Text(), "sqlite")
@@ -156,18 +203,18 @@ class Order(db.Model):
     provider_payment_id = db.Column(db.String(140), nullable=True, index=True)
 
     customer_name = db.Column(db.String(120))
-    customer_email = db.Column(db.String(255), index=True)
-    customer_phone = db.Column(db.String(40))
+    customer_email = db.Column(db.String(_EMAIL_MAX), index=True)
+    customer_phone = db.Column(db.String(_PHONE_MAX))
 
-    ship_address1 = db.Column(db.String(200))
-    ship_address2 = db.Column(db.String(200))
-    ship_city = db.Column(db.String(80))
-    ship_state = db.Column(db.String(80))
-    ship_postal_code = db.Column(db.String(20))
+    ship_address1 = db.Column(db.String(_ADDR_MAX))
+    ship_address2 = db.Column(db.String(_ADDR_MAX))
+    ship_city = db.Column(db.String(_CITY_MAX))
+    ship_state = db.Column(db.String(_STATE_MAX))
+    ship_postal_code = db.Column(db.String(_POSTAL_MAX))
     ship_country = db.Column(db.String(2))
 
-    customer_note = db.Column(db.String(500))
-    internal_note = db.Column(db.String(500))
+    customer_note = db.Column(db.String(_NOTE_MAX))
+    internal_note = db.Column(db.String(_NOTE_MAX))
 
     status = db.Column(db.String(30), nullable=False, default=STATUS_AWAITING_PAYMENT, index=True)
     payment_method = db.Column(db.String(30), nullable=False, default=PM_PAYPAL, index=True)
@@ -187,9 +234,9 @@ class Order(db.Model):
     bank_transfer_ref = db.Column(db.String(120))
     wise_transfer_id = db.Column(db.String(120), index=True)
 
-    carrier = db.Column(db.String(80))
-    tracking_number = db.Column(db.String(120), index=True)
-    tracking_url = db.Column(db.String(500))
+    carrier = db.Column(db.String(_CARRIER_MAX))
+    tracking_number = db.Column(db.String(_TRACKING_MAX), index=True)
+    tracking_url = db.Column(db.String(_TRACKING_URL_MAX))
 
     paid_at = db.Column(db.DateTime(timezone=True), index=True)
     cancelled_at = db.Column(db.DateTime(timezone=True), index=True)
@@ -215,35 +262,29 @@ class Order(db.Model):
         CheckConstraint("total >= 0", name="ck_orders_total_nonneg"),
         CheckConstraint("commission_rate_applied >= 0", name="ck_orders_comm_rate_nonneg"),
         CheckConstraint("commission_amount >= 0", name="ck_orders_comm_amt_nonneg"),
+        CheckConstraint("length(currency) = 3", name="ck_orders_currency_len3"),
         UniqueConstraint("user_id", "idempotency_key", name="uq_orders_user_idem"),
+        Index("ix_orders_status_created", "status", "created_at"),
+        Index("ix_orders_payment_status_created", "payment_status", "created_at"),
+        Index("ix_orders_user_created", "user_id", "created_at"),
+        Index("ix_orders_aff_created", "affiliate_code", "created_at"),
+        Index("ix_orders_provider_pid", "payment_provider", "provider_payment_id"),
+        Index("ix_orders_idem_user", "user_id", "idempotency_key"),
+        Index("ix_orders_payout_status_created", "payout_status", "created_at"),
+        Index("ix_orders_fulfillment_created", "fulfillment_status", "created_at"),
     )
 
     @staticmethod
     def _make_number() -> str:
         return f"ORD-{int(time.time())}-{secrets.token_hex(4)}"[:40]
 
-    @staticmethod
-    def _canon_currency(v: Any) -> str:
-        s = (str(v).strip().upper() if v is not None else "USD")[:3]
-        return s if len(s) == 3 else "USD"
-
-    @staticmethod
-    def _canon_email(v: Any) -> Optional[str]:
-        s = _clip_str(v, 255)
-        return s.lower() if s else None
-
-    @staticmethod
-    def _canon_country2(v: Any) -> Optional[str]:
-        s = _clip_str(v, 2)
-        return s.upper() if s else None
-
     @validates("currency")
     def _v_currency(self, _k: str, v: Any) -> str:
-        return self._canon_currency(v)
+        return _canon_currency(v)
 
     @validates("ship_country")
     def _v_ship_country(self, _k: str, v: Any) -> Optional[str]:
-        return self._canon_country2(v)
+        return _canon_country2(v)
 
     @validates("status")
     def _v_status(self, _k: str, v: Any) -> str:
@@ -272,14 +313,20 @@ class Order(db.Model):
 
     @validates("customer_email")
     def _v_email(self, _k: str, v: Any) -> Optional[str]:
-        return self._canon_email(v)
+        return _lower_clip(v, _EMAIL_MAX)
+
+    @validates("customer_phone")
+    def _v_phone(self, _k: str, v: Any) -> Optional[str]:
+        s = _clip_str(v, _PHONE_MAX)
+        if not s:
+            return None
+        cleaned = "".join(ch for ch in s if ch.isdigit() or ch in "+()- ").strip()
+        return cleaned[:_PHONE_MAX] if cleaned else None
 
     @validates("number")
     def _v_number(self, _k: str, v: Any) -> str:
         s = (str(v or "")).strip()
-        if not s:
-            s = self._make_number()
-        return s[:40]
+        return (s[:40] if s else self._make_number())
 
     @validates("affiliate_code")
     def _v_aff(self, _k: str, v: Any) -> Optional[str]:
@@ -291,7 +338,7 @@ class Order(db.Model):
 
     @validates("idempotency_key")
     def _v_idem(self, _k: str, v: Any) -> Optional[str]:
-        return _clip_str(v, 80)
+        return _slugish(v, 80)
 
     @validates("provider_payment_id")
     def _v_ppid(self, _k: str, v: Any) -> Optional[str]:
@@ -299,16 +346,46 @@ class Order(db.Model):
 
     @validates("payment_provider")
     def _v_provider(self, _k: str, v: Any) -> Optional[str]:
-        s = _clip_str(v, 40)
-        return s.lower() if s else None
+        return _slugish(v, 40)
+
+    @validates("tracking_number")
+    def _v_tracking_number(self, _k: str, v: Any) -> Optional[str]:
+        return _clip_str(v, _TRACKING_MAX)
 
     @validates("tracking_url")
     def _v_tracking_url(self, _k: str, v: Any) -> Optional[str]:
-        s = _clip_str(v, 500)
-        return s if s else None
+        return _clip_str(v, _TRACKING_URL_MAX)
+
+    @validates(
+        "customer_name",
+        "ship_address1",
+        "ship_address2",
+        "ship_city",
+        "ship_state",
+        "ship_postal_code",
+        "customer_note",
+        "internal_note",
+        "bank_transfer_ref",
+        "carrier",
+    )
+    def _v_text_fields(self, _k: str, v: Any) -> Optional[str]:
+        limits = {
+            "customer_name": 120,
+            "ship_address1": _ADDR_MAX,
+            "ship_address2": _ADDR_MAX,
+            "ship_city": _CITY_MAX,
+            "ship_state": _STATE_MAX,
+            "ship_postal_code": _POSTAL_MAX,
+            "customer_note": _NOTE_MAX,
+            "internal_note": _NOTE_MAX,
+            "bank_transfer_ref": 120,
+            "carrier": _CARRIER_MAX,
+        }
+        return _clip_str(v, limits.get(_k, 120))
 
     def add_meta(self, **extra: Any) -> None:
-        self.meta = _meta(self.meta, extra)
+        merged = _meta_merge(self.meta, extra)
+        self.meta = _safe_json(merged)
 
     def touch_updated(self) -> None:
         self.updated_at = utcnow()
@@ -320,8 +397,8 @@ class Order(db.Model):
     def set_payment_provider_id(self, provider: Optional[str], provider_payment_id: Optional[str]) -> None:
         prov = (provider or "").strip().lower()
         pid = (provider_payment_id or "").strip()
-        self.payment_provider = prov[:40] if prov else None
-        self.provider_payment_id = pid[:140] if pid else None
+        self.payment_provider = (prov[:40] if prov else None)
+        self.provider_payment_id = (pid[:140] if pid else None)
 
         if not prov or not pid:
             return
@@ -356,7 +433,7 @@ class Order(db.Model):
         computed = _d(subtotal) - _d(discount) + _d(shipping) + _d(tax)
         if computed < Decimal("0.00"):
             computed = Decimal("0.00")
-        self.total = _money(computed)
+        self.total = _q_money(computed)
 
     def can_transition_to(self, to_status: str) -> bool:
         cur = (self.status or "").strip().lower()
@@ -377,12 +454,15 @@ class Order(db.Model):
             self.payment_status = self.PAY_PAID
             if self.fulfillment_status == self.FULFILL_NONE:
                 self.fulfillment_status = self.FULFILL_QUEUED
+
         elif nxt == self.STATUS_CANCELLED:
             if not self.cancelled_at:
                 self.cancelled_at = now
             if self.payment_status == self.PAY_PENDING:
                 self.payment_status = self.PAY_FAILED
-            self.fulfillment_status = self.FULFILL_FAILED if self.fulfillment_status != self.FULFILL_DONE else self.fulfillment_status
+            if self.fulfillment_status != self.FULFILL_DONE:
+                self.fulfillment_status = self.FULFILL_FAILED
+
         elif nxt == self.STATUS_REFUNDED:
             if not self.refunded_at:
                 self.refunded_at = now
@@ -417,18 +497,17 @@ class Order(db.Model):
     def apply_commission_snapshot(self, *, sales_in_month: int, rate: Any) -> None:
         r = _rate(rate)
         base = _money(self.total)
-        amt = (base * r).quantize(MONEY_2, rounding=ROUND_HALF_UP)
+        amt = _q_money(base * r)
         self.commission_rate_applied = r
         self.commission_amount = amt
         self.payout_status = self.PAYOUT_PENDING if amt > Decimal("0.00") else self.PAYOUT_NONE
-        self.add_meta(
-            commission={
-                "sales_in_month": int(max(0, int(sales_in_month or 0))),
-                "rate": str(r),
-                "amount": str(amt),
-                "snap_at": utcnow().isoformat(),
-            }
-        )
+        snap = {
+            "sales_in_month": int(max(0, int(sales_in_month or 0))),
+            "rate": str(r),
+            "amount": str(amt),
+            "snap_at": utcnow().isoformat(),
+        }
+        self.add_meta(commission=snap)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -472,11 +551,10 @@ class OrderItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
 
     order_id = db.Column(db.Integer, db.ForeignKey("orders.id", ondelete="CASCADE"), nullable=False, index=True)
-
     product_id = db.Column(db.Integer, db.ForeignKey("products.id", ondelete="SET NULL"), index=True)
 
-    title_snapshot = db.Column(db.String(200), nullable=False)
-    sku_snapshot = db.Column(db.String(80))
+    title_snapshot = db.Column(db.String(_TITLE_MAX), nullable=False)
+    sku_snapshot = db.Column(db.String(_SKU_MAX))
 
     currency = db.Column(db.String(3), nullable=False, default="USD")
 
@@ -494,6 +572,8 @@ class OrderItem(db.Model):
         CheckConstraint("qty >= 1", name="ck_order_items_qty_ge_1"),
         CheckConstraint("unit_price >= 0", name="ck_order_items_unit_price_nonneg"),
         CheckConstraint("line_total >= 0", name="ck_order_items_line_total_nonneg"),
+        Index("ix_order_items_order_created", "order_id", "created_at"),
+        Index("ix_order_items_product_created", "product_id", "created_at"),
     )
 
     @validates("qty")
@@ -510,17 +590,16 @@ class OrderItem(db.Model):
 
     @validates("currency")
     def _v_cur(self, _k: str, v: Any) -> str:
-        s = (str(v).strip().upper() if v is not None else "USD")[:3]
-        return s if len(s) == 3 else "USD"
+        return _canon_currency(v)
 
     @validates("title_snapshot")
     def _v_title(self, _k: str, v: Any) -> str:
-        s = (str(v or "")).strip()
-        return s[:200] if s else "Producto"
+        s = _clip_str(v, _TITLE_MAX)
+        return s if s else "Producto"
 
     @validates("sku_snapshot")
     def _v_sku(self, _k: str, v: Any) -> Optional[str]:
-        return _clip_str(v, 80)
+        return _clip_str(v, _SKU_MAX)
 
     def recompute_line_total(self) -> None:
         self.unit_price = _money(self.unit_price)
@@ -530,7 +609,7 @@ class OrderItem(db.Model):
         if qty > 999:
             qty = 999
         self.qty = qty
-        self.line_total = _money(_d(self.unit_price) * Decimal(qty))
+        self.line_total = _q_money(_d(self.unit_price) * Decimal(qty))
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -549,14 +628,14 @@ class OrderItem(db.Model):
         return f"<OrderItem id={self.id} product_id={self.product_id} qty={self.qty}>"
 
 
-@event.listens_for(OrderItem, "before_insert")
-@event.listens_for(OrderItem, "before_update")
+@event.listens_for(OrderItem, "before_insert", propagate=True)
+@event.listens_for(OrderItem, "before_update", propagate=True)
 def _oi_before_save(_mapper, _connection, target: OrderItem) -> None:
     target.recompute_line_total()
 
 
-@event.listens_for(Order, "before_insert")
-@event.listens_for(Order, "before_update")
+@event.listens_for(Order, "before_insert", propagate=True)
+@event.listens_for(Order, "before_update", propagate=True)
 def _o_before_save(_mapper, _connection, target: Order) -> None:
     target.ensure_number()
     target.touch_updated()
@@ -565,21 +644,6 @@ def _o_before_save(_mapper, _connection, target: Order) -> None:
             target.recompute_totals()
         except Exception:
             pass
-
-
-Index("ix_orders_status_created", Order.status, Order.created_at)
-Index("ix_orders_payment_status_created", Order.payment_status, Order.created_at)
-Index("ix_orders_user_created", Order.user_id, Order.created_at)
-
-Index("ix_orders_aff_created", Order.affiliate_code, Order.created_at)
-Index("ix_orders_provider_pid", Order.payment_provider, Order.provider_payment_id)
-Index("ix_orders_idem_user", Order.user_id, Order.idempotency_key)
-
-Index("ix_orders_payout_status_created", Order.payout_status, Order.created_at)
-Index("ix_orders_fulfillment_created", Order.fulfillment_status, Order.created_at)
-
-Index("ix_order_items_order_created", OrderItem.order_id, OrderItem.created_at)
-Index("ix_order_items_product_created", OrderItem.product_id, OrderItem.created_at)
 
 
 __all__ = ["Order", "OrderItem", "utcnow"]
