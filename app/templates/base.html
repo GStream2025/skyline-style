@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
 
-  {# ================= SAFE CONTEXT ================= #}
   {% set _req = (request if request is defined and request else none) %}
   {% set _args = (_req.args if _req and _req.args else {}) %}
   {% set _path = (_req.path if _req and _req.path else '/') %}
@@ -15,22 +14,25 @@
   {% set _desc  = (meta_description if meta_description is defined and meta_description else 'Marketplace premium de tecnología y streetwear.')|string %}
   {% set _vf = (view_functions if view_functions is defined and view_functions else {}) %}
   {% set _cssv = (BASE_CSS_VER if BASE_CSS_VER is defined else (ASSET_VER if ASSET_VER is defined else '1'))|string %}
-  {% set _nonce = (csp_nonce if csp_nonce is defined else (nonce if nonce is defined else '')) %}
+  {% set _nonce = (csp_nonce if csp_nonce is defined and csp_nonce else (nonce if nonce is defined else '')) %}
 
-  {# ================= SAFE URL HELPERS ================= #}
   {% macro safe_url(ep, fb='/') -%}
     {%- if url_for is defined and ep and ep in _vf -%}{{ url_for(ep) }}{%- else -%}{{ fb }}{%- endif -%}
   {%- endmacro %}
 
-  {% macro safe_urlq(ep, fb='/', **kwargs) -%}
-    {%- if url_for is defined and ep and ep in _vf -%}{{ url_for(ep, **kwargs) }}{%- else -%}{{ fb }}{%- endif -%}
+  {% macro safe_urlq(ep, fb='/', q='') -%}
+    {%- set base = (url_for(ep) if url_for is defined and ep and ep in _vf else fb) -%}
+    {%- set qs = (q|string)|trim -%}
+    {%- if not base -%}{{ fb }}
+    {%- elif qs -%}{{ base ~ ('&' if '?' in base else '?') ~ qs }}
+    {%- else -%}{{ base }}
+    {%- endif -%}
   {%- endmacro %}
 
   {% macro safe_static(f) -%}
     {%- if url_for is defined -%}{{ url_for('static', filename=f) ~ '?v=' ~ _cssv }}{%- else -%}{{ '' }}{%- endif -%}
   {%- endmacro %}
 
-  {# ================= CSRF SAFE ================= #}
   {% set _csrf = '' %}
   {% if csrf_token_value is defined and csrf_token_value %}
     {% set _csrf = csrf_token_value %}
@@ -38,7 +40,6 @@
     {% set _csrf = csrf_token() %}
   {% endif %}
 
-  {# ================= CANONICAL CLEAN ================= #}
   {% set _canonical = 'https://skyline-style.onrender.com' %}
   {% if _req and _req.url_root %}
     {% set _canonical = (_req.url_root.rstrip('/') ~ _path) %}
@@ -64,7 +65,6 @@
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta name="csrf-token" content="{{ _csrf|e }}">
 
-  {# Perf: fonts only if you really use them #}
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
@@ -81,19 +81,12 @@
 <body>
 <a href="#main" class="skip">Saltar al contenido</a>
 
-{# ================= NAV ROUTES (PRO) ================= #}
 {% set home = safe_url('main.home','/') %}
 {% set shop = safe_url('shop.shop','/shop') %}
 {% set cart = safe_url('cart.cart_view','/cart') %}
-
-{# Panel (si logueado) #}
 {% set account_panel = safe_url('auth.account','/auth/account') %}
-
-{# LOGIN/REGISTER directos (si existen) con fallback al tab #}
 {% set login_url = safe_url('auth.login', account_panel ~ '?tab=login') %}
 {% set register_url = safe_url('auth.register', account_panel ~ '?tab=register') %}
-
-{# user state safe #}
 {% set user_ok = (current_user is defined and current_user and current_user.is_authenticated is defined and current_user.is_authenticated) %}
 
 <header class="topbar" role="banner">
@@ -123,7 +116,6 @@
         🛒 <span class="cart-badge" data-cart-badge hidden>0</span>
       </a>
 
-      {# ====== BOTONES REALES LOGIN / REGISTER ====== #}
       {% if user_ok %}
         <a href="{{ account_panel|e }}" class="account-link" aria-label="Mi cuenta">
           👤 <span class="txt"><strong>Mi cuenta</strong><small>Panel</small></span>
@@ -169,15 +161,10 @@
 
 <script{% if _nonce %} nonce="{{ _nonce|e }}"{% endif %}>
 (() => {
-  // CSRF meta
   const meta = document.querySelector('meta[name="csrf-token"]');
-  const token = (meta && meta.content) ? meta.content : '';
+  const token = meta && meta.content ? meta.content : '';
   const badge = document.querySelector('[data-cart-badge]');
-
-  // Namespace
   window.Skyline = window.Skyline || {};
-
-  // Badge helper (safe)
   window.Skyline.setCartBadge = (n = 0) => {
     if (!badge) return;
     const num = Number(n) || 0;
@@ -185,28 +172,20 @@
     if (num > 0) badge.removeAttribute('hidden');
     else badge.setAttribute('hidden', '');
   };
-
-  // Harden fetch (same-origin only)
   const _fetch = window.fetch;
   if (_fetch && token) {
     window.fetch = (url, opts = {}) => {
       const o = Object.assign({}, opts);
       const m = String(o.method || 'GET').toUpperCase();
       const h = new Headers(o.headers || {});
-      // mark ajax
       h.set('X-Requested-With', 'XMLHttpRequest');
-
-      // Only attach CSRF on non-GET to same-origin
       try {
         const u = new URL(String(url), window.location.href);
-        const sameOrigin = (u.origin === window.location.origin);
-        if (sameOrigin && m !== 'GET' && m !== 'HEAD' && m !== 'OPTIONS') {
+        if (u.origin === window.location.origin && !['GET','HEAD','OPTIONS'].includes(m)) {
           h.set('X-CSRFToken', token);
           if (!o.credentials) o.credentials = 'same-origin';
         }
-      } catch (e) {
-        // if URL parsing fails, keep original behavior
-      }
+      } catch (_) {}
       o.headers = h;
       return _fetch(url, o);
     };
