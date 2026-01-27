@@ -5,19 +5,21 @@ import logging
 import os
 import threading
 from types import ModuleType
-from typing import Any, Dict, Tuple, TYPE_CHECKING
+from typing import Any, Dict, Mapping, Optional, Sequence, Tuple, TYPE_CHECKING
 
 log = logging.getLogger("utils")
 
 _TRUE = {"1", "true", "yes", "y", "on", "checked"}
-_FALSE = {"0", "false", "no", "n", "off"}
+_FALSE = {"0", "false", "no", "n", "off", "unchecked"}
 
 
 def _env_bool(key: str, default: bool = False) -> bool:
     v = os.getenv(key)
     if v is None:
         return default
-    s = v.strip().lower()
+    s = str(v).strip().lower()
+    if not s:
+        return default
     if s in _TRUE:
         return True
     if s in _FALSE:
@@ -26,6 +28,9 @@ def _env_bool(key: str, default: bool = False) -> bool:
 
 
 _UTILS_STRICT = _env_bool("UTILS_STRICT", False)
+_UTILS_LOG_IMPORT_ERRORS = _env_bool("UTILS_LOG_IMPORT_ERRORS", False)
+
+__version__ = "3.2.0"
 
 _EXPORTS: Dict[str, Tuple[str, str]] = {
     "admin_required": ("app.utils.auth", "admin_required"),
@@ -46,72 +51,105 @@ _ALIASES: Dict[str, str] = {}
 
 _CACHE: Dict[str, Any] = {}
 _MODCACHE: Dict[str, ModuleType] = {}
+_MISSCACHE: Dict[str, bool] = {}
 _LOCK = threading.RLock()
+
+
+def _canon(v: Any) -> str:
+    return str(v or "").strip()
+
+
+def _is_missing_obj(obj: Any) -> bool:
+    return bool(getattr(obj, "__dict__", {}).get("_is_utils_missing"))
 
 
 def _missing(name: str):
     def _fn(*_a: Any, **_k: Any):
         raise RuntimeError(
-            f"Utilidad no disponible: {name}. "
-            f"Revisá registry _EXPORTS/_ALIASES o módulos faltantes."
+            "Utilidad no disponible: "
+            f"{name}. Revisá _EXPORTS/_ALIASES o módulos/símbolos faltantes."
         )
 
-    _fn.__name__ = name
+    _fn.__name__ = name or "missing"
+    _fn.__qualname__ = _fn.__name__
+    setattr(_fn, "_is_utils_missing", True)
     return _fn
 
 
 def _resolve_name(name: str) -> str:
-    seen = set()
-    cur = name
-    while cur in _ALIASES and cur not in seen:
+    cur = _canon(name)
+    if not cur:
+        return ""
+    seen: set[str] = set()
+    while True:
+        nxt = _ALIASES.get(cur)
+        if not nxt:
+            return cur
+        if nxt == cur or cur in seen:
+            return cur
         seen.add(cur)
-        cur = _ALIASES[cur]
-    return cur
+        cur = nxt
 
 
-def _import_module(module: str) -> ModuleType | None:
-    m = _MODCACHE.get(module)
+def _import_module(module: str) -> Optional[ModuleType]:
+    modname = _canon(module)
+    if not modname:
+        return None
+
+    m = _MODCACHE.get(modname)
     if m is not None:
         return m
+
+    if _MISSCACHE.get(modname):
+        return None
+
     try:
-        m = importlib.import_module(module)
-        _MODCACHE[module] = m
+        m = importlib.import_module(modname)
+        _MODCACHE[modname] = m
         return m
     except Exception as e:
-        try:
-            log.debug("utils import failed: %s (%s)", module, e)
-        except Exception:
-            pass
+        _MISSCACHE[modname] = True
+        if _UTILS_LOG_IMPORT_ERRORS:
+            try:
+                log.debug("utils import failed: %s (%s)", modname, e)
+            except Exception:
+                pass
         if _UTILS_STRICT:
-            raise RuntimeError(f"Utils strict: no se pudo importar {module}: {e}") from e
+            raise RuntimeError(f"Utils strict: no se pudo importar {modname}: {e}") from e
         return None
 
 
-def _safe_getattr(module: str, symbol: str) -> Any | None:
-    m = _import_module(module)
+def _safe_getattr(module: str, symbol: str) -> Any:
+    modname = _canon(module)
+    sym = _canon(symbol)
+    if not modname or not sym:
+        return None
+
+    m = _import_module(modname)
     if m is None:
         return None
+
     try:
-        return getattr(m, symbol)
+        return getattr(m, sym)
     except Exception as e:
-        try:
-            log.debug("utils getattr failed: %s.%s (%s)", module, symbol, e)
-        except Exception:
-            pass
+        if _UTILS_LOG_IMPORT_ERRORS:
+            try:
+                log.debug("utils getattr failed: %s.%s (%s)", modname, sym, e)
+            except Exception:
+                pass
         if _UTILS_STRICT:
-            raise RuntimeError(
-                f"Utils strict: no se pudo resolver {module}.{symbol}: {e}"
-            ) from e
+            raise RuntimeError(f"Utils strict: no se pudo resolver {modname}.{sym}: {e}") from e
         return None
 
 
 def _load(name: str) -> Any:
     resolved = _resolve_name(name)
+    if not resolved:
+        return _missing("")
 
     with _LOCK:
-        obj = _CACHE.get(resolved)
-        if obj is not None:
-            return obj
+        if resolved in _CACHE:
+            return _CACHE[resolved]
 
         spec = _EXPORTS.get(resolved)
         if not spec:
@@ -136,47 +174,109 @@ def __dir__() -> list[str]:
     return sorted(set(_EXPORTS.keys()) | set(_ALIASES.keys()))
 
 
-def configure_aliases(mapping: Dict[str, str] | None = None, *, clear_cache: bool = False) -> None:
+def configure_aliases(mapping: Optional[Mapping[str, str]] = None, *, clear_cache: bool = False) -> None:
     if not mapping:
         return
     with _LOCK:
         for k, v in mapping.items():
-            if isinstance(k, str) and isinstance(v, str) and k and v and k != v:
-                _ALIASES[k] = v
+            kk = _canon(k)
+            vv = _canon(v)
+            if kk and vv and kk != vv:
+                _ALIASES[kk] = vv
         if clear_cache:
             _CACHE.clear()
 
 
-def register_export(name: str, module: str, symbol: str, *, replace: bool = True, clear_cache: bool = True) -> None:
-    if not (isinstance(name, str) and isinstance(module, str) and isinstance(symbol, str)):
-        raise TypeError("register_export espera strings: (name, module, symbol)")
-    if not name or not module or not symbol:
+def register_export(
+    name: str,
+    module: str,
+    symbol: str,
+    *,
+    replace: bool = True,
+    clear_cache: bool = True,
+    clear_module_cache: bool = False,
+) -> None:
+    n = _canon(name)
+    m = _canon(module)
+    s = _canon(symbol)
+    if not n or not m or not s:
         raise ValueError("register_export: parámetros vacíos")
+
     with _LOCK:
-        if (not replace) and (name in _EXPORTS):
+        if (not replace) and (n in _EXPORTS):
             return
-        _EXPORTS[name] = (module, symbol)
+        _EXPORTS[n] = (m, s)
         if clear_cache:
-            _CACHE.pop(name, None)
+            _CACHE.pop(n, None)
+        if clear_module_cache:
+            _MODCACHE.pop(m, None)
+            _MISSCACHE.pop(m, None)
 
 
-def clear_utils_cache(*, modules: bool = False) -> None:
+def bulk_register(items: Sequence[Tuple[str, str, str]], *, replace: bool = True) -> int:
+    n = 0
+    with _LOCK:
+        for name, module, symbol in items:
+            nn = _canon(name)
+            mm = _canon(module)
+            ss = _canon(symbol)
+            if not nn or not mm or not ss:
+                continue
+            if (not replace) and (nn in _EXPORTS):
+                continue
+            _EXPORTS[nn] = (mm, ss)
+            _CACHE.pop(nn, None)
+            n += 1
+    return n
+
+
+def clear_utils_cache(*, modules: bool = False, missing: bool = True) -> None:
     with _LOCK:
         _CACHE.clear()
         if modules:
             _MODCACHE.clear()
+        if missing:
+            _MISSCACHE.clear()
 
 
 def has(name: str) -> bool:
     resolved = _resolve_name(name)
-    if resolved not in _EXPORTS:
+    if not resolved:
         return False
-    module, symbol = _EXPORTS[resolved]
+    spec = _EXPORTS.get(resolved)
+    if not spec:
+        return False
+    module, symbol = spec
     return _safe_getattr(module, symbol) is not None
 
 
+def get(name: str, default: Any = None) -> Any:
+    try:
+        obj = _load(name)
+        return default if _is_missing_obj(obj) else obj
+    except Exception:
+        return default
+
+
+def resolve(name: str) -> Tuple[str, Optional[Tuple[str, str]]]:
+    r = _resolve_name(name)
+    return r, _EXPORTS.get(r)
+
+
+__all__ = sorted(set(_EXPORTS.keys()) | set(_ALIASES.keys())) + [
+    "__version__",
+    "configure_aliases",
+    "register_export",
+    "bulk_register",
+    "clear_utils_cache",
+    "has",
+    "get",
+    "resolve",
+]
+
+
 if TYPE_CHECKING:
-    from app.utils.auth import (  # noqa: F401
+    from app.utils.auth import (
         admin_required,
         admin_creds_ok,
         admin_login,
@@ -186,8 +286,5 @@ if TYPE_CHECKING:
         admin_identity,
         admin_next,
     )
-    from app.utils.security import safe_next_url, is_safe_url  # noqa: F401
-    from app.utils.printful_mapper import map_printful_product, map_printful_variant  # noqa: F401
-
-
-__all__ = sorted(set(_EXPORTS.keys()) | set(_ALIASES.keys()))
+    from app.utils.security import is_safe_url, safe_next_url
+    from app.utils.printful_mapper import map_printful_product, map_printful_variant
