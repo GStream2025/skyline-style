@@ -20,6 +20,13 @@ ALT_MAX = 180
 MIME_MAX = 120
 SHA_MAX = 64
 
+_SORT_LO = -10_000
+_SORT_HI = 10_000
+_DIM_LO = 1
+_DIM_HI = 200_000
+_SIZE_LO = 0
+_SIZE_HI = 10_000_000_000
+
 _SCOPE_RE = re.compile(r"^[a-z0-9][a-z0-9_\-]{0,31}$")
 _KIND_RE = re.compile(r"^[a-z0-9][a-z0-9_\-]{0,31}$")
 _SHA_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -31,22 +38,24 @@ def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _clip_str(v: Any, n: int) -> Optional[str]:
-    if v is None:
-        return None
-    s = str(v).strip().replace("\x00", "")
-    if not s:
-        return None
+def _s(v: Any, n: int) -> str:
+    s = "" if v is None else str(v)
+    s = s.strip().replace("\x00", "")
     return s[:n]
 
 
-def _clean_tag(v: Any, default: str, max_len: int) -> str:
-    raw = (str(v) if v is not None else "").strip().lower()
+def _opt(v: Any, n: int) -> Optional[str]:
+    s = _s(v, n)
+    return s or None
+
+
+def _clean_tag(v: Any, default: str, max_len: int, rx: re.Pattern[str]) -> str:
+    raw = _s(v, max_len).lower()
     if not raw:
         return default
     raw = raw.replace(" ", "_")
     raw = re.sub(r"[^a-z0-9_\-]+", "", raw)[:max_len]
-    if not raw:
+    if not raw or not rx.match(raw):
         return default
     return raw
 
@@ -66,43 +75,33 @@ def _clamp_int(v: Any, default: Optional[int], lo: int, hi: int) -> Optional[int
 
 
 def _canon_url(v: Any) -> str:
-    s = (str(v) if v is not None else "").strip().replace("\x00", "")
+    s = _s(v, URL_MAX)
     if not s:
         raise ValueError("Media.url es obligatorio")
-    if len(s) > URL_MAX:
-        s = s[:URL_MAX]
+
     if _DATA_URI_RE.match(s):
         if len(s) > URL_MAX:
             raise ValueError("Media.url data: demasiado largo")
         return s
 
-    if s.startswith(("/", "./", "../")):
-        return s
-
-    if s.startswith("ipfs://"):
+    if s.startswith(("ipfs://", "/", "./", "../")):
         return s
 
     if s.startswith(("http://", "https://")):
-        try:
-            u = urlparse(s)
-            if not u.scheme or not u.netloc:
-                raise ValueError("Media.url inválido")
-            return s
-        except Exception as e:
-            raise ValueError("Media.url inválido") from e
+        u = urlparse(s)
+        if not u.scheme or not u.netloc:
+            raise ValueError("Media.url inválido")
+        return s
 
-    try:
-        u2 = urlparse("https://" + s)
-        if u2.netloc:
-            return s
-    except Exception:
-        pass
+    u2 = urlparse("https://" + s)
+    if u2.netloc:
+        return s
 
     return s
 
 
 def _canon_sha(v: Any) -> Optional[str]:
-    s = _clip_str(v, SHA_MAX)
+    s = _opt(v, SHA_MAX)
     if not s:
         return None
     s = s.lower()
@@ -110,7 +109,7 @@ def _canon_sha(v: Any) -> Optional[str]:
 
 
 def _canon_mime(v: Any) -> Optional[str]:
-    s = _clip_str(v, MIME_MAX)
+    s = _opt(v, MIME_MAX)
     if not s:
         return None
     s = s.lower()
@@ -127,6 +126,10 @@ def _safe_meta(v: Any) -> Optional[Dict[str, Any]]:
 
 def _nonce8() -> str:
     return secrets.token_hex(4)
+
+
+def _touch(target: Any) -> None:
+    target.updated_at = utcnow()
 
 
 class Media(db.Model):
@@ -164,10 +167,10 @@ class Media(db.Model):
     updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
 
     __table_args__ = (
-        CheckConstraint("sort_order >= -10000 AND sort_order <= 10000", name="ck_media_sort_range"),
-        CheckConstraint("(width IS NULL) OR (width >= 1 AND width <= 200000)", name="ck_media_width_range"),
-        CheckConstraint("(height IS NULL) OR (height >= 1 AND height <= 200000)", name="ck_media_height_range"),
-        CheckConstraint("(size_bytes IS NULL) OR (size_bytes >= 0)", name="ck_media_size_nonneg"),
+        CheckConstraint(f"sort_order >= {_SORT_LO} AND sort_order <= {_SORT_HI}", name="ck_media_sort_range"),
+        CheckConstraint(f"(width IS NULL) OR (width >= {_DIM_LO} AND width <= {_DIM_HI})", name="ck_media_width_range"),
+        CheckConstraint(f"(height IS NULL) OR (height >= {_DIM_LO} AND height <= {_DIM_HI})", name="ck_media_height_range"),
+        CheckConstraint(f"(size_bytes IS NULL) OR (size_bytes >= {_SIZE_LO})", name="ck_media_size_nonneg"),
         CheckConstraint("(scope <> '')", name="ck_media_scope_nonempty"),
         CheckConstraint("(kind <> '')", name="ck_media_kind_nonempty"),
         CheckConstraint("(url <> '')", name="ck_media_url_nonempty"),
@@ -180,13 +183,11 @@ class Media(db.Model):
 
     @validates("scope")
     def _v_scope(self, _k: str, v: Any) -> str:
-        out = _clean_tag(v, "generic", SCOPE_MAX)
-        return out if _SCOPE_RE.match(out) else "generic"
+        return _clean_tag(v, "generic", SCOPE_MAX, _SCOPE_RE)
 
     @validates("kind")
     def _v_kind(self, _k: str, v: Any) -> str:
-        out = _clean_tag(v, "image", KIND_MAX)
-        return out if _KIND_RE.match(out) else "image"
+        return _clean_tag(v, "image", KIND_MAX, _KIND_RE)
 
     @validates("url")
     def _v_url(self, _k: str, v: Any) -> str:
@@ -194,7 +195,7 @@ class Media(db.Model):
 
     @validates("alt")
     def _v_alt(self, _k: str, v: Any) -> Optional[str]:
-        return _clip_str(v, ALT_MAX)
+        return _opt(v, ALT_MAX)
 
     @validates("mime_type")
     def _v_mime(self, _k: str, v: Any) -> Optional[str]:
@@ -206,16 +207,16 @@ class Media(db.Model):
 
     @validates("sort_order")
     def _v_sort(self, _k: str, v: Any) -> int:
-        n = _clamp_int(v, 0, -10_000, 10_000)
+        n = _clamp_int(v, 0, _SORT_LO, _SORT_HI)
         return int(n if n is not None else 0)
 
     @validates("size_bytes")
     def _v_size(self, _k: str, v: Any) -> Optional[int]:
-        return _clamp_int(v, None, 0, 10_000_000_000)
+        return _clamp_int(v, None, _SIZE_LO, _SIZE_HI)
 
     @validates("width", "height")
     def _v_dim(self, _k: str, v: Any) -> Optional[int]:
-        return _clamp_int(v, None, 1, 200_000)
+        return _clamp_int(v, None, _DIM_LO, _DIM_HI)
 
     @validates("meta")
     def _v_meta(self, _k: str, v: Any) -> Optional[Dict[str, Any]]:
@@ -249,7 +250,7 @@ class Media(db.Model):
 
     def meta_set(self, key: str, value: Any) -> None:
         d = dict(self.meta or {}) if isinstance(self.meta, dict) else {}
-        d[str(key)] = value
+        d[_s(key, 120)] = value
         self.meta = d
 
     def public_dict(self) -> Dict[str, Any]:
@@ -286,47 +287,46 @@ def _media_before_insert(_mapper, _conn, target: Media) -> None:
     if not target.created_at:
         target.created_at = now
     target.updated_at = now
-    if not (target.scope or "").strip():
-        target.scope = "generic"
-    if not (target.kind or "").strip():
-        target.kind = "image"
-    target.scope = _clean_tag(target.scope, "generic", SCOPE_MAX)
-    target.kind = _clean_tag(target.kind, "image", KIND_MAX)
-    if not _SCOPE_RE.match(target.scope):
-        target.scope = "generic"
-    if not _KIND_RE.match(target.kind):
-        target.kind = "image"
+
+    target.scope = _clean_tag(target.scope, "generic", SCOPE_MAX, _SCOPE_RE)
+    target.kind = _clean_tag(target.kind, "image", KIND_MAX, _KIND_RE)
+
     target.url = _canon_url(target.url)
-    target.alt = _clip_str(target.alt, ALT_MAX)
+    target.alt = _opt(target.alt, ALT_MAX)
     target.mime_type = _canon_mime(target.mime_type)
     target.sha256 = _canon_sha(target.sha256)
-    target.sort_order = int(_clamp_int(target.sort_order, 0, -10_000, 10_000) or 0)
-    target.size_bytes = _clamp_int(target.size_bytes, None, 0, 10_000_000_000)
-    target.width = _clamp_int(target.width, None, 1, 200_000)
-    target.height = _clamp_int(target.height, None, 1, 200_000)
+
+    target.sort_order = int(_clamp_int(target.sort_order, 0, _SORT_LO, _SORT_HI) or 0)
+    target.size_bytes = _clamp_int(target.size_bytes, None, _SIZE_LO, _SIZE_HI)
+    target.width = _clamp_int(target.width, None, _DIM_LO, _DIM_HI)
+    target.height = _clamp_int(target.height, None, _DIM_LO, _DIM_HI)
+
     target.meta = _safe_meta(target.meta)
+
+    if target.idempotency_key is None and target.sha256 and target.product_id:
+        target.idempotency_key = f"{target.product_id}:{target.sha256}:{_nonce8()}"[:200]
 
 
 @event.listens_for(Media, "before_update", propagate=True)
 def _media_before_update(_mapper, _conn, target: Media) -> None:
-    target.updated_at = utcnow()
+    _touch(target)
+
     if target.scope:
-        target.scope = _clean_tag(target.scope, "generic", SCOPE_MAX)
-        if not _SCOPE_RE.match(target.scope):
-            target.scope = "generic"
+        target.scope = _clean_tag(target.scope, "generic", SCOPE_MAX, _SCOPE_RE)
     if target.kind:
-        target.kind = _clean_tag(target.kind, "image", KIND_MAX)
-        if not _KIND_RE.match(target.kind):
-            target.kind = "image"
+        target.kind = _clean_tag(target.kind, "image", KIND_MAX, _KIND_RE)
     if target.url:
         target.url = _canon_url(target.url)
-    target.alt = _clip_str(target.alt, ALT_MAX)
+
+    target.alt = _opt(target.alt, ALT_MAX)
     target.mime_type = _canon_mime(target.mime_type)
     target.sha256 = _canon_sha(target.sha256)
-    target.sort_order = int(_clamp_int(target.sort_order, 0, -10_000, 10_000) or 0)
-    target.size_bytes = _clamp_int(target.size_bytes, None, 0, 10_000_000_000)
-    target.width = _clamp_int(target.width, None, 1, 200_000)
-    target.height = _clamp_int(target.height, None, 1, 200_000)
+
+    target.sort_order = int(_clamp_int(target.sort_order, 0, _SORT_LO, _SORT_HI) or 0)
+    target.size_bytes = _clamp_int(target.size_bytes, None, _SIZE_LO, _SIZE_HI)
+    target.width = _clamp_int(target.width, None, _DIM_LO, _DIM_HI)
+    target.height = _clamp_int(target.height, None, _DIM_LO, _DIM_HI)
+
     target.meta = _safe_meta(target.meta)
 
 
