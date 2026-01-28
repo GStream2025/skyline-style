@@ -4,14 +4,7 @@ import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy import (
-    CheckConstraint,
-    Index,
-    UniqueConstraint,
-    event,
-    func,
-    select,
-)
+from sqlalchemy import CheckConstraint, Index, UniqueConstraint, event, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import validates
 
@@ -58,6 +51,8 @@ _INT_MAX_SORT = 9999
 _INT_MAX_ETA = 100000
 _INT_MAX_MONEY = 1_000_000_000
 
+_CTRL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
+
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
@@ -66,14 +61,22 @@ def utcnow() -> datetime:
 def _clean_str(v: Any, max_len: int) -> str:
     s = "" if v is None else str(v)
     s = s.replace("\x00", "").strip()
+    s = _CTRL_RE.sub("", s)
     if not s:
+        return ""
+    if max_len <= 0:
         return ""
     return s[:max_len]
 
 
-def _clean_code(v: Any) -> str:
-    s = _clean_str(v, _STR_MAX_CODE).lower().replace("-", "_").replace(" ", "_")
+def _norm_code(raw: Any) -> str:
+    s = _clean_str(raw, _STR_MAX_CODE).lower().replace("-", "_").replace(" ", "_")
     s = re.sub(r"__+", "_", s).strip("_")
+    return s
+
+
+def _clean_code(v: Any) -> str:
+    s = _norm_code(v)
     if not _CODE_RE.match(s):
         raise ValueError("code inválido")
     if s not in _ALLOWED_CODES:
@@ -88,7 +91,9 @@ def _clean_kind(v: Any) -> str:
 
 def _clean_country(v: Any) -> str:
     s = _clean_str(v, 2).upper()
-    return s if len(s) == 2 else "UY"
+    if len(s) == 2 and s.isalpha():
+        return s
+    return "UY"
 
 
 def _as_int(v: Any, default: int = 0) -> int:
@@ -120,11 +125,11 @@ def _safe_dict(v: Any) -> Dict[str, Any]:
 
 def _deep_merge(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
     out = dict(a or {})
-    for k, v in (b or {}).items():
-        if isinstance(out.get(k), dict) and isinstance(v, dict):
-            out[k] = _deep_merge(out[k], v)
+    for k, vv in (b or {}).items():
+        if isinstance(out.get(k), dict) and isinstance(vv, dict):
+            out[k] = _deep_merge(out[k], vv)
         else:
-            out[k] = v
+            out[k] = vv
     return out
 
 
@@ -139,9 +144,10 @@ def _mask(v: Any, keep: int = 4) -> str:
     s = _clean_str(v, 600)
     if not s:
         return ""
-    if len(s) <= keep:
+    keep_i = max(0, int(keep or 0))
+    if len(s) <= keep_i:
         return "•" * len(s)
-    return ("•" * (len(s) - keep)) + s[-keep:]
+    return ("•" * (len(s) - keep_i)) + s[-keep_i:]
 
 
 def _clean_url(v: Any) -> str:
@@ -150,7 +156,8 @@ def _clean_url(v: Any) -> str:
         return ""
     if s.startswith("/"):
         return s
-    if not (s.lower().startswith("http://") or s.lower().startswith("https://")):
+    low = s.lower()
+    if not (low.startswith("http://") or low.startswith("https://")):
         raise ValueError("URL inválida")
     return s
 
@@ -169,6 +176,19 @@ def _clean_last4(v: Any) -> str:
     if not s:
         return ""
     return s if re.fullmatch(r"\d{4,8}", s) else ""
+
+
+def _coerce_config_field(typ: str, value: Any) -> Any:
+    t = (typ or "text").strip().lower()
+    if t == "url":
+        return _clean_url(value)
+    if t == "email":
+        return _clean_email(value)
+    if t == "bool":
+        return _as_bool(value)
+    if t == "int":
+        return _clamp_int(value, lo=0, hi=_INT_MAX_MONEY, default=0)
+    return _clean_str(value, _STR_MAX_URL)
 
 
 class PaymentProvider(db.Model):
@@ -208,7 +228,10 @@ class PaymentProvider(db.Model):
         CheckConstraint(f"eta_minutes BETWEEN 0 AND {_INT_MAX_ETA}", name="ck_pp_eta"),
         CheckConstraint(f"min_amount BETWEEN 0 AND {_INT_MAX_MONEY}", name="ck_pp_min"),
         CheckConstraint(f"max_amount BETWEEN 0 AND {_INT_MAX_MONEY}", name="ck_pp_max"),
-        Index("ix_pp_enabled_sort", "enabled", "sort_order", "name"),
+        CheckConstraint("(max_amount = 0) OR (min_amount = 0) OR (max_amount >= min_amount)", name="ck_pp_minmax"),
+        CheckConstraint("country <> ''", name="ck_pp_country_nonempty"),
+        CheckConstraint("kind <> ''", name="ck_pp_kind_nonempty"),
+        Index("ix_pp_enabled_sort", "enabled", "recommended", "sort_order", "name"),
         Index("ix_pp_country_enabled", "country", "enabled", "sort_order"),
         Index("ix_pp_kind_enabled", "kind", "enabled", "sort_order"),
     )
@@ -236,6 +259,10 @@ class PaymentProvider(db.Model):
     def _v_country(self, _k: str, v: Any) -> str:
         return _clean_country(v)
 
+    @validates("enabled", "recommended")
+    def _v_bools(self, _k: str, v: Any) -> bool:
+        return _as_bool(v)
+
     @validates("notes", "updated_by", "updated_ip")
     def _v_txt(self, _k: str, v: Any) -> str:
         max_len = _STR_MAX_NOTES if _k == "notes" else (_STR_MAX_AUDIT if _k == "updated_by" else _STR_MAX_IP)
@@ -259,7 +286,7 @@ class PaymentProvider(db.Model):
         return self.config
 
     def get(self, key: str, default: Any = None) -> Any:
-        return self.ensure_config().get(key, default)
+        return self.ensure_config().get(str(key), default)
 
     def set(self, key: str, value: Any) -> None:
         cfg = self.ensure_config()
@@ -268,7 +295,9 @@ class PaymentProvider(db.Model):
 
     def update_config(self, data: Dict[str, Any], *, deep: bool = False) -> None:
         cur = self.ensure_config()
-        self.config = _deep_merge(cur, data) if deep else {**cur, **(data or {})}
+        if not isinstance(data, dict):
+            return
+        self.config = _deep_merge(cur, data) if deep else {**cur, **data}
 
     def validate_config(self) -> Tuple[bool, List[str]]:
         errors: List[str] = []
@@ -276,30 +305,21 @@ class PaymentProvider(db.Model):
         schema = self.config_schema_for(self.code)
 
         for f in schema:
-            k = str(f.get("key") or "").strip()
+            k = _clean_str(f.get("key"), 80)
             if not k:
                 continue
-            typ = str(f.get("type") or "text").strip().lower()
+            typ = _clean_str(f.get("type"), 16).lower() or "text"
             required = bool(f.get("required"))
 
-            if required and not cfg.get(k):
+            present = k in cfg and cfg.get(k) not in (None, "", [], {})
+            if required and not present:
                 errors.append(f"Falta: {k}")
                 continue
-
-            if not cfg.get(k):
+            if not present:
                 continue
 
             try:
-                if typ == "url":
-                    cfg[k] = _clean_url(cfg[k])
-                elif typ == "email":
-                    cfg[k] = _clean_email(cfg[k])
-                elif typ == "bool":
-                    cfg[k] = _as_bool(cfg[k])
-                elif typ == "int":
-                    cfg[k] = _clamp_int(cfg[k], lo=0, hi=_INT_MAX_MONEY, default=0)
-                else:
-                    cfg[k] = _clean_str(cfg[k], _STR_MAX_URL)
+                cfg[k] = _coerce_config_field(typ, cfg.get(k))
             except Exception as e:
                 errors.append(f"{k}: {e}")
 
@@ -307,19 +327,19 @@ class PaymentProvider(db.Model):
         return (len(errors) == 0), errors
 
     def is_ready_for_checkout(self) -> bool:
-        ok, _ = self.validate_config()
-        if not self.enabled or not ok:
-            return False
-        if self.max_amount and self.min_amount and self.max_amount < self.min_amount:
-            return False
-        if self.kind not in _ALLOWED_KINDS:
+        if not self.enabled:
             return False
         if self.code not in _ALLOWED_CODES:
             return False
-        return True
+        if self.kind not in _ALLOWED_KINDS:
+            return False
+        if self.max_amount and self.min_amount and self.max_amount < self.min_amount:
+            return False
+        ok, _ = self.validate_config()
+        return bool(ok)
 
     def checkout_link(self) -> str:
-        return str(self.get("checkout_url") or self.get("paypal_me") or "")
+        return _clean_str(self.get("checkout_url") or self.get("paypal_me") or "", _STR_MAX_URL)
 
     def get_label_for_checkout(self) -> str:
         v = self.get("label_checkout") or ""
@@ -359,23 +379,14 @@ class PaymentProvider(db.Model):
             "max_amount": int(self.max_amount or 0),
             "notes": self.notes,
             "config": self.masked_config() if masked else self.ensure_config(),
+            "checkout_link": self.checkout_link(),
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
 
     @staticmethod
     def config_schema_for(code: str) -> List[Dict[str, Any]]:
-        if code == "mercadopago_uy":
-            return [
-                {"key": "mode", "type": "text", "required": False},
-                {"key": "checkout_url", "type": "url", "required": False},
-                {"key": "public_key", "type": "text", "required": False},
-                {"key": "access_token", "type": "text", "required": False},
-                {"key": "currency", "type": "text", "required": True},
-                {"key": "label_checkout", "type": "text", "required": False},
-                {"key": "icon", "type": "text", "required": False},
-            ]
-        if code == "mercadopago_ar":
+        if code in {"mercadopago_uy", "mercadopago_ar"}:
             return [
                 {"key": "mode", "type": "text", "required": False},
                 {"key": "checkout_url", "type": "url", "required": False},
@@ -411,21 +422,18 @@ class PaymentProvider(db.Model):
                 {"key": "label_checkout", "type": "text", "required": False},
                 {"key": "icon", "type": "text", "required": False},
             ]
-        return [
-            {"key": "title", "type": "text", "required": True},
-            {"key": "instructions", "type": "text", "required": True},
-        ]
+        return [{"key": "title", "type": "text", "required": True}, {"key": "instructions", "type": "text", "required": True}]
 
     @staticmethod
     def boot_defaults() -> List["PaymentProvider"]:
         defaults = [
             ("mercadopago_uy", "Mercado Pago Uruguay", "wallet", "UY", 10),
             ("mercadopago_ar", "Mercado Pago Argentina", "wallet", "AR", 20),
-            ("paypal", "PayPal", "wallet", "WW", 30),
+            ("paypal", "PayPal", "wallet", "UY", 30),
             ("transferencia", "Transferencia bancaria", "bank_transfer", "UY", 40),
-            ("wise", "Wise", "bank_transfer", "WW", 50),
-            ("payoneer", "Payoneer", "wallet", "WW", 60),
-            ("paxum", "Paxum", "wallet", "WW", 70),
+            ("wise", "Wise", "bank_transfer", "UY", 50),
+            ("payoneer", "Payoneer", "wallet", "UY", 60),
+            ("paxum", "Paxum", "wallet", "UY", 70),
         ]
         items: List[PaymentProvider] = []
         for code, name, kind, country, order in defaults:
@@ -436,7 +444,7 @@ class PaymentProvider(db.Model):
                         code=code,
                         name=name,
                         kind=kind,
-                        country=("UY" if country == "WW" else country),
+                        country=country,
                         sort_order=order,
                         enabled=False,
                         recommended=False,
@@ -451,13 +459,7 @@ class UserPreferredPayment(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
 
-    user_id = db.Column(
-        db.Integer,
-        db.ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     provider_code = db.Column(db.String(_STR_MAX_CODE), nullable=False, index=True)
 
     label = db.Column(db.String(_STR_MAX_LABEL), nullable=False, default="")
@@ -477,8 +479,7 @@ class UserPreferredPayment(db.Model):
 
     @validates("provider_code")
     def _v_provider_code(self, _k: str, v: Any) -> str:
-        s = _clean_str(v, _STR_MAX_CODE).lower().replace("-", "_").replace(" ", "_")
-        s = re.sub(r"__+", "_", s).strip("_")
+        s = _norm_code(v)
         if not _CODE_RE.match(s):
             raise ValueError("provider_code inválido")
         if s not in _ALLOWED_CODES:
@@ -532,8 +533,7 @@ class PaymentProviderService:
                     PaymentProvider.recommended.desc(),
                     PaymentProvider.sort_order.asc(),
                     PaymentProvider.name.asc(),
-                )
-                .all()
+                ).all()
             )
             return [p for p in providers if p.is_ready_for_checkout()]
         except Exception:
@@ -542,8 +542,7 @@ class PaymentProviderService:
     @staticmethod
     def get_by_code(code: str) -> Optional[PaymentProvider]:
         try:
-            c = _clean_str(code, _STR_MAX_CODE).lower().replace("-", "_").replace(" ", "_")
-            c = re.sub(r"__+", "_", c).strip("_")
+            c = _norm_code(code)
             return PaymentProvider.query.filter_by(code=c).first()
         except Exception:
             return None
@@ -621,6 +620,7 @@ class PaymentProviderService:
             db.session.rollback()
             created = 0
 
+        total = 0
         try:
             total = int(db.session.execute(select(func.count(PaymentProvider.id))).scalar() or 0)
         except Exception:
@@ -649,8 +649,7 @@ def _pp_before_insert(_mapper, _conn, target: PaymentProvider) -> None:
     target.recommended = bool(target.recommended)
     target.config = _safe_dict(target.config)
     now = utcnow()
-    if not target.created_at:
-        target.created_at = now
+    target.created_at = target.created_at or now
     target.updated_at = now
 
 
@@ -674,20 +673,19 @@ def _pp_before_update(_mapper, _conn, target: PaymentProvider) -> None:
 
 @event.listens_for(UserPreferredPayment, "before_insert", propagate=True)
 def _upp_before_insert(_mapper, _conn, target: UserPreferredPayment) -> None:
-    target.provider_code = _clean_code(target.provider_code)
+    target.provider_code = _norm_code(target.provider_code)
     target.label = _clean_str(target.label, _STR_MAX_LABEL)
     target.brand = _clean_str(target.brand, _STR_MAX_BRAND)
     target.last4 = _clean_last4(target.last4)
     target.meta = _safe_dict(target.meta)
     now = utcnow()
-    if not target.created_at:
-        target.created_at = now
+    target.created_at = target.created_at or now
     target.updated_at = now
 
 
 @event.listens_for(UserPreferredPayment, "before_update", propagate=True)
 def _upp_before_update(_mapper, _conn, target: UserPreferredPayment) -> None:
-    target.provider_code = _clean_code(target.provider_code)
+    target.provider_code = _norm_code(target.provider_code)
     target.label = _clean_str(target.label, _STR_MAX_LABEL)
     target.brand = _clean_str(target.brand, _STR_MAX_BRAND)
     target.last4 = _clean_last4(target.last4)
@@ -695,9 +693,4 @@ def _upp_before_update(_mapper, _conn, target: UserPreferredPayment) -> None:
     target.updated_at = utcnow()
 
 
-__all__ = [
-    "PaymentProvider",
-    "UserPreferredPayment",
-    "PaymentProviderService",
-    "utcnow",
-]
+__all__ = ["PaymentProvider", "UserPreferredPayment", "PaymentProviderService", "utcnow"]
