@@ -2,68 +2,65 @@
 {% block title %}Verificar correo · {{ (APP_NAME or "Skyline Store")|e }}{% endblock %}
 
 {% block extra_head %}
-  {% set _env = (ENV if ENV is defined else '')|string|lower|trim %}
+  {% set _env = (ENV if ENV is defined and ENV else 'production')|string|lower|trim %}
   <meta name="robots" content="{{ 'index,follow' if _env == 'production' else 'noindex,nofollow' }}">
   <meta name="theme-color" content="#2563eb">
 
   {% set _nonce = (csp_nonce if csp_nonce is defined and csp_nonce else (nonce if nonce is defined and nonce else '')) %}
-  {% set _req = (request if request is defined else none) %}
+  {% set _req = (request if request is defined and request else none) %}
   {% set _vf = (view_functions if view_functions is defined and view_functions else {}) %}
 
   {% macro safe_url(ep, fb) -%}
-    {%- if ep and _vf and ep in _vf -%}{{ url_for(ep) }}{%- else -%}{{ fb }}{%- endif -%}
+    {%- if url_for is defined and ep and (not _vf or ep in _vf) -%}
+      {{- url_for(ep) -}}
+    {%- else -%}
+      {{- fb -}}
+    {%- endif -%}
   {%- endmacro %}
 
   {% macro safe_next(path, default_path) -%}
     {%- set p = (path|string|trim) if path is not none else '' -%}
-    {%- if not p or not p.startswith('/') or '://' in p or p.startswith('//') -%}{{- default_path -}}
-    {%- else -%}{{- p -}}
+    {%- if not p or not p.startswith('/') or p.startswith('//') or '://' in p or '\\' in p or '\n' in p or '\r' in p or '\t' in p or ' ' in p or '..' in p -%}
+      {{- default_path -}}
+    {%- else -%}
+      {{- p -}}
     {%- endif -%}
   {%- endmacro %}
 
   {% set _csrf = '' %}
-  {% if csrf_token is defined %}
-    {% set _csrf = (csrf_token() if csrf_token is callable else (csrf_token|string)) %}
-  {% elif csrf_token_value is defined and csrf_token_value %}
+  {% if csrf_token_value is defined and csrf_token_value %}
     {% set _csrf = csrf_token_value|string %}
+  {% elif csrf_token is defined %}
+    {% set _csrf = (csrf_token() if csrf_token is callable else (csrf_token|string)) %}
   {% endif %}
   <meta name="csrf-token" content="{{ _csrf|e }}">
 
   <style{% if _nonce %} nonce="{{ _nonce|e }}"{% endif %}>
-    .ss-ve{min-height:72vh;display:grid;place-items:center;padding:34px 14px;background:transparent}
+    .ss-ve{min-height:72vh;display:grid;place-items:center;padding:34px 14px}
     .ss-ve__card{max-width:620px;width:100%;border-radius:26px;border:1px solid rgba(148,163,184,.22);background:rgba(255,255,255,.92);box-shadow:0 22px 60px rgba(2,6,23,.12);overflow:hidden}
     .ss-ve__head{padding:22px 20px;border-bottom:1px solid rgba(148,163,184,.16);background:linear-gradient(180deg,rgba(37,99,235,.06),transparent)}
     .ss-ve__body{padding:20px}
-
     .ss-ve__title{margin:0;font-size:clamp(1.45rem,3vw,2rem);font-weight:950;letter-spacing:-.35px}
     .ss-ve__sub{margin:.45rem 0 0;color:rgba(11,18,32,.72);font-weight:750;line-height:1.55}
-
     .ss-ve__flash{margin-top:12px;padding:10px 12px;border-radius:14px;font-weight:850;border:1px solid rgba(148,163,184,.18)}
     .ss-ve__flash.error{background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.20)}
     .ss-ve__flash.success{background:rgba(34,197,94,.10);border-color:rgba(34,197,94,.22)}
     .ss-ve__flash.info{background:rgba(47,123,255,.08);border-color:rgba(47,123,255,.18)}
-
     .ss-ve__note{margin-top:14px;padding:12px 12px;border-radius:16px;border:1px dashed rgba(148,163,184,.32);font-size:.9rem;color:rgba(11,18,32,.78);font-weight:750;line-height:1.5}
     .ss-ve__note b{font-weight:950}
     .ss-ve__actions{display:grid;gap:10px;margin-top:16px}
-
     .ss-ve__btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;padding:12px 14px;border-radius:999px;border:1px solid rgba(15,23,42,.14);background:rgba(255,255,255,.9);font-weight:900;cursor:pointer;text-decoration:none;color:rgba(11,18,32,.92);user-select:none;min-height:44px;transition:transform .12s ease,filter .12s ease,box-shadow .12s ease}
     .ss-ve__btn--primary{background:linear-gradient(135deg,#2563eb,#0ea5e9);border-color:transparent;color:#fff;box-shadow:0 18px 44px rgba(37,99,235,.22)}
-
     .ss-ve__btn:hover{filter:brightness(1.02);transform:translateY(-1px)}
     .ss-ve__btn:active{transform:translateY(0)}
     .ss-ve__btn[disabled],.ss-ve__btn[aria-disabled="true"]{opacity:.65;cursor:not-allowed;transform:none}
-
-    .ss-ve__btn:focus-visible{outline:none;box-shadow:0 0 0 4px rgba(37,99,235,.22), 0 18px 44px rgba(37,99,235,.18)}
-    .ss-ve__btn--primary:focus-visible{box-shadow:0 0 0 4px rgba(255,255,255,.28), 0 18px 44px rgba(37,99,235,.22)}
-
+    .ss-ve__btn:focus-visible{outline:none;box-shadow:0 0 0 4px rgba(37,99,235,.22),0 18px 44px rgba(37,99,235,.18)}
+    .ss-ve__btn--primary:focus-visible{box-shadow:0 0 0 4px rgba(255,255,255,.28),0 18px 44px rgba(37,99,235,.22)}
     .ss-ve__live{display:none;margin-top:12px;font-size:.9rem;font-weight:850;color:rgba(11,18,32,.76)}
     .ss-ve__live.is-on{display:block}
     .ss-ve__sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
-
     .ss-ve__spin{width:16px;height:16px;border-radius:999px;border:2px solid rgba(255,255,255,.35);border-top-color:rgba(255,255,255,.95);animation:spin .85s linear infinite}
     @keyframes spin{to{transform:rotate(360deg)}}
-
     @media (prefers-reduced-motion:reduce){
       .ss-ve__btn{transition:none}
       .ss-ve__btn:hover{transform:none}
@@ -87,7 +84,8 @@
   {% set login_url = safe_url('auth.login','/auth/login') %}
   {% set register_url = safe_url('auth.register','/auth/register') %}
 
-  {% set next_path = safe_next(_req.full_path if _req else '/account', '/account') %}
+  {% set _raw_next = (_req.args.get('next') if _req and _req.args else none) %}
+  {% set next_path = safe_next(_raw_next if _raw_next is not none else (_req.path if _req else '/account'), '/account') %}
   {% if '?' in next_path %}{% set next_path = next_path.split('?')[0] %}{% endif %}
 
   {% set resend_json = safe_url('auth.resend_verification_json','') %}
@@ -113,6 +111,7 @@
           {% if msgs %}
             {% for c,m in msgs %}
               {% set k = (c|string|lower|trim) %}
+              {% if k in ['danger','error'] %}{% set k = 'error' %}{% endif %}
               {% if k not in ['error','success','info'] %}{% set k = 'info' %}{% endif %}
               <div class="ss-ve__flash {{ k }}" role="status" aria-live="polite">{{ m }}</div>
             {% endfor %}
@@ -125,18 +124,10 @@
 
         <div id="veLive" class="ss-ve__live" role="status" aria-live="polite"></div>
 
-        <form id="resendForm" method="post" action="{{ resend_ep }}">
+        <form id="resendForm" method="post" action="{{ resend_ep|e }}" autocomplete="off" novalidate>
           <input type="hidden" name="csrf_token" value="{{ _csrf|e }}">
           {% if email %}<input type="hidden" name="email" value="{{ email|e }}">{% endif %}
           {% if next_path %}<input type="hidden" name="next" value="{{ next_path|e }}">{% endif %}
-          <noscript>
-            <div class="ss-ve__note" style="margin-top:12px">
-              JavaScript está desactivado. Podés reenviar usando este botón:
-              <button class="ss-ve__btn ss-ve__btn--primary" type="submit" {% if not resend_ep %}disabled aria-disabled="true"{% endif %}>
-                Reenviar correo
-              </button>
-            </div>
-          </noscript>
         </form>
 
         <div class="ss-ve__actions" aria-label="Acciones">
@@ -155,6 +146,15 @@
         <p class="ss-ve__note" style="margin-top:12px">
           ¿Ya verificaste? Cerrá sesión y volvé a entrar.
         </p>
+
+        <noscript>
+          <div class="ss-ve__note" style="margin-top:12px">
+            JavaScript está desactivado. Podés reenviar usando este botón:
+            <button class="ss-ve__btn ss-ve__btn--primary" type="submit" form="resendForm" {% if not resend_ep %}disabled aria-disabled="true"{% endif %}>
+              Reenviar correo
+            </button>
+          </div>
+        </noscript>
       </div>
     </div>
   </section>
@@ -174,9 +174,9 @@
   const isJson   = {{ resend_is_json|tojson }};
 
   const COOLDOWN_MS = 30000;
-  const KEY = "ss_verify_cd_v3";
-
+  const KEY = "ss_verify_cd_v5";
   const now = () => Date.now();
+
   const say = (m) => {
     if (!live) return;
     live.textContent = m || '';
@@ -215,6 +215,7 @@
 
   const sendJson = async () => {
     const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    const payload = csrf ? { csrf_token: csrf } : {};
     const r = await fetch(endpoint, {
       method: "POST",
       headers: {
@@ -223,15 +224,18 @@
         ...(csrf ? {"X-CSRF-Token": csrf} : {})
       },
       credentials: "same-origin",
-      body: JSON.stringify({})
+      body: JSON.stringify(payload)
     });
 
     let j = null;
     try { j = await r.json(); } catch (_) { j = null; }
 
-    const ok = r.ok && (!j || j.ok !== false);
-    if (!ok) {
-      const msg = (j && (j.message || j.error)) ? String(j.message || j.error) : "No se pudo reenviar.";
+    if (!r.ok) {
+      const msg = (j && (j.message || j.error)) ? String(j.message || j.error) : `Error ${r.status}`;
+      throw new Error(msg);
+    }
+    if (j && j.ok === false) {
+      const msg = (j.message || j.error) ? String(j.message || j.error) : "No se pudo reenviar.";
       throw new Error(msg);
     }
     return j;
@@ -250,10 +254,12 @@
         if (form) form.submit();
         return;
       }
-      await sendJson();
-      say("Correo reenviado ✅ Revisá tu email.");
-    } catch (_) {
-      say("No se pudo reenviar automáticamente. Probá de nuevo en unos minutos.");
+      const j = await sendJson();
+      const msg = (j && (j.message || j.detail)) ? String(j.message || j.detail) : "Correo reenviado ✅ Revisá tu email.";
+      say(msg);
+    } catch (e) {
+      const msg = (e && e.message) ? String(e.message) : "No se pudo reenviar automáticamente. Probá de nuevo en unos minutos.";
+      say(msg);
       setCd(0);
     } finally {
       stopLoading();

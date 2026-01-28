@@ -54,10 +54,9 @@ TAB_LOGIN = "login"
 TAB_REGISTER = "register"
 _VALID_TABS: Set[str] = {TAB_LOGIN, TAB_REGISTER}
 
-# Rate limit
 _RL_WINDOW_SEC = 60
 _RL_MAX = 8
-_RL_STORE_CAP = 200  # global cap (all buckets)
+_RL_STORE_CAP = 200
 
 _RL_LOGIN_KEY = "login"
 _RL_REG_KEY = "register"
@@ -112,10 +111,8 @@ def _safe_next(nxt: Any) -> str:
     s = _norm(nxt, max_len=_MAX_NEXT_LEN)
     if not s:
         return ""
-    # must be a relative path
     if not s.startswith("/") or s.startswith("//"):
         return ""
-    # basic hardening
     if any(c in s for c in ("\x00", "\\", "\r", "\n", "\t", " ")):
         return ""
     if ".." in s:
@@ -156,18 +153,21 @@ def _wants_json() -> bool:
     return False
 
 
-def _client_fingerprint() -> str:
+def _client_ip() -> str:
     xff = _norm(request.headers.get("X-Forwarded-For") or "", max_len=400)
-    ip = (xff.split(",")[0].strip() if xff else _norm(request.remote_addr or "unknown", max_len=80))[:80]
+    if xff:
+        ip = xff.split(",")[0].strip()
+        return _norm(ip, max_len=80)
+    return _norm(request.remote_addr or "unknown", max_len=80)
+
+
+def _client_fingerprint() -> str:
+    ip = _client_ip()
     ua = _norm(request.headers.get("User-Agent") or "", max_len=200)[:120]
     return f"{ip}|{ua}"
 
 
 def _rate_limit(bucket: str) -> Tuple[bool, int]:
-    """
-    Rate limit store en session["rl_store"] para evitar bugs de claves.
-    Devuelve (ok, retry_after_seconds).
-    """
     now = _now()
     fp = _client_fingerprint()
     bucket_key = f"{bucket}:{fp}"
@@ -176,12 +176,14 @@ def _rate_limit(bucket: str) -> Tuple[bool, int]:
     if not isinstance(store, dict):
         store = {}
 
-    # prune store si crece
     if len(store) > _RL_STORE_CAP:
         items = []
         for k, v in list(store.items()):
             if isinstance(v, dict):
-                t0 = int(v.get("t", 0) or 0)
+                try:
+                    t0 = int(v.get("t", 0) or 0)
+                except Exception:
+                    t0 = 0
                 items.append((t0, k))
         items.sort()
         for _, k in items[: max(0, len(store) - _RL_STORE_CAP)]:
@@ -194,8 +196,14 @@ def _rate_limit(bucket: str) -> Tuple[bool, int]:
         session.modified = True
         return True, 0
 
-    t0 = int(b.get("t", now) or now)
-    n = int(b.get("n", 0) or 0)
+    try:
+        t0 = int(b.get("t", now) or now)
+    except Exception:
+        t0 = now
+    try:
+        n = int(b.get("n", 0) or 0)
+    except Exception:
+        n = 0
 
     if now - t0 >= _RL_WINDOW_SEC:
         store[bucket_key] = {"t": now, "n": 1}
@@ -219,8 +227,7 @@ def _is_honeypot_triggered() -> bool:
 
 
 def _normalize_name(name: Any) -> str:
-    v = re.sub(r"\s+", " ", _norm(name, max_len=180))
-    v = v.strip()
+    v = re.sub(r"\s+", " ", _norm(name, max_len=180)).strip()
     return v[:120]
 
 
@@ -241,7 +248,13 @@ def _account_url() -> str:
 
 
 def _json(ok: bool, payload: Dict[str, Any], status: int):
-    return jsonify({"ok": ok, **payload}), status
+    resp = jsonify({"ok": ok, **payload})
+    if status == 429 and "retry_after" in payload:
+        try:
+            resp.headers["Retry-After"] = str(int(payload.get("retry_after") or 0))
+        except Exception:
+            pass
+    return resp, status
 
 
 def _flash(level: str, msg: str) -> None:
@@ -303,7 +316,7 @@ def _bad_auth(tab: str, nxt: str, *, retry_after: int = 0):
 
 
 def _clear_auth_session() -> None:
-    keep_exact = {_RL_STORE_SESSION_KEY, _VERIFY_TOKEN_SESSION_KEY, _VERIFY_TOKEN_TS_SESSION_KEY}
+    keep_exact = {_RL_STORE_SESSION_KEY, "csrf_token", _VERIFY_TOKEN_SESSION_KEY, _VERIFY_TOKEN_TS_SESSION_KEY}
     keep_prefix = ("verify_rl:",)
     for k in list(session.keys()):
         ks = str(k)
@@ -325,7 +338,6 @@ def _user_password_check(user: Any, password: str) -> bool:
     except Exception:
         pass
 
-    ph = ""
     try:
         ph = str(getattr(user, "password_hash", "") or getattr(user, "password", "") or "")
     except Exception:
@@ -367,6 +379,14 @@ def _user_password_set(user: Any, password: str) -> bool:
         return False
 
 
+def _rotate_csrf() -> None:
+    try:
+        session["csrf_token"] = secrets.token_urlsafe(32)
+        session.modified = True
+    except Exception:
+        pass
+
+
 def _set_user_session(user: User) -> None:
     _clear_auth_session()
     session["user_id"] = int(getattr(user, "id", 0) or 0)
@@ -378,6 +398,7 @@ def _set_user_session(user: User) -> None:
     session["login_nonce"] = secrets.token_urlsafe(16)
     session.permanent = True
     session.modified = True
+    _rotate_csrf()
 
     if _login_user:
         try:
@@ -414,7 +435,10 @@ def _get_user_by_email(email: str) -> Optional[User]:
 def _verify_rate_limited(email: str) -> bool:
     key = f"verify_rl:{email}"
     now = _now()
-    last = int(session.get(key) or 0)
+    try:
+        last = int(session.get(key) or 0)
+    except Exception:
+        last = 0
     if last and (now - last) < _VERIFY_RL_SEC:
         return True
     session[key] = now
@@ -427,7 +451,6 @@ def _make_verify_token() -> str:
 
 
 def _send_verify_email(email: str, verify_url: str) -> None:
-    # stub: log only
     try:
         rid = _norm(request.headers.get("X-Request-Id") or "", max_len=80)
         current_app.logger.info("VERIFY_EMAIL rid=%s to=%s url=%s", rid or "-", email, verify_url)
@@ -436,12 +459,8 @@ def _send_verify_email(email: str, verify_url: str) -> None:
 
 
 def _csrf_from_headers_or_body() -> str:
-    # accepts X-CSRFToken / X-CSRF-Token
     hdr = _norm(
-        request.headers.get("X-CSRFToken")
-        or request.headers.get("X-CSRF-Token")
-        or request.headers.get("X-CSRFToken".lower())
-        or "",
+        request.headers.get("X-CSRFToken") or request.headers.get("X-CSRF-Token") or "",
         max_len=2048,
     )
     if hdr:
@@ -449,8 +468,7 @@ def _csrf_from_headers_or_body() -> str:
     try:
         body = request.get_json(silent=True) or {}
         if isinstance(body, dict):
-            tok = _norm(body.get("csrf_token") or "", max_len=2048)
-            return tok
+            return _norm(body.get("csrf_token") or "", max_len=2048)
     except Exception:
         pass
     return ""
@@ -471,9 +489,24 @@ def _is_csrf_ok_for_json() -> bool:
         return False
 
 
+@auth_bp.before_request
+def _auth_before_request():
+    try:
+        tok = session.get("csrf_token")
+        if not tok or not isinstance(tok, str) or len(tok) < 16:
+            session["csrf_token"] = secrets.token_urlsafe(32)
+            session.modified = True
+    except Exception:
+        pass
+
+
+@auth_bp.after_request
+def _auth_after_request(resp):
+    return _no_store(resp)
+
+
 @auth_bp.get("/account")
 def account():
-    # si ya está logueado, respetamos next safe (si lo mandaron)
     if _is_authenticated():
         nxt = _safe_next(request.args.get("next", "")) or "/"
         return redirect(nxt, code=302)
@@ -489,7 +522,7 @@ def account():
         render_template("auth/account.html", active_tab=tab, next=nxt, prefill_email=prefill_email),
         200,
     )
-    return _no_store(resp)
+    return resp
 
 
 @auth_bp.get("/login")
@@ -534,7 +567,6 @@ def login():
         return _bad_auth(TAB_LOGIN, nxt)
 
     user = _get_user_by_email(email)
-
     ok = False
     try:
         ok = bool(user and _user_password_check(user, password))
@@ -607,7 +639,7 @@ def register():
 
     try:
         db.session.add(user)
-        db.session.flush()  # permite user.id sin commit todavía
+        db.session.flush()
 
         if role == "affiliate" and AffiliateProfile is not None:
             try:
@@ -618,10 +650,16 @@ def register():
         db.session.commit()
 
     except IntegrityError:
-        db.session.rollback()
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         return _json_or_redirect(ok=False, message="Ese email ya existe.", tab=TAB_LOGIN, nxt=nxt, status_err=409)
     except Exception:
-        db.session.rollback()
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         log.exception("register commit failed")
         return _bad_auth(TAB_REGISTER, nxt)
 
@@ -705,10 +743,16 @@ def verify_send():
 def resend_verification():
     nxt = _safe_next(request.form.get("next", "")) or _safe_next(request.args.get("next", "")) or "/"
 
-    ok_rl, _ = _rate_limit(_RL_VERIFY_SEND_KEY)
+    ok_rl, retry = _rate_limit(_RL_VERIFY_SEND_KEY)
     if (not ok_rl) or _is_honeypot_triggered():
         _flash("info", "Esperá un momento y reintentá.")
-        return redirect(nxt, code=302)
+        r = redirect(nxt, code=302)
+        if retry:
+            try:
+                r.headers["Retry-After"] = str(int(retry))
+            except Exception:
+                pass
+        return r
 
     uid = int(session.get("user_id") or 0)
     email = _safe_email(session.get("user_email") or request.form.get("email") or "")
@@ -791,9 +835,20 @@ def verify(token: str):
         return _redirect_account(TAB_LOGIN, "")
 
     st = _norm(session.get(_VERIFY_TOKEN_SESSION_KEY) or "", max_len=300)
-    ts = int(session.get(_VERIFY_TOKEN_TS_SESSION_KEY) or 0)
+    try:
+        ts = int(session.get(_VERIFY_TOKEN_TS_SESSION_KEY) or 0)
+    except Exception:
+        ts = 0
 
-    if not st or not secrets.compare_digest(st, token):
+    if not st:
+        _flash("danger", "Token inválido.")
+        return _redirect_account(TAB_LOGIN, "")
+
+    try:
+        if not secrets.compare_digest(st, token):
+            _flash("danger", "Token inválido.")
+            return _redirect_account(TAB_LOGIN, "")
+    except Exception:
         _flash("danger", "Token inválido.")
         return _redirect_account(TAB_LOGIN, "")
 
@@ -814,7 +869,10 @@ def verify(token: str):
         db.session.add(user)
         db.session.commit()
     except Exception:
-        db.session.rollback()
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         _flash("danger", "No se pudo verificar. Reintentá.")
         return _redirect_account(TAB_LOGIN, "")
 
@@ -824,8 +882,7 @@ def verify(token: str):
     session.modified = True
 
     _flash("success", "Cuenta verificada ✅")
-    resp = redirect(_safe_next(request.args.get("next", "")) or "/", code=302)
-    return _no_store(resp)
+    return redirect(_safe_next(request.args.get("next", "")) or "/", code=302)
 
 
 __all__ = ["auth_bp"]

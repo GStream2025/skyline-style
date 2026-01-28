@@ -8,38 +8,16 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 from urllib.parse import urlencode, urljoin, urlparse
 
-from flask import (
-    Blueprint,
-    current_app,
-    flash,
-    jsonify,
-    redirect,
-    render_template,
-    request,
-    session,
-    url_for,
-)
+from flask import Blueprint, current_app, jsonify, redirect, render_template, request, session, url_for
 from sqlalchemy import select
 
-from app.models import db, Order, User, UserAddress
+from app.models import Order, User, UserAddress, db
 
 log = logging.getLogger("account_routes")
 
-# ============================================================
-# Blueprints
-# ============================================================
-account_bp = Blueprint(
-    "account",
-    __name__,
-    url_prefix="/account",
-    template_folder="../templates",
-)
-
+account_bp = Blueprint("account", __name__, url_prefix="/account", template_folder="../templates")
 cuenta_bp = Blueprint("cuenta", __name__)
 
-# ============================================================
-# ENV helpers
-# ============================================================
 _TRUE = {"1", "true", "yes", "y", "on", "checked"}
 _FALSE = {"0", "false", "no", "n", "off", "unchecked"}
 
@@ -50,10 +28,10 @@ def _env_str(name: str, default: str = "") -> str:
 
 
 def _env_bool(name: str, default: bool = False) -> bool:
-    v = _env_str(name, "")
-    if not v:
+    s = _env_str(name, "")
+    if not s:
         return default
-    s = v.lower()
+    s = s.lower()
     if s in _FALSE:
         return False
     return s in _TRUE
@@ -61,7 +39,7 @@ def _env_bool(name: str, default: bool = False) -> bool:
 
 def _env_int(name: str, default: int, *, min_v: int, max_v: int) -> int:
     try:
-        n = int(_env_str(name, default))
+        n = int(_env_str(name, str(default)))
     except Exception:
         n = default
     return max(min_v, min(max_v, n))
@@ -71,20 +49,24 @@ def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
-# ============================================================
-# Config
-# ============================================================
 ACCOUNT_ALLOW_JSON = _env_bool("ACCOUNT_ALLOW_JSON", True)
 REQUIRE_CSRF_FALLBACK = _env_bool("REQUIRE_CSRF", True)
 
 MAX_BODY_BYTES = _env_int("ACCOUNT_MAX_BODY_BYTES", 120_000, min_v=20_000, max_v=500_000)
-RL_COOLDOWN_SEC = float(_env_str("ACCOUNT_RATE_LIMIT_SECONDS", "1.2"))
+RL_COOLDOWN_SEC = float(_env_str("ACCOUNT_RATE_LIMIT_SECONDS", "1.2") or "1.2")
 RL_BURST = _env_int("ACCOUNT_RATE_LIMIT_BURST", 12, min_v=3, max_v=60)
 RL_WINDOW = _env_int("ACCOUNT_RATE_LIMIT_WINDOW", 60, min_v=10, max_v=600)
 
-# ============================================================
-# Helpers
-# ============================================================
+_CACHE_HEADERS = {
+    "Cache-Control": "no-store",
+    "Pragma": "no-cache",
+    "Vary": "Cookie",
+    "X-Frame-Options": "DENY",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+}
+
+
 def _template_exists(name: str) -> bool:
     try:
         current_app.jinja_env.get_template(name)
@@ -93,62 +75,82 @@ def _template_exists(name: str) -> bool:
         return False
 
 
-def _safe_url_for(endpoint: str, **kwargs) -> Optional[str]:
+def _safe_url_for(endpoint: str, **kwargs) -> str:
     try:
         return url_for(endpoint, **kwargs)
     except Exception:
-        return None
+        qs = urlencode({k: v for k, v in kwargs.items() if v is not None})
+        base = f"/{endpoint.replace('.', '/')}"
+        return base + (f"?{qs}" if qs else "")
 
 
 def _wants_json() -> bool:
     if not ACCOUNT_ALLOW_JSON:
         return False
-    if request.is_json:
-        return True
-    if (request.args.get("format") or "").lower() == "json":
+    try:
+        if request.is_json:
+            return True
+    except Exception:
+        pass
+    fmt = (request.args.get("format") or "").strip().lower()
+    if fmt == "json":
         return True
     accept = (request.headers.get("Accept") or "").lower()
-    return "application/json" in accept
+    if "application/json" in accept:
+        return True
+    try:
+        best = request.accept_mimetypes.best_match(["application/json", "text/html"])
+        return best == "application/json" and request.accept_mimetypes[best] > request.accept_mimetypes["text/html"]
+    except Exception:
+        return False
 
 
 def _safe_get_json() -> Dict[str, Any]:
     try:
-        if request.content_length and request.content_length > MAX_BODY_BYTES:
+        cl = request.content_length
+        if cl is not None and int(cl) > MAX_BODY_BYTES:
             return {}
-        if request.is_json:
-            data = request.get_json(silent=True)
-            return data if isinstance(data, dict) else {}
+        data = request.get_json(silent=True)
+        return data if isinstance(data, dict) else {}
     except Exception:
-        pass
-    return {}
+        return {}
 
 
 def _no_store(resp):
-    resp.headers.setdefault("Cache-Control", "no-store")
-    resp.headers.setdefault("Pragma", "no-cache")
-    resp.headers.setdefault("Vary", "Cookie")
-    resp.headers.setdefault("X-Frame-Options", "DENY")
-    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+    try:
+        for k, v in _CACHE_HEADERS.items():
+            resp.headers.setdefault(k, v)
+    except Exception:
+        pass
     return resp
 
 
 def _json_or_html(payload: Dict[str, Any], html_fn):
-    return jsonify(payload) if _wants_json() else html_fn()
+    if _wants_json():
+        return jsonify(payload)
+    return html_fn()
 
 
 def _is_safe_next(target: Optional[str]) -> bool:
-    if not target or not target.startswith("/") or target.startswith("//"):
+    if not target:
+        return False
+    t = str(target).strip()
+    if not t.startswith("/") or t.startswith("//"):
+        return False
+    if any(x in t for x in ("\x00", "\\", "\r", "\n", "\t", " ")):
+        return False
+    if ".." in t:
         return False
     try:
         ref = urlparse(request.host_url)
-        test = urlparse(urljoin(request.host_url, target))
+        test = urlparse(urljoin(request.host_url, t))
         return test.scheme == ref.scheme and test.netloc == ref.netloc
     except Exception:
         return False
 
 
 def _next_url(default: str = "/account") -> str:
-    nxt = (request.args.get("next") or request.form.get("next") or "").strip()
+    nxt = (request.values.get("next") or "").strip()
     return nxt if _is_safe_next(nxt) else default
 
 
@@ -156,16 +158,17 @@ def _redirect_auth_account(tab: str, nxt: str):
     tab = tab if tab in {"login", "register"} else "login"
     nxt = nxt if _is_safe_next(nxt) else "/account"
     try:
-        return redirect(url_for("auth.account", tab=tab, next=nxt))
+        return redirect(url_for("auth.account", tab=tab, next=nxt), code=302)
     except Exception:
-        return redirect(f"/auth/account?{urlencode({'tab': tab, 'next': nxt})}")
+        return redirect(f"/auth/account?{urlencode({'tab': tab, 'next': nxt})}", code=302)
 
 
 def _ensure_csrf_token() -> str:
     tok = session.get("csrf_token")
-    if not tok:
+    if not isinstance(tok, str) or not tok:
         tok = secrets.token_urlsafe(32)
         session["csrf_token"] = tok
+        session.modified = True
     return tok
 
 
@@ -174,45 +177,79 @@ def _csrf_ok_fallback() -> bool:
         return True
     if not REQUIRE_CSRF_FALLBACK:
         return True
-    sent = (
-        request.form.get("csrf_token")
-        or request.headers.get("X-CSRF-Token")
-        or _safe_get_json().get("csrf_token")
-    )
-    return bool(sent and secrets.compare_digest(str(sent), session.get("csrf_token", "")))
+    sess = session.get("csrf_token")
+    if not isinstance(sess, str) or not sess:
+        return False
+    sent = request.form.get("csrf_token") or request.headers.get("X-CSRF-Token")
+    if not sent:
+        sent = _safe_get_json().get("csrf_token")
+    if not sent:
+        return False
+    try:
+        return secrets.compare_digest(str(sent), sess)
+    except Exception:
+        return False
 
 
 def _rate_limit_ok(key: str) -> bool:
     now = time.time()
-    last = session.get(key, 0.0)
-    if (now - float(last)) < RL_COOLDOWN_SEC:
+    state = session.get(key)
+    if not isinstance(state, dict):
+        state = {"t": now, "n": 0}
+    t0 = float(state.get("t") or now)
+    n = int(state.get("n") or 0)
+
+    if (now - t0) >= float(RL_WINDOW):
+        state = {"t": now, "n": 0}
+        t0 = now
+        n = 0
+
+    if n >= int(RL_BURST):
         return False
-    session[key] = now
+
+    last_hit = float(state.get("last") or 0.0)
+    if (now - last_hit) < float(RL_COOLDOWN_SEC):
+        return False
+
+    state["n"] = n + 1
+    state["last"] = now
+    session[key] = state
+    session.modified = True
     return True
 
 
 def _get_current_user() -> Optional[User]:
     try:
-        uid = int(session.get("user_id", 0))
+        uid = int(session.get("user_id") or 0)
+        if uid <= 0:
+            return None
         return db.session.execute(select(User).where(User.id == uid)).scalar_one_or_none()
     except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         return None
 
 
 def _require_login():
-    return None if _get_current_user() else _redirect_auth_account("login", _next_url())
+    if _get_current_user():
+        return None
+    return _redirect_auth_account("login", _next_url())
 
 
-# ============================================================
-# Hooks
-# ============================================================
 @account_bp.before_request
 def _before_account():
+    _ensure_csrf_token()
     if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
         if not _rate_limit_ok("acct_write"):
-            return jsonify({"ok": False, "error": "rate_limited"}), 429
+            if _wants_json():
+                return jsonify({"ok": False, "error": "rate_limited"}), 429
+            return _redirect_auth_account("login", _next_url())
         if not _csrf_ok_fallback():
-            return jsonify({"ok": False, "error": "csrf_failed"}), 400
+            if _wants_json():
+                return jsonify({"ok": False, "error": "csrf_failed"}), 400
+            return redirect(_next_url("/account"), code=302)
     return None
 
 
@@ -221,21 +258,19 @@ def _after_account(resp):
     return _no_store(resp)
 
 
-# ============================================================
-# Routes
-# ============================================================
 @account_bp.get("/")
 def account_home():
-    _ensure_csrf_token()
     guard = _require_login()
     if guard:
         return guard
 
     u = _get_current_user()
-    tpl = "account/dashboard.html" if _template_exists("account/dashboard.html") else "account/account.html"
+    if not u:
+        return _redirect_auth_account("login", _next_url())
 
+    tpl = "account/dashboard.html" if _template_exists("account/dashboard.html") else "account/account.html"
     return _json_or_html(
-        {"ok": True, "user_id": u.id},
+        {"ok": True, "user_id": int(getattr(u, "id", 0) or 0)},
         lambda: render_template(tpl, user=u, csrf_token_value=session.get("csrf_token")),
     )
 
