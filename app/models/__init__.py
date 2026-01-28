@@ -3,10 +3,12 @@
 import logging
 import os
 import threading
+from dataclasses import dataclass
 from typing import Any, Dict, Optional, Set
 
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import text as sa_text
 from sqlalchemy.exc import OperationalError, ProgrammingError
 
 log = logging.getLogger("models")
@@ -20,16 +22,11 @@ _INIT_LOCK = threading.RLock()
 _LOADED_MODELS: Optional[Dict[str, Any]] = None
 _MODELS_INIT_ONCE_OK = False
 
+_SQLA_EXT_KEY = "sqlalchemy"
 
-try:
-    from sqlalchemy import text as _sa_text
 
-    def text(sql: str):
-        return _sa_text(sql)
-
-except Exception:
-    def text(sql: str):
-        raise RuntimeError("sqlalchemy.text no disponible")
+def text(sql: str):
+    return sa_text(sql)
 
 
 def _env_flag(name: str, default: bool) -> bool:
@@ -54,7 +51,8 @@ def _app_env(app: Flask) -> str:
         or (app.config.get("ENVIRONMENT") or "")
         or (os.getenv("ENV") or "")
         or (os.getenv("FLASK_ENV") or "")
-    ).lower().strip()
+    )
+    env = str(env).lower().strip()
 
     if env in {"prod", "production"}:
         return "production"
@@ -101,7 +99,7 @@ def _ensure_db_uri(app: Flask) -> str:
 
 
 def _db_uri(app: Flask) -> str:
-    return (app.config.get("SQLALCHEMY_DATABASE_URI") or "").strip()
+    return str(app.config.get("SQLALCHEMY_DATABASE_URI") or "").strip()
 
 
 def _db_tables_not_ready_error(e: Exception) -> bool:
@@ -123,19 +121,23 @@ def _ensure_db_registered(app: Flask) -> None:
         app.config.setdefault("SQLALCHEMY_SESSION_OPTIONS", {"expire_on_commit": False})
         app.config.setdefault("SQLALCHEMY_ENGINE_OPTIONS", {"pool_pre_ping": True})
 
-    ext = app.extensions.get("sqlalchemy")
+    ext = app.extensions.get(_SQLA_EXT_KEY)
     if ext is db:
         return
 
     db.init_app(app)
 
-    if app.extensions.get("sqlalchemy") is not db:
+    if app.extensions.get(_SQLA_EXT_KEY) is not db:
         raise RuntimeError("Multiple SQLAlchemy instances detected")
 
 
 def _import_required(module: str, name: str) -> Any:
-    mod = __import__(module, fromlist=[name])
-    return getattr(mod, name)
+    try:
+        mod = __import__(module, fromlist=[name])
+        obj = getattr(mod, name)
+    except Exception as e:
+        raise RuntimeError(f"Failed to import required model {module}:{name}") from e
+    return obj
 
 
 def _import_optional(module: str, name: str) -> Optional[Any]:
@@ -181,16 +183,21 @@ class _ModelProxy:
         self._name = name
 
     def _resolve(self):
-        if not _LOADED_MODELS or self._name not in _LOADED_MODELS:
-            raise RuntimeError(f"Model '{self._name}' not loaded")
-        return _LOADED_MODELS[self._name]
+        loaded = _LOADED_MODELS
+        if not loaded or self._name not in loaded:
+            raise RuntimeError(
+                f"Model '{self._name}' not loaded. "
+                f"Did you call init_models(app) before importing/using model proxies?"
+            )
+        return loaded[self._name]
 
     def __clause_element__(self):
         return self._resolve().__table__
 
     def __sa_inspect__(self):
-        from sqlalchemy.inspection import inspect
-        return inspect(self._resolve())
+        from sqlalchemy.inspection import inspect as _inspect
+
+        return _inspect(self._resolve())
 
     @property
     def __mapper__(self):
@@ -230,60 +237,92 @@ def _ping_db(app: Flask) -> None:
         db.session.rollback()
 
 
+_EMAIL_SIMPLE_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+
+
 def _looks_like_email(email: str) -> bool:
     e = (email or "").strip().lower()
-    if not e or "@" not in e:
+    if not e:
         return False
-    local, _, domain = e.partition("@")
-    return bool(local and domain and "." in domain and " " not in e and ".." not in e)
+    if len(e) > 254:
+        return False
+    return bool(_EMAIL_SIMPLE_RE.match(e))
 
 
-def create_admin_owner_guard(app: Flask) -> Dict[str, Any]:
-    loaded = _LOADED_MODELS or {}
-    UserModel = loaded.get("User")
-    if not UserModel:
-        return {"ok": False}
+@dataclass(frozen=True)
+class AdminBootstrap:
+    email: str
+    password: str
+    name: str
 
+
+def _get_admin_bootstrap(app: Flask) -> Optional[AdminBootstrap]:
     if _env_flag("SKIP_ADMIN_BOOTSTRAP", False) or app.config.get("TESTING"):
-        return {"skipped": True}
+        return None
 
     email = _env_str("ADMIN_EMAIL").lower()
     password = _env_str("ADMIN_PASSWORD")
     name = _env_str("ADMIN_NAME", "Admin")
 
     if not _looks_like_email(email):
-        return {"ok": False}
+        return None
 
     if _is_production(app) and len(password) < 12:
-        return {"ok": False}
+        return None
+
+    if len(password) < 8:
+        return None
+
+    return AdminBootstrap(email=email, password=password, name=name)
+
+
+def create_admin_owner_guard(app: Flask) -> Dict[str, Any]:
+    loaded = _LOADED_MODELS or {}
+    UserModel = loaded.get("User")
+    if not UserModel:
+        return {"ok": False, "reason": "User model not loaded"}
+
+    bootstrap = _get_admin_bootstrap(app)
+    if bootstrap is None:
+        return {"skipped": True}
 
     with app.app_context():
         try:
             _ensure_db_registered(app)
-            existing = db.session.query(UserModel).filter_by(email=email).first()
+            existing = db.session.query(UserModel).filter_by(email=bootstrap.email).first()
         except (OperationalError, ProgrammingError) as e:
             if _db_tables_not_ready_error(e):
                 return {"skipped": True}
-            return {"ok": False}
+            return {"ok": False, "reason": "db error"}
 
         if existing:
             for f in ("is_admin", "is_active", "email_verified"):
                 if hasattr(existing, f):
                     setattr(existing, f, True)
-            db.session.commit()
+            try:
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+                raise
             return {"ok": True, "created": False}
 
-        if len(password) < 8:
-            return {"ok": False}
-
-        u = UserModel(name=name, email=email)
+        u = UserModel(name=bootstrap.name, email=bootstrap.email)
         if hasattr(u, "set_password"):
-            u.set_password(password)
-        u.is_admin = True
-        u.is_active = True
-        u.email_verified = True
+            u.set_password(bootstrap.password)
+        if hasattr(u, "is_admin"):
+            u.is_admin = True
+        if hasattr(u, "is_active"):
+            u.is_active = True
+        if hasattr(u, "email_verified"):
+            u.email_verified = True
+
         db.session.add(u)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            raise
+
         return {"ok": True, "created": True}
 
 
@@ -306,8 +345,9 @@ def init_models(
         loaded = _load_models(force=force_reload_models)
 
         required: Set[str] = {"User", "Category", "Product", "Order", "OrderItem"}
-        if not required.issubset(set(loaded)):
-            raise RuntimeError("Missing core models")
+        missing = sorted(required.difference(set(loaded)))
+        if missing:
+            raise RuntimeError(f"Missing core models: {', '.join(missing)}")
 
         if ping_db:
             _ping_db(app)
@@ -342,7 +382,7 @@ def create_admin_if_missing(app: Flask) -> Dict[str, Any]:
     return create_admin_owner_guard(app)
 
 
-__all__ = [
+__all__ = (
     "db",
     "text",
     "init_models",
@@ -363,4 +403,4 @@ __all__ = [
     "CampaignSend",
     "CommissionLedgerEntry",
     "CommissionPayout",
-]
+)
