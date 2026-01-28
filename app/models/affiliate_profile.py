@@ -15,30 +15,44 @@ def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
-HANDLE_RE = re.compile(r"^[a-zA-Z0-9._]{2,64}$")
-ALLOWED_STATUS = {"pending", "approved", "rejected"}
+_HANDLE_RE = re.compile(r"^[a-zA-Z0-9._]{2,64}$")
+_ALLOWED_STATUS = {"pending", "approved", "rejected"}
+
+_DISPLAY_NAME_MAX = 120
+_PHONE_MAX = 40
+_HANDLE_MAX = 120
+_URL_MAX = 200
+_PAYOUT_METHOD_MAX = 40
+_PAYOUT_DETAILS_MAX = 4000
+_REF_CODE_MAX = 32
+_REF_CODE_TRIES = 30
 
 
-def _safe_strip(v: Any) -> Optional[str]:
+def _strip(v: Any) -> Optional[str]:
     if v is None:
         return None
-    s = str(v).strip()
-    return s if s else None
-
-
-def _clamp(s: Optional[str], max_len: int) -> Optional[str]:
+    s = str(v).replace("\x00", "").replace("\u200b", "").strip()
     if not s:
         return None
-    return s[:max_len]
+    s = " ".join(s.split())
+    return s
 
 
-def _normalize_status(v: Any) -> str:
-    s = (_safe_strip(v) or "pending").lower()
-    return s if s in ALLOWED_STATUS else "pending"
+def _clip(s: Optional[str], n: int) -> Optional[str]:
+    if not s:
+        return None
+    if n <= 0:
+        return None
+    return s[:n]
+
+
+def _status(v: Any) -> str:
+    s = (_strip(v) or "pending").lower()
+    return s if s in _ALLOWED_STATUS else "pending"
 
 
 def _clean_phone(v: Any) -> Optional[str]:
-    s = _safe_strip(v)
+    s = _strip(v)
     if not s:
         return None
     keep = []
@@ -46,33 +60,54 @@ def _clean_phone(v: Any) -> Optional[str]:
         if ch.isdigit() or ch in {"+", " ", "(", ")", "-"}:
             keep.append(ch)
     out = "".join(keep).strip()
-    return out[:40] if out else None
+    if not out:
+        return None
+    out = " ".join(out.split())
+    return out[:_PHONE_MAX]
 
 
-def _normalize_handle_or_url(v: Any, max_len: int) -> Optional[str]:
-    s = _safe_strip(v)
+def _clean_handle(v: Any, *, max_len: int = _HANDLE_MAX) -> Optional[str]:
+    s = _strip(v)
     if not s:
         return None
     s = s.replace(" ", "")
     if s.startswith("@"):
         s = s[1:]
-    if HANDLE_RE.match(s):
-        return s[:max_len]
-    return s[:max_len]
+    s = _clip(s, max_len)
+    return s if (s and _HANDLE_RE.match(s)) else s
 
 
-def _normalize_url(v: Any, max_len: int = 200) -> Optional[str]:
-    s = _safe_strip(v)
-    return s[:max_len] if s else None
+def _clean_url(v: Any, *, max_len: int = _URL_MAX) -> Optional[str]:
+    s = _strip(v)
+    if not s:
+        return None
+    return _clip(s, max_len)
 
 
 def _token_ref_code() -> str:
-    raw = secrets.token_urlsafe(10)
-    return raw.replace("-", "").replace("_", "")[:16]
+    raw = secrets.token_urlsafe(12)
+    raw = raw.replace("-", "").replace("_", "")
+    return (raw[:16] if len(raw) >= 16 else (raw + secrets.token_hex(8))[:16])
+
+
+def _normalize_ref_code(v: Any) -> Optional[str]:
+    s = _strip(v)
+    if not s:
+        return None
+    s = s.replace(" ", "").strip()
+    s = s.replace("-", "").replace("_", "")
+    s = "".join(ch for ch in s if ch.isalnum())
+    if not s:
+        return None
+    return s[:_REF_CODE_MAX]
 
 
 class AffiliateProfile(db.Model):
     __tablename__ = "affiliate_profiles"
+
+    STATUS_PENDING = "pending"
+    STATUS_APPROVED = "approved"
+    STATUS_REJECTED = "rejected"
 
     id = db.Column(db.Integer, primary_key=True)
 
@@ -84,17 +119,17 @@ class AffiliateProfile(db.Model):
         index=True,
     )
 
-    status = db.Column(db.String(20), nullable=False, default="pending", index=True)
-    ref_code = db.Column(db.String(32), nullable=False, unique=True, index=True)
+    status = db.Column(db.String(20), nullable=False, default=STATUS_PENDING, index=True)
+    ref_code = db.Column(db.String(_REF_CODE_MAX), nullable=False, unique=True, index=True)
 
-    display_name = db.Column(db.String(120), nullable=True)
-    phone = db.Column(db.String(40), nullable=True)
+    display_name = db.Column(db.String(_DISPLAY_NAME_MAX), nullable=True)
+    phone = db.Column(db.String(_PHONE_MAX), nullable=True)
 
-    instagram = db.Column(db.String(120), nullable=True)
-    tiktok = db.Column(db.String(120), nullable=True)
-    website = db.Column(db.String(200), nullable=True)
+    instagram = db.Column(db.String(_HANDLE_MAX), nullable=True)
+    tiktok = db.Column(db.String(_HANDLE_MAX), nullable=True)
+    website = db.Column(db.String(_URL_MAX), nullable=True)
 
-    payout_method = db.Column(db.String(40), nullable=True)
+    payout_method = db.Column(db.String(_PAYOUT_METHOD_MAX), nullable=True)
     payout_details = db.Column(db.Text, nullable=True)
 
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, index=True)
@@ -107,11 +142,10 @@ class AffiliateProfile(db.Model):
             "status IN ('pending','approved','rejected')",
             name="ck_affiliate_status_allowed",
         ),
+        CheckConstraint("length(ref_code) <= 32", name="ck_affiliate_ref_len"),
+        Index("ix_affiliate_profiles_status_created", "status", "created_at"),
+        Index("ix_affiliate_profiles_user_status", "user_id", "status"),
     )
-
-    STATUS_PENDING = "pending"
-    STATUS_APPROVED = "approved"
-    STATUS_REJECTED = "rejected"
 
     @property
     def is_pending(self) -> bool:
@@ -127,15 +161,15 @@ class AffiliateProfile(db.Model):
 
     @property
     def display_label(self) -> str:
-        dn = _safe_strip(self.display_name)
+        dn = _strip(self.display_name)
         if dn:
             return dn
         u = getattr(self, "user", None)
         if u is not None:
-            nm = _safe_strip(getattr(u, "name", None))
+            nm = _strip(getattr(u, "name", None))
             if nm:
                 return nm
-            em = _safe_strip(getattr(u, "email", None))
+            em = _strip(getattr(u, "email", None))
             if em and "@" in em:
                 return em.split("@", 1)[0]
         return "Afiliado"
@@ -145,19 +179,32 @@ class AffiliateProfile(db.Model):
         return _token_ref_code()
 
     @classmethod
-    def ensure_unique_ref_code(cls, max_tries: int = 20) -> str:
-        for _ in range(max_tries):
+    def ensure_unique_ref_code(cls, max_tries: int = _REF_CODE_TRIES) -> str:
+        tries = _clamp(max_tries, 3)
+        n = int(tries or _REF_CODE_TRIES)
+        for _ in range(max(3, n)):
             code = cls.generate_ref_code()
             exists = db.session.query(cls.id).filter_by(ref_code=code).first()
             if not exists:
                 return code
-        return secrets.token_hex(10)[:20]
+        return secrets.token_hex(12)[:_REF_CODE_MAX]
 
     def ensure_ref_code(self) -> str:
-        if not _safe_strip(self.ref_code):
+        current = _normalize_ref_code(self.ref_code)
+        if not current:
             self.ref_code = self.ensure_unique_ref_code()
-        else:
-            self.ref_code = _clamp(_safe_strip(self.ref_code), 32) or self.ensure_unique_ref_code()
+            return self.ref_code
+
+        if current != self.ref_code:
+            self.ref_code = current
+
+        exists = (
+            db.session.query(AffiliateProfile.id)
+            .filter(AffiliateProfile.ref_code == self.ref_code, AffiliateProfile.id != (self.id or 0))
+            .first()
+        )
+        if exists:
+            self.ref_code = self.ensure_unique_ref_code()
         return self.ref_code
 
     @classmethod
@@ -178,13 +225,20 @@ class AffiliateProfile(db.Model):
         existing = cls.query.filter_by(user_id=uid).first()
         if existing:
             if keep_existing:
-                existing.display_name = display_name or existing.display_name
-                existing.phone = phone or existing.phone
-                existing.instagram = instagram or existing.instagram
-                existing.tiktok = tiktok or existing.tiktok
-                existing.website = website or existing.website
-                existing.payout_method = payout_method or existing.payout_method
-                existing.payout_details = payout_details or existing.payout_details
+                if display_name is not None:
+                    existing.display_name = display_name
+                if phone is not None:
+                    existing.phone = phone
+                if instagram is not None:
+                    existing.instagram = instagram
+                if tiktok is not None:
+                    existing.tiktok = tiktok
+                if website is not None:
+                    existing.website = website
+                if payout_method is not None:
+                    existing.payout_method = payout_method
+                if payout_details is not None:
+                    existing.payout_details = payout_details
             else:
                 existing.display_name = display_name
                 existing.phone = phone
@@ -193,8 +247,9 @@ class AffiliateProfile(db.Model):
                 existing.website = website
                 existing.payout_method = payout_method
                 existing.payout_details = payout_details
-            existing.status = _normalize_status(existing.status)
-            existing.ensure_ref_code()
+
+            existing.status = _status(existing.status)
+            existing.prepare_for_save()
             return existing
 
         p = cls(
@@ -228,47 +283,51 @@ class AffiliateProfile(db.Model):
         self.status = self.STATUS_PENDING
 
     def payout_details_masked(self) -> Optional[str]:
-        txt = _safe_strip(self.payout_details)
+        txt = _strip(self.payout_details)
         if not txt:
             return None
-        if len(txt) <= 8:
-            return "*" * len(txt)
-        core = "*" * min(12, max(0, len(txt) - 6))
-        return txt[:3] + core + txt[-3:]
+        t = txt.strip()
+        if len(t) <= 8:
+            return "*" * len(t)
+        core_len = max(0, len(t) - 6)
+        core = "*" * min(24, core_len)
+        return t[:3] + core + t[-3:]
 
     def is_ready_for_payout(self) -> bool:
         if not self.is_approved:
             return False
-        return bool(_safe_strip(self.payout_method)) and bool(_safe_strip(self.payout_details))
+        return bool(_strip(self.payout_method)) and bool(_strip(self.payout_details))
 
     def prepare_for_save(self) -> None:
-        self.status = _normalize_status(self.status)
-        self.ensure_ref_code()
-
-        self.display_name = _clamp(_safe_strip(self.display_name), 120)
+        self.status = _status(self.status)
+        self.display_name = _clip(_strip(self.display_name), _DISPLAY_NAME_MAX)
         self.phone = _clean_phone(self.phone)
 
-        self.instagram = _normalize_handle_or_url(self.instagram, 120)
-        self.tiktok = _normalize_handle_or_url(self.tiktok, 120)
-        self.website = _normalize_url(self.website, 200)
+        self.instagram = _clean_handle(self.instagram, max_len=_HANDLE_MAX)
+        self.tiktok = _clean_handle(self.tiktok, max_len=_HANDLE_MAX)
+        self.website = _clean_url(self.website, max_len=_URL_MAX)
 
-        pm = _safe_strip(self.payout_method)
-        self.payout_method = pm.lower()[:40] if pm else None
+        pm = _strip(self.payout_method)
+        self.payout_method = (pm.lower()[:_PAYOUT_METHOD_MAX] if pm else None)
 
-        pd = _safe_strip(self.payout_details)
-        self.payout_details = pd[:4000] if pd else None
+        pd = _strip(self.payout_details)
+        self.payout_details = (pd[:_PAYOUT_DETAILS_MAX] if pd else None)
 
-        if self.status != self.STATUS_APPROVED:
-            if self.approved_at is not None:
-                self.approved_at = self.approved_at
+        if self.status == self.STATUS_APPROVED:
+            if not self.approved_at:
+                self.approved_at = utcnow()
+        else:
+            self.approved_at = None
+
+        self.ensure_ref_code()
 
     @validates("status")
     def _v_status(self, _k: str, v: Any) -> str:
-        return _normalize_status(v)
+        return _status(v)
 
     @validates("display_name")
     def _v_display_name(self, _k: str, v: Any) -> Optional[str]:
-        return _clamp(_safe_strip(v), 120)
+        return _clip(_strip(v), _DISPLAY_NAME_MAX)
 
     @validates("phone")
     def _v_phone(self, _k: str, v: Any) -> Optional[str]:
@@ -276,30 +335,37 @@ class AffiliateProfile(db.Model):
 
     @validates("instagram")
     def _v_instagram(self, _k: str, v: Any) -> Optional[str]:
-        return _normalize_handle_or_url(v, 120)
+        return _clean_handle(v, max_len=_HANDLE_MAX)
 
     @validates("tiktok")
     def _v_tiktok(self, _k: str, v: Any) -> Optional[str]:
-        return _normalize_handle_or_url(v, 120)
+        return _clean_handle(v, max_len=_HANDLE_MAX)
 
     @validates("website")
     def _v_website(self, _k: str, v: Any) -> Optional[str]:
-        return _normalize_url(v, 200)
+        return _clean_url(v, max_len=_URL_MAX)
 
     @validates("payout_method")
     def _v_payout_method(self, _k: str, v: Any) -> Optional[str]:
-        s = _safe_strip(v)
-        return s.lower()[:40] if s else None
+        s = _strip(v)
+        return s.lower()[:_PAYOUT_METHOD_MAX] if s else None
 
     @validates("payout_details")
     def _v_payout_details(self, _k: str, v: Any) -> Optional[str]:
-        s = _safe_strip(v)
-        return s[:4000] if s else None
+        s = _strip(v)
+        return s[:_PAYOUT_DETAILS_MAX] if s else None
 
     @validates("ref_code")
     def _v_ref_code(self, _k: str, v: Any) -> str:
-        s = (_safe_strip(v) or "").strip()
-        return s[:32]
+        return _normalize_ref_code(v) or self.ensure_unique_ref_code()
+
+    def referral_path(self) -> str:
+        rc = _strip(self.ref_code) or ""
+        return f"/r/{rc}"
+
+    def referral_url(self, base_url: str) -> str:
+        b = (base_url or "").strip().rstrip("/")
+        return f"{b}{self.referral_path()}" if b else self.referral_path()
 
     def as_admin_dict(self) -> Dict[str, Any]:
         return {
@@ -335,13 +401,6 @@ class AffiliateProfile(db.Model):
             "approved_at": self.approved_at.isoformat() if self.approved_at else None,
         }
 
-    def referral_path(self) -> str:
-        return f"/r/{self.ref_code}"
-
-    def referral_url(self, base_url: str) -> str:
-        b = (base_url or "").rstrip("/")
-        return f"{b}{self.referral_path()}" if b else self.referral_path()
-
     def __repr__(self) -> str:
         return (
             f"<AffiliateProfile id={self.id} user_id={self.user_id} "
@@ -349,15 +408,10 @@ class AffiliateProfile(db.Model):
         )
 
 
-Index("ix_affiliate_profiles_status_created", AffiliateProfile.status, AffiliateProfile.created_at)
-Index("ix_affiliate_profiles_user_status", AffiliateProfile.user_id, AffiliateProfile.status)
-
-
 @event.listens_for(AffiliateProfile, "before_insert", propagate=True)
-def _aff_before_insert(_mapper, _conn, target: AffiliateProfile):
-    target.prepare_for_save()
-
-
 @event.listens_for(AffiliateProfile, "before_update", propagate=True)
-def _aff_before_update(_mapper, _conn, target: AffiliateProfile):
+def _aff_before_save(_mapper, _conn, target: AffiliateProfile) -> None:
     target.prepare_for_save()
+
+
+__all__ = ["AffiliateProfile", "utcnow"]

@@ -39,18 +39,18 @@ _FALSE = {"0", "false", "no", "n", "off", "unchecked"}
 
 SAFE_STATUSES = {"active", "inactive", "draft"}
 
-MAX_ADMIN_ATTEMPTS = int(os.getenv("ADMIN_MAX_ATTEMPTS", "6") or "6")
-ADMIN_LOCK_SECONDS = int(os.getenv("ADMIN_LOCK_SECONDS", "600") or "600")
-ADMIN_RATE_SECONDS = float(os.getenv("ADMIN_RATE_SECONDS", "1.5") or "1.5")
-ADMIN_FRESH_SECONDS = int(os.getenv("ADMIN_FRESH_SECONDS", "1800") or "1800")
+_MAX_ADMIN_ATTEMPTS = int(os.getenv("ADMIN_MAX_ATTEMPTS", "6") or "6")
+_ADMIN_LOCK_SECONDS = int(os.getenv("ADMIN_LOCK_SECONDS", "600") or "600")
+_ADMIN_RATE_SECONDS = float(os.getenv("ADMIN_RATE_SECONDS", "1.5") or "1.5")
+_ADMIN_FRESH_SECONDS = int(os.getenv("ADMIN_FRESH_SECONDS", "1800") or "1800")
 
-UPLOAD_MAX_MB_PRODUCTS = int(os.getenv("UPLOAD_MAX_MB_PRODUCTS", "8") or "8")
-UPLOAD_MAX_MB_OFFERS = int(os.getenv("UPLOAD_MAX_MB_OFFERS", "25") or "25")
+_UPLOAD_MAX_MB_PRODUCTS = int(os.getenv("UPLOAD_MAX_MB_PRODUCTS", "8") or "8")
+_UPLOAD_MAX_MB_OFFERS = int(os.getenv("UPLOAD_MAX_MB_OFFERS", "25") or "25")
 
-ALLOWED_IMAGES = {"png", "jpg", "jpeg", "webp"}
-ALLOWED_MEDIA = ALLOWED_IMAGES | {"mp4", "webm"}
+_ALLOWED_IMAGES = {"png", "jpg", "jpeg", "webp"}
+_ALLOWED_MEDIA = _ALLOWED_IMAGES | {"mp4", "webm"}
 
-MIME_ALLOW: Dict[str, set[str]] = {
+_MIME_ALLOW: Dict[str, set[str]] = {
     "images": {"image/png", "image/jpeg", "image/webp"},
     "media": {"image/png", "image/jpeg", "image/webp", "video/mp4", "video/webm"},
 }
@@ -70,33 +70,6 @@ _DEC_RATE_MAX = Decimal("0.8000")
 
 def utcnow_ts() -> int:
     return int(time.time())
-
-
-def _logger():
-    try:
-        return current_app.logger
-    except Exception:
-        return None
-
-
-def _log(msg: str) -> None:
-    lg = _logger()
-    if not lg:
-        return
-    try:
-        lg.info("%s", msg)
-    except Exception:
-        pass
-
-
-def _log_exc(msg: str) -> None:
-    lg = _logger()
-    if not lg:
-        return
-    try:
-        lg.exception("%s", msg)
-    except Exception:
-        pass
 
 
 def _clean_str(v: Any, max_len: int, *, default: str = "") -> str:
@@ -197,7 +170,7 @@ def _safe_url_for(endpoint: str, **kwargs: Any) -> Optional[str]:
 
 def _redir(endpoint: str, **kwargs: Any) -> Response:
     u = _safe_url_for(endpoint, **kwargs)
-    return redirect(u or "/admin")
+    return redirect(u or "/admin", code=302)
 
 
 def _json_ok(**payload: Any):
@@ -217,7 +190,7 @@ def _flash_ok(msg: str) -> None:
 
 
 def _flash_warn(msg: str) -> None:
-    flash(_clean_str(msg, 240, default="Atencion"), "warning")
+    flash(_clean_str(msg, 240, default="Atención"), "warning")
 
 
 def _flash_err(msg: str) -> None:
@@ -233,8 +206,12 @@ def _no_store(resp: Response) -> Response:
         resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
         resp.headers.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
         vary = resp.headers.get("Vary", "")
-        if "Accept" not in vary:
-            resp.headers["Vary"] = (vary + ", Accept").strip(", ").strip()
+        parts = [p.strip() for p in vary.split(",") if p.strip()]
+        if "Accept" not in parts:
+            parts.append("Accept")
+        if "Cookie" not in parts:
+            parts.append("Cookie")
+        resp.headers["Vary"] = ", ".join(parts)
     except Exception:
         pass
     return resp
@@ -252,8 +229,8 @@ def _render_safe(template: str, **ctx: Any):
     if _template_exists(template):
         try:
             return render_template(template, **ctx)
-        except Exception as e:
-            _log_exc(f"render_template failed: {template} ({e})")
+        except Exception:
+            pass
     title = _clean_str(ctx.get("title") or "Admin", 120, default="Admin")
     body = (
         "<!doctype html><html lang='es'><head><meta charset='utf-8'>"
@@ -313,10 +290,7 @@ def _require_csrf() -> None:
 
 @admin_bp.before_request
 def _admin_before_request():
-    try:
-        _ensure_csrf()
-    except Exception:
-        pass
+    _ensure_csrf()
 
 
 @admin_bp.after_request
@@ -326,7 +300,7 @@ def _admin_after_request(resp: Response):
 
 @admin_bp.context_processor
 def _inject_csrf():
-    return {"csrf_token": session.get("csrf_token", "")}
+    return {"csrf_token_value": session.get("csrf_token", "")}
 
 
 def _commit_ok() -> bool:
@@ -338,7 +312,6 @@ def _commit_ok() -> bool:
             db.session.rollback()
         except Exception:
             pass
-        _log_exc("DB commit failed")
         return False
 
 
@@ -357,7 +330,7 @@ def _admin_rate_ok() -> bool:
         last_f = float(last)
     except Exception:
         last_f = 0.0
-    if (now - last_f) < ADMIN_RATE_SECONDS:
+    if (now - last_f) < _ADMIN_RATE_SECONDS:
         return False
     session["admin_last_try"] = now
     session.modified = True
@@ -375,8 +348,8 @@ def _admin_locked() -> Tuple[bool, int]:
 
 
 def _admin_lock(fails: int) -> None:
-    extra = min(ADMIN_LOCK_SECONDS, max(0, fails - MAX_ADMIN_ATTEMPTS) * 30)
-    session["admin_locked_until"] = time.time() + ADMIN_LOCK_SECONDS + extra
+    extra = min(_ADMIN_LOCK_SECONDS, max(0, fails - _MAX_ADMIN_ATTEMPTS) * 30)
+    session["admin_locked_until"] = time.time() + _ADMIN_LOCK_SECONDS + extra
     session.modified = True
 
 
@@ -403,6 +376,7 @@ def _admin_login_success(email: str) -> None:
     session["admin_login_at"] = utcnow_ts()
     session["csrf_token"] = secrets.token_urlsafe(32) if not old_csrf else secrets.token_urlsafe(32)
     session.permanent = True
+    session.modified = True
     _admin_failed_reset()
 
 
@@ -412,7 +386,7 @@ def _admin_is_fresh() -> bool:
         ts_i = int(ts)
     except Exception:
         return False
-    return (utcnow_ts() - ts_i) <= ADMIN_FRESH_SECONDS
+    return (utcnow_ts() - ts_i) <= _ADMIN_FRESH_SECONDS
 
 
 def _unique_slug(model, slug: str, *, id_exclude: Optional[int] = None, max_tries: int = 12) -> str:
@@ -499,12 +473,12 @@ def save_upload(file, kind: str, allow_ext: set[str]) -> Optional[str]:
     if ext not in allow_ext:
         raise ValueError("Formato no permitido")
 
-    max_mb = UPLOAD_MAX_MB_PRODUCTS if kind2 == "products" else UPLOAD_MAX_MB_OFFERS
+    max_mb = _UPLOAD_MAX_MB_PRODUCTS if kind2 == "products" else _UPLOAD_MAX_MB_OFFERS
     if _file_too_large(file, max_mb):
         raise ValueError(f"Archivo muy grande (max {max_mb}MB)")
 
     mimetype = (getattr(file, "mimetype", "") or "").lower().strip()
-    allowed_m = MIME_ALLOW["images"] if kind2 == "products" else MIME_ALLOW["media"]
+    allowed_m = _MIME_ALLOW["images"] if kind2 == "products" else _MIME_ALLOW["media"]
     if mimetype and mimetype not in allowed_m:
         raise ValueError("Tipo de archivo no permitido")
 
@@ -579,7 +553,7 @@ def save_payments(data: Dict[str, Any]) -> None:
 def login():
     if session.get("admin_logged_in"):
         return _redir("admin.dashboard")
-    return _render_safe("admin/login.html", csrf_token=_csrf_token())
+    return _render_safe("admin/login.html", csrf_token_value=_csrf_token())
 
 
 @admin_bp.post("/login")
@@ -590,13 +564,13 @@ def login_post():
     if locked:
         if _wants_json():
             return _json_err("Demasiados intentos", code=429, error="locked", retry_after=left)
-        _flash_err("Demasiados intentos. Espera unos minutos.")
+        _flash_err("Demasiados intentos. Esperá unos minutos.")
         return _redir("admin.login")
 
     if not _admin_rate_ok():
         if _wants_json():
-            return _json_err("Espera un momento", code=429, error="rate_limited")
-        _flash_warn("Espera un momento antes de intentar de nuevo.")
+            return _json_err("Esperá un momento", code=429, error="rate_limited")
+        _flash_warn("Esperá un momento antes de intentar de nuevo.")
         return _redir("admin.login")
 
     email = _clean_str(request.form.get("email"), _MAX_EMAIL).lower()
@@ -604,11 +578,11 @@ def login_post():
 
     if not admin_creds_ok(email, password):
         n = _admin_failed_inc()
-        if n >= MAX_ADMIN_ATTEMPTS:
+        if n >= _MAX_ADMIN_ATTEMPTS:
             _admin_lock(n)
         if _wants_json():
-            return _json_err("Credenciales invalidas", code=401, error="invalid_creds")
-        _flash_err("Credenciales invalidas")
+            return _json_err("Credenciales inválidas", code=401, error="invalid_creds")
+        _flash_err("Credenciales inválidas")
         return _redir("admin.login")
 
     _admin_login_success(email)
@@ -623,7 +597,7 @@ def logout():
     session.clear()
     if _wants_json():
         return _json_ok()
-    _flash_ok("Sesion cerrada")
+    _flash_ok("Sesión cerrada")
     return _redir("admin.login")
 
 
@@ -645,7 +619,7 @@ def dashboard():
         prod_count=_count(Product.query),
         cat_count=_count(Category.query),
         offer_count=_count(Offer.query),
-        csrf_token=_csrf_token(),
+        csrf_token_value=_csrf_token(),
         admin_fresh=_admin_is_fresh(),
     )
 
@@ -653,7 +627,7 @@ def dashboard():
 @admin_bp.get("/payments")
 @admin_required
 def payments():
-    return _render_safe("admin/payments.html", data=load_payments(), csrf_token=_csrf_token())
+    return _render_safe("admin/payments.html", data=load_payments(), csrf_token_value=_csrf_token())
 
 
 @admin_bp.post("/payments/save")
@@ -675,11 +649,10 @@ def payments_save():
 
     try:
         save_payments(data)
-        _flash_ok("Metodos de pago guardados")
+        _flash_ok("Métodos de pago guardados")
         if _wants_json():
             return _json_ok()
     except Exception:
-        _log_exc("payments_save failed")
         if _wants_json():
             return _json_err("No se pudo guardar pagos", code=500)
         _flash_err("No se pudo guardar pagos")
@@ -723,7 +696,7 @@ def commission_tiers():
         tiers=items,
         ok=ok,
         issues=issues,
-        csrf_token=_csrf_token(),
+        csrf_token_value=_csrf_token(),
     )
 
 
@@ -735,7 +708,6 @@ def commission_tiers_seed():
         CommissionTier.ensure_default_seed()
         _flash_ok("Tiers default creados")
     except Exception:
-        _log_exc("commission_tiers_seed failed")
         _flash_err("No se pudo hacer seed de tiers")
     return _redir("admin.commission_tiers")
 
@@ -781,7 +753,7 @@ def commission_tiers_new():
         try:
             CommissionTier.validate_integrity()
         except Exception as e:
-            _flash_warn(f"Creado, pero revisa integridad: {_clean_str(e, 180)}")
+            _flash_warn(_clean_str(str(e), 180, default="Integridad a revisar"))
     except Exception:
         try:
             db.session.rollback()
@@ -830,7 +802,7 @@ def commission_tiers_edit(id: int):
         try:
             CommissionTier.validate_integrity()
         except Exception as e:
-            _flash_warn(f"Guardado, pero revisa integridad: {_clean_str(e, 180)}")
+            _flash_warn(_clean_str(str(e), 180, default="Integridad a revisar"))
 
     return _redir("admin.commission_tiers")
 
@@ -851,7 +823,7 @@ def commission_tiers_delete(id: int):
             try:
                 CommissionTier.validate_integrity()
             except Exception as e:
-                _flash_warn(f"Eliminado, pero revisa integridad: {_clean_str(e, 180)}")
+                _flash_warn(_clean_str(str(e), 180, default="Integridad a revisar"))
     except Exception:
         try:
             db.session.rollback()
@@ -873,7 +845,7 @@ def categories():
             db.session.rollback()
         except Exception:
             pass
-    return _render_safe("admin/categories.html", categories=cats, csrf_token=_csrf_token())
+    return _render_safe("admin/categories.html", categories=cats, csrf_token_value=_csrf_token())
 
 
 @admin_bp.post("/categories/new")
@@ -890,13 +862,13 @@ def categories_new():
 
     try:
         db.session.add(Category(name=name, slug=slug))
-        _commit_or_flash("Categoria creada", "No se pudo crear la categoria")
+        _commit_or_flash("Categoría creada", "No se pudo crear la categoría")
     except Exception:
         try:
             db.session.rollback()
         except Exception:
             pass
-        _flash_err("No se pudo crear la categoria")
+        _flash_err("No se pudo crear la categoría")
 
     return _redir("admin.categories")
 
@@ -908,7 +880,7 @@ def categories_edit(id: int):
 
     c = db.session.get(Category, id)
     if not c:
-        _flash_warn("Categoria no encontrada")
+        _flash_warn("Categoría no encontrada")
         return _redir("admin.categories")
 
     name = _clean_str(request.form.get("name"), 120, default="")
@@ -922,7 +894,7 @@ def categories_edit(id: int):
         new_slug = _unique_slug(Category, base, id_exclude=id)
         _safe_set(c, "slug", new_slug)
 
-    _commit_or_flash("Categoria actualizada", "No se pudo actualizar la categoria")
+    _commit_or_flash("Categoría actualizada", "No se pudo actualizar la categoría")
     return _redir("admin.categories")
 
 
@@ -935,13 +907,13 @@ def categories_delete(id: int):
     if c:
         try:
             db.session.delete(c)
-            _commit_or_flash("Categoria eliminada", "No se pudo eliminar la categoria")
+            _commit_or_flash("Categoría eliminada", "No se pudo eliminar la categoría")
         except Exception:
             try:
                 db.session.rollback()
             except Exception:
                 pass
-            _flash_err("No se pudo eliminar la categoria")
+            _flash_err("No se pudo eliminar la categoría")
     return _redir("admin.categories")
 
 
@@ -1018,7 +990,7 @@ def products():
         pages=pages,
         per_page=per_page,
         total=total,
-        csrf_token=_csrf_token(),
+        csrf_token_value=_csrf_token(),
     )
 
 
@@ -1033,7 +1005,7 @@ def products_new():
             db.session.rollback()
         except Exception:
             pass
-    return _render_safe("admin/product_edit.html", product=None, categories=cats, csrf_token=_csrf_token())
+    return _render_safe("admin/product_edit.html", product=None, categories=cats, csrf_token_value=_csrf_token())
 
 
 @admin_bp.post("/products/new")
@@ -1043,7 +1015,7 @@ def products_create():
 
     title = _clean_str(request.form.get("title"), 180, default="")
     if not title:
-        _flash_warn("Titulo requerido")
+        _flash_warn("Título requerido")
         return _redir("admin.products_new")
 
     slug = _unique_slug(Product, _clean_str(request.form.get("slug"), 180, default="") or title)
@@ -1056,9 +1028,9 @@ def products_create():
 
     image_url: Optional[str] = None
     try:
-        image_url = save_upload(request.files.get("image"), "products", ALLOWED_IMAGES)
+        image_url = save_upload(request.files.get("image"), "products", _ALLOWED_IMAGES)
     except Exception as e:
-        _flash_err(_clean_str(e, 220, default="Error subiendo imagen"))
+        _flash_err(_clean_str(str(e), 220, default="Error subiendo imagen"))
 
     p = Product()
     _safe_set(p, "title", title)
@@ -1108,7 +1080,7 @@ def products_edit(id: int):
         except Exception:
             pass
 
-    return _render_safe("admin/product_edit.html", product=p, categories=cats, csrf_token=_csrf_token())
+    return _render_safe("admin/product_edit.html", product=p, categories=cats, csrf_token_value=_csrf_token())
 
 
 @admin_bp.post("/products/edit/<int:id>")
@@ -1151,11 +1123,11 @@ def products_update(id: int):
         _safe_set(p, "category_id", cat_id)
 
     try:
-        img = save_upload(request.files.get("image"), "products", ALLOWED_IMAGES)
+        img = save_upload(request.files.get("image"), "products", _ALLOWED_IMAGES)
         if img:
             _safe_set(p, "image_url", img)
     except Exception as e:
-        _flash_err(_clean_str(e, 220, default="Error subiendo imagen"))
+        _flash_err(_clean_str(str(e), 220, default="Error subiendo imagen"))
 
     _commit_or_flash("Producto actualizado", "No se pudo actualizar el producto")
     return _redir("admin.products_edit", id=id)
@@ -1190,7 +1162,7 @@ def offers():
             db.session.rollback()
         except Exception:
             pass
-    return _render_safe("admin/offers.html", offers=items, csrf_token=_csrf_token())
+    return _render_safe("admin/offers.html", offers=items, csrf_token_value=_csrf_token())
 
 
 @admin_bp.post("/offers/new")
@@ -1200,14 +1172,14 @@ def offers_new():
 
     title = _clean_str(request.form.get("title"), 180, default="")
     if not title:
-        _flash_warn("Titulo requerido")
+        _flash_warn("Título requerido")
         return _redir("admin.offers")
 
     media: Optional[str] = None
     try:
-        media = save_upload(request.files.get("media"), "offers", ALLOWED_MEDIA)
+        media = save_upload(request.files.get("media"), "offers", _ALLOWED_MEDIA)
     except Exception as e:
-        _flash_err(_clean_str(e, 220, default="Error subiendo media"))
+        _flash_err(_clean_str(str(e), 220, default="Error subiendo media"))
 
     o = Offer()
     _safe_set(o, "title", title)

@@ -3,15 +3,14 @@
 import re
 import unicodedata
 from datetime import datetime, timezone
-from decimal import Decimal, InvalidOperation
-from typing import Any, Optional
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from typing import Any, Dict, Optional
 
 from sqlalchemy import CheckConstraint, Index, event, func, select
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import validates
 
 from app.models import db
-
 
 _TITLE_MAX = 180
 _SLUG_MAX = 200
@@ -25,15 +24,19 @@ _TAG_SLUG_MAX = 100
 _SUPPLIER_MAX = 80
 _ALT_MAX = 200
 
-_slug_re = re.compile(r"[^a-z0-9\-]+")
-_space_re = re.compile(r"\s+")
-_dash_re = re.compile(r"-{2,}")
-_strip_tags_re = re.compile(r"<[^>]+>")
-
 _ALLOWED_SOURCE = {"manual", "printful", "dropship", "temu"}
 _ALLOWED_STATUS = {"draft", "active", "hidden"}
 _ALLOWED_STOCK_MODE = {"finite", "unlimited", "external"}
 _ALLOWED_MEDIA_TYPE = {"image", "video"}
+
+_MONEY_Q = Decimal("0.01")
+_MONEY_MAX = Decimal("9999999999.99")
+_STOCK_MAX = 1_000_000
+
+_slug_re = re.compile(r"[^a-z0-9\-]+")
+_space_re = re.compile(r"\s+")
+_dash_re = re.compile(r"-{2,}")
+_strip_tags_re = re.compile(r"<[^>]+>")
 
 
 def utcnow() -> datetime:
@@ -47,6 +50,8 @@ def _clean_text(v: Any, max_len: int, *, default: str = "") -> str:
     if not s:
         return default
     s = " ".join(s.split())
+    if max_len <= 0:
+        return default
     return s[:max_len]
 
 
@@ -55,11 +60,11 @@ def _clean_optional(v: Any, max_len: int) -> Optional[str]:
     return s or None
 
 
-def _clamp_int(v: Any, default: int = 0, min_v: int = 0, max_v: int = 1_000_000) -> int:
+def _clamp_int(v: Any, default: int = 0, *, min_v: int = 0, max_v: int = _STOCK_MAX) -> int:
     try:
-        n = int(v)
+        n = int(str(v).strip())
     except Exception:
-        return default
+        return int(default)
     if n < min_v:
         return min_v
     if n > max_v:
@@ -67,64 +72,66 @@ def _clamp_int(v: Any, default: int = 0, min_v: int = 0, max_v: int = 1_000_000)
     return n
 
 
-def _d(v: Any, default: str = "0.00") -> Decimal:
+def _dec(v: Any, default: Decimal = Decimal("0.00")) -> Decimal:
     try:
         if v is None or v == "":
-            d = Decimal(default)
+            d = default
         elif isinstance(v, Decimal):
             d = v
         else:
-            d = Decimal(str(v))
+            s = str(v).strip().replace(",", ".")
+            d = Decimal(s) if s else default
     except (InvalidOperation, ValueError, TypeError):
-        d = Decimal(default)
-    try:
-        return d.quantize(Decimal("0.01"))
-    except Exception:
-        return Decimal(default)
+        d = default
 
+    if d.is_nan() or d.is_infinite():
+        d = default
 
-def _clamp_money(v: Decimal) -> Decimal:
-    d = v if v >= Decimal("0.00") else Decimal("0.00")
+    if d < Decimal("0.00"):
+        d = Decimal("0.00")
+    if d > _MONEY_MAX:
+        d = _MONEY_MAX
+
     try:
-        return d.quantize(Decimal("0.01"))
+        return d.quantize(_MONEY_Q, rounding=ROUND_HALF_UP)
     except Exception:
-        return Decimal("0.00")
+        return default
 
 
 def _ascii_fold(s: str) -> str:
-    s2 = unicodedata.normalize("NFKD", s)
+    s2 = unicodedata.normalize("NFKD", s or "")
     return "".join(ch for ch in s2 if not unicodedata.combining(ch))
 
 
-def slugify(text: str, max_len: int = _SLUG_MAX) -> str:
+def slugify(text: str, max_len: int = _SLUG_MAX, *, default: str = "product") -> str:
     s = (text or "").strip().lower()
     if not s:
-        return "product"
+        return default[:max_len]
     s = _ascii_fold(s)
     s = _space_re.sub("-", s)
     s = _slug_re.sub("", s)
     s = _dash_re.sub("-", s).strip("-")
-    out = s or "product"
+    out = s or default
     return out[:max_len]
 
 
 def _unique_slug(conn, base_slug: str, product_id: Optional[int] = None) -> str:
-    base = slugify(base_slug or "product", max_len=_SLUG_MAX) or "product"
+    base = slugify(base_slug, max_len=_SLUG_MAX, default="product") or "product"
 
-    def exists(sl: str) -> bool:
+    def _exists(sl: str) -> bool:
         q = select(func.count(Product.id)).where(Product.slug == sl)
-        if product_id:
+        if product_id is not None:
             q = q.where(Product.id != product_id)
         return (conn.execute(q).scalar() or 0) > 0
 
-    if not exists(base):
+    if not _exists(base):
         return base
 
     for i in range(2, 5000):
         suffix = f"-{i}"
         head = base[: max(1, _SLUG_MAX - len(suffix))]
         cand = (head + suffix).strip("-")
-        if not exists(cand):
+        if not _exists(cand):
             return cand
 
     return (base[: max(1, _SLUG_MAX - 2)] + "-x")[:_SLUG_MAX]
@@ -213,7 +220,7 @@ class Product(db.Model):
         if "description" in kwargs and "description_html" not in kwargs:
             kwargs["description_html"] = kwargs.pop("description")
         if not kwargs.get("slug") and kwargs.get("title"):
-            kwargs["slug"] = slugify(str(kwargs["title"]), max_len=_SLUG_MAX)
+            kwargs["slug"] = slugify(str(kwargs["title"]), max_len=_SLUG_MAX, default="product")
         super().__init__(**kwargs)
 
     @property
@@ -230,7 +237,7 @@ class Product(db.Model):
 
     @stock.setter
     def stock(self, value: int) -> None:
-        self.stock_qty = _clamp_int(value, default=0, min_v=0, max_v=1_000_000)
+        self.stock_qty = _clamp_int(value, default=0, min_v=0, max_v=_STOCK_MAX)
 
     @hybrid_property
     def is_active(self) -> bool:
@@ -246,7 +253,7 @@ class Product(db.Model):
 
     @validates("slug")
     def _v_slug(self, _k, v: Any) -> str:
-        return slugify(str(v or ""), max_len=_SLUG_MAX) or "product"
+        return slugify(str(v or ""), max_len=_SLUG_MAX, default="product") or "product"
 
     @validates("currency")
     def _v_currency(self, _k, v: Any) -> str:
@@ -270,11 +277,11 @@ class Product(db.Model):
 
     @validates("stock_qty")
     def _v_stock_qty(self, _k, v: Any) -> int:
-        return _clamp_int(v, default=0, min_v=0, max_v=1_000_000)
+        return _clamp_int(v, default=0, min_v=0, max_v=_STOCK_MAX)
 
     @validates("price", "compare_at_price")
     def _v_price(self, _k, v: Any):
-        return _clamp_money(_d(v, "0.00"))
+        return _dec(v, Decimal("0.00"))
 
     @validates("external_url")
     def _v_external_url(self, _k, v: Any) -> Optional[str]:
@@ -300,18 +307,18 @@ class Product(db.Model):
     def is_available(self) -> bool:
         if not self.is_active:
             return False
-        mode = (self.stock_mode or "finite").lower()
+        mode = (self.stock_mode or "finite").strip().lower()
         if mode in {"unlimited", "external"}:
             return True
         return int(self.stock_qty or 0) > 0
 
     def price_decimal(self) -> Decimal:
-        return _d(self.price, "0.00")
+        return _dec(self.price, Decimal("0.00"))
 
     def compare_at_decimal(self) -> Optional[Decimal]:
         if self.compare_at_price is None:
             return None
-        d = _d(self.compare_at_price, "0.00")
+        d = _dec(self.compare_at_price, Decimal("0.00"))
         return d if d > Decimal("0.00") else None
 
     def has_discount(self) -> bool:
@@ -329,35 +336,42 @@ class Product(db.Model):
             return None
 
     def main_image_url(self) -> Optional[str]:
-        items = [m for m in (self.media or []) if (m.type or "").lower() == "image" and (m.url or "").strip()]
+        items = [m for m in (self.media or []) if (m.type or "").strip().lower() == "image" and (m.url or "").strip()]
         if not items:
             return None
         items.sort(key=lambda x: (x.sort_order or 0, x.id or 0))
-        return items[0].url
+        return (items[0].url or "").strip() or None
 
     def main_video_url(self) -> Optional[str]:
-        items = [m for m in (self.media or []) if (m.type or "").lower() == "video" and (m.url or "").strip()]
+        items = [m for m in (self.media or []) if (m.type or "").strip().lower() == "video" and (m.url or "").strip()]
         if not items:
             return None
         items.sort(key=lambda x: (x.sort_order or 0, x.id or 0))
-        return items[0].url
+        return (items[0].url or "").strip() or None
 
     def seo_title_final(self, brand: str = "Skyline Store") -> str:
-        base = (self.seo_title or self.title or "Producto").strip()
-        if brand and brand.lower() in base.lower():
+        base = _clean_text(self.seo_title or self.title or "Producto", _SEO_TITLE_MAX, default="Producto")
+        br = _clean_text(brand or "", 80, default="")
+        if br and br.lower() in base.lower():
             return base[:_SEO_TITLE_MAX]
-        return f"{base} · {brand}"[:_SEO_TITLE_MAX]
+        if br:
+            return f"{base} - {br}"[:_SEO_TITLE_MAX]
+        return base[:_SEO_TITLE_MAX]
 
     def seo_description_final(self) -> str:
-        d = (self.seo_description or self.short_description or "").strip()
+        d = _clean_text(self.seo_description or self.short_description or "", _SEO_DESC_MAX, default="")
         if d:
             return d[:_SEO_DESC_MAX]
-        raw = (self.description_html or "").replace("\x00", "").strip()
+        raw = _clean_text(self.description_html or "", 50_000, default="")
+        if not raw:
+            return ""
         raw = _strip_tags_re.sub(" ", raw)
         raw = " ".join(raw.split()).strip()
         return (raw[:_SEO_DESC_MAX] if raw else "") or ""
 
     def to_dict(self) -> Dict[str, Any]:
+        price = self.price_decimal()
+        ca = self.compare_at_decimal()
         return {
             "id": self.id,
             "title": self.title,
@@ -365,8 +379,8 @@ class Product(db.Model):
             "status": self.status,
             "source": self.source,
             "currency": self.currency,
-            "price": str(_d(self.price)),
-            "compare_at_price": str(_d(self.compare_at_price)) if self.compare_at_price is not None else None,
+            "price": str(price),
+            "compare_at_price": str(ca) if ca is not None else None,
             "stock_mode": self.stock_mode,
             "stock_qty": int(self.stock_qty or 0),
             "category_id": self.category_id,
@@ -436,9 +450,7 @@ class Tag(db.Model):
     name = db.Column(db.String(_TAG_NAME_MAX), nullable=False, unique=True)
     slug = db.Column(db.String(_TAG_SLUG_MAX), nullable=False, unique=True, index=True)
 
-    __table_args__ = (
-        Index("ix_tags_slug", "slug"),
-    )
+    __table_args__ = (Index("ix_tags_slug", "slug"),)
 
     @validates("name")
     def _v_name(self, _k, v: Any) -> str:
@@ -447,7 +459,7 @@ class Tag(db.Model):
 
     @validates("slug")
     def _v_slug(self, _k, v: Any) -> str:
-        return slugify(str(v or "tag"), max_len=_TAG_SLUG_MAX)
+        return slugify(str(v or "tag"), max_len=_TAG_SLUG_MAX, default="tag")
 
     def __repr__(self) -> str:
         return f"<Tag id={self.id} name={self.name!r}>"
@@ -458,7 +470,7 @@ def _product_before_insert(_mapper, conn, target: Product):
     target.title = _clean_text(target.title, _TITLE_MAX, default="Producto")
 
     base = (target.slug or "").strip() or (target.title or "product")
-    target.slug = slugify(base, max_len=_SLUG_MAX)
+    target.slug = slugify(base, max_len=_SLUG_MAX, default="product")
     target.slug = _unique_slug(conn, target.slug)
 
     now = utcnow()
@@ -472,7 +484,7 @@ def _product_before_update(_mapper, conn, target: Product):
     target.title = _clean_text(target.title, _TITLE_MAX, default="Producto")
 
     base = (target.slug or "").strip() or (target.title or "product")
-    target.slug = slugify(base, max_len=_SLUG_MAX)
+    target.slug = slugify(base, max_len=_SLUG_MAX, default="product")
     target.slug = _unique_slug(conn, target.slug, product_id=target.id)
 
     target.updated_at = utcnow()

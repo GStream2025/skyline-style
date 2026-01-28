@@ -29,6 +29,9 @@ _CARRIER_MAX = 80
 _TRACKING_MAX = 120
 _TRACKING_URL_MAX = 500
 
+_QTY_MAX = 999
+_META_MAX_BYTES = 64_000
+
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
@@ -40,7 +43,8 @@ def _d(v: Any, default: str = "0.00") -> Decimal:
             return Decimal(default)
         if isinstance(v, Decimal):
             return v
-        return Decimal(str(v))
+        s = str(v).strip().replace(",", ".")
+        return Decimal(s) if s else Decimal(default)
     except (InvalidOperation, ValueError, TypeError):
         return Decimal(default)
 
@@ -52,18 +56,23 @@ def _q_money(dv: Decimal) -> Decimal:
 
 
 def _money(v: Any) -> Decimal:
-    return _q_money(_d(v, "0.00"))
+    d = _d(v, "0.00")
+    if d.is_nan() or d.is_infinite() or d < Decimal("0.00"):
+        d = Decimal("0.00")
+    return _q_money(d)
 
 
 def _rate(v: Any) -> Decimal:
-    dv = _d(v, "0.0000")
-    if dv.is_nan() or dv.is_infinite():
-        dv = Decimal("0.0000")
-    if dv < Decimal("0.0000"):
-        dv = Decimal("0.0000")
-    if dv > MAX_RATE:
-        dv = MAX_RATE
-    return dv.quantize(RATE_4, rounding=ROUND_HALF_UP)
+    d = _d(v, "0.0000")
+    if d.is_nan() or d.is_infinite():
+        d = Decimal("0.0000")
+    if d > Decimal("1.0"):
+        d = d / Decimal("100.0")
+    if d < Decimal("0.0000"):
+        d = Decimal("0.0000")
+    if d > MAX_RATE:
+        d = MAX_RATE
+    return d.quantize(RATE_4, rounding=ROUND_HALF_UP)
 
 
 def _clip_str(v: Any, n: int) -> Optional[str]:
@@ -73,12 +82,14 @@ def _clip_str(v: Any, n: int) -> Optional[str]:
     if not s:
         return None
     s = " ".join(s.split())
+    if n <= 0:
+        return None
     return s[:n]
 
 
 def _lower_clip(v: Any, n: int) -> Optional[str]:
     s = _clip_str(v, n)
-    return s.lower() if s else None
+    return s.casefold() if s else None
 
 
 def _upper_clip(v: Any, n: int) -> Optional[str]:
@@ -116,8 +127,10 @@ def _meta_merge(base: Any, extra: Optional[dict]) -> dict:
 
 def _safe_json(obj: Any) -> Any:
     try:
-        json.dumps(obj, ensure_ascii=False, separators=(",", ":"))
-        return obj
+        raw = json.dumps(obj, ensure_ascii=False, separators=(",", ":"))
+        if len(raw.encode("utf-8")) > _META_MAX_BYTES:
+            return {"_meta_truncated": True}
+        return json.loads(raw)
     except Exception:
         return {"_invalid_meta": True}
 
@@ -384,8 +397,7 @@ class Order(db.Model):
         return _clip_str(v, limits.get(_k, 120))
 
     def add_meta(self, **extra: Any) -> None:
-        merged = _meta_merge(self.meta, extra)
-        self.meta = _safe_json(merged)
+        self.meta = _safe_json(_meta_merge(self.meta, extra))
 
     def touch_updated(self) -> None:
         self.updated_at = utcnow()
@@ -430,7 +442,7 @@ class Order(db.Model):
         self.shipping_total = shipping
         self.tax_total = tax
 
-        computed = _d(subtotal) - _d(discount) + _d(shipping) + _d(tax)
+        computed = subtotal - discount + shipping + tax
         if computed < Decimal("0.00"):
             computed = Decimal("0.00")
         self.total = _q_money(computed)
@@ -501,13 +513,14 @@ class Order(db.Model):
         self.commission_rate_applied = r
         self.commission_amount = amt
         self.payout_status = self.PAYOUT_PENDING if amt > Decimal("0.00") else self.PAYOUT_NONE
-        snap = {
-            "sales_in_month": int(max(0, int(sales_in_month or 0))),
-            "rate": str(r),
-            "amount": str(amt),
-            "snap_at": utcnow().isoformat(),
-        }
-        self.add_meta(commission=snap)
+        self.add_meta(
+            commission={
+                "sales_in_month": int(max(0, int(sales_in_month or 0))),
+                "rate": str(r),
+                "amount": str(amt),
+                "snap_at": utcnow().isoformat(),
+            }
+        )
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -539,6 +552,7 @@ class Order(db.Model):
             "paid_at": self.paid_at.isoformat() if self.paid_at else None,
             "cancelled_at": self.cancelled_at.isoformat() if self.cancelled_at else None,
             "refunded_at": self.refunded_at.isoformat() if self.refunded_at else None,
+            "meta": self.meta if isinstance(self.meta, dict) else None,
         }
 
     def __repr__(self) -> str:
@@ -579,13 +593,13 @@ class OrderItem(db.Model):
     @validates("qty")
     def _v_qty(self, _k: str, v: Any) -> int:
         try:
-            n = int(v)
+            n = int(str(v).strip())
         except Exception:
             n = 1
         if n < 1:
             n = 1
-        if n > 999:
-            n = 999
+        if n > _QTY_MAX:
+            n = _QTY_MAX
         return n
 
     @validates("currency")
@@ -601,14 +615,18 @@ class OrderItem(db.Model):
     def _v_sku(self, _k: str, v: Any) -> Optional[str]:
         return _clip_str(v, _SKU_MAX)
 
+    @validates("unit_price", "line_total")
+    def _v_money(self, _k: str, v: Any) -> Decimal:
+        return _money(v)
+
     def recompute_line_total(self) -> None:
-        self.unit_price = _money(self.unit_price)
         qty = int(self.qty or 1)
         if qty < 1:
             qty = 1
-        if qty > 999:
-            qty = 999
+        if qty > _QTY_MAX:
+            qty = _QTY_MAX
         self.qty = qty
+        self.unit_price = _money(self.unit_price)
         self.line_total = _q_money(_d(self.unit_price) * Decimal(qty))
 
     def to_dict(self) -> Dict[str, Any]:
@@ -622,6 +640,7 @@ class OrderItem(db.Model):
             "unit_price": str(_d(self.unit_price)),
             "qty": int(self.qty or 1),
             "line_total": str(_d(self.line_total)),
+            "meta": self.meta if isinstance(self.meta, dict) else None,
         }
 
     def __repr__(self) -> str:
@@ -640,10 +659,7 @@ def _o_before_save(_mapper, _connection, target: Order) -> None:
     target.ensure_number()
     target.touch_updated()
     if getattr(target, "items", None) is not None:
-        try:
-            target.recompute_totals()
-        except Exception:
-            pass
+        target.recompute_totals()
 
 
 __all__ = ["Order", "OrderItem", "utcnow"]

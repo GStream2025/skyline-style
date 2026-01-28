@@ -3,6 +3,7 @@ from __future__ import annotations
 import enum
 import json
 import logging
+import re
 import secrets
 import time
 from dataclasses import dataclass
@@ -10,6 +11,7 @@ from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
+from flask import current_app
 from sqlalchemy import (
     BigInteger,
     Boolean,
@@ -47,6 +49,8 @@ _env_last_applied = 0
 
 DEFAULT_BALANCE_EXCLUDES_VOIDED = True
 
+_IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
@@ -64,6 +68,10 @@ def _safe_str(v: Any, max_len: int) -> str:
     return s
 
 
+def _is_safe_ident(name: str) -> bool:
+    return bool(name and _IDENT_RE.match(name))
+
+
 def _currency(code: Any) -> str:
     c = _safe_str(code, 8).upper()
     if not c:
@@ -77,9 +85,9 @@ def _to_decimal(v: Any, *, places: Decimal = TWOPLACES, allow_negative: bool = T
     if v is None:
         raise ValueError("amount is required")
     try:
-        d = v if isinstance(v, Decimal) else Decimal(str(v))
+        d = v if isinstance(v, Decimal) else Decimal(str(v).strip())
     except (InvalidOperation, ValueError) as e:
-        raise ValueError(f"Invalid decimal value: {v!r}") from e
+        raise ValueError(f"invalid decimal value: {v!r}") from e
 
     if d.is_nan() or d.is_infinite():
         raise ValueError("amount cannot be NaN/Infinity")
@@ -102,6 +110,9 @@ def _gen_public_id(prefix: str = "cl") -> str:
 def _json_dumps_compact(obj: Any) -> str:
     if obj is None:
         return ""
+
+    if isinstance(obj, (bytes, bytearray, memoryview)):
+        obj = bytes(obj).decode("utf-8", errors="strict")
 
     if isinstance(obj, str):
         s = obj.strip()
@@ -134,9 +145,13 @@ def _apply_env_overrides(force: bool = False) -> None:
         return
     _env_last_applied = now
 
+    default_tbl = USER_TABLE_NAME
+    default_pk = USER_PK_COL
+    default_meta = META_JSON_MAX_BYTES
+
     try:
-        cfg = getattr(db, "get_app", None)
-        app = cfg() if callable(cfg) else None
+        get_app = getattr(db, "get_app", None)
+        app = get_app() if callable(get_app) else None
         conf = getattr(app, "config", None) if app else None
     except Exception:
         conf = None
@@ -149,15 +164,25 @@ def _apply_env_overrides(force: bool = False) -> None:
             pass
         return default
 
-    USER_TABLE_NAME = _safe_str(_cfg("USER_TABLE_NAME", USER_TABLE_NAME), 64) or USER_TABLE_NAME
-    USER_PK_COL = _safe_str(_cfg("USER_PK_COL", USER_PK_COL), 64) or USER_PK_COL
+    tbl = _safe_str(_cfg("USER_TABLE_NAME", default_tbl), 64) or default_tbl
+    pk = _safe_str(_cfg("USER_PK_COL", default_pk), 64) or default_pk
+
+    if _is_safe_ident(tbl):
+        USER_TABLE_NAME = tbl
+    else:
+        USER_TABLE_NAME = default_tbl
+
+    if _is_safe_ident(pk):
+        USER_PK_COL = pk
+    else:
+        USER_PK_COL = default_pk
 
     try:
-        mj = _cfg("META_JSON_MAX_BYTES", META_JSON_MAX_BYTES)
-        META_JSON_MAX_BYTES = int(mj) if mj is not None else META_JSON_MAX_BYTES
-        META_JSON_MAX_BYTES = max(2_000, min(META_JSON_MAX_BYTES, 256_000))
+        mj = _cfg("META_JSON_MAX_BYTES", default_meta)
+        meta = int(mj) if mj is not None else default_meta
+        META_JSON_MAX_BYTES = max(2_000, min(meta, 256_000))
     except Exception:
-        META_JSON_MAX_BYTES = META_JSON_MAX_BYTES
+        META_JSON_MAX_BYTES = default_meta
 
 
 class LedgerEntryType(str, enum.Enum):
@@ -249,6 +274,74 @@ def _enforce_sign(rule: EntryRule, amount: Decimal, avail: Decimal) -> None:
         raise InvalidLedgerOperation(f"available_delta violates rule: expected {rule.avail_sign}, got {avail}")
 
 
+def _dialect_name() -> str:
+    try:
+        bind = db.session.get_bind()  # type: ignore[attr-defined]
+        return str(bind.dialect.name) if bind and getattr(bind, "dialect", None) else ""
+    except Exception:
+        return ""
+
+
+def _try_advisory_lock(key: str, ttl_sec: int = _LOCK_TTL_SEC) -> bool:
+    try:
+        cache = current_app.extensions.get("cache")  # type: ignore[union-attr]
+    except Exception:
+        cache = None
+    if not cache:
+        return False
+    try:
+        return bool(cache.add(f"comm_ledger_lock:{key}", "1", timeout=max(1, int(ttl_sec))))
+    except Exception:
+        return False
+
+
+def _release_advisory_lock(key: str) -> None:
+    try:
+        cache = current_app.extensions.get("cache")  # type: ignore[union-attr]
+    except Exception:
+        cache = None
+    if not cache:
+        return
+    try:
+        cache.delete(f"comm_ledger_lock:{key}")
+    except Exception:
+        pass
+
+
+def _lock_actor_rows(actor_user_id: int, currency: Optional[str] = None) -> None:
+    uid = int(actor_user_id)
+    if uid <= 0:
+        raise InvalidLedgerOperation("actor_user_id must be > 0")
+
+    if _dialect_name().lower() in _SQLITE_DIALECTS:
+        return
+
+    _apply_env_overrides()
+    tbl = USER_TABLE_NAME
+    pk = USER_PK_COL
+
+    if not _is_safe_ident(tbl) or not _is_safe_ident(pk):
+        raise InvalidLedgerOperation("unsafe USER table/PK identifier configuration")
+
+    cur = _currency(currency) if currency else None
+    lock_key = f"{uid}:{cur or '*'}"
+
+    locked_by_cache = _try_advisory_lock(lock_key, ttl_sec=_LOCK_TTL_SEC)
+    try:
+        # Portable-enough row lock for Postgres/MySQL; no-op on dialects that ignore FOR UPDATE.
+        db.session.execute(text(f"SELECT {pk} FROM {tbl} WHERE {pk} = :uid FOR UPDATE").bindparams(uid=uid))
+    finally:
+        if locked_by_cache:
+            _release_advisory_lock(lock_key)
+
+
+def _bump_version(obj: Any) -> None:
+    try:
+        obj.version = int(getattr(obj, "version", 1) or 1) + 1
+    except Exception:
+        obj.version = 2
+
+
 class CommissionLedgerEntry(db.Model):
     __tablename__ = "commission_ledger_entries"
 
@@ -256,11 +349,16 @@ class CommissionLedgerEntry(db.Model):
     public_id: Mapped[str] = mapped_column(String(40), nullable=False, unique=True, index=True, default=_gen_public_id)
 
     entry_type: Mapped[LedgerEntryType] = mapped_column(
-        Enum(LedgerEntryType, name="commission_ledger_entry_type"), nullable=False, index=True
+        Enum(LedgerEntryType, name="commission_ledger_entry_type"),
+        nullable=False,
+        index=True,
     )
 
     status: Mapped[LedgerStatus] = mapped_column(
-        Enum(LedgerStatus, name="commission_ledger_status"), nullable=False, index=True, default=LedgerStatus.POSTED
+        Enum(LedgerStatus, name="commission_ledger_status"),
+        nullable=False,
+        index=True,
+        default=LedgerStatus.POSTED,
     )
 
     currency: Mapped[str] = mapped_column(String(8), nullable=False, index=True, default="USD")
@@ -269,12 +367,18 @@ class CommissionLedgerEntry(db.Model):
     available_delta: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False, default=Decimal("0.00"))
 
     actor_user_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey(f"{USER_TABLE_NAME}.{USER_PK_COL}", ondelete="CASCADE"), nullable=False, index=True
+        BigInteger,
+        ForeignKey(f"{USER_TABLE_NAME}.{USER_PK_COL}", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     actor = relationship("User", foreign_keys=[actor_user_id], lazy="joined")
 
     created_by_user_id: Mapped[Optional[int]] = mapped_column(
-        BigInteger, ForeignKey(f"{USER_TABLE_NAME}.{USER_PK_COL}", ondelete="SET NULL"), nullable=True, index=True
+        BigInteger,
+        ForeignKey(f"{USER_TABLE_NAME}.{USER_PK_COL}", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     created_by = relationship("User", foreign_keys=[created_by_user_id], lazy="select")
 
@@ -286,7 +390,10 @@ class CommissionLedgerEntry(db.Model):
     idempotency_key: Mapped[Optional[str]] = mapped_column(String(120), nullable=True, unique=True, index=True)
 
     related_entry_id: Mapped[Optional[int]] = mapped_column(
-        BigInteger, ForeignKey("commission_ledger_entries.id", ondelete="SET NULL"), nullable=True, index=True
+        BigInteger,
+        ForeignKey("commission_ledger_entries.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     related_entry = relationship("CommissionLedgerEntry", remote_side=[id], lazy="select")
 
@@ -381,12 +488,13 @@ class CommissionPayout(db.Model):
     __tablename__ = "commission_payouts"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    public_id: Mapped[str] = mapped_column(
-        String(40), nullable=False, unique=True, index=True, default=lambda: _gen_public_id("po")
-    )
+    public_id: Mapped[str] = mapped_column(String(40), nullable=False, unique=True, index=True, default=lambda: _gen_public_id("po"))
 
     status: Mapped[PayoutStatus] = mapped_column(
-        Enum(PayoutStatus, name="commission_payout_status"), nullable=False, index=True, default=PayoutStatus.CREATED
+        Enum(PayoutStatus, name="commission_payout_status"),
+        nullable=False,
+        index=True,
+        default=PayoutStatus.CREATED,
     )
 
     provider: Mapped[Optional[str]] = mapped_column(String(40), nullable=True, index=True)
@@ -398,7 +506,10 @@ class CommissionPayout(db.Model):
     net_amount: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False, default=Decimal("0.00"))
 
     created_by_user_id: Mapped[Optional[int]] = mapped_column(
-        BigInteger, ForeignKey(f"{USER_TABLE_NAME}.{USER_PK_COL}", ondelete="SET NULL"), nullable=True, index=True
+        BigInteger,
+        ForeignKey(f"{USER_TABLE_NAME}.{USER_PK_COL}", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     created_by = relationship("User", foreign_keys=[created_by_user_id], lazy="select")
 
@@ -478,93 +589,47 @@ class CommissionBalance:
         }
 
 
-def _dialect_name() -> str:
-    try:
-        return str(db.session.bind.dialect.name)  # type: ignore[union-attr]
-    except Exception:
-        return ""
-
-
-def _try_advisory_lock(key: str, ttl_sec: int = _LOCK_TTL_SEC) -> bool:
-    try:
-        cache = current_app.extensions.get("cache")  # type: ignore[union-attr]
-    except Exception:
-        cache = None
-    if not cache:
-        return False
-    try:
-        return bool(cache.add(f"comm_ledger_lock:{key}", "1", timeout=max(1, int(ttl_sec))))
-    except Exception:
-        return False
-
-
-def _release_advisory_lock(key: str) -> None:
-    try:
-        cache = current_app.extensions.get("cache")  # type: ignore[union-attr]
-    except Exception:
-        cache = None
-    if not cache:
-        return
-    try:
-        cache.delete(f"comm_ledger_lock:{key}")
-    except Exception:
-        pass
-
-
-def _lock_actor_rows(actor_user_id: int, currency: Optional[str] = None) -> None:
-    if actor_user_id <= 0:
-        raise InvalidLedgerOperation("actor_user_id must be > 0")
-
-    if _dialect_name().lower() in _SQLITE_DIALECTS:
-        return
-
-    _apply_env_overrides()
-    cur = _currency(currency) if currency else None
-    lock_key = f"{actor_user_id}:{cur or '*'}"
-
-    locked_by_cache = _try_advisory_lock(lock_key, ttl_sec=_LOCK_TTL_SEC)
-    try:
-        tbl = USER_TABLE_NAME
-        pk = USER_PK_COL
-        db.session.execute(
-            select(func.cast(1, Integer))
-            .select_from(text(tbl))
-            .where(text(f"{pk} = :uid"))
-            .params(uid=actor_user_id)
-            .with_for_update()
-        )
-    finally:
-        if locked_by_cache:
-            _release_advisory_lock(lock_key)
-
-
 def get_balance(actor_user_id: int, currency: str = "USD", *, include_voided: bool = False) -> CommissionBalance:
     cur = _currency(currency)
+    uid = int(actor_user_id)
+    if uid <= 0:
+        raise InvalidLedgerOperation("actor_user_id must be > 0")
+
+    conds = [
+        CommissionLedgerEntry.actor_user_id == uid,
+        CommissionLedgerEntry.currency == cur,
+        CommissionLedgerEntry.status.in_([LedgerStatus.POSTED, LedgerStatus.RECONCILED]),
+    ]
+    if not include_voided:
+        conds.append(CommissionLedgerEntry.is_voided.is_(False))
 
     q = select(
         func.coalesce(func.sum(CommissionLedgerEntry.amount), 0),
         func.coalesce(func.sum(CommissionLedgerEntry.available_delta), 0),
-    ).where(
-        CommissionLedgerEntry.actor_user_id == actor_user_id,
-        CommissionLedgerEntry.currency == cur,
-        CommissionLedgerEntry.status.in_([LedgerStatus.POSTED, LedgerStatus.RECONCILED]),
-        *( [] if include_voided else [CommissionLedgerEntry.is_voided.is_(False)] ),
-    )
+    ).where(*conds)
 
     total, available = db.session.execute(q).one()
     total_d = _to_decimal(total, allow_negative=True)
     available_d = _to_decimal(available, allow_negative=True)
     reserved_d = (total_d - available_d).quantize(TWOPLACES, rounding=ROUND_HALF_UP)
-    return CommissionBalance(actor_user_id=actor_user_id, currency=cur, total=total_d, available=available_d, reserved=reserved_d)
+    return CommissionBalance(actor_user_id=uid, currency=cur, total=total_d, available=available_d, reserved=reserved_d)
 
 
 def get_balances_bulk(
     actor_user_ids: Sequence[int], currency: str = "USD", *, include_voided: bool = False
 ) -> Dict[int, CommissionBalance]:
     cur = _currency(currency)
-    ids = [int(x) for x in actor_user_ids if int(x) > 0]
+    ids = sorted({int(x) for x in actor_user_ids if int(x) > 0})
     if not ids:
         return {}
+
+    conds = [
+        CommissionLedgerEntry.actor_user_id.in_(ids),
+        CommissionLedgerEntry.currency == cur,
+        CommissionLedgerEntry.status.in_([LedgerStatus.POSTED, LedgerStatus.RECONCILED]),
+    ]
+    if not include_voided:
+        conds.append(CommissionLedgerEntry.is_voided.is_(False))
 
     q = (
         select(
@@ -572,12 +637,7 @@ def get_balances_bulk(
             func.coalesce(func.sum(CommissionLedgerEntry.amount), 0),
             func.coalesce(func.sum(CommissionLedgerEntry.available_delta), 0),
         )
-        .where(
-            CommissionLedgerEntry.actor_user_id.in_(ids),
-            CommissionLedgerEntry.currency == cur,
-            CommissionLedgerEntry.status.in_([LedgerStatus.POSTED, LedgerStatus.RECONCILED]),
-            *( [] if include_voided else [CommissionLedgerEntry.is_voided.is_(False)] ),
-        )
+        .where(*conds)
         .group_by(CommissionLedgerEntry.actor_user_id)
     )
 
@@ -609,10 +669,14 @@ def list_entries(
     include_voided: bool = False,
     entry_types: Optional[Sequence[LedgerEntryType]] = None,
 ) -> List[CommissionLedgerEntry]:
+    uid = int(actor_user_id)
+    if uid <= 0:
+        raise InvalidLedgerOperation("actor_user_id must be > 0")
+
     limit_i = max(1, min(int(limit or 100), 500))
     offset_i = max(0, int(offset or 0))
 
-    conds = [CommissionLedgerEntry.actor_user_id == int(actor_user_id)]
+    conds = [CommissionLedgerEntry.actor_user_id == uid]
     if currency:
         conds.append(CommissionLedgerEntry.currency == _currency(currency))
     if not include_voided:
@@ -641,9 +705,7 @@ def _get_entry_by_idempotency_key(ikey: str) -> Optional[CommissionLedgerEntry]:
     s = _safe_str(ikey, 120)
     if not s:
         return None
-    return db.session.execute(
-        select(CommissionLedgerEntry).where(CommissionLedgerEntry.idempotency_key == s)
-    ).scalar_one_or_none()
+    return db.session.execute(select(CommissionLedgerEntry).where(CommissionLedgerEntry.idempotency_key == s)).scalar_one_or_none()
 
 
 def _insert_entry(
@@ -664,6 +726,10 @@ def _insert_entry(
     meta_json: Optional[Any] = None,
     posted: bool = True,
 ) -> CommissionLedgerEntry:
+    uid = int(actor_user_id)
+    if uid <= 0:
+        raise InvalidLedgerOperation("actor_user_id must be > 0")
+
     cur = _currency(currency)
     amount_q = _to_decimal(amount, allow_negative=True)
     avail_q = _to_decimal(available_delta, allow_negative=True)
@@ -687,14 +753,14 @@ def _insert_entry(
         currency=cur,
         amount=amount_q,
         available_delta=avail_q,
-        actor_user_id=int(actor_user_id),
-        created_by_user_id=created_by_user_id,
-        order_id=order_id,
-        order_item_id=order_item_id,
+        actor_user_id=uid,
+        created_by_user_id=int(created_by_user_id) if created_by_user_id is not None else None,
+        order_id=int(order_id) if order_id is not None else None,
+        order_item_id=int(order_item_id) if order_item_id is not None else None,
         payment_provider=_safe_str(payment_provider, 40) or None,
         payment_ref=_safe_str(payment_ref, 120) or None,
         idempotency_key=ikey,
-        related_entry_id=related_entry_id,
+        related_entry_id=int(related_entry_id) if related_entry_id is not None else None,
         note=_safe_str(note, 300) or None,
         meta_json=_json_dumps_compact(meta_json) or None,
         posted_at=utcnow() if posted else None,
@@ -711,7 +777,7 @@ def _insert_entry(
             existing2 = _get_entry_by_idempotency_key(ikey)
             if existing2:
                 return existing2
-        raise DuplicateIdempotencyKey("Unique constraint hit (idempotency_key/public_id).") from ie
+        raise DuplicateIdempotencyKey("unique constraint hit (idempotency_key/public_id).") from ie
 
 
 def post_commission_earned(
@@ -772,7 +838,7 @@ def post_adjustment(
         available_delta=amt,
         created_by_user_id=created_by_user_id,
         idempotency_key=idempotency_key,
-        note=note or "Manual adjustment",
+        note=_safe_str(note, 300) or "Manual adjustment",
         meta_json=meta_json,
         posted=True,
     )
@@ -795,8 +861,8 @@ def reverse_entry(
     if original.is_voided:
         raise InvalidLedgerOperation("cannot reverse a voided entry")
 
-    rev_amount = (-original.amount).quantize(TWOPLACES, rounding=ROUND_HALF_UP)
-    rev_avail = (-original.available_delta).quantize(TWOPLACES, rounding=ROUND_HALF_UP)
+    rev_amount = (-_to_decimal(original.amount, allow_negative=True)).quantize(TWOPLACES, rounding=ROUND_HALF_UP)
+    rev_avail = (-_to_decimal(original.available_delta, allow_negative=True)).quantize(TWOPLACES, rounding=ROUND_HALF_UP)
 
     return _insert_entry(
         actor_user_id=actor_user_id,
@@ -811,7 +877,7 @@ def reverse_entry(
         payment_ref=original.payment_ref,
         idempotency_key=idempotency_key,
         related_entry_id=original.id,
-        note=note or f"Reverse of entry {original.public_id}",
+        note=_safe_str(note, 300) or f"Reverse of entry {original.public_id}",
         meta_json=meta_json,
         posted=True,
     )
@@ -831,6 +897,10 @@ def create_payout(
     meta_json: Optional[Any] = None,
 ) -> Tuple[CommissionPayout, CommissionLedgerEntry]:
     cur = _currency(currency)
+    uid = int(actor_user_id)
+    if uid <= 0:
+        raise InvalidLedgerOperation("actor_user_id must be > 0")
+
     amt = _to_decimal(amount, allow_negative=False)
     fee = _to_decimal(fee_amount, allow_negative=False)
 
@@ -839,9 +909,9 @@ def create_payout(
     if fee > amt:
         raise InvalidLedgerOperation("fee cannot exceed amount")
 
-    _lock_actor_rows(actor_user_id, cur)
+    _lock_actor_rows(uid, cur)
 
-    bal = get_balance(actor_user_id, cur)
+    bal = get_balance(uid, cur, include_voided=not DEFAULT_BALANCE_EXCLUDES_VOIDED)
     if bal.available < amt:
         raise InsufficientAvailableBalance(f"available {bal.available} < requested {amt}")
 
@@ -853,7 +923,7 @@ def create_payout(
         gross_amount=amt,
         fee_amount=fee,
         net_amount=(amt - fee).quantize(TWOPLACES, rounding=ROUND_HALF_UP),
-        created_by_user_id=created_by_user_id,
+        created_by_user_id=int(created_by_user_id) if created_by_user_id is not None else None,
         note=_safe_str(note, 300) or None,
         meta_json=_json_dumps_compact(meta_json) or None,
     )
@@ -861,7 +931,7 @@ def create_payout(
     db.session.flush()
 
     hold_entry = _insert_entry(
-        actor_user_id=actor_user_id,
+        actor_user_id=uid,
         entry_type=LedgerEntryType.PAYOUT_PENDING,
         currency=cur,
         amount=Decimal("0.00"),
@@ -990,7 +1060,7 @@ def reconcile_entries(
     created_by_user_id: Optional[int] = None,
     note: Optional[str] = None,
 ) -> int:
-    ids = [int(i) for i in entry_ids if int(i) > 0]
+    ids = sorted({int(i) for i in entry_ids if int(i) > 0})
     if not ids:
         return 0
 
@@ -1009,7 +1079,7 @@ def reconcile_entries(
     for e in q.all():
         if e.status != LedgerStatus.RECONCILED:
             e.status = LedgerStatus.RECONCILED
-            e.version = int(e.version or 1) + 1
+            _bump_version(e)
             e.posted_at = e.posted_at or now
             if note_s:
                 e.note = note_s or e.note
@@ -1038,7 +1108,7 @@ def void_entry(
 
     e.is_voided = True
     e.status = LedgerStatus.VOIDED
-    e.version = int(e.version or 1) + 1
+    _bump_version(e)
     e.note = (f"VOIDED: {_safe_str(reason, 240)}" if reason else "VOIDED").strip()
     if created_by_user_id is not None:
         e.created_by_user_id = int(created_by_user_id)
@@ -1078,8 +1148,8 @@ def _before_insert_payout(_mapper, _conn, target: CommissionPayout) -> None:
     target.gross_amount = _to_decimal(target.gross_amount, allow_negative=False)
     target.fee_amount = _to_decimal(target.fee_amount, allow_negative=False)
 
-    net = _to_decimal(target.net_amount, allow_negative=False)
     expected = (target.gross_amount - target.fee_amount).quantize(TWOPLACES, rounding=ROUND_HALF_UP)
+    net = _to_decimal(target.net_amount, allow_negative=False)
     if net != expected:
         target.net_amount = expected
 

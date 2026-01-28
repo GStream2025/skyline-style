@@ -1,5 +1,6 @@
 {% extends "base.html" %}
-{% block title %}Verificar correo · {{ (APP_NAME or "Skyline Store")|e }}{% endblock %}
+
+{% block title %}Verificar correo - {{ (APP_NAME or "Skyline Store")|e }}{% endblock %}
 
 {% block extra_head %}
   {% set _env = (ENV if ENV is defined and ENV else 'production')|string|lower|trim %}
@@ -11,16 +12,34 @@
   {% set _vf = (view_functions if view_functions is defined and view_functions else {}) %}
 
   {% macro safe_url(ep, fb) -%}
-    {%- if url_for is defined and ep and (not _vf or ep in _vf) -%}
-      {{- url_for(ep) -}}
+    {%- if url_for is defined and ep -%}
+      {%- if (_vf is mapping and ep in _vf) or (_vf is not mapping) or (not _vf) -%}
+        {{- url_for(ep) -}}
+      {%- else -%}
+        {{- fb -}}
+      {%- endif -%}
     {%- else -%}
       {{- fb -}}
     {%- endif -%}
   {%- endmacro %}
 
   {% macro safe_next(path, default_path) -%}
-    {%- set p = (path|string|trim) if path is not none else '' -%}
-    {%- if not p or not p.startswith('/') or p.startswith('//') or '://' in p or '\\' in p or '\n' in p or '\r' in p or '\t' in p or ' ' in p or '..' in p -%}
+    {%- set p = (path|string) if path is not none else '' -%}
+    {%- set p = p|trim -%}
+    {%- set pl = p|lower -%}
+    {%- if not p
+        or not p.startswith('/')
+        or p.startswith('//')
+        or '://' in p
+        or '\\' in p
+        or '\n' in p
+        or '\r' in p
+        or '\t' in p
+        or ' ' in p
+        or '..' in p
+        or pl.startswith('/%5c')
+        or pl.startswith('/%2f%2f')
+      -%}
       {{- default_path -}}
     {%- else -%}
       {{- p -}}
@@ -36,20 +55,21 @@
   <meta name="csrf-token" content="{{ _csrf|e }}">
 
   <style{% if _nonce %} nonce="{{ _nonce|e }}"{% endif %}>
+    :root{color-scheme:light dark}
     .ss-ve{min-height:72vh;display:grid;place-items:center;padding:34px 14px}
-    .ss-ve__card{max-width:620px;width:100%;border-radius:26px;border:1px solid rgba(148,163,184,.22);background:rgba(255,255,255,.92);box-shadow:0 22px 60px rgba(2,6,23,.12);overflow:hidden}
+    .ss-ve__card{max-width:640px;width:100%;border-radius:26px;border:1px solid rgba(148,163,184,.22);background:rgba(255,255,255,.92);box-shadow:0 22px 60px rgba(2,6,23,.12);overflow:hidden}
     .ss-ve__head{padding:22px 20px;border-bottom:1px solid rgba(148,163,184,.16);background:linear-gradient(180deg,rgba(37,99,235,.06),transparent)}
     .ss-ve__body{padding:20px}
     .ss-ve__title{margin:0;font-size:clamp(1.45rem,3vw,2rem);font-weight:950;letter-spacing:-.35px}
     .ss-ve__sub{margin:.45rem 0 0;color:rgba(11,18,32,.72);font-weight:750;line-height:1.55}
-    .ss-ve__flash{margin-top:12px;padding:10px 12px;border-radius:14px;font-weight:850;border:1px solid rgba(148,163,184,.18)}
+    .ss-ve__flash{margin-top:12px;padding:10px 12px;border-radius:14px;font-weight:850;border:1px solid rgba(148,163,184,.18);word-break:break-word}
     .ss-ve__flash.error{background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.20)}
     .ss-ve__flash.success{background:rgba(34,197,94,.10);border-color:rgba(34,197,94,.22)}
     .ss-ve__flash.info{background:rgba(47,123,255,.08);border-color:rgba(47,123,255,.18)}
     .ss-ve__note{margin-top:14px;padding:12px 12px;border-radius:16px;border:1px dashed rgba(148,163,184,.32);font-size:.9rem;color:rgba(11,18,32,.78);font-weight:750;line-height:1.5}
     .ss-ve__note b{font-weight:950}
     .ss-ve__actions{display:grid;gap:10px;margin-top:16px}
-    .ss-ve__btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;padding:12px 14px;border-radius:999px;border:1px solid rgba(15,23,42,.14);background:rgba(255,255,255,.9);font-weight:900;cursor:pointer;text-decoration:none;color:rgba(11,18,32,.92);user-select:none;min-height:44px;transition:transform .12s ease,filter .12s ease,box-shadow .12s ease}
+    .ss-ve__btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;padding:12px 14px;border-radius:999px;border:1px solid rgba(15,23,42,.14);background:rgba(255,255,255,.9);font-weight:900;cursor:pointer;text-decoration:none;color:rgba(11,18,32,.92);user-select:none;min-height:44px;transition:transform .12s ease,filter .12s ease,box-shadow .12s ease;touch-action:manipulation}
     .ss-ve__btn--primary{background:linear-gradient(135deg,#2563eb,#0ea5e9);border-color:transparent;color:#fff;box-shadow:0 18px 44px rgba(37,99,235,.22)}
     .ss-ve__btn:hover{filter:brightness(1.02);transform:translateY(-1px)}
     .ss-ve__btn:active{transform:translateY(0)}
@@ -87,6 +107,7 @@
   {% set _raw_next = (_req.args.get('next') if _req and _req.args else none) %}
   {% set next_path = safe_next(_raw_next if _raw_next is not none else (_req.path if _req else '/account'), '/account') %}
   {% if '?' in next_path %}{% set next_path = next_path.split('?')[0] %}{% endif %}
+  {% if '#' in next_path %}{% set next_path = next_path.split('#')[0] %}{% endif %}
 
   {% set resend_json = safe_url('auth.resend_verification_json','') %}
   {% set resend_post = safe_url('auth.resend_verification','') %}
@@ -174,7 +195,7 @@
   const isJson   = {{ resend_is_json|tojson }};
 
   const COOLDOWN_MS = 30000;
-  const KEY = "ss_verify_cd_v5";
+  const KEY = "ss_verify_cd_v6";
   const now = () => Date.now();
 
   const say = (m) => {
@@ -215,7 +236,14 @@
 
   const sendJson = async () => {
     const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-    const payload = csrf ? { csrf_token: csrf } : {};
+    const email = {{ (email or '')|tojson }};
+    const nextPath = {{ (next_path or '')|tojson }};
+
+    const payload = {};
+    if (csrf) payload.csrf_token = csrf;
+    if (email) payload.email = email;
+    if (nextPath) payload.next = nextPath;
+
     const r = await fetch(endpoint, {
       method: "POST",
       headers: {
