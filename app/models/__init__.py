@@ -2,6 +2,7 @@
 
 import logging
 import os
+import re
 import threading
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Set
@@ -9,7 +10,7 @@ from typing import Any, Dict, Optional, Set
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import text as sa_text
-from sqlalchemy.exc import OperationalError, ProgrammingError
+from sqlalchemy.exc import OperationalError, ProgrammingError, SQLAlchemyError
 
 log = logging.getLogger("models")
 
@@ -23,6 +24,10 @@ _LOADED_MODELS: Optional[Dict[str, Any]] = None
 _MODELS_INIT_ONCE_OK = False
 
 _SQLA_EXT_KEY = "sqlalchemy"
+_LOCAL_SQLITE_FALLBACK = "sqlite:///skyline_local.db"
+_MAX_EMAIL_LEN = 254
+
+_EMAIL_SIMPLE_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 
 
 def text(sql: str):
@@ -91,9 +96,8 @@ def _ensure_db_uri(app: Flask) -> str:
         return db_url
 
     if not _is_production(app):
-        fallback = "sqlite:///skyline_local.db"
-        app.config["SQLALCHEMY_DATABASE_URI"] = fallback
-        return fallback
+        app.config["SQLALCHEMY_DATABASE_URI"] = _LOCAL_SQLITE_FALLBACK
+        return _LOCAL_SQLITE_FALLBACK
 
     return ""
 
@@ -187,7 +191,7 @@ class _ModelProxy:
         if not loaded or self._name not in loaded:
             raise RuntimeError(
                 f"Model '{self._name}' not loaded. "
-                f"Did you call init_models(app) before importing/using model proxies?"
+                f"Call init_models(app) before using model proxies."
             )
         return loaded[self._name]
 
@@ -237,14 +241,11 @@ def _ping_db(app: Flask) -> None:
         db.session.rollback()
 
 
-_EMAIL_SIMPLE_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
-
-
 def _looks_like_email(email: str) -> bool:
     e = (email or "").strip().lower()
     if not e:
         return False
-    if len(e) > 254:
+    if len(e) > _MAX_EMAIL_LEN:
         return False
     return bool(_EMAIL_SIMPLE_RE.match(e))
 
@@ -301,7 +302,7 @@ def create_admin_owner_guard(app: Flask) -> Dict[str, Any]:
                     setattr(existing, f, True)
             try:
                 db.session.commit()
-            except Exception:
+            except SQLAlchemyError:
                 db.session.rollback()
                 raise
             return {"ok": True, "created": False}
@@ -319,7 +320,7 @@ def create_admin_owner_guard(app: Flask) -> Dict[str, Any]:
         db.session.add(u)
         try:
             db.session.commit()
-        except Exception:
+        except SQLAlchemyError:
             db.session.rollback()
             raise
 
