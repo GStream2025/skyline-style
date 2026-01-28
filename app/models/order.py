@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 import json
+import re
 import secrets
 import time
 from datetime import datetime, timezone
@@ -32,9 +33,31 @@ _TRACKING_URL_MAX = 500
 _QTY_MAX = 999
 _META_MAX_BYTES = 64_000
 
+_STATUS_MAX = 30
+_PROVIDER_MAX = 40
+_PROVIDER_PID_MAX = 140
+_IDEM_MAX = 80
+
+_CURRENCY_RE = re.compile(r"^[A-Z]{3}$")
+_EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]{2,}$")
+_CTRL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
+
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _s(v: Any, n: int) -> str:
+    s = "" if v is None else str(v)
+    s = s.replace("\x00", "").strip()
+    s = _CTRL_RE.sub("", s)
+    return s[:n]
+
+
+def _opt(v: Any, n: int) -> Optional[str]:
+    s = _s(v, n)
+    s = " ".join(s.split())
+    return s or None
 
 
 def _d(v: Any, default: str = "0.00") -> Decimal:
@@ -56,10 +79,7 @@ def _q_money(dv: Decimal) -> Decimal:
 
 
 def _money(v: Any) -> Decimal:
-    d = _d(v, "0.00")
-    if d.is_nan() or d.is_infinite() or d < Decimal("0.00"):
-        d = Decimal("0.00")
-    return _q_money(d)
+    return _q_money(_d(v, "0.00"))
 
 
 def _rate(v: Any) -> Decimal:
@@ -75,30 +95,18 @@ def _rate(v: Any) -> Decimal:
     return d.quantize(RATE_4, rounding=ROUND_HALF_UP)
 
 
-def _clip_str(v: Any, n: int) -> Optional[str]:
-    if v is None:
-        return None
-    s = str(v).replace("\x00", "").strip()
-    if not s:
-        return None
-    s = " ".join(s.split())
-    if n <= 0:
-        return None
-    return s[:n]
-
-
-def _lower_clip(v: Any, n: int) -> Optional[str]:
-    s = _clip_str(v, n)
+def _lower(v: Any, n: int) -> Optional[str]:
+    s = _opt(v, n)
     return s.casefold() if s else None
 
 
-def _upper_clip(v: Any, n: int) -> Optional[str]:
-    s = _clip_str(v, n)
+def _upper(v: Any, n: int) -> Optional[str]:
+    s = _opt(v, n)
     return s.upper() if s else None
 
 
 def _slugish(v: Any, n: int) -> Optional[str]:
-    s = _lower_clip(v, n)
+    s = _lower(v, n)
     if not s:
         return None
     s = s.replace(" ", "-")
@@ -107,27 +115,27 @@ def _slugish(v: Any, n: int) -> Optional[str]:
 
 
 def _canon_currency(v: Any) -> str:
-    s = (str(v).strip().upper() if v is not None else "USD")[:3]
-    return s if len(s) == 3 else "USD"
+    s = _upper(v, 3) or "USD"
+    return s if _CURRENCY_RE.match(s) else "USD"
 
 
 def _canon_country2(v: Any) -> Optional[str]:
-    s = _upper_clip(v, 2)
+    s = _upper(v, 2)
     return s if s and len(s) == 2 else None
 
 
 def _meta_merge(base: Any, extra: Optional[dict]) -> dict:
     out: dict = dict(base) if isinstance(base, dict) else {}
     if isinstance(extra, dict):
-        for k, v in extra.items():
-            if v is not None:
-                out[k] = v
+        for k, vv in extra.items():
+            if vv is not None:
+                out[str(k)] = vv
     return out
 
 
 def _safe_json(obj: Any) -> Any:
     try:
-        raw = json.dumps(obj, ensure_ascii=False, separators=(",", ":"))
+        raw = json.dumps(obj, ensure_ascii=False, separators=(",", ":"), default=str)
         if len(raw.encode("utf-8")) > _META_MAX_BYTES:
             return {"_meta_truncated": True}
         return json.loads(raw)
@@ -211,9 +219,9 @@ class Order(db.Model):
     commission_amount = db.Column(db.Numeric(12, 2), nullable=False, default=Decimal("0.00"))
     payout_status = db.Column(db.String(20), nullable=False, default=PAYOUT_NONE, index=True)
 
-    idempotency_key = db.Column(db.String(80), nullable=True, index=True)
-    payment_provider = db.Column(db.String(40), nullable=True, index=True)
-    provider_payment_id = db.Column(db.String(140), nullable=True, index=True)
+    idempotency_key = db.Column(db.String(_IDEM_MAX), nullable=True, index=True)
+    payment_provider = db.Column(db.String(_PROVIDER_MAX), nullable=True, index=True)
+    provider_payment_id = db.Column(db.String(_PROVIDER_PID_MAX), nullable=True, index=True)
 
     customer_name = db.Column(db.String(120))
     customer_email = db.Column(db.String(_EMAIL_MAX), index=True)
@@ -229,9 +237,9 @@ class Order(db.Model):
     customer_note = db.Column(db.String(_NOTE_MAX))
     internal_note = db.Column(db.String(_NOTE_MAX))
 
-    status = db.Column(db.String(30), nullable=False, default=STATUS_AWAITING_PAYMENT, index=True)
-    payment_method = db.Column(db.String(30), nullable=False, default=PM_PAYPAL, index=True)
-    payment_status = db.Column(db.String(30), nullable=False, default=PAY_PENDING, index=True)
+    status = db.Column(db.String(_STATUS_MAX), nullable=False, default=STATUS_AWAITING_PAYMENT, index=True)
+    payment_method = db.Column(db.String(_STATUS_MAX), nullable=False, default=PM_PAYPAL, index=True)
+    payment_status = db.Column(db.String(_STATUS_MAX), nullable=False, default=PAY_PENDING, index=True)
     fulfillment_status = db.Column(db.String(20), nullable=False, default=FULFILL_NONE, index=True)
 
     currency = db.Column(db.String(3), nullable=False, default="USD", index=True)
@@ -276,6 +284,7 @@ class Order(db.Model):
         CheckConstraint("commission_rate_applied >= 0", name="ck_orders_comm_rate_nonneg"),
         CheckConstraint("commission_amount >= 0", name="ck_orders_comm_amt_nonneg"),
         CheckConstraint("length(currency) = 3", name="ck_orders_currency_len3"),
+        CheckConstraint("(idempotency_key IS NULL) OR (idempotency_key <> '')", name="ck_orders_idem_nonempty"),
         UniqueConstraint("user_id", "idempotency_key", name="uq_orders_user_idem"),
         Index("ix_orders_status_created", "status", "created_at"),
         Index("ix_orders_payment_status_created", "payment_status", "created_at"),
@@ -285,6 +294,7 @@ class Order(db.Model):
         Index("ix_orders_idem_user", "user_id", "idempotency_key"),
         Index("ix_orders_payout_status_created", "payout_status", "created_at"),
         Index("ix_orders_fulfillment_created", "fulfillment_status", "created_at"),
+        Index("ix_orders_currency_created", "currency", "created_at"),
     )
 
     @staticmethod
@@ -301,36 +311,39 @@ class Order(db.Model):
 
     @validates("status")
     def _v_status(self, _k: str, v: Any) -> str:
-        s = (str(v or "")).strip().lower()
+        s = _s(v, _STATUS_MAX).lower()
         return s if s in self._ALLOWED_STATUS else self.STATUS_AWAITING_PAYMENT
 
     @validates("payment_status")
     def _v_payment_status(self, _k: str, v: Any) -> str:
-        s = (str(v or "")).strip().lower()
+        s = _s(v, _STATUS_MAX).lower()
         return s if s in self._ALLOWED_PAY_STATUS else self.PAY_PENDING
 
     @validates("fulfillment_status")
     def _v_fulfillment(self, _k: str, v: Any) -> str:
-        s = (str(v or "")).strip().lower()
+        s = _s(v, 20).lower()
         return s if s in self._ALLOWED_FULFILL else self.FULFILL_NONE
 
     @validates("payout_status")
     def _v_payout(self, _k: str, v: Any) -> str:
-        s = (str(v or "")).strip().lower()
+        s = _s(v, 20).lower()
         return s if s in self._ALLOWED_PAYOUT else self.PAYOUT_NONE
 
     @validates("payment_method")
     def _v_payment_method(self, _k: str, v: Any) -> str:
-        s = (str(v or "")).strip().lower()
+        s = _s(v, _STATUS_MAX).lower()
         return s if s in self._ALLOWED_PM else self.PM_PAYPAL
 
     @validates("customer_email")
     def _v_email(self, _k: str, v: Any) -> Optional[str]:
-        return _lower_clip(v, _EMAIL_MAX)
+        s = _lower(v, _EMAIL_MAX)
+        if not s:
+            return None
+        return s if _EMAIL_RE.match(s) else s
 
     @validates("customer_phone")
     def _v_phone(self, _k: str, v: Any) -> Optional[str]:
-        s = _clip_str(v, _PHONE_MAX)
+        s = _opt(v, _PHONE_MAX)
         if not s:
             return None
         cleaned = "".join(ch for ch in s if ch.isdigit() or ch in "+()- ").strip()
@@ -338,8 +351,8 @@ class Order(db.Model):
 
     @validates("number")
     def _v_number(self, _k: str, v: Any) -> str:
-        s = (str(v or "")).strip()
-        return (s[:40] if s else self._make_number())
+        s = _opt(v, 40)
+        return s if s else self._make_number()
 
     @validates("affiliate_code")
     def _v_aff(self, _k: str, v: Any) -> Optional[str]:
@@ -347,27 +360,27 @@ class Order(db.Model):
 
     @validates("affiliate_sub")
     def _v_sub(self, _k: str, v: Any) -> Optional[str]:
-        return _clip_str(v, 120)
+        return _opt(v, 120)
 
     @validates("idempotency_key")
     def _v_idem(self, _k: str, v: Any) -> Optional[str]:
-        return _slugish(v, 80)
+        return _slugish(v, _IDEM_MAX)
 
     @validates("provider_payment_id")
     def _v_ppid(self, _k: str, v: Any) -> Optional[str]:
-        return _clip_str(v, 140)
+        return _opt(v, _PROVIDER_PID_MAX)
 
     @validates("payment_provider")
     def _v_provider(self, _k: str, v: Any) -> Optional[str]:
-        return _slugish(v, 40)
+        return _slugish(v, _PROVIDER_MAX)
 
     @validates("tracking_number")
     def _v_tracking_number(self, _k: str, v: Any) -> Optional[str]:
-        return _clip_str(v, _TRACKING_MAX)
+        return _opt(v, _TRACKING_MAX)
 
     @validates("tracking_url")
     def _v_tracking_url(self, _k: str, v: Any) -> Optional[str]:
-        return _clip_str(v, _TRACKING_URL_MAX)
+        return _opt(v, _TRACKING_URL_MAX)
 
     @validates(
         "customer_name",
@@ -394,7 +407,15 @@ class Order(db.Model):
             "bank_transfer_ref": 120,
             "carrier": _CARRIER_MAX,
         }
-        return _clip_str(v, limits.get(_k, 120))
+        return _opt(v, limits.get(_k, 120))
+
+    @validates("commission_rate_applied")
+    def _v_comm_rate(self, _k: str, v: Any) -> Decimal:
+        return _rate(v)
+
+    @validates("commission_amount", "subtotal", "discount_total", "shipping_total", "tax_total", "total")
+    def _v_money(self, _k: str, v: Any) -> Decimal:
+        return _money(v)
 
     def add_meta(self, **extra: Any) -> None:
         self.meta = _safe_json(_meta_merge(self.meta, extra))
@@ -407,20 +428,21 @@ class Order(db.Model):
             self.number = self._make_number()
 
     def set_payment_provider_id(self, provider: Optional[str], provider_payment_id: Optional[str]) -> None:
-        prov = (provider or "").strip().lower()
-        pid = (provider_payment_id or "").strip()
-        self.payment_provider = (prov[:40] if prov else None)
-        self.provider_payment_id = (pid[:140] if pid else None)
+        prov = _s(provider, _PROVIDER_MAX).lower()
+        pid = _s(provider_payment_id, _PROVIDER_PID_MAX)
+
+        self.payment_provider = prov or None
+        self.provider_payment_id = pid or None
 
         if not prov or not pid:
             return
 
         if prov == self.PM_PAYPAL:
-            self.paypal_order_id = pid[:120]
+            self.paypal_order_id = _s(pid, 120) or None
         elif prov.startswith("mercadopago"):
-            self.mp_payment_id = pid[:120]
+            self.mp_payment_id = _s(pid, 120) or None
         elif prov == self.PM_WISE:
-            self.wise_transfer_id = pid[:120]
+            self.wise_transfer_id = _s(pid, 120) or None
 
     def recompute_totals(self) -> None:
         sub = Decimal("0.00")
@@ -448,12 +470,12 @@ class Order(db.Model):
         self.total = _q_money(computed)
 
     def can_transition_to(self, to_status: str) -> bool:
-        cur = (self.status or "").strip().lower()
-        nxt = (to_status or "").strip().lower()
+        cur = _s(self.status, _STATUS_MAX).lower()
+        nxt = _s(to_status, _STATUS_MAX).lower()
         return nxt in self._ALLOWED_TRANSITIONS.get(cur, set())
 
     def transition_to(self, to_status: str) -> None:
-        nxt = (to_status or "").strip().lower()
+        nxt = _s(to_status, _STATUS_MAX).lower()
         if not self.can_transition_to(nxt):
             raise ValueError(f"Transición inválida: {self.status} -> {nxt}")
 
@@ -461,23 +483,20 @@ class Order(db.Model):
         now = utcnow()
 
         if nxt == self.STATUS_PAID:
-            if not self.paid_at:
-                self.paid_at = now
+            self.paid_at = self.paid_at or now
             self.payment_status = self.PAY_PAID
             if self.fulfillment_status == self.FULFILL_NONE:
                 self.fulfillment_status = self.FULFILL_QUEUED
 
         elif nxt == self.STATUS_CANCELLED:
-            if not self.cancelled_at:
-                self.cancelled_at = now
+            self.cancelled_at = self.cancelled_at or now
             if self.payment_status == self.PAY_PENDING:
                 self.payment_status = self.PAY_FAILED
             if self.fulfillment_status != self.FULFILL_DONE:
                 self.fulfillment_status = self.FULFILL_FAILED
 
         elif nxt == self.STATUS_REFUNDED:
-            if not self.refunded_at:
-                self.refunded_at = now
+            self.refunded_at = self.refunded_at or now
             self.payment_status = self.PAY_REFUNDED
             if self.payout_status == self.PAYOUT_PAID:
                 self.payout_status = self.PAYOUT_REVERSED
@@ -486,23 +505,20 @@ class Order(db.Model):
         if self.status != self.STATUS_PAID:
             self.status = self.STATUS_PAID
         self.payment_status = self.PAY_PAID
-        if not self.paid_at:
-            self.paid_at = utcnow()
+        self.paid_at = self.paid_at or utcnow()
         if self.fulfillment_status == self.FULFILL_NONE:
             self.fulfillment_status = self.FULFILL_QUEUED
 
     def mark_cancelled(self) -> None:
         if self.status != self.STATUS_CANCELLED:
             self.status = self.STATUS_CANCELLED
-        if not self.cancelled_at:
-            self.cancelled_at = utcnow()
+        self.cancelled_at = self.cancelled_at or utcnow()
 
     def mark_refunded(self) -> None:
         if self.status != self.STATUS_REFUNDED:
             self.status = self.STATUS_REFUNDED
         self.payment_status = self.PAY_REFUNDED
-        if not self.refunded_at:
-            self.refunded_at = utcnow()
+        self.refunded_at = self.refunded_at or utcnow()
         if self.payout_status == self.PAYOUT_PAID:
             self.payout_status = self.PAYOUT_REVERSED
 
@@ -608,12 +624,12 @@ class OrderItem(db.Model):
 
     @validates("title_snapshot")
     def _v_title(self, _k: str, v: Any) -> str:
-        s = _clip_str(v, _TITLE_MAX)
+        s = _opt(v, _TITLE_MAX)
         return s if s else "Producto"
 
     @validates("sku_snapshot")
     def _v_sku(self, _k: str, v: Any) -> Optional[str]:
-        return _clip_str(v, _SKU_MAX)
+        return _opt(v, _SKU_MAX)
 
     @validates("unit_price", "line_total")
     def _v_money(self, _k: str, v: Any) -> Decimal:
