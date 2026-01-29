@@ -5,7 +5,8 @@ import os
 import secrets
 import time
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Iterable, Optional, Set, Tuple, TypeVar, cast
+from functools import wraps
+from typing import Any, Callable, Dict, Optional, Set, Tuple, TypeVar, cast
 from urllib.parse import quote
 
 from flask import abort, current_app, flash, jsonify, redirect, request, session, url_for
@@ -24,6 +25,7 @@ CFG_ADMIN_EMAIL = "ADMIN_EMAIL"
 CFG_ADMIN_PASSWORD = "ADMIN_PASSWORD"
 CFG_ADMIN_PASSWORD_HASH = "ADMIN_PASSWORD_HASH"
 CFG_ADMIN_EMAILS = "ADMIN_EMAILS"
+
 CFG_ADMIN_SESSION_KEY = "ADMIN_SESSION_KEY"
 CFG_ADMIN_LOGIN_ENDPOINT = "ADMIN_LOGIN_ENDPOINT"
 CFG_ADMIN_LOGIN_FALLBACK = "ADMIN_LOGIN_FALLBACK_PATH"
@@ -46,7 +48,7 @@ CFG_AUTH_AUDIT_CALLBACK = "AUTH_AUDIT_CALLBACK"
 CFG_ADMIN_SOFT_RL_WINDOW_S = "ADMIN_SOFT_RL_WINDOW_S"
 CFG_ADMIN_SOFT_RL_MAX = "ADMIN_SOFT_RL_MAX"
 
-_NO_STORE_HEADERS = {
+_NO_STORE_HEADERS: Dict[str, str] = {
     "Cache-Control": "no-store, max-age=0, must-revalidate",
     "Pragma": "no-cache",
     "Expires": "0",
@@ -79,9 +81,10 @@ def _env(name: str, default: str = "") -> str:
 
 
 def _safe_str(v: Any, *, max_len: int = 512) -> str:
-    s = "" if v is None else str(v)
-    s = s.replace("\x00", "").replace("\u200b", "").strip()
-    if len(s) > max_len:
+    if v is None:
+        return ""
+    s = str(v).replace("\x00", "").replace("\u200b", "").strip()
+    if max_len > 0 and len(s) > max_len:
         s = s[:max_len]
     return s
 
@@ -97,6 +100,19 @@ def _is_truthy(v: Any) -> bool:
             return False
         return s in _TRUE or s == "1"
     return False
+
+
+def _client_ip() -> str:
+    try:
+        fwd = (request.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
+        if fwd:
+            return fwd[:64]
+    except Exception:
+        pass
+    try:
+        return (request.remote_addr or "")[:64]
+    except Exception:
+        return ""
 
 
 def _is_json_like_request() -> bool:
@@ -120,7 +136,7 @@ def _is_json_like_request() -> bool:
 
     try:
         best = request.accept_mimetypes.best_match(["application/json", "text/html"])
-        if best == "application/json":
+        if best == "application/json" and request.accept_mimetypes[best] >= request.accept_mimetypes["text/html"]:
             return True
     except Exception:
         pass
@@ -134,7 +150,7 @@ def _clean_next_path(raw: Optional[str], *, default_path: str = "/admin") -> str
         return default_path
 
     pl = p.lower()
-    bad = (
+    if (
         not p.startswith("/")
         or p.startswith("//")
         or "://" in p
@@ -147,8 +163,7 @@ def _clean_next_path(raw: Optional[str], *, default_path: str = "/admin") -> str
         or pl.startswith("/%5c")
         or pl.startswith("/%2f%2f")
         or pl.startswith("/%2f%5c")
-    )
-    if bad:
+    ):
         return default_path
 
     if "?" in p:
@@ -181,13 +196,21 @@ def _resolve_login_url(*, endpoint: str, next_param: str, next_path: str) -> str
         if u:
             return u
 
-    fallback = _safe_str(_cfg(CFG_ADMIN_LOGIN_FALLBACK, ADMIN_LOGIN_FALLBACK_PATH_DEFAULT), max_len=240)
-    fallback = fallback or ADMIN_LOGIN_FALLBACK_PATH_DEFAULT
+    fallback = _safe_str(_cfg(CFG_ADMIN_LOGIN_FALLBACK, ADMIN_LOGIN_FALLBACK_PATH_DEFAULT), max_len=240) or (
+        ADMIN_LOGIN_FALLBACK_PATH_DEFAULT
+    )
     sep = "&" if "?" in fallback else "?"
     return f"{fallback}{sep}{next_param}={quote(next_path, safe='/')}"
 
 
 def _audit(event: Dict[str, Any]) -> None:
+    event = dict(event or {})
+    event.setdefault("ip", _client_ip())
+    try:
+        event.setdefault("ua", _safe_str(request.headers.get("User-Agent"), max_len=160))
+    except Exception:
+        pass
+
     try:
         cb = _cfg(CFG_AUTH_AUDIT_CALLBACK, None)
         if callable(cb):
@@ -211,7 +234,9 @@ def _soft_rate_limit(bucket: str) -> Tuple[bool, int]:
     key = f"_rl:{bucket}"
     try:
         now = int(time.time())
-        data = session.get(key) or {}
+        data = session.get(key)
+        if not isinstance(data, dict):
+            data = {}
         start = int(data.get("start") or 0)
         hits = int(data.get("hits") or 0)
 
@@ -356,7 +381,11 @@ def admin_creds_ok(email: str, password: str) -> bool:
         checked = _check_password_hash_if_possible(pw_hash, password_s)
         if checked is not None:
             return checked
-        return hmac.compare_digest(pw_hash, password_s)
+        # si NO es hash (misconfig), igual comparamos en constant-time
+        try:
+            return secrets.compare_digest(pw_hash, password_s)
+        except Exception:
+            return hmac.compare_digest(pw_hash, password_s)
 
     pw_plain = _safe_str(_cfg(CFG_ADMIN_PASSWORD, ""), max_len=500) or _env(CFG_ADMIN_PASSWORD, "")
     if not pw_plain:
@@ -522,7 +551,7 @@ def admin_required(
             try:
                 for k, v in _NO_STORE_HEADERS.items():
                     resp.headers[k] = v
-                resp.headers["Vary"] = "Cookie"
+                resp.headers.setdefault("Vary", "Cookie")
                 resp.headers["X-Admin-Gate"] = decision.reason
             except Exception:
                 pass
