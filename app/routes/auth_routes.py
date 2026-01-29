@@ -65,6 +65,7 @@ _RL_VERIFY_SEND_KEY = "verify_send"
 _RL_STORE_SESSION_KEY = "rl_store"
 
 _MIN_PASS_LEN = 8
+_MAX_PASS_LEN = 256
 
 _VERIFY_TTL_MIN = 30
 _VERIFY_RL_SEC = 60
@@ -177,14 +178,14 @@ def _rate_limit(bucket: str) -> Tuple[bool, int]:
         store = {}
 
     if len(store) > _RL_STORE_CAP:
-        items = []
+        items: list[tuple[int, str]] = []
         for k, v in list(store.items()):
             if isinstance(v, dict):
                 try:
                     t0 = int(v.get("t", 0) or 0)
                 except Exception:
                     t0 = 0
-                items.append((t0, k))
+                items.append((t0, str(k)))
         items.sort()
         for _, k in items[: max(0, len(store) - _RL_STORE_CAP)]:
             store.pop(k, None)
@@ -354,7 +355,7 @@ def _user_password_check(user: Any, password: str) -> bool:
 
 def _user_password_set(user: Any, password: str) -> bool:
     pw = password or ""
-    if len(pw) < _MIN_PASS_LEN:
+    if len(pw) < _MIN_PASS_LEN or len(pw) > _MAX_PASS_LEN:
         return False
 
     try:
@@ -611,7 +612,9 @@ def register():
     password2 = _norm(request.form.get("password2", ""), max_len=512)
     name = _normalize_name(request.form.get("name", ""))
 
-    if (not _valid_email(email)) or (len(password) < _MIN_PASS_LEN) or (password != password2):
+    if (not _valid_email(email)) or (len(password) < _MIN_PASS_LEN) or (len(password) > _MAX_PASS_LEN) or (
+        password != password2
+    ):
         return _json_or_redirect(ok=False, message="Datos inválidos.", tab=TAB_REGISTER, nxt=nxt)
 
     if _get_user_by_email(email):
@@ -635,7 +638,9 @@ def register():
         pass
 
     if not _user_password_set(user, password):
-        return _json_or_redirect(ok=False, message="No se pudo crear la cuenta.", tab=TAB_REGISTER, nxt=nxt, status_err=400)
+        return _json_or_redirect(
+            ok=False, message="No se pudo crear la cuenta.", tab=TAB_REGISTER, nxt=nxt, status_err=400
+        )
 
     try:
         db.session.add(user)
