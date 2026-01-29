@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import secrets
 import time
 import unicodedata
+from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, cast
+from urllib.parse import quote
 
 from flask import (
     Blueprint,
@@ -23,6 +26,7 @@ from flask import (
     session,
     url_for,
 )
+from werkzeug.datastructures import FileStorage
 from werkzeug.utils import secure_filename
 
 from app.models import db
@@ -32,6 +36,8 @@ from app.models.offer import Offer
 from app.models.product import Product
 from app.utils.auth import admin_creds_ok, admin_required
 
+log = logging.getLogger("admin_routes")
+
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin", template_folder="../templates")
 
 _TRUE = {"1", "true", "yes", "y", "on", "checked"}
@@ -39,13 +45,13 @@ _FALSE = {"0", "false", "no", "n", "off", "unchecked"}
 
 SAFE_STATUSES = {"active", "inactive", "draft"}
 
-_MAX_ADMIN_ATTEMPTS = int(os.getenv("ADMIN_MAX_ATTEMPTS", "6") or "6")
-_ADMIN_LOCK_SECONDS = int(os.getenv("ADMIN_LOCK_SECONDS", "600") or "600")
-_ADMIN_RATE_SECONDS = float(os.getenv("ADMIN_RATE_SECONDS", "1.5") or "1.5")
-_ADMIN_FRESH_SECONDS = int(os.getenv("ADMIN_FRESH_SECONDS", "1800") or "1800")
+_MAX_ADMIN_ATTEMPTS = max(1, int(os.getenv("ADMIN_MAX_ATTEMPTS", "6") or "6"))
+_ADMIN_LOCK_SECONDS = max(10, int(os.getenv("ADMIN_LOCK_SECONDS", "600") or "600"))
+_ADMIN_RATE_SECONDS = max(0.1, float(os.getenv("ADMIN_RATE_SECONDS", "1.5") or "1.5"))
+_ADMIN_FRESH_SECONDS = max(60, int(os.getenv("ADMIN_FRESH_SECONDS", "1800") or "1800"))
 
-_UPLOAD_MAX_MB_PRODUCTS = int(os.getenv("UPLOAD_MAX_MB_PRODUCTS", "8") or "8")
-_UPLOAD_MAX_MB_OFFERS = int(os.getenv("UPLOAD_MAX_MB_OFFERS", "25") or "25")
+_UPLOAD_MAX_MB_PRODUCTS = max(1, int(os.getenv("UPLOAD_MAX_MB_PRODUCTS", "8") or "8"))
+_UPLOAD_MAX_MB_OFFERS = max(1, int(os.getenv("UPLOAD_MAX_MB_OFFERS", "25") or "25"))
 
 _ALLOWED_IMAGES = {"png", "jpg", "jpeg", "webp"}
 _ALLOWED_MEDIA = _ALLOWED_IMAGES | {"mp4", "webm"}
@@ -57,6 +63,7 @@ _MIME_ALLOW: Dict[str, set[str]] = {
 
 _slug_pat = re.compile(r"[^a-z0-9]+")
 _ext_pat = re.compile(r"^\.[a-z0-9]{1,8}$")
+_EMAIL_SIMPLE_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 
 _MAX_Q = 80
 _MAX_EMAIL = 160
@@ -67,21 +74,32 @@ _MAX_INFO = 3000
 _DEC_RATE_Q = Decimal("0.0001")
 _DEC_RATE_MAX = Decimal("0.8000")
 
+_SESSION_CSRF_KEY = "csrf_token"
+_SESSION_ADMIN_KEY = "admin_logged_in"
+_SESSION_ADMIN_EMAIL = "admin_email"
+_SESSION_ADMIN_LOGIN_AT = "admin_login_at"
+_SESSION_ADMIN_LAST_TRY = "admin_last_try"
+_SESSION_ADMIN_FAILED = "admin_failed"
+_SESSION_ADMIN_LOCKED_UNTIL = "admin_locked_until"
+
 
 def utcnow_ts() -> int:
     return int(time.time())
 
 
 def _clean_str(v: Any, max_len: int, *, default: str = "") -> str:
+    if max_len <= 0:
+        return default
     if v is None:
         return default
-    s = str(v).replace("\x00", "").strip()
+    s = str(v)
+    s = s.replace("\x00", "").replace("\u200b", "").strip()
     if not s:
         return default
     s = " ".join(s.split())
-    if max_len <= 0:
-        return default
-    return s[:max_len]
+    if len(s) > max_len:
+        s = s[:max_len]
+    return s
 
 
 def _bool(v: Any) -> bool:
@@ -149,7 +167,7 @@ def _wants_json() -> bool:
         if _clean_str(request.args.get("format"), 12).lower() == "json":
             return True
         accept = (request.headers.get("Accept") or "").lower()
-        if "application/json" in accept:
+        if "application/json" in accept or "text/json" in accept:
             return True
         if (request.headers.get("X-Requested-With") or "").lower() == "xmlhttprequest":
             return True
@@ -182,7 +200,7 @@ def _json_ok(**payload: Any):
 def _json_err(message: str, *, code: int = 400, **payload: Any):
     out = {"ok": False, "message": _clean_str(message, 400, default="Error")}
     out.update(payload)
-    return jsonify(out), code
+    return jsonify(out), int(code)
 
 
 def _flash_ok(msg: str) -> None:
@@ -197,14 +215,21 @@ def _flash_err(msg: str) -> None:
     flash(_clean_str(msg, 240, default="Error"), "error")
 
 
+_NO_STORE_HEADERS = {
+    "Cache-Control": "no-store, max-age=0, must-revalidate",
+    "Pragma": "no-cache",
+    "Expires": "0",
+    "X-Frame-Options": "SAMEORIGIN",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": "geolocation=(), microphone=(), camera=()",
+}
+
+
 def _no_store(resp: Response) -> Response:
     try:
-        resp.headers["Cache-Control"] = "no-store"
-        resp.headers["Pragma"] = "no-cache"
-        resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
-        resp.headers.setdefault("X-Content-Type-Options", "nosniff")
-        resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
-        resp.headers.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+        for k, v in _NO_STORE_HEADERS.items():
+            resp.headers.setdefault(k, v)
         vary = resp.headers.get("Vary", "")
         parts = [p.strip() for p in vary.split(",") if p.strip()]
         if "Accept" not in parts:
@@ -230,7 +255,7 @@ def _render_safe(template: str, **ctx: Any):
         try:
             return render_template(template, **ctx)
         except Exception:
-            pass
+            log.exception("Template render failed: %s", template)
     title = _clean_str(ctx.get("title") or "Admin", 120, default="Admin")
     body = (
         "<!doctype html><html lang='es'><head><meta charset='utf-8'>"
@@ -244,13 +269,13 @@ def _render_safe(template: str, **ctx: Any):
 
 
 def _ensure_csrf() -> str:
-    tok = session.get("csrf_token")
+    tok = session.get(_SESSION_CSRF_KEY)
     if not isinstance(tok, str) or len(tok) < 24:
         tok = secrets.token_urlsafe(32)
-        session["csrf_token"] = tok
+        session[_SESSION_CSRF_KEY] = tok
     session.permanent = True
     session.modified = True
-    return cast(str, session["csrf_token"])
+    return cast(str, session[_SESSION_CSRF_KEY])
 
 
 def _csrf_token() -> str:
@@ -270,17 +295,17 @@ def _safe_get_json() -> Dict[str, Any]:
 def _require_csrf() -> None:
     if request.method in {"GET", "HEAD", "OPTIONS"}:
         return
-    sess_tok = _clean_str(session.get("csrf_token"), 256)
+
+    sess_tok = _clean_str(session.get(_SESSION_CSRF_KEY), 256)
     if not sess_tok:
         abort(400)
 
     form_tok = _clean_str(request.form.get("csrf_token"), 256)
     hdr_tok = _clean_str(request.headers.get("X-CSRF-Token") or request.headers.get("X-CSRFToken"), 256)
-    tok = form_tok or hdr_tok
-    if not tok:
-        tok = _clean_str(_safe_get_json().get("csrf_token"), 256)
+    tok = form_tok or hdr_tok or _clean_str(_safe_get_json().get("csrf_token"), 256)
     if not tok:
         abort(400)
+
     try:
         if not secrets.compare_digest(tok, sess_tok):
             abort(400)
@@ -288,19 +313,108 @@ def _require_csrf() -> None:
         abort(400)
 
 
-@admin_bp.before_request
-def _admin_before_request():
-    _ensure_csrf()
+def _clean_next_path(raw: Optional[str], *, default_path: str = "/admin") -> str:
+    p = _clean_str(raw, 512, default="")
+    if not p:
+        return default_path
+
+    pl = p.lower()
+    if (
+        not p.startswith("/")
+        or p.startswith("//")
+        or "://" in p
+        or "\\" in p
+        or "\n" in p
+        or "\r" in p
+        or "\t" in p
+        or " " in p
+        or ".." in p
+        or pl.startswith("/%5c")
+        or pl.startswith("/%2f%2f")
+        or pl.startswith("/%2f%5c")
+    ):
+        return default_path
+
+    if "?" in p:
+        p = p.split("?", 1)[0]
+    if "#" in p:
+        p = p.split("#", 1)[0]
+    return p or default_path
 
 
-@admin_bp.after_request
-def _admin_after_request(resp: Response):
-    return _no_store(resp)
+def _admin_rate_ok() -> bool:
+    now = time.time()
+    last = session.get(_SESSION_ADMIN_LAST_TRY, 0.0)
+    try:
+        last_f = float(last)
+    except Exception:
+        last_f = 0.0
+    if (now - last_f) < _ADMIN_RATE_SECONDS:
+        return False
+    session[_SESSION_ADMIN_LAST_TRY] = now
+    session.modified = True
+    return True
 
 
-@admin_bp.context_processor
-def _inject_csrf():
-    return {"csrf_token_value": session.get("csrf_token", "")}
+def _admin_locked() -> Tuple[bool, int]:
+    until = session.get(_SESSION_ADMIN_LOCKED_UNTIL, 0.0)
+    try:
+        until_f = float(until)
+    except Exception:
+        until_f = 0.0
+    left = int(max(0, until_f - time.time()))
+    return (left > 0), left
+
+
+def _admin_lock(fails: int) -> None:
+    extra = min(_ADMIN_LOCK_SECONDS, max(0, fails - _MAX_ADMIN_ATTEMPTS) * 30)
+    session[_SESSION_ADMIN_LOCKED_UNTIL] = time.time() + _ADMIN_LOCK_SECONDS + extra
+    session.modified = True
+
+
+def _admin_failed_inc() -> int:
+    n = as_int(session.get(_SESSION_ADMIN_FAILED, 0), 0, min_value=0, max_value=10000)
+    n += 1
+    session[_SESSION_ADMIN_FAILED] = n
+    session.modified = True
+    return n
+
+
+def _admin_failed_reset() -> None:
+    session[_SESSION_ADMIN_FAILED] = 0
+    session[_SESSION_ADMIN_LOCKED_UNTIL] = 0
+    session.modified = True
+
+
+def _admin_login_success(email: str) -> None:
+    session.clear()
+    session[_SESSION_ADMIN_KEY] = True
+    session[_SESSION_ADMIN_EMAIL] = _clean_str(email, _MAX_EMAIL).lower()
+    session["is_admin"] = True
+    session[_SESSION_ADMIN_LOGIN_AT] = utcnow_ts()
+    session[_SESSION_CSRF_KEY] = secrets.token_urlsafe(32)
+    session.permanent = True
+    session.modified = True
+    _admin_failed_reset()
+
+
+def _admin_is_fresh() -> bool:
+    ts = session.get(_SESSION_ADMIN_LOGIN_AT)
+    try:
+        ts_i = int(ts)
+    except Exception:
+        return False
+    return (utcnow_ts() - ts_i) <= _ADMIN_FRESH_SECONDS
+
+
+def _require_admin_fresh() -> None:
+    if request.method in {"GET", "HEAD", "OPTIONS"}:
+        return
+    if not _admin_is_fresh():
+        if _wants_json():
+            abort(401)
+        _flash_warn("Tu sesión admin expiró. Volvé a iniciar sesión.")
+        abort(401)
 
 
 def _commit_ok() -> bool:
@@ -323,70 +437,14 @@ def _commit_or_flash(msg_ok: str, msg_err: str, category_ok: str = "success") ->
     return False
 
 
-def _admin_rate_ok() -> bool:
-    now = time.time()
-    last = session.get("admin_last_try", 0.0)
-    try:
-        last_f = float(last)
-    except Exception:
-        last_f = 0.0
-    if (now - last_f) < _ADMIN_RATE_SECONDS:
+def _safe_set(obj: Any, attr: str, value: Any) -> bool:
+    if not hasattr(obj, attr):
         return False
-    session["admin_last_try"] = now
-    session.modified = True
-    return True
-
-
-def _admin_locked() -> Tuple[bool, int]:
-    until = session.get("admin_locked_until", 0.0)
     try:
-        until_f = float(until)
-    except Exception:
-        until_f = 0.0
-    left = int(max(0, until_f - time.time()))
-    return (left > 0), left
-
-
-def _admin_lock(fails: int) -> None:
-    extra = min(_ADMIN_LOCK_SECONDS, max(0, fails - _MAX_ADMIN_ATTEMPTS) * 30)
-    session["admin_locked_until"] = time.time() + _ADMIN_LOCK_SECONDS + extra
-    session.modified = True
-
-
-def _admin_failed_inc() -> int:
-    n = as_int(session.get("admin_failed", 0), 0, min_value=0, max_value=10000)
-    n += 1
-    session["admin_failed"] = n
-    session.modified = True
-    return n
-
-
-def _admin_failed_reset() -> None:
-    session["admin_failed"] = 0
-    session["admin_locked_until"] = 0
-    session.modified = True
-
-
-def _admin_login_success(email: str) -> None:
-    old_csrf = _clean_str(session.get("csrf_token"), 256, default="")
-    session.clear()
-    session["admin_logged_in"] = True
-    session["admin_email"] = _clean_str(email, _MAX_EMAIL).lower()
-    session["is_admin"] = True
-    session["admin_login_at"] = utcnow_ts()
-    session["csrf_token"] = secrets.token_urlsafe(32) if not old_csrf else secrets.token_urlsafe(32)
-    session.permanent = True
-    session.modified = True
-    _admin_failed_reset()
-
-
-def _admin_is_fresh() -> bool:
-    ts = session.get("admin_login_at")
-    try:
-        ts_i = int(ts)
+        setattr(obj, attr, value)
+        return True
     except Exception:
         return False
-    return (utcnow_ts() - ts_i) <= _ADMIN_FRESH_SECONDS
 
 
 def _unique_slug(model, slug: str, *, id_exclude: Optional[int] = None, max_tries: int = 12) -> str:
@@ -409,36 +467,26 @@ def _unique_slug(model, slug: str, *, id_exclude: Optional[int] = None, max_trie
     return cand
 
 
-def _safe_set(obj: Any, attr: str, value: Any) -> bool:
-    if not hasattr(obj, attr):
-        return False
-    try:
-        setattr(obj, attr, value)
-        return True
-    except Exception:
-        return False
-
-
 def uploads_dir(kind: str) -> Path:
     base = _clean_str(current_app.config.get("UPLOADS_DIR"), 400, default="")
     root = Path(base) if base else (Path(current_app.root_path) / "static" / "uploads")
     kind2 = slugify(kind).replace("-", "")[:24] or "files"
-    path = root / kind2
+    path = (root / kind2).resolve()
     path.mkdir(parents=True, exist_ok=True)
     return path
 
 
 def _random_filename(original: str) -> str:
     name = secure_filename(original or "")
-    stem = (Path(name).stem[:30] if name else "file") or "file"
+    stem = (Path(name).stem[:40] if name else "file") or "file"
     ext = Path(name).suffix.lower()
     if ext and not _ext_pat.fullmatch(ext):
         ext = ""
-    token = secrets.token_urlsafe(8).replace("-", "").replace("_", "")
+    token = secrets.token_urlsafe(10).replace("-", "").replace("_", "")
     return f"{stem}_{int(time.time() * 1000)}_{token}{ext}"
 
 
-def _file_too_large(file, max_mb: int) -> bool:
+def _file_too_large(file: FileStorage, max_mb: int) -> bool:
     try:
         max_bytes = int(max_mb) * 1024 * 1024
         cl = getattr(file, "content_length", None)
@@ -460,7 +508,19 @@ def _file_too_large(file, max_mb: int) -> bool:
     return False
 
 
-def save_upload(file, kind: str, allow_ext: set[str]) -> Optional[str]:
+def _atomic_save_upload(file: FileStorage, dest: Path) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_suffix(dest.suffix + f".{secrets.token_hex(6)}.tmp")
+    file.save(tmp)
+    try:
+        with open(tmp, "rb") as f:
+            os.fsync(f.fileno())
+    except Exception:
+        pass
+    os.replace(str(tmp), str(dest))
+
+
+def save_upload(file: Optional[FileStorage], kind: str, allow_ext: set[str]) -> Optional[str]:
     if not file or not getattr(file, "filename", ""):
         return None
 
@@ -484,7 +544,7 @@ def save_upload(file, kind: str, allow_ext: set[str]) -> Optional[str]:
 
     final = _random_filename(filename)
     dest = uploads_dir(kind2) / final
-    file.save(dest)
+    _atomic_save_upload(file, dest)
 
     return url_for("static", filename=f"uploads/{kind2}/{final}")
 
@@ -524,10 +584,11 @@ def load_payments() -> Dict[str, Any]:
             raw = json.loads(p.read_text("utf-8"))
             if isinstance(raw, dict):
                 for k, shape in base.items():
-                    if isinstance(raw.get(k), dict):
+                    v = raw.get(k)
+                    if isinstance(v, dict):
                         for kk in shape.keys():
-                            if kk in raw[k]:
-                                base[k][kk] = raw[k][kk]
+                            if kk in v:
+                                base[k][kk] = v[kk]
         except Exception:
             pass
     return base
@@ -538,22 +599,60 @@ def save_payments(data: Dict[str, Any]) -> None:
     safe = payments_defaults()
 
     for k in base:
-        if isinstance(data.get(k), dict):
-            safe[k]["active"] = _bool(data[k].get("active"))
+        v = data.get(k)
+        if isinstance(v, dict):
+            safe[k]["active"] = _bool(v.get("active"))
             for kk in base[k].keys():
                 if kk == "active":
                     continue
-                val = data[k].get(kk)
-                safe[k][kk] = _clean_str(val, _MAX_INFO) if val is not None else ""
+                safe[k][kk] = _clean_str(v.get(kk), _MAX_INFO) if v.get(kk) is not None else ""
 
     _atomic_write_text(payments_path(), json.dumps(safe, indent=2, ensure_ascii=False))
 
 
+def _tiers_sanity() -> Tuple[bool, List[str]]:
+    try:
+        out = CommissionTier.sanity_check_overlaps()
+        if isinstance(out, tuple) and len(out) == 2:
+            ok, issues = out
+            return bool(ok), list(issues or [])
+        if isinstance(out, list):
+            return (len(out) == 0), list(out)
+        return True, []
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return False, ["No se pudo ejecutar sanity_check_overlaps()."]
+
+
+@admin_bp.before_request
+def _admin_before_request():
+    _ensure_csrf()
+
+
+@admin_bp.after_request
+def _admin_after_request(resp: Response):
+    return _no_store(resp)
+
+
+@admin_bp.context_processor
+def _inject_csrf():
+    return {"csrf_token_value": session.get(_SESSION_CSRF_KEY, "")}
+
+
 @admin_bp.get("/login")
 def login():
-    if session.get("admin_logged_in"):
+    if session.get(_SESSION_ADMIN_KEY):
         return _redir("admin.dashboard")
-    return _render_safe("admin/login.html", csrf_token_value=_csrf_token())
+
+    raw_next = request.args.get("next")
+    next_path = _clean_next_path(raw_next, default_path="/admin")
+    if next_path.startswith("/admin/login"):
+        next_path = "/admin"
+
+    return _render_safe("admin/login.html", csrf_token_value=_csrf_token(), next=next_path)
 
 
 @admin_bp.post("/login")
@@ -576,6 +675,15 @@ def login_post():
     email = _clean_str(request.form.get("email"), _MAX_EMAIL).lower()
     password = _clean_str(request.form.get("password"), 500)
 
+    if not email or len(email) > 254 or not _EMAIL_SIMPLE_RE.match(email):
+        n = _admin_failed_inc()
+        if n >= _MAX_ADMIN_ATTEMPTS:
+            _admin_lock(n)
+        if _wants_json():
+            return _json_err("Credenciales inválidas", code=401, error="invalid_creds")
+        _flash_err("Credenciales inválidas")
+        return _redir("admin.login")
+
     if not admin_creds_ok(email, password):
         n = _admin_failed_inc()
         if n >= _MAX_ADMIN_ATTEMPTS:
@@ -586,10 +694,17 @@ def login_post():
         return _redir("admin.login")
 
     _admin_login_success(email)
+
+    next_in = _clean_str(request.form.get("next"), 512, default="")
+    next_path = _clean_next_path(next_in, default_path="/admin")
+    if next_path.startswith("/admin/login"):
+        next_path = "/admin"
+
     if _wants_json():
-        return _json_ok(redirect=_safe_url_for("admin.dashboard") or "/admin")
+        return _json_ok(redirect=next_path)
+
     _flash_ok("Bienvenido al panel admin")
-    return _redir("admin.dashboard")
+    return redirect(next_path, code=302)
 
 
 @admin_bp.get("/logout")
@@ -634,6 +749,7 @@ def payments():
 @admin_required
 def payments_save():
     _require_csrf()
+    _require_admin_fresh()
 
     data = payments_defaults()
     for k in data:
@@ -658,23 +774,6 @@ def payments_save():
         _flash_err("No se pudo guardar pagos")
 
     return _redir("admin.payments")
-
-
-def _tiers_sanity() -> Tuple[bool, List[str]]:
-    try:
-        out = CommissionTier.sanity_check_overlaps()
-        if isinstance(out, tuple) and len(out) == 2:
-            ok, issues = out
-            return bool(ok), list(issues or [])
-        if isinstance(out, list):
-            return (len(out) == 0), list(out)
-        return True, []
-    except Exception:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
-        return False, ["No se pudo ejecutar sanity_check_overlaps()."]
 
 
 @admin_bp.get("/commission-tiers")
@@ -704,6 +803,7 @@ def commission_tiers():
 @admin_required
 def commission_tiers_seed():
     _require_csrf()
+    _require_admin_fresh()
     try:
         CommissionTier.ensure_default_seed()
         _flash_ok("Tiers default creados")
@@ -716,6 +816,7 @@ def commission_tiers_seed():
 @admin_required
 def commission_tiers_validate():
     _require_csrf()
+    _require_admin_fresh()
     try:
         CommissionTier.validate_integrity()
         _flash_ok("Tiers OK")
@@ -728,6 +829,7 @@ def commission_tiers_validate():
 @admin_required
 def commission_tiers_new():
     _require_csrf()
+    _require_admin_fresh()
 
     min_sales = as_int(request.form.get("min_sales"), 0, min_value=0, max_value=1_000_000)
     max_sales_raw = _clean_str(request.form.get("max_sales"), 32, default="")
@@ -767,6 +869,7 @@ def commission_tiers_new():
 @admin_required
 def commission_tiers_edit(id: int):
     _require_csrf()
+    _require_admin_fresh()
 
     t = db.session.get(CommissionTier, id)
     if not t:
@@ -811,6 +914,7 @@ def commission_tiers_edit(id: int):
 @admin_required
 def commission_tiers_delete(id: int):
     _require_csrf()
+    _require_admin_fresh()
 
     t = db.session.get(CommissionTier, id)
     if not t:
@@ -852,6 +956,7 @@ def categories():
 @admin_required
 def categories_new():
     _require_csrf()
+    _require_admin_fresh()
 
     name = _clean_str(request.form.get("name"), 120, default="")
     if not name:
@@ -877,6 +982,7 @@ def categories_new():
 @admin_required
 def categories_edit(id: int):
     _require_csrf()
+    _require_admin_fresh()
 
     c = db.session.get(Category, id)
     if not c:
@@ -902,6 +1008,7 @@ def categories_edit(id: int):
 @admin_required
 def categories_delete(id: int):
     _require_csrf()
+    _require_admin_fresh()
 
     c = db.session.get(Category, id)
     if c:
@@ -1012,6 +1119,7 @@ def products_new():
 @admin_required
 def products_create():
     _require_csrf()
+    _require_admin_fresh()
 
     title = _clean_str(request.form.get("title"), 180, default="")
     if not title:
@@ -1087,6 +1195,7 @@ def products_edit(id: int):
 @admin_required
 def products_update(id: int):
     _require_csrf()
+    _require_admin_fresh()
 
     p = db.session.get(Product, id)
     if not p:
@@ -1137,6 +1246,8 @@ def products_update(id: int):
 @admin_required
 def products_delete(id: int):
     _require_csrf()
+    _require_admin_fresh()
+
     p = db.session.get(Product, id)
     if p:
         try:
@@ -1169,6 +1280,7 @@ def offers():
 @admin_required
 def offers_new():
     _require_csrf()
+    _require_admin_fresh()
 
     title = _clean_str(request.form.get("title"), 180, default="")
     if not title:
@@ -1207,6 +1319,7 @@ def offers_new():
 @admin_required
 def offers_delete(id: int):
     _require_csrf()
+    _require_admin_fresh()
 
     o = db.session.get(Offer, id)
     if o:

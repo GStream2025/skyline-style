@@ -1,88 +1,464 @@
-{# app/templates/admin/login.html — Login PRO #}
+{% set APP = (APP_NAME if APP_NAME is defined and APP_NAME else "Skyline Store") %}
+{% set _nonce = (csp_nonce if csp_nonce is defined and csp_nonce else (nonce if nonce is defined and nonce else "")) %}
+{% set _req = (request if request is defined else none) %}
+{% set _next_raw = (next if next is defined else (_req.args.get('next') if _req and _req.args else "")) %}
+{% set _next_raw = (_next_raw|string)|trim %}
+{% set _nl = _next_raw|lower %}
+{% if not _next_raw
+  or not _next_raw.startswith('/')
+  or _next_raw.startswith('//')
+  or '://' in _next_raw
+  or '\\' in _next_raw
+  or '\n' in _next_raw
+  or '\r' in _next_raw
+  or '\t' in _next_raw
+  or ' ' in _next_raw
+  or '..' in _next_raw
+  or _nl.startswith('/%5c')
+  or _nl.startswith('/%2f%2f')
+%}
+  {% set _next = '/admin' %}
+{% else %}
+  {% set _next = _next_raw.split('?',1)[0].split('#',1)[0] %}
+{% endif %}
+
+{% set _csrf = "" %}
+{% if csrf_token_value is defined and csrf_token_value %}
+  {% set _csrf = csrf_token_value|string %}
+{% elif csrf_token is defined %}
+  {% set _csrf = (csrf_token() if csrf_token is callable else (csrf_token|string)) %}
+{% endif %}
+
 <!doctype html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Admin · Login</title>
-  <style>
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="theme-color" content="#2563eb">
+  <meta name="color-scheme" content="dark light">
+  {% if _csrf %}<meta name="csrf-token" content="{{ _csrf|e }}">{% endif %}
+  <title>Admin · Login · {{ APP|e }}</title>
+
+  <style{% if _nonce %} nonce="{{ _nonce|e }}"{% endif %}>
     :root{
-      --bg:#0b1120;
+      --bg0:#020617;
+      --bg1:#0b1120;
+      --card: rgba(255,255,255,.06);
       --stroke: rgba(148,163,184,.16);
+      --stroke2: rgba(148,163,184,.22);
       --text:#e5e7eb;
       --muted:#9ca3af;
+      --good:#22c55e;
+      --bad:#ef4444;
+      --info:#38bdf8;
       --a:#38bdf8;
       --b:#2563eb;
       --r: 18px;
+      --r2: 22px;
       --shadow: 0 22px 60px rgba(0,0,0,.45);
       --ring: 0 0 0 4px rgba(56,189,248,.18);
+      --ring2: 0 0 0 4px rgba(255,255,255,.10);
+      color-scheme: dark;
     }
+
+    *{box-sizing:border-box}
+    html,body{height:100%}
     body{
-      margin:0;min-height:100vh;display:grid;place-items:center;
-      font-family:system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial;
+      margin:0;
+      min-height:100vh;
+      display:grid;
+      place-items:center;
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial;
       background:
         radial-gradient(900px 600px at 0% 0%, rgba(56,189,248,.20), transparent 55%),
         radial-gradient(900px 600px at 100% 0%, rgba(37,99,235,.22), transparent 60%),
-        linear-gradient(160deg,#0f172a,#020617);
-      color:var(--text)
+        linear-gradient(160deg,#0f172a,var(--bg0));
+      color:var(--text);
+      padding:22px 14px;
     }
+
+    .wrap{width:min(600px,94vw);}
+
     .card{
-      width:min(560px,92vw);
       border:1px solid var(--stroke);
-      border-radius:var(--r);
-      background:rgba(255,255,255,.06);
+      border-radius:var(--r2);
+      background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.045));
       padding:18px;
-      box-shadow:var(--shadow)
+      box-shadow:var(--shadow);
+      overflow:hidden;
+      position:relative;
     }
-    .h{margin:0;font-size:1.35rem;font-weight:1000;letter-spacing:-.4px}
-    .muted{color:var(--muted);line-height:1.6;margin:.4rem 0 1rem}
-    input{
+
+    .top{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:12px;
+      padding:6px 6px 12px;
+      border-bottom:1px solid rgba(148,163,184,.12);
+      margin-bottom:14px;
+    }
+
+    .brand{
+      display:flex;
+      gap:12px;
+      align-items:center;
+      min-width:0;
+    }
+
+    .logo{
+      width:40px;height:40px;border-radius:14px;
+      background:
+        radial-gradient(18px 18px at 30% 30%, rgba(56,189,248,.55), transparent 60%),
+        linear-gradient(135deg, rgba(56,189,248,.25), rgba(37,99,235,.22));
+      border:1px solid rgba(148,163,184,.18);
+      box-shadow:0 16px 44px rgba(2,6,23,.45);
+      flex:0 0 auto;
+    }
+
+    h1{
+      margin:0;
+      font-size:1.28rem;
+      font-weight:1000;
+      letter-spacing:-.45px;
+      line-height:1.1;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+
+    .sub{
+      margin:.35rem 0 0;
+      color:var(--muted);
+      line-height:1.5;
+      font-weight:650;
+      font-size:.94rem;
+    }
+
+    .pill{
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid rgba(148,163,184,.18);
+      background:rgba(255,255,255,.05);
+      color:rgba(226,232,240,.92);
+      font-weight:850;
+      font-size:.78rem;
+      user-select:none;
+    }
+
+    form{margin:0}
+    .grid{display:grid;gap:10px}
+
+    label{
+      display:block;
+      font-weight:850;
+      font-size:.9rem;
+      color:rgba(226,232,240,.92);
+      margin:4px 2px;
+    }
+
+    .field{
       width:100%;
-      padding:10px 12px;
-      border-radius:12px;
-      border:1px solid rgba(148,163,184,.22);
+      padding:12px 12px;
+      border-radius:14px;
+      border:1px solid var(--stroke2);
       background:rgba(255,255,255,.06);
-      color:var(--text)
+      color:var(--text);
+      outline:none;
+      transition:box-shadow .12s ease, transform .12s ease, border-color .12s ease, filter .12s ease;
     }
-    input:focus-visible{ outline:none; box-shadow: var(--ring) }
+
+    .field::placeholder{color:rgba(148,163,184,.78)}
+    .field:focus-visible{box-shadow:var(--ring); border-color:rgba(56,189,248,.42)}
+    .field:disabled{opacity:.6; cursor:not-allowed}
+
+    .row2{
+      display:grid;
+      grid-template-columns: 1fr;
+      gap:10px;
+    }
+
+    .actions{
+      display:grid;
+      gap:10px;
+      margin-top:6px;
+    }
+
     .btn{
-      margin-top:10px;width:100%;
-      padding:10px 12px;
-      border-radius:12px;border:0;
-      font-weight:950;color:#001018;
+      width:100%;
+      padding:12px 14px;
+      border-radius:14px;
+      border:0;
+      font-weight:950;
+      color:#001018;
       cursor:pointer;
-      background:linear-gradient(135deg,var(--a),var(--b))
+      background:linear-gradient(135deg,var(--a),var(--b));
+      box-shadow:0 18px 44px rgba(37,99,235,.22);
+      transition:transform .12s ease, filter .12s ease, box-shadow .12s ease;
+      min-height:46px;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:10px;
+      touch-action:manipulation;
     }
-    .row{display:grid;gap:10px}
-    .msg{margin-top:10px;padding:10px 12px;border-radius:12px;border:1px solid rgba(148,163,184,.16);background:rgba(255,255,255,.05)}
-    code{ background: rgba(0,0,0,.25); padding: 2px 6px; border-radius: 8px; }
+
+    .btn:hover{filter:brightness(1.03); transform:translateY(-1px)}
+    .btn:active{transform:translateY(0)}
+    .btn:focus-visible{outline:none; box-shadow:var(--ring2), 0 18px 44px rgba(37,99,235,.22)}
+    .btn[disabled], .btn[aria-disabled="true"]{opacity:.65; cursor:not-allowed; transform:none}
+
+    .meta{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      margin-top:6px;
+      flex-wrap:wrap;
+    }
+
+    .check{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      user-select:none;
+      color:rgba(226,232,240,.88);
+      font-weight:750;
+      font-size:.92rem;
+    }
+    .check input{width:18px;height:18px; accent-color: #38bdf8}
+
+    .hint{
+      margin:12px 0 0;
+      color:rgba(148,163,184,.92);
+      font-size:.9rem;
+      line-height:1.5;
+      font-weight:650;
+    }
+    code{background: rgba(0,0,0,.25); padding: 2px 6px; border-radius: 8px; border:1px solid rgba(148,163,184,.16)}
+
+    .msg{
+      margin:10px 0 0;
+      padding:10px 12px;
+      border-radius:14px;
+      border:1px solid rgba(148,163,184,.16);
+      background:rgba(255,255,255,.05);
+      font-weight:800;
+      line-height:1.45;
+      word-break:break-word;
+    }
+    .msg.success{border-color:rgba(34,197,94,.22); background:rgba(34,197,94,.08)}
+    .msg.error{border-color:rgba(239,68,68,.22); background:rgba(239,68,68,.08)}
+    .msg.warning{border-color:rgba(245,158,11,.22); background:rgba(245,158,11,.08)}
+    .msg.info{border-color:rgba(56,189,248,.22); background:rgba(56,189,248,.08)}
+
+    .sr-only{
+      position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+      clip:rect(0,0,0,0);white-space:nowrap;border:0;
+    }
+
+    .spin{
+      width:16px;height:16px;border-radius:999px;
+      border:2px solid rgba(255,255,255,.35);
+      border-top-color:rgba(255,255,255,.95);
+      animation:spin .85s linear infinite;
+      display:none;
+    }
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    @media (min-width:720px){
+      .card{padding:20px}
+      .row2{grid-template-columns: 1fr 1fr}
+    }
+    @media (prefers-reduced-motion: reduce){
+      .btn{transition:none}
+      .btn:hover{transform:none}
+      .spin{animation:none}
+    }
+    @media (prefers-color-scheme: light){
+      :root{
+        color-scheme: light;
+        --text:#0b1220;
+        --muted:rgba(11,18,32,.70);
+        --card: rgba(255,255,255,.92);
+        --stroke: rgba(15,23,42,.12);
+        --stroke2: rgba(15,23,42,.16);
+      }
+      body{
+        background:
+          radial-gradient(900px 600px at 0% 0%, rgba(56,189,248,.18), transparent 55%),
+          radial-gradient(900px 600px at 100% 0%, rgba(37,99,235,.18), transparent 60%),
+          linear-gradient(160deg,#eef2ff,#ffffff);
+        color:var(--text);
+      }
+      .card{background:rgba(255,255,255,.88); box-shadow:0 22px 60px rgba(2,6,23,.12)}
+      .pill{background:rgba(2,6,23,.04); color:rgba(2,6,23,.78)}
+      .field{background:rgba(2,6,23,.03)}
+      code{background:rgba(2,6,23,.06)}
+    }
   </style>
 </head>
+
 <body>
-  <div class="card">
-    <h1 class="h">Skyline Admin</h1>
-    <p class="muted">Ingresá para administrar productos, categorías, imágenes y fuentes (Printful / dropship / Temu).</p>
+  <main class="wrap" aria-label="Login de administrador">
+    <section class="card" role="region" aria-labelledby="adminTitle">
+      <header class="top">
+        <div class="brand">
+          <div class="logo" aria-hidden="true"></div>
+          <div style="min-width:0">
+            <h1 id="adminTitle">Skyline Admin</h1>
+            <p class="sub">Accedé para administrar productos, categorías, medios, Printful y comisiones.</p>
+          </div>
+        </div>
+        <div class="pill" aria-label="Modo">PRO</div>
+      </header>
 
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        {% for category, message in messages %}
-          <div class="msg">{{ message }}</div>
-        {% endfor %}
-      {% endif %}
-    {% endwith %}
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div aria-live="polite">
+            {% for category, message in messages %}
+              {% set k = (category|string|lower|trim) %}
+              {% if k in ['danger','error'] %}{% set k = 'error' %}{% endif %}
+              {% if k not in ['success','error','warning','info'] %}{% set k = 'info' %}{% endif %}
+              <div class="msg {{ k }}">{{ message }}</div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
 
-    <form method="post" action="{{ url_for('admin.login_post') }}">
-      <input type="hidden" name="next" value="{{ next }}">
-      <div class="row">
-        <input name="email" type="email" placeholder="Email admin" required>
-        <input name="password" type="password" placeholder="Contraseña" required>
-        <button class="btn" type="submit">Entrar</button>
-      </div>
-    </form>
+      <form id="adminLoginForm" method="post" action="{{ url_for('admin.login_post') }}" novalidate autocomplete="on">
+        {% if _csrf %}
+          <input type="hidden" name="csrf_token" value="{{ _csrf|e }}">
+        {% endif %}
+        <input type="hidden" name="next" value="{{ _next|e }}">
 
-    <p class="muted" style="margin:12px 0 0;font-size:.92rem">
-      Definí <code>ADMIN_EMAIL</code> y <code>ADMIN_PASSWORD</code> en tu <code>.env</code>.
-    </p>
-  </div>
+        <div class="grid" style="margin-top:14px">
+          <div>
+            <label for="email">Email</label>
+            <input
+              class="field"
+              id="email"
+              name="email"
+              type="email"
+              inputmode="email"
+              placeholder="admin@tu-dominio.com"
+              autocomplete="username"
+              required
+              maxlength="254"
+              spellcheck="false"
+              aria-describedby="emailHelp"
+              value="{{ (email if email is defined else '')|string|trim|e }}"
+            >
+            <div id="emailHelp" class="sr-only">Ingresá tu email de administrador</div>
+          </div>
+
+          <div>
+            <label for="password">Contraseña</label>
+            <input
+              class="field"
+              id="password"
+              name="password"
+              type="password"
+              placeholder="Tu contraseña"
+              autocomplete="current-password"
+              required
+              minlength="8"
+              maxlength="256"
+              aria-describedby="passHelp"
+            >
+            <div id="passHelp" class="sr-only">Ingresá tu contraseña</div>
+          </div>
+
+          <div class="meta">
+            <label class="check" for="showPass">
+              <input id="showPass" type="checkbox">
+              Mostrar contraseña
+            </label>
+            <span class="hint" style="margin:0">Redirección: <code>{{ _next|e }}</code></span>
+          </div>
+
+          <div class="actions">
+            <button class="btn" id="btnSubmit" type="submit">
+              <span class="spin" id="spin" aria-hidden="true"></span>
+              <span id="btnTxt">Entrar</span>
+              <span class="sr-only" id="srStatus" aria-live="polite"></span>
+            </button>
+          </div>
+
+          <p class="hint">
+            Configurá <code>ADMIN_EMAIL</code> y <code>ADMIN_PASSWORD</code> (y opcionalmente <code>SEED=1</code>) en Render / .env.
+          </p>
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <script{% if _nonce %} nonce="{{ _nonce|e }}"{% endif %}>
+    (() => {
+      const form = document.getElementById("adminLoginForm");
+      const email = document.getElementById("email");
+      const pass = document.getElementById("password");
+      const show = document.getElementById("showPass");
+      const btn  = document.getElementById("btnSubmit");
+      const spin = document.getElementById("spin");
+      const txt  = document.getElementById("btnTxt");
+      const sr   = document.getElementById("srStatus");
+
+      const setBusy = (v) => {
+        if (!btn) return;
+        btn.disabled = !!v;
+        btn.setAttribute("aria-disabled", v ? "true" : "false");
+        if (spin) spin.style.display = v ? "inline-block" : "none";
+        if (txt) txt.textContent = v ? "Ingresando…" : "Entrar";
+        if (sr) sr.textContent = v ? "Enviando formulario" : "";
+      };
+
+      if (show && pass) {
+        show.addEventListener("change", () => {
+          pass.type = show.checked ? "text" : "password";
+        });
+      }
+
+      const isValidEmail = (v) => {
+        const s = String(v || "").trim();
+        if (!s || s.length > 254) return false;
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+      };
+
+      if (form) {
+        form.addEventListener("submit", (e) => {
+          const ev = e;
+          const em = email ? String(email.value || "").trim() : "";
+          const pw = pass ? String(pass.value || "") : "";
+
+          if (email && !isValidEmail(em)) {
+            ev.preventDefault();
+            email.focus();
+            email.setCustomValidity("Ingresá un email válido.");
+            email.reportValidity();
+            email.setCustomValidity("");
+            return;
+          }
+
+          if (pass && pw.length < 8) {
+            ev.preventDefault();
+            pass.focus();
+            pass.setCustomValidity("La contraseña debe tener al menos 8 caracteres.");
+            pass.reportValidity();
+            pass.setCustomValidity("");
+            return;
+          }
+
+          setBusy(true);
+          window.setTimeout(() => setBusy(false), 12000);
+        }, { passive: false });
+      }
+
+      if (email && !email.value) {
+        try { email.focus(); } catch (_) {}
+      }
+    })();
+  </script>
 </body>
 </html>
