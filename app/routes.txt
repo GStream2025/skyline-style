@@ -1,0 +1,279 @@
+Windows PowerShell
+Copyright (C) Microsoft Corporation. Todos los derechos reservados.
+
+Instale la versión más reciente de PowerShell para obtener nuevas características y mejoras. https://aka.ms/PSWindows
+
+PS C:\Users\User\Desktop\Dev\skyline_style_PRO_READY\skyline-style\app> tree /f
+Listado de rutas de carpetas
+El número de serie del volumen es 44CC-0E14
+C:.
+│   config.py
+│   printful_client.py
+│   printful_config.py
+│   routes.txt
+│   seed.py
+│   tree.txt
+│   _legacy_models_py__20251226_210547.py
+│   __init__.py
+│
+├───integrations
+│   │   mercadopago_webhook.py
+│   │   mp_create_preference.py
+│   │   paypal_client.py
+│   │   wise_handler.py
+│   │
+│   └───__pycache__
+│           mercadopago_webhook.cpython-312.pyc
+│           mp_create_preference.cpython-312.pyc
+│           paypal_client.cpython-312.pyc
+│           wise_handler.cpython-312.pyc
+│
+├───models
+│   │   affiliate_profile.py
+│   │   campaign.py
+│   │   category.py
+│   │   commission.py
+│   │   commission_ledger.py
+│   │   event.py
+│   │   media.py
+│   │   offer.py
+│   │   order.py
+│   │   payment_provider.py
+│   │   product.py
+│   │   user.py
+│   │   __init__.py
+│   │
+│   └───__pycache__
+│           affiliate_profile.cpython-312.pyc
+│           campaign.cpython-312.pyc
+│           category.cpython-312.pyc
+│           commission.cpython-312.pyc
+│           commission_ledger.cpython-312.pyc
+│           event.cpython-312.pyc
+│           media.cpython-312.pyc
+│           offer.cpython-312.pyc
+│           order.cpython-312.pyc
+│           payment_provider.cpython-312.pyc
+│           product.cpython-312.pyc
+│           user.cpython-312.pyc
+│           __init__.cpython-312.pyc
+│
+├───routes
+│   │   account_routes.py
+│   │   address_routes.py
+│   │   admin_auth_routes.py
+│   │   admin_payments_routes.py
+│   │   admin_routes.py
+│   │   affiliate.py
+│   │   affiliate_routes.py
+│   │   api_routes.py
+│   │   auth_routes.py
+│   │   cart_routes.py
+│   │   checkout_routes.py
+│   │   main_routes.py
+│   │   marketing_routes.py
+│   │   printful_routes.py
+│   │   profile_routes.py
+│   │   shop_routes.py
+│   │   webhook_routes.py
+│   │   __init__.py
+│   │
+│   └───__pycache__
+│           account_routes.cpython-312.pyc
+│           address_routes.cpython-312.pyc
+│           admin_payments_routes.cpython-312.pyc
+│           admin_routes.cpython-312.pyc
+│           affiliate.cpython-312.pyc
+│           affiliate_routes.cpython-312.pyc
+│           api_routes.cpython-312.pyc
+│           auth_routes.cpython-312.pyc
+│           cart_routes.cpython-312.pyc
+│           checkout_routes.cpython-312.pyc
+│           main_routes.cpython-312.pyc
+│           marketing_routes.cpython-312.pyc
+│           printful_routes.cpython-312.pyc
+│           profile_routes.cpython-312.pyc
+│           shop_routes.cpython-312.pyc
+│           webhook_routes.cpython-312.pyc
+│           __init__.cpython-312.pyc
+│
+├───services
+│   │   checkout_flow.py
+│   │   commission_service.py
+│   │   dropshipping_service.py
+│   │   email_service.py
+│   │   order_service.py
+│   │   payments_bootstrap.py
+│   │   paypal_capture.py
+│   │   printful_service.py
+│   │   product_service.py
+│   │   __init__.py
+│   │
+│   └───__pycache__
+│           checkout_flow.cpython-312.pyc
+│           commission_service.cpython-312.pyc
+│           dropshipping_service.cpython-312.pyc
+│           email_service.cpython-312.pyc
+│           order_service.cpython-312.pyc
+│           payments_bootstrap.cpython-312.pyc
+│           paypal_capture.cpython-312.pyc
+│           printful_service.cpython-312.pyc
+│           product_service.cpython-312.pyc
+│           __init__.cpython-312.pyc
+│
+├───static
+│   │   robots.txt
+│   │
+│   ├───css
+│   │   │   account.css
+│   │   │   components.css
+│   │   │   home.css
+│   │   │   skyline-pro.css
+│   │   │
+│   │   └───components
+│   │           buttons.css
+│   │           chips.css
+│   │           pagination.css
+│   │           price.css
+│   │           product_card.css
+│   │           rating.css
+│   │           section_header.css
+│   │           toasts.css
+│   │           _helpers.css
+│   │           _tokens.css
+│   │
+│   ├───img
+│   │   ├───banners
+│   │   │       banner_blog.png
+│   │   │       banner_new_arrivals.png
+│   │   │       cat_accessories.png
+│   │   │       cat_men.png
+│   │   │       cat_tech.png
+│   │   │       cat_women.png
+│   │   │       hero_home.png
+│   │   │       promo_week.png
+│   │   │       service_payment.png
+│   │   │       service_shipping.png
+│   │   │       service_support.png
+│   │   │
+│   │   └───products
+│   │           hero-headphones.png
+│   │           hero-hoodie.png
+│   │           hero-sneakers.png
+│   │           hero-watch.png
+│   │
+│   ├───js
+│   │       account.js
+│   │       home.js
+│   │       login.js
+│   │       register.js
+│   │
+│   └───uploads
+│       │   .gitkeep
+│       │
+│       ├───img
+│       │   │   1skyline_team.jpg
+│       │   │   skyline_team.jpg
+│       │   │
+│       │   └───hero
+│       │           card_accesorios.png
+│       │           card_buzos.png
+│       │           card_gorras.png
+│       │           card_remeras.png
+│       │
+│       └───products
+│               .gitkeep
+│
+├───templates
+│   │   about.html
+│   │   account_dashboard.html
+│   │   base.html
+│   │   error.html
+│   │   index.html
+│   │   printful_products.html
+│   │   printful_refresh.html
+│   │   product_detail.html
+│   │   shop.html
+│   │   sitemap.xml
+│   │
+│   ├───admin
+│   │       base_admin.html
+│   │       categories.html
+│   │       dashboard.html
+│   │       login.html
+│   │       offers.html
+│   │       payments.html
+│   │       products_list.html
+│   │       product_edit.html
+│   │       register.html
+│   │
+│   ├───auth
+│   │       account.html
+│   │       forgot_password.html
+│   │       login.html
+│   │       registrer.html
+│   │       reset_password.html
+│   │       verify_email.html
+│   │
+│   ├───cart
+│   │       cart.html
+│   │       empty.html
+│   │       mini.html
+│   │       modal.html
+│   │
+│   ├───checkout
+│   │       checkout.html
+│   │       failure.html
+│   │       pending.html
+│   │       success.html
+│   │
+│   ├───components
+│   │       badge.html
+│   │       chips.html
+│   │       price.html
+│   │       product_card.html
+│   │       rating.html
+│   │       section_header.html
+│   │       toasts.html
+│   │
+│   ├───emails
+│   │       email_verified.html
+│   │       password_reset.html
+│   │       verify_reminder.html
+│   │       welcome_verify.html
+│   │
+│   ├───errors
+│   │       404.html
+│   │       500.html
+│   │
+│   └───orders
+│           detail.html
+│           invoice.html
+│           order_success.html
+│
+├───utils
+│   │   admin_gate.py
+│   │   auth.py
+│   │   passwords.py
+│   │   password_engine.py
+│   │   printful_mapper.py
+│   │   security.py
+│   │   __init__.py
+│   │
+│   └───__pycache__
+│           auth.cpython-312.pyc
+│           passwords.cpython-312.pyc
+│           password_engine.cpython-312.pyc
+│           printful_mapper.cpython-312.pyc
+│           security.cpython-312.pyc
+│           __init__.cpython-312.pyc
+│
+└───__pycache__
+        config.cpython-312.pyc
+        printful_client.cpython-312.pyc
+        printful_config.cpython-312.pyc
+        seed.cpython-312.pyc
+        _legacy_models_py__20251226_210547.cpython-312.pyc
+        __init__.cpython-312.pyc
+
+PS C:\Users\User\Desktop\Dev\skyline_style_PRO_READY\skyline-style\app>

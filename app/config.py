@@ -324,15 +324,57 @@ class BaseConfig:
             "TEMPLATES_AUTO_RELOAD": env_bool("TEMPLATES_AUTO_RELOAD", default=debug),
         }
 
+        # -----------------------------
+        # AUTH (común) - login/register
+        # -----------------------------
+        cfg.update(
+            {
+                "AUTH_HEADERS_STRICT": env_bool("AUTH_HEADERS_STRICT", default=is_prod),
+                "AUTH_RL_WINDOW_SEC": env_int("AUTH_RL_WINDOW_SEC", 60, min_v=10, max_v=600),
+                "AUTH_RL_MAX": env_int("AUTH_RL_MAX", 8, min_v=3, max_v=60),
+                "AUTH_VERIFY_TTL_MIN": env_int("AUTH_VERIFY_TTL_MIN", 30, min_v=5, max_v=180),
+                "AUTH_VERIFY_RL_SEC": env_int("AUTH_VERIFY_RL_SEC", 60, min_v=10, max_v=600),
+            }
+        )
+
+        # -----------------------------
+        # ADMIN AUTH (panel)
+        # -----------------------------
+        allowed_roles_raw = env_str("ADMIN_ALLOWED_ROLES", "admin,staff")
+        allowed_roles = {x.strip().lower() for x in allowed_roles_raw.split(",") if x.strip()} or {"admin", "staff"}
+
+        cfg.update(
+            {
+                "ADMIN_HEADERS_STRICT": env_bool("ADMIN_HEADERS_STRICT", default=is_prod),
+                "ADMIN_LOGIN_ENDPOINT": env_str("ADMIN_LOGIN_ENDPOINT", "admin.login"),
+                "ADMIN_REGISTER_ENDPOINT": env_str("ADMIN_REGISTER_ENDPOINT", "admin.register"),
+                "ADMIN_LOGIN_FALLBACK_PATH": env_str("ADMIN_LOGIN_FALLBACK_PATH", "/admin/login"),
+                "ADMIN_REGISTER_FALLBACK_PATH": env_str("ADMIN_REGISTER_FALLBACK_PATH", "/admin/register"),
+                "ADMIN_SESSION_KEY": env_str("ADMIN_SESSION_KEY", "admin_logged_in"),
+                "ADMIN_DEFAULT_NEXT": env_str("ADMIN_DEFAULT_NEXT", "/admin"),
+                "ADMIN_ABORT_CODE_JSON": env_int("ADMIN_ABORT_CODE_JSON", 401, min_v=401, max_v=403),
+                "ADMIN_ABORT_CODE_HTML": env_opt_int("ADMIN_ABORT_CODE_HTML", None, min_v=401, max_v=403),
+                "ADMIN_ROLE_KEY": env_str("ADMIN_ROLE_KEY", "role"),
+                "ADMIN_ALLOWED_ROLES": allowed_roles,
+                "ADMIN_BYPASS": env_bool(
+                    "ADMIN_BYPASS", default=(not is_prod and env_bool("DEV_ADMIN_BYPASS", False))
+                ),
+                "ADMIN_EMAIL": env_str("ADMIN_EMAIL", ""),
+                "ADMIN_EMAILS": env_str("ADMIN_EMAILS", ""),
+                "ADMIN_PASSWORD": env_str("ADMIN_PASSWORD", ""),
+                "ADMIN_PASSWORD_HASH": env_str("ADMIN_PASSWORD_HASH", ""),
+                "ADMIN_ALLOW_REGISTER": env_bool("ADMIN_ALLOW_REGISTER", default=not is_prod),
+                "ADMIN_REGISTER_CODE": env_str("ADMIN_REGISTER_CODE", ""),
+            }
+        )
+
         if server_name:
             cfg["SERVER_NAME"] = server_name
-
         if cookie_domain:
             cfg["SESSION_COOKIE_DOMAIN"] = cookie_domain
 
         if not cfg.get("WTF_CSRF_SECRET_KEY"):
             cfg.pop("WTF_CSRF_SECRET_KEY", None)
-
         if not cfg.get("SERVER_NAME"):
             cfg.pop("SERVER_NAME", None)
 
