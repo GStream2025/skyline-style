@@ -55,14 +55,12 @@ def _s(v: Optional[str], max_len: int) -> Optional[str]:
 
 def _normalize_text(s: str) -> str:
     s = (s or "").replace("\u200b", "").replace("\ufeff", "")
-    s = unicodedata.normalize("NFKC", s)
-    return s
+    return unicodedata.normalize("NFKC", s)
 
 
 def _normalize_email(email: str) -> str:
     e = _normalize_text(email or "").strip().lower()
-    e = " ".join(e.split())
-    return e
+    return " ".join(e.split())
 
 
 def _email_ok(email: str) -> bool:
@@ -94,13 +92,11 @@ def _safe_ip(v: Optional[str]) -> Optional[str]:
     raw = _s(_normalize_text(v or ""), _MAX_IP_LEN)
     if not raw:
         return None
-    raw = raw.strip()
-    if len(raw) > _MAX_IP_LEN:
-        raw = raw[:_MAX_IP_LEN]
+    raw = raw.strip()[:_MAX_IP_LEN]
     try:
         return str(ip_address(raw))
     except Exception:
-        return raw[:_MAX_IP_LEN]
+        return raw
 
 
 def _clamp_int(v: Any, default: int, min_v: int, max_v: int) -> int:
@@ -146,18 +142,18 @@ class User(UserMixin, db.Model):
     country = db.Column(db.String(2), index=True)
     city = db.Column(db.String(_MAX_CITY_LEN))
 
-    is_active = db.Column(db.Boolean, default=True, nullable=False, index=True)
-    is_admin = db.Column(db.Boolean, default=False, nullable=False, index=True)
+    is_active = db.Column(db.Boolean, default=True, server_default="1", nullable=False, index=True)
+    is_admin = db.Column(db.Boolean, default=False, server_default="0", nullable=False, index=True)
     role = db.Column(db.String(20), index=True)
 
-    email_verified = db.Column(db.Boolean, default=False, nullable=False, index=True)
+    email_verified = db.Column(db.Boolean, default=False, server_default="0", nullable=False, index=True)
     email_verified_at = db.Column(db.DateTime(timezone=True))
 
     created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False, index=True)
     last_login_at = db.Column(db.DateTime(timezone=True))
     password_changed_at = db.Column(db.DateTime(timezone=True))
 
-    failed_login_count = db.Column(db.Integer, default=0, nullable=False)
+    failed_login_count = db.Column(db.Integer, default=0, server_default="0", nullable=False)
     locked_until = db.Column(db.DateTime(timezone=True))
     last_login_ip = db.Column(db.String(_MAX_IP_LEN))
 
@@ -165,14 +161,9 @@ class User(UserMixin, db.Model):
     reset_password_token = db.Column(db.String(_TOKEN_HEX_LEN), unique=True, index=True)
     reset_password_expires_at = db.Column(db.DateTime(timezone=True))
 
-    email_opt_in = db.Column(db.Boolean, default=True, nullable=False, index=True)
+    email_opt_in = db.Column(db.Boolean, default=True, server_default="1", nullable=False, index=True)
     email_opt_in_at = db.Column(db.DateTime(timezone=True))
-    unsubscribe_token = db.Column(
-        db.String(_TOKEN_HEX_LEN),
-        unique=True,
-        nullable=False,
-        default=_token64,
-    )
+    unsubscribe_token = db.Column(db.String(_TOKEN_HEX_LEN), unique=True, nullable=False, default=_token64)
 
     addresses = db.relationship(
         "UserAddress",
@@ -228,7 +219,7 @@ class User(UserMixin, db.Model):
 
     @property
     def role_effective(self) -> str:
-        if self.is_owner or self.is_admin:
+        if self.is_owner or bool(self.is_admin):
             return "admin"
         r = _role_normalize(self.role)
         return r or "customer"
@@ -318,6 +309,35 @@ class User(UserMixin, db.Model):
         self.unsubscribe_token = tok
         return tok
 
+    # =========================
+    # 5 mejoras extra (helpers)
+    # =========================
+    def is_staff(self) -> bool:
+        return self.role_effective in {"admin", "staff"}
+
+    def promote_to_staff(self) -> None:
+        if self.is_owner:
+            self.is_admin = True
+            self.role = "admin"
+        else:
+            self.role = "staff"
+
+    def deactivate(self) -> None:
+        self.is_active = False
+        self.unlock()
+
+    def activate(self) -> None:
+        self.is_active = True
+
+    def safe_email(self) -> str:
+        e = self.email or ""
+        if "@" not in e:
+            return e
+        name, domain = e.split("@", 1)
+        if len(name) <= 2:
+            return f"{name[:1]}*@{domain}"
+        return f"{name[:2]}***@{domain}"
+
     def prepare(self) -> None:
         self.email = _normalize_email(self.email)[:_DB_EMAIL_LEN]
         self.phone = _clean_phone(self.phone)
@@ -325,6 +345,11 @@ class User(UserMixin, db.Model):
         self.country = (_s(_normalize_text(self.country or ""), 2) or None)
         self.country = self.country.upper() if self.country else None
         self.city = _s(_normalize_text(self.city or ""), _MAX_CITY_LEN)
+
+        self.is_active = bool(self.is_active)
+        self.is_admin = bool(self.is_admin)
+        self.email_verified = bool(self.email_verified)
+        self.email_opt_in = bool(self.email_opt_in)
 
         if self.is_owner:
             self.is_admin = True
@@ -353,8 +378,8 @@ class User(UserMixin, db.Model):
         if not self.email_opt_in:
             self.email_opt_in_at = None
 
-        if self.failed_login_count < 0:
-            self.failed_login_count = 0
+        self.failed_login_count = _clamp_int(self.failed_login_count, 0, 0, 10_000)
+        self.last_login_ip = _safe_ip(self.last_login_ip)
 
         if self.locked_until and not isinstance(self.locked_until, datetime):
             self.locked_until = None
@@ -396,7 +421,7 @@ class UserAddress(db.Model):
     postal_code = db.Column(db.String(40))
     country = db.Column(db.String(2))
 
-    is_default = db.Column(db.Boolean, default=False, nullable=False, index=True)
+    is_default = db.Column(db.Boolean, default=False, server_default="0", nullable=False, index=True)
     created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
 
     user = db.relationship("User", back_populates="addresses")
