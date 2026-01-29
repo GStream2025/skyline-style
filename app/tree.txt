@@ -12,6 +12,7 @@ C:.
 │   printful_config.py
 │   routes.txt
 │   seed.py
+│   tree.txt
 │   _legacy_models_py__20251226_210547.py
 │   __init__.py
 │
