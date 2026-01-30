@@ -444,7 +444,7 @@ def _set_user_session(user: User) -> None:
     session.modified = True
     _rotate_csrf()
 
-    if _login_user:
+    if _login_user and getattr(current_app, "login_manager", None) is not None:
         try:
             _login_user(user, remember=False)
         except Exception:
