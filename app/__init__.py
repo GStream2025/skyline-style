@@ -23,6 +23,11 @@ try:
 except Exception:
     sql_text = None  # type: ignore
 
+try:
+    from werkzeug.security import safe_join  # type: ignore
+except Exception:
+    safe_join = None  # type: ignore
+
 
 _TRUE = {"1", "true", "yes", "y", "on", "checked"}
 _FALSE = {"0", "false", "no", "n", "off"}
@@ -52,14 +57,6 @@ def _env_int(name: str, default: int, *, min_v: int = 0, max_v: int = 10**9) -> 
     return max(min_v, min(max_v, v))
 
 
-def _env_float(name: str, default: float, *, min_v: float = 0.0, max_v: float = 10**9) -> float:
-    try:
-        v = float(_env_str(name, str(default)))
-    except Exception:
-        v = default
-    return max(min_v, min(max_v, v))
-
-
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -70,7 +67,7 @@ def _env_name(app: Flask) -> str:
         or app.config.get("ENVIRONMENT")
         or _env_str("ENV")
         or _env_str("FLASK_ENV")
-        or "production"
+        or ("development" if bool(app.debug) else "production")
     )
     env_s = str(env).lower().strip()
     if env_s in {"prod", "production"}:
@@ -89,7 +86,7 @@ def wants_json() -> bool:
         if request.is_json:
             return True
         accept = (request.headers.get("Accept") or "").lower()
-        if "application/json" in accept:
+        if "application/json" in accept or "text/json" in accept:
             return True
         if (request.headers.get("X-Requested-With") or "").lower() == "xmlhttprequest":
             return True
@@ -100,6 +97,15 @@ def wants_json() -> bool:
     return False
 
 
+def current_app_config(key: str, default: Any = None) -> Any:
+    try:
+        from flask import current_app
+
+        return current_app.config.get(key, default)
+    except Exception:
+        return default
+
+
 def resp_error(status: int, code: str, message: str):
     status_i = int(status or 500)
     err = (code or "error").strip().lower()[:64] or "error"
@@ -108,8 +114,11 @@ def resp_error(status: int, code: str, message: str):
     if wants_json():
         return jsonify({"ok": False, "error": err, "message": msg, "status": status_i}), status_i
 
-    no_store = bool(current_app_config("NO_STORE_ERROR_PAGES", True))
-    headers = {"Cache-Control": "no-store"} if no_store else {}
+    headers: dict[str, str] = {}
+    if bool(current_app_config("NO_STORE_ERROR_PAGES", True)):
+        headers["Cache-Control"] = "no-store, max-age=0, must-revalidate"
+        headers["Pragma"] = "no-cache"
+        headers["Expires"] = "0"
 
     for tpl in (f"errors/{status_i}.html", "error.html"):
         try:
@@ -118,15 +127,6 @@ def resp_error(status: int, code: str, message: str):
             continue
 
     return msg, status_i, headers
-
-
-def current_app_config(key: str, default: Any = None) -> Any:
-    try:
-        from flask import current_app
-
-        return current_app.config.get(key, default)
-    except Exception:
-        return default
 
 
 def setup_logging(app: Flask) -> None:
@@ -139,18 +139,30 @@ def setup_logging(app: Flask) -> None:
         )
     root.setLevel(level)
     app.logger.setLevel(level)
+    if _is_prod(app):
+        logging.getLogger("werkzeug").setLevel(logging.WARNING)
 
 
 def _safe_next_path(v: str) -> str:
     nxt = (v or "").strip()
-    if not nxt or not nxt.startswith("/") or nxt.startswith("//"):
+    if not nxt:
         return ""
     if any(c in nxt for c in ("\x00", "\r", "\n", "\\")):
+        return ""
+    if "://" in nxt:
+        return ""
+    if not nxt.startswith("/") or nxt.startswith("//"):
         return ""
     p = urlparse(nxt)
     if p.scheme or p.netloc:
         return ""
-    return nxt[:512] if len(nxt) > 512 else nxt
+    if "?" in nxt:
+        nxt = nxt.split("?", 1)[0]
+    if "#" in nxt:
+        nxt = nxt.split("#", 1)[0]
+    if ".." in nxt:
+        return ""
+    return nxt[:512]
 
 
 def _endpoint_exists(app: Flask, endpoint: str) -> bool:
@@ -256,6 +268,7 @@ def _apply_runtime_defaults(app: Flask) -> None:
     app.config.setdefault("NO_STORE_ERROR_PAGES", True)
 
     app.config.setdefault("CSRF_ENABLED", True)
+    app.config.setdefault("CSRF_TIME_LIMIT", _env_int("CSRF_TIME_LIMIT", 3600, min_v=300, max_v=86400))
 
     app.config.setdefault("MAIL_ENABLED", _env_bool("MAIL_ENABLED", False))
     app.config.setdefault("MAIL_FROM", _env_str("MAIL_FROM", "no-reply@localhost"))
@@ -266,6 +279,12 @@ def _apply_runtime_defaults(app: Flask) -> None:
 
     app.config.setdefault("CSP_ENABLED", _env_bool("CSP_ENABLED", _is_prod(app)))
     app.config.setdefault("CSP_POLICY", _env_str("CSP_POLICY", ""))
+
+    app.config.setdefault("STRICT_STARTUP", _env_bool("STRICT_STARTUP", _is_prod(app)))
+    app.config.setdefault("HEALTH_REVEAL_ERRORS", _env_bool("HEALTH_REVEAL_ERRORS", not _is_prod(app)))
+
+    app.config.setdefault("ADMIN_LOGIN_ENDPOINT", _env_str("ADMIN_LOGIN_ENDPOINT", "admin.login"))
+    app.config.setdefault("AUTH_ACCOUNT_ENDPOINT", _env_str("AUTH_ACCOUNT_ENDPOINT", "auth.account"))
 
 
 def _ensure_secret_key(app: Flask) -> None:
@@ -312,8 +331,21 @@ def _apply_security_headers(app: Flask, resp: Response) -> Response:
     return resp
 
 
+def _normalize_db_uri(uri: str) -> str:
+    u = (uri or "").strip()
+    if not u:
+        return ""
+    if u.startswith("postgres://"):
+        u = "postgresql://" + u[len("postgres://") :]
+    if "sslmode=" not in u and u.startswith("postgresql://"):
+        sep = "&" if "?" in u else "?"
+        u = u + f"{sep}sslmode=require"
+    return u
+
+
 def _configure_sqlalchemy(app: Flask) -> None:
     uri = app.config.get("SQLALCHEMY_DATABASE_URI") or _env_str("DATABASE_URL", "")
+    uri = _normalize_db_uri(str(uri or ""))
     if uri:
         app.config["SQLALCHEMY_DATABASE_URI"] = uri
 
@@ -342,6 +374,14 @@ def _configure_sqlalchemy(app: Flask) -> None:
     db.init_app(app)
 
 
+def _best_redirect_to_account(app: Flask, tab: str) -> Response:
+    nxt = _safe_next_path(request.args.get("next", "")) or "/"
+    endpoint = str(app.config.get("AUTH_ACCOUNT_ENDPOINT", "auth.account") or "auth.account")
+    if _endpoint_exists(app, endpoint):
+        return redirect(url_for(endpoint, tab=tab, next=nxt), code=302)
+    return redirect("/auth/account?" + urlencode({"tab": tab, "next": nxt}), code=302)
+
+
 def create_app() -> Flask:
     cfg: Type = get_config()
 
@@ -360,7 +400,7 @@ def create_app() -> Flask:
     _ensure_proxyfix_once(app)
     _configure_sqlalchemy(app)
 
-    strict_startup = _env_bool("STRICT_STARTUP", _is_prod(app))
+    strict_startup = bool(app.config.get("STRICT_STARTUP", _is_prod(app)))
 
     csrf = CSRFProtect()
     if bool(app.config.get("CSRF_ENABLED", True)):
@@ -386,6 +426,7 @@ def create_app() -> Flask:
             "MAIL_FROM": app.config.get("MAIL_FROM", ""),
             "now_year": utcnow().year,
             "view_functions": {k: True for k in vf},
+            "REQUEST_ID": cast(str, getattr(g, "request_id", "")) if hasattr(g, "request_id") else "",
         }
 
     @app.before_request
@@ -394,25 +435,14 @@ def create_app() -> Flask:
             return "", 204
 
         rid = (request.headers.get("X-Request-Id") or "").strip()
-        g.request_id = (rid[:128] if rid else secrets.token_urlsafe(10))
+        g.request_id = rid[:128] if rid else secrets.token_urlsafe(10)
         g._t0 = time.time()
 
-        if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
-            return None
-
         p = request.path.rstrip("/") or "/"
-        nxt = _safe_next_path(request.args.get("next", "")) or "/"
-
         if p in {"/login", "/auth/login"}:
-            if _endpoint_exists(app, "_fallback_auth_login"):
-                return redirect(url_for("_fallback_auth_login", next=nxt), code=302)
-            return redirect("/auth/login?" + urlencode({"next": nxt}), code=302)
-
+            return _best_redirect_to_account(app, "login")
         if p in {"/register", "/auth/register"}:
-            if _endpoint_exists(app, "_fallback_auth_register"):
-                return redirect(url_for("_fallback_auth_register", next=nxt), code=302)
-            return redirect("/auth/register?" + urlencode({"next": nxt}), code=302)
-
+            return _best_redirect_to_account(app, "register")
         return None
 
     @app.after_request
@@ -431,7 +461,9 @@ def create_app() -> Flask:
             pass
 
         if bool(app.config.get("NO_STORE_ERROR_PAGES", True)) and (resp.status_code >= 400):
-            resp.headers.setdefault("Cache-Control", "no-store")
+            resp.headers.setdefault("Cache-Control", "no-store, max-age=0, must-revalidate")
+            resp.headers.setdefault("Pragma", "no-cache")
+            resp.headers.setdefault("Expires", "0")
 
         return _apply_security_headers(app, resp)
 
@@ -456,26 +488,30 @@ def create_app() -> Flask:
 
     stats = _register_blueprints(app)
 
-    def _redir_account(tab: str):
-        nxt = _safe_next_path(request.args.get("next", "")) or "/"
-        if _endpoint_exists(app, "auth.account"):
-            return redirect(url_for("auth.account", tab=tab, next=nxt), code=302)
-        return redirect("/auth/account?" + urlencode({"tab": tab, "next": nxt}), code=302)
-
     if not _endpoint_exists(app, "_fallback_auth_login"):
-        app.add_url_rule("/auth/login", "_fallback_auth_login", partial(_redir_account, "login"), methods=["GET", "HEAD"])
+        app.add_url_rule(
+            "/auth/login",
+            "_fallback_auth_login",
+            partial(_best_redirect_to_account, app, "login"),
+            methods=["GET", "HEAD"],
+        )
 
     if not _endpoint_exists(app, "_fallback_auth_register"):
-        app.add_url_rule("/auth/register", "_fallback_auth_register", partial(_redir_account, "register"), methods=["GET", "HEAD"])
+        app.add_url_rule(
+            "/auth/register",
+            "_fallback_auth_register",
+            partial(_best_redirect_to_account, app, "register"),
+            methods=["GET", "HEAD"],
+        )
 
     for rule, endpoint, tab in (
         ("/login", "_fallback_login", "login"),
         ("/register", "_fallback_register", "register"),
     ):
         if not _endpoint_exists(app, endpoint) and not _rule_exists(app, rule):
-            app.add_url_rule(rule, endpoint, partial(_redir_account, tab), methods=["GET", "HEAD"])
+            app.add_url_rule(rule, endpoint, partial(_best_redirect_to_account, app, tab), methods=["GET", "HEAD"])
 
-    if not _endpoint_exists(app, "auth.account") and not _rule_exists(app, "/auth/account"):
+    if not _endpoint_exists(app, str(app.config.get("AUTH_ACCOUNT_ENDPOINT", "auth.account"))) and not _rule_exists(app, "/auth/account"):
 
         @app.get("/auth/account")
         def _emergency_account():
@@ -483,26 +519,28 @@ def create_app() -> Flask:
             if tab not in {"login", "register"}:
                 tab = "login"
             nxt = _safe_next_path(request.args.get("next", "")) or "/"
-            headers = {"Cache-Control": "no-store"} if bool(app.config.get("NO_STORE_ERROR_PAGES", True)) else {}
+            headers = {}
+            if bool(app.config.get("NO_STORE_ERROR_PAGES", True)):
+                headers["Cache-Control"] = "no-store, max-age=0, must-revalidate"
+                headers["Pragma"] = "no-cache"
+                headers["Expires"] = "0"
             return render_template("auth/account.html", active_tab=tab, next=nxt, prefill_email=""), 200, headers
 
     if not _rule_exists(app, "/"):
 
         @app.get("/")
         def _root():
-            if _endpoint_exists(app, "main.home"):
-                return redirect(url_for("main.home"), code=302)
-            if _endpoint_exists(app, "main.index"):
-                return redirect(url_for("main.index"), code=302)
-            if _endpoint_exists(app, "shop.shop"):
-                return redirect(url_for("shop.shop"), code=302)
+            for ep in ("main.home", "main.index", "shop.shop"):
+                if _endpoint_exists(app, ep):
+                    return redirect(url_for(ep), code=302)
             return "Skyline Store", 200, {"Cache-Control": "no-store"}
 
     @app.get("/health")
     def health():
         rr = stats.get("routes_report") if isinstance(stats.get("routes_report"), dict) else {}
         imports_failed = rr.get("imports_failed", []) if isinstance(rr, dict) else []
-        return {
+        reveal = bool(app.config.get("HEALTH_REVEAL_ERRORS", not _is_prod(app)))
+        payload = {
             "status": "ok" if init_ok else "degraded",
             "env": _env_name(app),
             "app": app.config.get("APP_NAME", "Skyline Store"),
@@ -511,14 +549,16 @@ def create_app() -> Flask:
             "bp_registered": int(stats.get("registered", 0)),
             "bp_failed": int(stats.get("failed", 0)),
             "bp_skipped": int(stats.get("skipped", 0)),
-            "bp_failed_names": stats.get("failed_names", []),
-            "auth_account": bool(_endpoint_exists(app, "auth.account") or _rule_exists(app, "/auth/account")),
-            "errors": stats.get("errors", {}),
-            "imports_failed": imports_failed,
+            "auth_account": bool(_endpoint_exists(app, str(app.config.get("AUTH_ACCOUNT_ENDPOINT", "auth.account"))) or _rule_exists(app, "/auth/account")),
             "init_models_ok": bool(init_ok),
-            "init_models_error": init_err,
             "ts": int(time.time()),
         }
+        if reveal:
+            payload["bp_failed_names"] = stats.get("failed_names", [])
+            payload["errors"] = stats.get("errors", {})
+            payload["imports_failed"] = imports_failed
+            payload["init_models_error"] = init_err
+        return payload
 
     @app.get("/ready")
     def ready():
