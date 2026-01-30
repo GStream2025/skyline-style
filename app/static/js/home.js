@@ -1,69 +1,57 @@
-/* ============================================================
-   Skyline Store — HOME ULTRA PRO JS (v3.3 FINAL · NO-ERROR)
-   ✅ +20 mejoras extra (sobre v3.2):
-   51) Proof-of-load visible: setea data-ss-home="v3.3" en #hp (se nota)
-   52) Rebind seguro: si cambia #hp (HTMX/Turbo), reinit con MutationObserver (light)
-   53) Sticky: IO con hysteresis (evita flicker) + fallback sólido
-   54) Sticky: respeta reduce-motion (sin transiciones bruscas)
-   55) Reveal: “batch scheduler” con requestIdleCallback (si existe) => menos jank
-   56) Reveal: prioridad por “above the fold” (primero lo visible)
-   57) Hero motion: usa CSS vars (--mx,--my,--sy) si existen => GPU friendly
-   58) Hero motion: freeze cuando tab no visible + cuando FPS cae (auto-throttle)
-   59) Hero motion: smoothing mejorado + clamp adaptativo por tamaño
-   60) Hero glow: suaviza + evita repaints (vars)
-   61) Pills: scroll con offset header (si hay sticky header)
-   62) Pills: soporte data-target y href + analytics hook opcional
-   63) Autocomplete: overlay portal con max-height + scroll + aria-activedescendant estable
-   64) Autocomplete: cache LRU real (más estable)
-   65) Autocomplete: cancel fetch al blur + al cambiar pagehide
-   66) Autocomplete: evita fetch si usuario pegó texto largo (throttle extra)
-   67) Hotkey "/": ignora cuando hay input dentro del hero o forms activos
-   68) Image safety: fallback también para <source> y background data-bg-fallback
-   69) Prefetch: usa <link rel=preconnect> a tu dominio si aplica
-   70) “Connected check”: valida que los hooks existan y marca data-ss-home-status
-============================================================ */
-
 (() => {
   "use strict";
 
-  const HOME_VERSION = "v3.3";
+  const HOME_VERSION = "v3.4";
   const doc = document;
 
   // ---------------------------
   // Helpers
   // ---------------------------
+  const safe = (fn) => { try { return fn(); } catch (_) { return undefined; } };
   const $ = (sel, el = doc) => (el ? el.querySelector(sel) : null);
   const $$ = (sel, el = doc) => (el ? Array.from(el.querySelectorAll(sel)) : []);
   const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
+  const nowMs = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
 
-  const safe = (fn) => {
-    try { fn(); } catch (_) {}
+  const supports = {
+    IO: "IntersectionObserver" in window,
+    RO: "ResizeObserver" in window,
+    Idle: "requestIdleCallback" in window,
+    Abort: "AbortController" in window,
+    Microtask: "queueMicrotask" in window,
+    RAF: "requestAnimationFrame" in window,
+    MO: "MutationObserver" in window,
   };
 
-  const supportsIO = "IntersectionObserver" in window;
-  const supportsRO = "ResizeObserver" in window;
-  const supportsIdle = "requestIdleCallback" in window;
+  const raf = (cb) => {
+    const r = window.requestAnimationFrame;
+    if (typeof r === "function") return r(cb);
+    return window.setTimeout(cb, 16);
+  };
 
-  const reducedMotion = !!(
-    window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches
-  );
-  const reducedData = !!(navigator.connection && navigator.connection.saveData);
+  const caf = (id) => {
+    const c = window.cancelAnimationFrame;
+    if (typeof c === "function") return c(id);
+    clearTimeout(id);
+  };
 
-  const isTouch = "ontouchstart" in window || (navigator.maxTouchPoints || 0) > 0;
-  const isFinePointer = !!(window.matchMedia && window.matchMedia("(pointer: fine)").matches);
+  const microtask = (fn) => {
+    if (supports.Microtask) return queueMicrotask(fn);
+    Promise.resolve().then(fn).catch(() => {});
+  };
 
   const rafThrottle = (fn) => {
-    let raf = 0;
+    let id = 0;
     return (...args) => {
-      if (raf) return;
-      raf = requestAnimationFrame(() => {
-        raf = 0;
+      if (id) return;
+      id = raf(() => {
+        id = 0;
         fn(...args);
       });
     };
   };
 
-  const debounce = (fn, wait = 140) => {
+  const debounce = (fn, wait = 160) => {
     let t = 0;
     return (...args) => {
       clearTimeout(t);
@@ -71,7 +59,6 @@
     };
   };
 
-  // escape seguro
   const esc = (s) =>
     String(s ?? "")
       .replace(/&/g, "&amp;")
@@ -80,7 +67,10 @@
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#039;");
 
+  const reducedMotion = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  const reducedData = !!(navigator.connection && navigator.connection.saveData);
   const preferSmooth = !reducedMotion;
+
   const smoothScrollTo = (node, offset = 0) => {
     if (!node) return;
     safe(() => {
@@ -88,6 +78,9 @@
       window.scrollTo({ top: Math.max(0, y), behavior: preferSmooth ? "smooth" : "auto" });
     });
   };
+
+  const isTouch = "ontouchstart" in window || (navigator.maxTouchPoints || 0) > 0;
+  const isFinePointer = !!(window.matchMedia && window.matchMedia("(pointer: fine)").matches);
 
   // ---------------------------
   // Home root + isHome
@@ -108,7 +101,7 @@
   if (!isHome) return;
 
   // ---------------------------
-  // hash + global anti double init
+  // global init guard (per DOM signature)
   // ---------------------------
   const homeHash = (() => {
     try {
@@ -125,44 +118,55 @@
   const STATE = window.__SS_HOME_STATE__;
 
   if (STATE[homeHash] && STATE[homeHash].version === HOME_VERSION) return;
-  if (STATE[homeHash] && typeof STATE[homeHash].stopAll === "function") {
-    safe(() => STATE[homeHash].stopAll());
-  }
+  if (STATE[homeHash] && typeof STATE[homeHash].stopAll === "function") safe(() => STATE[homeHash].stopAll());
 
   // ---------------------------
   // Lifecycle cleanup
   // ---------------------------
   const LIFECYCLE = {
     alive: true,
+    stopped: false,
     intervals: new Set(),
     observers: new Set(),
     aborters: new Set(),
     listeners: [],
+    nodes: new Set(),
     addListener(el, type, fn, opts) {
+      if (!el) return;
       safe(() => {
         el.addEventListener(type, fn, opts);
         this.listeners.push({ el, type, fn, opts });
       });
     },
+    trackNode(n) { if (n) this.nodes.add(n); },
     stopAll() {
+      if (this.stopped) return;
+      this.stopped = true;
       this.alive = false;
+
       this.intervals.forEach((id) => safe(() => clearInterval(id)));
       this.intervals.clear();
+
       this.observers.forEach((o) => safe(() => o.disconnect()));
       this.observers.clear();
+
       this.aborters.forEach((a) => safe(() => a.abort()));
       this.aborters.clear();
+
       this.listeners.forEach((l) => safe(() => l.el.removeEventListener(l.type, l.fn, l.opts)));
       this.listeners.length = 0;
+
+      this.nodes.forEach((n) => safe(() => n.remove?.()));
+      this.nodes.clear();
     },
   };
 
   STATE[homeHash] = { version: HOME_VERSION, stopAll: () => LIFECYCLE.stopAll() };
 
-  LIFECYCLE.addListener(doc, "visibilitychange", () => {
-    LIFECYCLE.alive = !doc.hidden;
-  });
+  const syncAlive = () => { LIFECYCLE.alive = !doc.hidden && !LIFECYCLE.stopped; };
 
+  LIFECYCLE.addListener(doc, "visibilitychange", syncAlive);
+  LIFECYCLE.addListener(window, "pageshow", syncAlive);
   LIFECYCLE.addListener(window, "pagehide", () => safe(() => LIFECYCLE.stopAll()), { once: true });
 
   // ---------------------------
@@ -218,18 +222,18 @@
   };
 
   // ---------------------------
-  // PROOF OF LOAD + connected check
+  // Proof-of-load + connected check
   // ---------------------------
   const markLoaded = (status = "ok") => {
     const hp = getHomeRoot();
     if (!hp) return;
-    hp.dataset.ssHome = HOME_VERSION; // (51) visible
-    hp.dataset.ssHomeStatus = status; // (70)
+    hp.dataset.ssHome = HOME_VERSION;
+    hp.dataset.ssHomeStatus = status;
     hp.classList.add("ss-homejs-on");
   };
 
   // ---------------------------
-  // Auto mark reveal
+  // Auto mark reveal (scoped)
   // ---------------------------
   const autoMarkReveal = () => {
     const hp = getHomeRoot();
@@ -254,13 +258,16 @@
   };
 
   // ---------------------------
-  // Reveal (55/56)
+  // Reveal (scoped + idle batch)
   // ---------------------------
   const initReveal = () => {
-    const nodes = $$(CFG.reveal.selector);
+    const hp = getHomeRoot();
+    if (!hp) return;
+
+    const nodes = $$(CFG.reveal.selector, hp);
     if (!nodes.length) return;
 
-    if (reducedMotion || !supportsIO) {
+    if (reducedMotion || !supports.IO) {
       nodes.forEach((n) => n.classList.add("is-in"));
       return;
     }
@@ -272,24 +279,22 @@
       60
     );
 
-    // “above the fold first”
     const sorted = nodes
       .map((n) => ({ n, top: n.getBoundingClientRect().top || 99999 }))
       .sort((a, b) => a.top - b.top)
       .map((x) => x.n);
 
-    // idx per section
     const groupIndex = new Map();
     sorted.forEach((el) => {
-      const section = el.closest("section") || doc.body || doc.documentElement;
+      const section = el.closest("section") || hp;
       const idx = groupIndex.get(section) ?? 0;
       groupIndex.set(section, idx + 1);
       el.dataset.revealIdx = String(idx);
     });
 
     const schedule = (fn) => {
-      if (supportsIdle) return requestIdleCallback(fn, { timeout: 180 });
-      queueMicrotask(fn);
+      if (supports.Idle) return requestIdleCallback(fn, { timeout: 180 });
+      microtask(fn);
     };
 
     const io = new IntersectionObserver(
@@ -319,7 +324,7 @@
   };
 
   // ---------------------------
-  // Sticky + ToTop (53/54)
+  // Sticky + ToTop (stable state)
   // ---------------------------
   const initStickyToTop = () => {
     const toTop = $(CFG.toTop.sel);
@@ -327,13 +332,14 @@
     const heroSection = $(".hp-hero") || $(".hp-heroFull") || $(".hp-heroCard");
 
     const setOn = (on) => {
+      const v = !!on;
       if (sticky) {
-        sticky.classList.toggle(CFG.sticky.onClass, !!on);
-        sticky.setAttribute("aria-hidden", on ? "false" : "true");
+        sticky.classList.toggle(CFG.sticky.onClass, v);
+        sticky.setAttribute("aria-hidden", v ? "false" : "true");
       }
       if (toTop) {
-        toTop.hidden = !on;
-        toTop.style.display = on ? "inline-flex" : "";
+        toTop.hidden = !v;
+        toTop.style.display = v ? "inline-flex" : "";
       }
     };
 
@@ -347,13 +353,13 @@
 
     let lastSwitch = 0;
     const hysteresis = (on) => {
-      const now = performance.now();
-      if (now - lastSwitch < CFG.sticky.hysteresisMs) return;
-      lastSwitch = now;
+      const t = nowMs();
+      if (t - lastSwitch < CFG.sticky.hysteresisMs) return;
+      lastSwitch = t;
       setOn(on);
     };
 
-    if (supportsIO && heroSection) {
+    if (supports.IO && heroSection) {
       const io = new IntersectionObserver(
         (entries) => {
           const e = entries[0];
@@ -361,7 +367,7 @@
           if (reducedMotion) return setOn(on);
           hysteresis(on);
         },
-        { threshold: 0.15 }
+        { threshold: [0.01, 0.15, 0.35] }
       );
       io.observe(heroSection);
       LIFECYCLE.observers.add(io);
@@ -373,13 +379,14 @@
       const y = window.scrollY || 0;
       setOn(y > Math.max(CFG.sticky.showAt, CFG.toTop.showAt));
     };
+
     const onScroll = rafThrottle(apply);
     LIFECYCLE.addListener(window, "scroll", onScroll, { passive: true });
     apply();
   };
 
   // ---------------------------
-  // Hotkey "/" (67)
+  // Hotkey "/"
   // ---------------------------
   const initHotkeys = () => {
     const input = $(CFG.search.candidates);
@@ -403,7 +410,6 @@
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (hasModalOpen()) return;
 
-      // ignora si estás dentro de un form del hero
       const ae = doc.activeElement;
       if (ae && ae.closest && ae.closest(".hp-hero, .hp-heroFull, .hp-heroCard") && isTypingContext()) return;
 
@@ -418,7 +424,7 @@
   };
 
   // ---------------------------
-  // Pills + offset header (61/62)
+  // Pills + offset header
   // ---------------------------
   const initPills = () => {
     const pills = $$(CFG.pills.selector);
@@ -468,7 +474,7 @@
   };
 
   // ---------------------------
-  // Hero motion (57/58/59)
+  // Hero motion (cancelable)
   // ---------------------------
   const initHeroMotion = () => {
     if (!CFG.hero.enable) return;
@@ -481,12 +487,13 @@
     let mx = 0, my = 0, sx = 0, sy = 0;
     let active = true;
     let lastTransform = "";
-    let lastFrame = performance.now();
+    let lastFrame = nowMs();
     let slowFrames = 0;
+    let frameId = 0;
 
     const updateRect = () => (rect = hero.getBoundingClientRect());
 
-    if (supportsRO) {
+    if (supports.RO) {
       const ro = new ResizeObserver(updateRect);
       ro.observe(hero);
       LIFECYCLE.observers.add(ro);
@@ -494,7 +501,7 @@
       LIFECYCLE.addListener(window, "resize", rafThrottle(updateRect), { passive: true });
     }
 
-    if (supportsIO) {
+    if (supports.IO) {
       const io = new IntersectionObserver(
         (entries) => {
           active = !!entries[0]?.isIntersecting && !doc.hidden;
@@ -506,21 +513,20 @@
       LIFECYCLE.observers.add(io);
     }
 
-    const useVars = (() => {
-      // si tu CSS usa variables para animar, esto es todavía más smooth
+    const useVars = safe(() => {
       const st = getComputedStyle(img);
       return st && (st.getPropertyValue("--mx") !== "" || st.getPropertyValue("--my") !== "");
-    })();
+    }) === true;
 
     const onMove = rafThrottle((e) => {
-      if (!active) return;
+      if (!active || !LIFECYCLE.alive) return;
+
       const w = Math.max(1, rect.width);
       const h = Math.max(1, rect.height);
 
       const px = clamp((e.clientX - rect.left) / w - 0.5, -0.5, 0.5);
       const py = clamp((e.clientY - rect.top) / h - 0.5, -0.5, 0.5);
 
-      // clamp adaptativo por tamaño
       const mxMax = clamp(CFG.hero.maxMoveX * (w > 520 ? 1 : 0.75), 6, 14);
       const myMax = clamp(CFG.hero.maxMoveY * (h > 420 ? 1 : 0.75), 5, 12);
 
@@ -544,18 +550,18 @@
     onScroll();
 
     const tick = () => {
-      const now = performance.now();
+      if (LIFECYCLE.stopped) return;
+
+      const now = nowMs();
       const dt = now - lastFrame;
       lastFrame = now;
 
-      // auto throttle si FPS baja
       if (dt > 34) slowFrames++;
       else slowFrames = Math.max(0, slowFrames - 1);
 
       const shouldWork = LIFECYCLE.alive && active && slowFrames < 12;
 
       if (shouldWork) {
-        // smoothing mejorado
         sx += (mx - sx) * 0.11;
         const combinedY = sy + (my - sy * 0.15);
 
@@ -563,11 +569,8 @@
           img.style.setProperty("--mx", `${sx.toFixed(2)}px`);
           img.style.setProperty("--my", `${combinedY.toFixed(2)}px`);
           img.style.setProperty("--sy", `${sy.toFixed(2)}px`);
-          // si CSS está listo, no tocamos transform acá
         } else {
-          const tr = `scale(${CFG.hero.scale}) translate3d(${sx.toFixed(2)}px, ${combinedY.toFixed(
-            2
-          )}px, 0)`;
+          const tr = `scale(${CFG.hero.scale}) translate3d(${sx.toFixed(2)}px, ${combinedY.toFixed(2)}px, 0)`;
           if (tr !== lastTransform) {
             img.style.transform = tr;
             lastTransform = tr;
@@ -575,14 +578,19 @@
         }
       }
 
-      requestAnimationFrame(tick);
+      frameId = raf(tick);
     };
 
-    requestAnimationFrame(tick);
+    frameId = raf(tick);
+
+    // Ensure stop cancels animation loop
+    const stop = () => { if (frameId) caf(frameId); frameId = 0; };
+    LIFECYCLE.intervals.add(setTimeout(() => {}, 0)); // keep set API consistent
+    LIFECYCLE.addListener(window, "pagehide", stop, { once: true });
   };
 
   // ---------------------------
-  // Glow (60)
+  // Glow
   // ---------------------------
   const initGlow = () => {
     if (!CFG.hero.enable) return;
@@ -611,6 +619,7 @@
     });
 
     hero.appendChild(glow);
+    LIFECYCLE.trackNode(glow);
 
     const moveGlow = rafThrottle((e) => {
       const r = hero.getBoundingClientRect();
@@ -628,7 +637,7 @@
   };
 
   // ---------------------------
-  // Image safety (68)
+  // Image safety
   // ---------------------------
   const initImageSafety = () => {
     const imgs = $$("img");
@@ -657,46 +666,34 @@
       );
     });
 
-    // backgrounds fallback (data-bg-fallback)
     $$("[data-bg-fallback]").forEach((el) => {
       const fb = el.getAttribute("data-bg-fallback");
       if (!fb) return;
-      // si background-image está vacío, set fallback
       const bg = getComputedStyle(el).backgroundImage || "";
       if (bg === "none" || bg === "") safe(() => (el.style.backgroundImage = `url("${fb}")`));
     });
-
-    // <source> fallback simple
-    $$("picture source").forEach((src) => {
-      LIFECYCLE.addListener(src, "error", () => {}, { once: true });
-    });
   };
 
   // ---------------------------
-  // Prefetch / preconnect (69)
+  // Prefetch / preconnect (dedupe)
   // ---------------------------
+  const ensureLink = (rel, href) => {
+    if (!href) return;
+    const exists = $$(`link[rel="${rel}"]`).some((l) => (l.getAttribute("href") || "") === href);
+    if (exists) return;
+    const link = doc.createElement("link");
+    link.rel = rel;
+    link.href = href;
+    doc.head.appendChild(link);
+  };
+
   const initPrefetchShop = () => {
-    const href = "/shop";
-    const exists = $$('link[rel="prefetch"]').some((l) => (l.getAttribute("href") || "") === href);
-    if (!exists) {
-      const link = doc.createElement("link");
-      link.rel = "prefetch";
-      link.href = href;
-      doc.head.appendChild(link);
-    }
-
-    // preconnect to self (safe)
-    const pc = $$('link[rel="preconnect"]').some((l) => (l.getAttribute("href") || "") === location.origin);
-    if (!pc) {
-      const link2 = doc.createElement("link");
-      link2.rel = "preconnect";
-      link2.href = location.origin;
-      doc.head.appendChild(link2);
-    }
+    ensureLink("prefetch", "/shop");
+    ensureLink("preconnect", location.origin);
   };
 
   // ---------------------------
-  // Autocomplete (63/64/65/66)
+  // Autocomplete (LRU + cleanup)
   // ---------------------------
   const initAutocomplete = () => {
     if (!CFG.autocomplete.enable) return;
@@ -710,7 +707,6 @@
     input.setAttribute("aria-autocomplete", "list");
     input.setAttribute("aria-haspopup", "listbox");
 
-    // LRU cache real
     const cache = new Map();
     const cacheGet = (k) => {
       if (!cache.has(k)) return null;
@@ -722,10 +718,7 @@
     const cacheSet = (k, v) => {
       if (cache.has(k)) cache.delete(k);
       cache.set(k, v);
-      if (cache.size > CFG.autocomplete.cacheSize) {
-        const first = cache.keys().next().value;
-        cache.delete(first);
-      }
+      if (cache.size > CFG.autocomplete.cacheSize) cache.delete(cache.keys().next().value);
     };
 
     const box = doc.createElement("div");
@@ -752,6 +745,7 @@
     });
 
     doc.body.appendChild(box);
+    LIFECYCLE.trackNode(box);
 
     const positionBox = () => {
       const r = input.getBoundingClientRect();
@@ -786,6 +780,18 @@
       safe(() => row.scrollIntoView({ block: "nearest" }));
     };
 
+    const normalizeItems = (data) => {
+      const arr = Array.isArray(data) ? data : (data && Array.isArray(data.items) ? data.items : []);
+      return arr
+        .map((it) => {
+          const title = String((it && (it.title || it.name || it.label)) || "").trim();
+          if (!title) return null;
+          const href = String((it && it.href) || "").trim() || `/shop?q=${encodeURIComponent(title)}`;
+          return { title, href };
+        })
+        .filter(Boolean);
+    };
+
     const render = (items) => {
       const list = (items || []).slice(0, CFG.autocomplete.limit);
       if (!list.length) return close();
@@ -794,18 +800,15 @@
 
       box.innerHTML = list
         .map((it, idx) => {
-          const title = esc((it && (it.title || it.name || it.label)) || "");
-          const hrefRaw = (it && it.href) || "";
-          const href = esc(hrefRaw || (title ? `/shop?q=${encodeURIComponent(title)}` : "#"));
+          const title = esc(it.title);
+          const href = esc(it.href);
           const id = `ss-sg-${idx}`;
           return `
             <div id="${id}" class="ss-suggest__item" role="option" aria-selected="false"
                  data-idx="${idx}" data-href="${href}"
                  style="padding:10px 12px;cursor:pointer;display:flex;gap:10px;align-items:center">
               <span style="width:8px;height:8px;border-radius:999px;background:linear-gradient(135deg,#2563eb,#0ea5e9);display:inline-block"></span>
-              <span style="font-weight:900;${isDark ? "color:rgba(238,242,255,.90)" : "color:rgba(10,16,32,.88)"};line-height:1.2">
-                ${title}
-              </span>
+              <span style="font-weight:900;${isDark ? "color:rgba(238,242,255,.90)" : "color:rgba(10,16,32,.88)"};line-height:1.2">${title}</span>
             </div>
           `;
         })
@@ -829,19 +832,16 @@
       const cached = cacheGet(q);
       if (cached) return cached;
 
-      if (aborter) {
-        safe(() => aborter.abort());
-        LIFECYCLE.aborters.delete(aborter);
-      }
-      aborter = new AbortController();
-      LIFECYCLE.aborters.add(aborter);
+      if (aborter) safe(() => aborter.abort());
+      aborter = supports.Abort ? new AbortController() : null;
+      if (aborter) LIFECYCLE.aborters.add(aborter);
 
       const url = `${CFG.autocomplete.endpoint}${encodeURIComponent(q)}`;
-      let res;
 
+      let res;
       try {
         res = await fetch(url, {
-          signal: aborter.signal,
+          signal: aborter ? aborter.signal : undefined,
           headers: { Accept: "application/json" },
           cache: "no-store",
           credentials: "same-origin",
@@ -851,17 +851,11 @@
       }
 
       if (!res || !res.ok) return [];
-
       const ct = String(res.headers.get("content-type") || "");
       if (!ct.includes("application/json")) return [];
 
       const data = await res.json().catch(() => null);
-      const items = Array.isArray(data)
-        ? data
-        : data && Array.isArray(data.items)
-        ? data.items
-        : [];
-
+      const items = normalizeItems(data);
       cacheSet(q, items);
       return items;
     };
@@ -873,9 +867,7 @@
       if (q === lastQ) return;
       lastQ = q;
 
-      // (66) paste guard
       if (q.length > CFG.autocomplete.pasteGuardLen) return close();
-
       if (q.length < CFG.autocomplete.minChars) return close();
 
       try {
@@ -889,10 +881,7 @@
 
     LIFECYCLE.addListener(input, "input", onInput);
     LIFECYCLE.addListener(input, "compositionstart", () => (composing = true));
-    LIFECYCLE.addListener(input, "compositionend", () => {
-      composing = false;
-      onInput();
-    });
+    LIFECYCLE.addListener(input, "compositionend", () => { composing = false; onInput(); });
 
     LIFECYCLE.addListener(doc, "click", (e) => {
       if (e.target === input) return;
@@ -901,7 +890,6 @@
     });
 
     LIFECYCLE.addListener(input, "blur", () => {
-      // (65) cancel on blur
       if (aborter) safe(() => aborter.abort());
       setTimeout(close, 120);
     });
@@ -911,53 +899,56 @@
 
       if (e.key === "Escape") return close();
 
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        activeIndex = clamp(activeIndex + 1, 0, rows.length - 1);
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        activeIndex = clamp(activeIndex - 1, 0, rows.length - 1);
-      } else if (e.key === "Enter") {
+      if (e.key === "ArrowDown") { e.preventDefault(); activeIndex = clamp(activeIndex + 1, 0, rows.length - 1); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); activeIndex = clamp(activeIndex - 1, 0, rows.length - 1); }
+      else if (e.key === "Enter") {
         const row = rows[activeIndex];
         if (row) {
           e.preventDefault();
           window.location.href = row.getAttribute("data-href") || "#";
         }
         return;
-      } else {
-        return;
-      }
+      } else return;
 
       const row = rows[activeIndex];
       highlight(row);
       if (row && row.id) input.setAttribute("aria-activedescendant", row.id);
     });
 
-    safe(() => {
+    const ensureAria = () => {
       const id = box.id || `ss-suggest-${Math.random().toString(16).slice(2)}`;
       box.id = id;
       input.setAttribute("aria-controls", id);
       input.setAttribute("aria-expanded", "false");
-    });
+    };
+    ensureAria();
+
+    // Cleanup extra safety
+    LIFECYCLE.addListener(window, "pagehide", () => {
+      if (aborter) safe(() => aborter.abort());
+      close();
+    }, { once: true });
   };
 
   // ---------------------------
-  // MutationObserver rebind (52)
+  // Rebind (clean re-init)
   // ---------------------------
   const initRebinder = () => {
-    if (!("MutationObserver" in window)) return;
+    if (!supports.MO) return;
 
     const mo = new MutationObserver(
       debounce(() => {
         const newRoot = getHomeRoot();
-        if (newRoot && newRoot !== homeRoot) {
-          homeRoot = newRoot;
-          markLoaded("rebind");
-          // reinit reveal + sticky (lo más importante)
-          safe(() => initReveal());
-          safe(() => initStickyToTop());
-        }
-      }, 220)
+        if (!newRoot || newRoot === homeRoot) return;
+
+        // hard reset everything for previous instance (prevents dup)
+        safe(() => LIFECYCLE.stopAll());
+
+        // new run: clear global guard for this hash and re-run fully
+        homeRoot = newRoot;
+        delete STATE[homeHash];
+        location.reload(); // safest for HTMX/Turbo swaps that replaced #hp entirely
+      }, 260)
     );
 
     safe(() => mo.observe(doc.body || doc.documentElement, { childList: true, subtree: true }));
@@ -968,7 +959,6 @@
   // Init
   // ---------------------------
   const init = () => {
-    // connected check
     const hp = getHomeRoot();
     if (!hp) return;
 
@@ -976,11 +966,10 @@
 
     safe(() => autoMarkReveal());
 
-    // preloader
     safe(() => {
       const p = $(CFG.preloader.sel);
       if (!p) return;
-      requestAnimationFrame(() => {
+      raf(() => {
         p.style.transition = `opacity ${CFG.preloader.fadeMs}ms ease`;
         p.style.opacity = "0";
         setTimeout(() => safe(() => p.remove?.()), CFG.preloader.fadeMs + 80);
@@ -996,15 +985,15 @@
     safe(() => initImageSafety());
     safe(() => initAutocomplete());
     safe(() => initPrefetchShop());
-    safe(() => initRebinder());
+
+    // Rebind: por defecto OFF (porque el reload es la opción más segura).
+    // Si querés rebind sin reload, te lo adapto a tu stack (HTMX/Turbo específico).
+    // safe(() => initRebinder());
 
     safe(() => hp.classList.add("is-ready"));
     markLoaded("ok");
   };
 
-  if (doc.readyState === "loading") {
-    doc.addEventListener("DOMContentLoaded", init, { once: true });
-  } else {
-    init();
-  }
+  if (doc.readyState === "loading") doc.addEventListener("DOMContentLoaded", init, { once: true });
+  else init();
 })();
