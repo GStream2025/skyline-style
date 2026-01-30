@@ -601,3 +601,81 @@ __all__ = [
     "safe_redirect_to",
     "admin_creds_ok",
 ]
+from __future__ import annotations
+
+from functools import wraps
+from typing import Any, Callable, Optional, TypeVar, cast
+
+from flask import abort, current_app, flash, redirect, request, session, url_for
+
+F = TypeVar("F", bound=Callable[..., Any])
+
+_TRUE = {"1", "true", "yes", "y", "on", "checked"}
+
+
+def _is_admin_session() -> bool:
+    try:
+        v = session.get("is_admin") or session.get("ADMIN_SESSION") or session.get("admin")
+        if isinstance(v, str):
+            return v.strip().lower() in _TRUE
+        return bool(v)
+    except Exception:
+        return False
+
+
+def _clean_next(raw: Optional[str], *, fallback: str = "/admin") -> str:
+    p = (raw or "").strip()
+    if not p or not p.startswith("/") or p.startswith("//") or "://" in p or "\\" in p or ".." in p:
+        return fallback
+    if "?" in p:
+        p = p.split("?", 1)[0]
+    if "#" in p:
+        p = p.split("#", 1)[0]
+    if p.startswith("/admin/login") or p.startswith("/admin/register") or p.startswith("/admin/logout"):
+        return fallback
+    return p or fallback
+
+
+def admin_required(fn: F) -> F:
+    @wraps(fn)
+    def _wrap(*args: Any, **kwargs: Any):
+        if _is_admin_session():
+            return fn(*args, **kwargs)
+
+        try:
+            if request.accept_mimetypes.best == "application/json" or request.is_json:
+                abort(401)
+        except Exception:
+            pass
+
+        try:
+            flash("Necesitás iniciar sesión como admin.", "warning")
+        except Exception:
+            pass
+
+        try:
+            nxt = _clean_next(request.full_path or request.path, fallback="/admin")
+        except Exception:
+            nxt = "/admin"
+
+        try:
+            ep = current_app.config.get("ADMIN_LOGIN_ENDPOINT", "admin.login")
+            return redirect(url_for(ep, next=nxt), code=302)
+        except Exception:
+            return redirect(f"/admin/login?next={nxt}", code=302)
+
+    return cast(F, _wrap)
+
+
+try:
+    from app.utils.admin_gate import admin_creds_ok  # type: ignore
+except Exception:
+    def admin_creds_ok(*args: Any, **kwargs: Any) -> bool:  # type: ignore
+        return False
+
+
+__all__ = [
+    *(__all__ if "__all__" in globals() else []),
+    "admin_required",
+    "admin_creds_ok",
+]
