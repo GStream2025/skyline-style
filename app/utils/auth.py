@@ -1,19 +1,21 @@
 from __future__ import annotations
 
 import base64
-import hmac
 import hashlib
+import hmac
+import json
 import os
 import re
 import secrets
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Tuple, TypeVar, Callable, cast
+from typing import Any, Callable, Dict, Optional, Tuple, TypeVar
 from urllib.parse import quote
 
 from flask import abort, current_app, flash, jsonify, redirect, request, session, url_for
 
 F = TypeVar("F", bound=Callable[..., Any])
+AdminCredsFn = Callable[[str, str], bool]
 
 CFG_AUTH_SECRET = "AUTH_SECRET"
 CFG_AUTH_AUDIT_CALLBACK = "AUTH_AUDIT_CALLBACK"
@@ -29,6 +31,18 @@ CFG_RESET_TTL_S = "AUTH_RESET_TTL_S"
 
 CFG_REQUIRE_EMAIL_VERIFIED = "AUTH_REQUIRE_EMAIL_VERIFIED"
 
+CFG_AUTH_TOKEN_LEN_MAX = "AUTH_TOKEN_LEN_MAX"
+CFG_AUTH_PAYLOAD_LEN_MAX = "AUTH_PAYLOAD_LEN_MAX"
+CFG_AUTH_IP_LEN_MAX = "AUTH_IP_LEN_MAX"
+CFG_AUTH_UA_LEN_MAX = "AUTH_UA_LEN_MAX"
+CFG_AUTH_EMAIL_LEN_MAX = "AUTH_EMAIL_LEN_MAX"
+
+CFG_AUTH_VERIFY_BIND_UA = "AUTH_VERIFY_BIND_UA"
+CFG_AUTH_VERIFY_BIND_IP = "AUTH_VERIFY_BIND_IP"
+
+CFG_AUTH_DISABLE_FLASH = "AUTH_DISABLE_FLASH"
+CFG_AUTH_REDIRECT_CODE = "AUTH_REDIRECT_CODE"
+
 DEFAULT_NEXT_PARAM = "next"
 DEFAULT_DEFAULT_NEXT = "/account"
 
@@ -39,9 +53,20 @@ _NO_STORE_HEADERS: Dict[str, str] = {
 }
 
 _EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
-
 _TRUE = {"1", "true", "yes", "y", "on", "checked"}
 _FALSE = {"0", "false", "no", "n", "off", "unchecked"}
+
+_ADMIN_CREDS_FALLBACK: AdminCredsFn
+
+
+def _admin_creds_false(_: str, __: str) -> bool:
+    return False
+
+
+try:
+    from app.utils.admin_gate import admin_creds_ok as admin_creds_ok  # type: ignore
+except Exception:
+    admin_creds_ok = _admin_creds_false  # type: ignore
 
 
 @dataclass(frozen=True)
@@ -58,10 +83,43 @@ def _cfg(name: str, default: Any) -> Any:
         return default
 
 
+def _cfg_int(name: str, default: int, *, min_v: int, max_v: int) -> int:
+    try:
+        v = int(_cfg(name, default) or default)
+    except Exception:
+        v = default
+    if v < min_v:
+        return min_v
+    if v > max_v:
+        return max_v
+    return v
+
+
+def _cfg_bool(name: str, default: bool = False) -> bool:
+    v = _cfg(name, default)
+    if v is True or v is False:
+        return bool(v)
+    if isinstance(v, (int, float)):
+        return bool(v)
+    if isinstance(v, str):
+        s = v.strip().lower()
+        if not s:
+            return default
+        if s in _TRUE:
+            return True
+        if s in _FALSE:
+            return False
+    return default
+
+
 def _safe_str(v: Any, *, max_len: int = 512) -> str:
     if v is None:
         return ""
     s = str(v).replace("\x00", "").replace("\u200b", "").strip()
+    if "\r" in s or "\n" in s:
+        s = s.replace("\r", "").replace("\n", "")
+    if "\t" in s:
+        s = s.replace("\t", " ")
     if max_len > 0 and len(s) > max_len:
         s = s[:max_len]
     return s
@@ -70,8 +128,10 @@ def _safe_str(v: Any, *, max_len: int = 512) -> str:
 def _is_truthy(v: Any) -> bool:
     if v is True:
         return True
-    if isinstance(v, (int, float)) and v == 1:
-        return True
+    if v is False or v is None:
+        return False
+    if isinstance(v, (int, float)):
+        return v == 1
     if isinstance(v, str):
         s = v.strip().lower()
         if not s or s in _FALSE:
@@ -81,14 +141,23 @@ def _is_truthy(v: Any) -> bool:
 
 
 def _client_ip() -> str:
+    max_len = _cfg_int(CFG_AUTH_IP_LEN_MAX, 64, min_v=16, max_v=256)
     try:
         fwd = (request.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
         if fwd:
-            return fwd[:64]
+            return fwd[:max_len]
     except Exception:
         pass
     try:
-        return (request.remote_addr or "")[:64]
+        return (request.remote_addr or "")[:max_len]
+    except Exception:
+        return ""
+
+
+def _client_ua() -> str:
+    max_len = _cfg_int(CFG_AUTH_UA_LEN_MAX, 180, min_v=60, max_v=512)
+    try:
+        return _safe_str(request.headers.get("User-Agent") or "", max_len=max_len)
     except Exception:
         return ""
 
@@ -125,10 +194,8 @@ def _is_json_like_request() -> bool:
 def _audit(event: Dict[str, Any]) -> None:
     e = dict(event or {})
     e.setdefault("ip", _client_ip())
-    try:
-        e.setdefault("ua", _safe_str(request.headers.get("User-Agent"), max_len=180))
-    except Exception:
-        pass
+    e.setdefault("ua", _client_ua())
+    e.setdefault("ts", int(time.time()))
 
     try:
         cb = _cfg(CFG_AUTH_AUDIT_CALLBACK, None)
@@ -138,24 +205,23 @@ def _audit(event: Dict[str, Any]) -> None:
         pass
 
     try:
-        if current_app and current_app.debug:
+        if current_app and getattr(current_app, "debug", False):
             current_app.logger.debug("auth_audit %s", e)
     except Exception:
         pass
 
 
 def _soft_rate_limit(bucket: str) -> Tuple[bool, int]:
-    window_s = int(_cfg(CFG_AUTH_SOFT_RL_WINDOW_S, 10) or 10)
-    max_hits = int(_cfg(CFG_AUTH_SOFT_RL_MAX, 25) or 25)
-    window_s = max(1, window_s)
-    max_hits = max(1, max_hits)
+    window_s = _cfg_int(CFG_AUTH_SOFT_RL_WINDOW_S, 10, min_v=1, max_v=600)
+    max_hits = _cfg_int(CFG_AUTH_SOFT_RL_MAX, 25, min_v=1, max_v=1000)
 
-    key = f"_rl:{bucket}"
+    key = f"_rl:{_safe_str(bucket, max_len=48)}"
     try:
         now = int(time.time())
         data = session.get(key)
         if not isinstance(data, dict):
             data = {}
+
         start = int(data.get("start") or 0)
         hits = int(data.get("hits") or 0)
 
@@ -174,7 +240,8 @@ def _soft_rate_limit(bucket: str) -> Tuple[bool, int]:
 
 
 def normalize_email(email: Any) -> str:
-    s = _safe_str(email, max_len=254).lower()
+    max_len = _cfg_int(CFG_AUTH_EMAIL_LEN_MAX, 254, min_v=64, max_v=320)
+    s = _safe_str(email, max_len=max_len).lower()
     s = s.replace(" ", "")
     return s
 
@@ -205,6 +272,8 @@ def _clean_next_path(raw: Optional[str], *, default_path: str) -> str:
         or pl.startswith("/%5c")
         or pl.startswith("/%2f%2f")
         or pl.startswith("/%2f%5c")
+        or pl.startswith("/%2f%2f")
+        or pl.startswith("/%5c%5c")
     ):
         return default_path
 
@@ -213,23 +282,29 @@ def _clean_next_path(raw: Optional[str], *, default_path: str) -> str:
     if "#" in p:
         p = p.split("#", 1)[0]
 
+    if not p.startswith("/"):
+        return default_path
+
     return p or default_path
 
 
 def resolve_next_path(*, default_next: Optional[str] = None) -> str:
     next_param = _safe_str(_cfg(CFG_AUTH_NEXT_PARAM, DEFAULT_NEXT_PARAM), max_len=32) or DEFAULT_NEXT_PARAM
     dnext = _safe_str(_cfg(CFG_AUTH_DEFAULT_NEXT, default_next or DEFAULT_DEFAULT_NEXT), max_len=256) or DEFAULT_DEFAULT_NEXT
+
     raw = None
     try:
         raw = request.args.get(next_param)
     except Exception:
         raw = None
+
     try:
         fallback = request.path or dnext
     except Exception:
         fallback = dnext
+
     out = _clean_next_path(raw, default_path=_clean_next_path(fallback, default_path=dnext))
-    if out.startswith("/auth/login") or out.startswith("/auth/register"):
+    if out.startswith("/auth/login") or out.startswith("/auth/register") or out.startswith("/admin/login") or out.startswith("/admin/register"):
         out = dnext
     return out
 
@@ -260,9 +335,12 @@ def _auth_secret() -> bytes:
     if raw:
         return raw.encode("utf-8")
     try:
-        return current_app.secret_key.encode("utf-8")  # type: ignore[union-attr]
+        sk = getattr(current_app, "secret_key", None)
+        if isinstance(sk, str) and sk:
+            return sk.encode("utf-8")
     except Exception:
-        return b"change-me"
+        pass
+    return b"change-me"
 
 
 def _sign(data: bytes) -> str:
@@ -270,18 +348,34 @@ def _sign(data: bytes) -> str:
     return _b64u(sig)
 
 
+def _payload_json(payload: Dict[str, Any]) -> bytes:
+    max_len = _cfg_int(CFG_AUTH_PAYLOAD_LEN_MAX, 4000, min_v=256, max_v=20000)
+    raw = json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    if len(raw) > max_len:
+        raw = raw[:max_len]
+    return raw
+
+
 def _make_token(payload: Dict[str, Any], *, ttl_s: int) -> str:
     now = int(time.time())
     body = dict(payload or {})
     body["iat"] = now
     body["exp"] = now + max(60, int(ttl_s))
-    raw = _safe_str(body, max_len=10_000).encode("utf-8")
+
+    if _cfg_bool(CFG_AUTH_VERIFY_BIND_IP, False):
+        body["ip"] = _client_ip()
+
+    if _cfg_bool(CFG_AUTH_VERIFY_BIND_UA, False):
+        body["ua"] = hashlib.sha256(_client_ua().encode("utf-8")).hexdigest()[:24]
+
+    raw = _payload_json(body)
     mac = _sign(raw)
     return f"{_b64u(raw)}.{mac}"
 
 
 def _read_token(token: str) -> TokenDecision:
-    t = _safe_str(token, max_len=4096)
+    tmax = _cfg_int(CFG_AUTH_TOKEN_LEN_MAX, 4096, min_v=512, max_v=20000)
+    t = _safe_str(token, max_len=tmax)
     if not t or "." not in t:
         return TokenDecision(False, "bad_format")
 
@@ -299,8 +393,7 @@ def _read_token(token: str) -> TokenDecision:
         return TokenDecision(False, "bad_sig")
 
     try:
-        s = raw.decode("utf-8", errors="strict")
-        payload: Dict[str, Any] = eval(s, {"__builtins__": {}}, {})  # noqa: S307
+        payload = json.loads(raw.decode("utf-8"))
         if not isinstance(payload, dict):
             return TokenDecision(False, "bad_payload")
     except Exception:
@@ -311,16 +404,27 @@ def _read_token(token: str) -> TokenDecision:
     if exp <= 0 or now > exp:
         return TokenDecision(False, "expired")
 
+    if _cfg_bool(CFG_AUTH_VERIFY_BIND_IP, False):
+        ip = _safe_str(payload.get("ip"), max_len=256)
+        if ip and ip != _client_ip():
+            return TokenDecision(False, "ip_mismatch")
+
+    if _cfg_bool(CFG_AUTH_VERIFY_BIND_UA, False):
+        ua = _safe_str(payload.get("ua"), max_len=64)
+        cur = hashlib.sha256(_client_ua().encode("utf-8")).hexdigest()[:24]
+        if ua and ua != cur:
+            return TokenDecision(False, "ua_mismatch")
+
     return TokenDecision(True, "ok", payload)
 
 
 def make_verify_email_token(*, user_id: Any, email: Any, ttl_s: Optional[int] = None) -> str:
-    ttl = int(_cfg(CFG_VERIFY_TTL_S, ttl_s or 60 * 60 * 24) or (60 * 60 * 24))
+    ttl = _cfg_int(CFG_VERIFY_TTL_S, int(ttl_s or 60 * 60 * 24), min_v=300, max_v=60 * 60 * 24 * 30)
     return _make_token({"typ": "verify", "uid": str(user_id), "email": normalize_email(email)}, ttl_s=ttl)
 
 
 def make_password_reset_token(*, user_id: Any, email: Any, ttl_s: Optional[int] = None) -> str:
-    ttl = int(_cfg(CFG_RESET_TTL_S, ttl_s or 60 * 60) or (60 * 60))
+    ttl = _cfg_int(CFG_RESET_TTL_S, int(ttl_s or 60 * 60), min_v=300, max_v=60 * 60 * 24 * 7)
     return _make_token({"typ": "reset", "uid": str(user_id), "email": normalize_email(email)}, ttl_s=ttl)
 
 
@@ -328,13 +432,17 @@ def verify_token(token: str, *, expected_type: str) -> TokenDecision:
     d = _read_token(token)
     if not d.ok:
         return d
-    typ = _safe_str((d.payload or {}).get("typ"), max_len=16)
+
+    payload = d.payload or {}
+    typ = _safe_str(payload.get("typ"), max_len=16)
     if typ != expected_type:
         return TokenDecision(False, "wrong_type")
-    uid = _safe_str((d.payload or {}).get("uid"), max_len=128)
-    email = _safe_str((d.payload or {}).get("email"), max_len=254).lower()
+
+    uid = _safe_str(payload.get("uid"), max_len=128)
+    email = _safe_str(payload.get("email"), max_len=254).lower()
     if not uid or not email or not email_is_valid(email):
         return TokenDecision(False, "bad_claims")
+
     return d
 
 
@@ -343,15 +451,18 @@ def load_user_by_email(email: str) -> Optional[Any]:
         from app.models import User, db  # type: ignore
     except Exception:
         return None
+
     e = normalize_email(email)
     if not email_is_valid(e):
         return None
+
     try:
         q = getattr(User, "query", None)
         if q is not None:
             return q.filter_by(email=e).first()
     except Exception:
         pass
+
     try:
         return db.session.query(User).filter(User.email == e).first()  # type: ignore[attr-defined]
     except Exception:
@@ -363,9 +474,11 @@ def load_user_by_id(user_id: Any) -> Optional[Any]:
         from app.models import User, db  # type: ignore
     except Exception:
         return None
+
     uid = _safe_str(user_id, max_len=128)
     if not uid:
         return None
+
     for attr in ("id", "user_id", "uuid"):
         try:
             col = getattr(User, attr, None)
@@ -373,6 +486,7 @@ def load_user_by_id(user_id: Any) -> Optional[Any]:
                 return db.session.query(User).filter(col == uid).first()  # type: ignore[attr-defined]
         except Exception:
             continue
+
     try:
         return getattr(User, "query").get(uid)  # type: ignore[attr-defined]
     except Exception:
@@ -422,7 +536,7 @@ def mark_email_verified(user: Any) -> bool:
 
 
 def require_verified_email(user: Any) -> bool:
-    if not bool(_cfg(CFG_REQUIRE_EMAIL_VERIFIED, False)):
+    if not _cfg_bool(CFG_REQUIRE_EMAIL_VERIFIED, False):
         return True
 
     for flag in ("email_verified", "is_email_verified", "verified"):
@@ -438,18 +552,23 @@ def auth_rate_limit_or_429(bucket: str) -> Optional[Any]:
     ok, remaining = _soft_rate_limit(bucket)
     if ok:
         return None
-    _audit({"type": "auth_rl", "ok": False, "bucket": bucket, "remaining": remaining})
+
+    _audit({"type": "auth_rl", "ok": False, "bucket": _safe_str(bucket, max_len=48), "remaining": remaining})
+
     if _is_json_like_request():
         return jsonify({"ok": False, "error": "rate_limited", "message": "Demasiados intentos. Probá más tarde."}), 429
-    try:
-        flash("Demasiados intentos. Probá más tarde.", "warning")
-    except Exception:
-        pass
+
+    if not _cfg_bool(CFG_AUTH_DISABLE_FLASH, False):
+        try:
+            flash("Demasiados intentos. Probá más tarde.", "warning")
+        except Exception:
+            pass
+
     abort(429)
 
 
 def redirect_with_no_store(url: str):
-    resp = redirect(url)
+    resp = redirect(url, code=_cfg_int(CFG_AUTH_REDIRECT_CODE, 302, min_v=301, max_v=308))
     try:
         for k, v in _NO_STORE_HEADERS.items():
             resp.headers[k] = v
@@ -480,4 +599,5 @@ __all__ = [
     "auth_rate_limit_or_429",
     "redirect_with_no_store",
     "safe_redirect_to",
+    "admin_creds_ok",
 ]
