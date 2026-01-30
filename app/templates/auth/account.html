@@ -4,17 +4,23 @@
 {% block extra_head %}
 <meta name="robots" content="noindex,nofollow">
 <meta name="theme-color" content="#0b1220">
-{% set _csrf = (csrf_token() if csrf_token is defined else (csrf_token_value if csrf_token_value is defined else (session.get('csrf_token') if session is defined else ''))) %}
+{% set _csrf = '' %}
+{% if csrf_token is defined %}
+  {% set _csrf = (csrf_token() if csrf_token is callable else (csrf_token|string)) %}
+{% elif csrf_token_value is defined and csrf_token_value %}
+  {% set _csrf = csrf_token_value %}
+{% elif session is defined and session.get is defined %}
+  {% set _csrf = (session.get('csrf_token') or '') %}
+{% endif %}
 {% if _csrf %}<meta name="csrf-token" content="{{ _csrf|e }}">{% endif %}
 <link rel="stylesheet" href="{{ (url_for('static', filename='css/account.css') if url_for is defined else '/static/css/account.css') }}">
 {% endblock %}
 
 {% block content %}
+{% set _vf = (current_app.view_functions if current_app is defined and current_app else {}) %}
 {% macro _safe_url(ep, fallback) -%}
-  {%- if url_for is defined and ep -%}
-    {%- set u = '' -%}
-    {%- try -%}{%- set u = url_for(ep) -%}{%- except -%}{%- set u = '' -%}{%- endtry -%}
-    {{- u if u else fallback -}}
+  {%- if url_for is defined and ep and ep in _vf -%}
+    {{- url_for(ep) -}}
   {%- else -%}
     {{- fallback -}}
   {%- endif -%}

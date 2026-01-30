@@ -439,10 +439,11 @@ def create_app() -> Flask:
         g._t0 = time.time()
 
         p = request.path.rstrip("/") or "/"
-        if p in {"/login", "/auth/login"}:
-            return _best_redirect_to_account(app, "login")
-        if p in {"/register", "/auth/register"}:
-            return _best_redirect_to_account(app, "register")
+        if request.method in {"GET", "HEAD"}:
+            if p in {"/login", "/auth/login"}:
+                return _best_redirect_to_account(app, "login")
+            if p in {"/register", "/auth/register"}:
+                return _best_redirect_to_account(app, "register")
         return None
 
     @app.after_request

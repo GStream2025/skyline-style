@@ -18,14 +18,15 @@
 <meta name="csrf-token" content="{{ (_csrf|string)|e }}">
 
 {% set _has_ep = has_endpoint if has_endpoint is defined else none %}
+{% set _vf = (current_app.view_functions if current_app is defined and current_app else {}) %}
 {% macro safe_url(ep, fb='') -%}
   {%- if url_for is defined and ep -%}
     {%- if _has_ep and _has_ep(ep) -%}
       {{- url_for(ep) -}}
+    {%- elif ep in _vf -%}
+      {{- url_for(ep) -}}
     {%- else -%}
-      {%- set u = '' -%}
-      {%- try -%}{%- set u = url_for(ep) -%}{%- except -%}{%- set u = '' -%}{%- endtry -%}
-      {{- u if u else fb -}}
+      {{- fb -}}
     {%- endif -%}
   {%- else -%}
     {{- fb -}}
