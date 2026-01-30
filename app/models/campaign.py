@@ -28,14 +28,12 @@ def utcnow() -> datetime:
 
 
 def _s(v: Any, max_len: int) -> Optional[str]:
-    if v is None:
+    if v is None or max_len <= 0:
         return None
     s = str(v).replace("\x00", "").replace("\u200b", "").strip()
     if not s:
         return None
     s = " ".join(s.split())
-    if max_len <= 0:
-        return None
     return s[:max_len]
 
 
@@ -48,8 +46,7 @@ def _normalize_email(v: Any) -> Optional[str]:
     if not s:
         return None
     s = s.casefold()
-    s = s.replace("..", ".")
-    s = s.strip(".")
+    s = s.replace("..", ".").strip(".")
     return s[:_EMAIL_MAX] if s else None
 
 
@@ -69,7 +66,7 @@ def _email(v: Any) -> Optional[str]:
     out = _normalize_email(v)
     if not out:
         return None
-    return out if _looks_like_email(out) else out
+    return out if _looks_like_email(out) else None
 
 
 def _clamp_int(v: Any, lo: int = 0, hi: int = 2_000_000_000) -> int:
@@ -159,6 +156,11 @@ class Campaign(db.Model):
             "status IN ('draft','scheduled','sending','sent','paused')",
             name="ck_campaigns_status_allowed",
         ),
+        # evita payloads gigantes si alguien mete basura (SQLite/Postgres soportan length())
+        CheckConstraint(
+            f"(audience_rule_json IS NULL) OR (length(audience_rule_json) <= {_JSON_MAX_BYTES})",
+            name="ck_campaigns_audience_json_len",
+        ),
         Index("ix_campaigns_status_scheduled", "status", "scheduled_at"),
         Index("ix_campaigns_created", "created_at"),
         Index("ix_campaigns_updated", "updated_at"),
@@ -179,6 +181,33 @@ class Campaign(db.Model):
     @validates("from_email")
     def _v_from_email(self, _k: str, v: Any) -> Optional[str]:
         return _email(v)
+
+    @validates("content_html")
+    def _v_html(self, _k: str, v: Any) -> str:
+        s = _s_req(v, 10_000_000, "<p></p>")  # límite lógico (db.Text igual lo soporta)
+        return s
+
+    @validates("content_text")
+    def _v_text(self, _k: str, v: Any) -> Optional[str]:
+        return _s(v, 10_000_000)
+
+    @validates("audience_rule_json")
+    def _v_audience(self, _k: str, v: Any) -> Optional[str]:
+        if v is None:
+            return None
+        s = str(v).strip()
+        if not s:
+            return None
+        if len(s.encode("utf-8", "ignore")) > _JSON_MAX_BYTES:
+            return "{}"
+        # normaliza a JSON compacto si es parseable; si no, no rompe
+        try:
+            obj = json.loads(s)
+            if isinstance(obj, dict):
+                return _json_dump(obj)
+        except Exception:
+            pass
+        return s
 
     @validates("status")
     def _v_status(self, _k: str, v: Any) -> str:
@@ -202,7 +231,7 @@ class Campaign(db.Model):
             return False
         return (now or utcnow()) >= self.scheduled_at
 
-    def mark_scheduled(self, when: datetime) -> None:
+    def mark_scheduled(self, when: Optional[datetime]) -> None:
         self.scheduled_at = when
         self.status = "scheduled" if when else "draft"
 
@@ -221,9 +250,12 @@ class Campaign(db.Model):
             self.status = "scheduled" if self.scheduled_at else "draft"
 
     def bump_counters(self, *, sent: int = 0, delivered: int = 0, failed: int = 0) -> None:
-        self.sent_count = _clamp_int(self.sent_count) + _clamp_int(sent)
-        self.delivered_count = _clamp_int(self.delivered_count) + _clamp_int(delivered)
-        self.failed_count = _clamp_int(self.failed_count) + _clamp_int(failed)
+        s0 = _clamp_int(self.sent_count)
+        d0 = _clamp_int(self.delivered_count)
+        f0 = _clamp_int(self.failed_count)
+        self.sent_count = _clamp_int(s0 + _clamp_int(sent), 0, 2_000_000_000)
+        self.delivered_count = _clamp_int(d0 + _clamp_int(delivered), 0, 2_000_000_000)
+        self.failed_count = _clamp_int(f0 + _clamp_int(failed), 0, 2_000_000_000)
 
     def __repr__(self) -> str:
         return f"<Campaign id={self.id} name={self.name!r} status={self.status!r}>"
@@ -251,7 +283,8 @@ class CampaignSend(db.Model):
     to_email = db.Column(db.String(_EMAIL_MAX), nullable=False, index=True)
     status = db.Column(db.String(30), nullable=False, default="pending", index=True)
 
-    sent_at = db.Column(db.DateTime(timezone=True), nullable=True, index=True)
+    # ⚠️ IMPORTANTE: no uses index=True acá si ya tenés Index explícito, evita duplicados en migraciones
+    sent_at = db.Column(db.DateTime(timezone=True), nullable=True)
     delivered_at = db.Column(db.DateTime(timezone=True), nullable=True)
     failed_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
@@ -273,12 +306,13 @@ class CampaignSend(db.Model):
         Index("ix_campaign_sends_campaign_status", "campaign_id", "status", "id"),
         Index("ix_campaign_sends_email_status", "to_email", "status", "id"),
         Index("ix_campaign_sends_sent_at", "sent_at", "id"),
+        Index("ix_campaign_sends_created", "created_at", "id"),
     )
 
     @validates("to_email")
     def _v_to_email(self, _k: str, v: Any) -> str:
-        out = _normalize_email(v) or "unknown@example.com"
-        return out[:_EMAIL_MAX]
+        out = _email(v)
+        return (out or "unknown@example.com")[:_EMAIL_MAX]
 
     @validates("status")
     def _v_status(self, _k: str, v: Any) -> str:
@@ -336,6 +370,8 @@ def _campaign_before_insert(_mapper, _conn, target: Campaign) -> None:
     target.sent_count = _clamp_int(target.sent_count)
     target.delivered_count = _clamp_int(target.delivered_count)
     target.failed_count = _clamp_int(target.failed_count)
+    if target.audience_rule_json:
+        target.audience_rule_json = _json_dump(_json_dict(target.audience_rule_json))
 
 
 @event.listens_for(Campaign, "before_update", propagate=True)
@@ -345,14 +381,21 @@ def _campaign_before_update(_mapper, _conn, target: Campaign) -> None:
     target.sent_count = _clamp_int(target.sent_count)
     target.delivered_count = _clamp_int(target.delivered_count)
     target.failed_count = _clamp_int(target.failed_count)
+    if target.audience_rule_json:
+        target.audience_rule_json = _json_dump(_json_dict(target.audience_rule_json))
 
 
 @event.listens_for(CampaignSend, "before_insert", propagate=True)
 @event.listens_for(CampaignSend, "before_update", propagate=True)
 def _send_before_save(_mapper, _conn, target: CampaignSend) -> None:
-    target.to_email = _normalize_email(target.to_email) or "unknown@example.com"
+    target.to_email = (_email(target.to_email) or "unknown@example.com")[:_EMAIL_MAX]
     target.status = _status(target.status, _SEND_STATUSES, "pending")
     target.error_message = _s(target.error_message, _ERROR_MAX) if target.error_message else None
+    # coherencia mínima de timestamps
+    if target.status == "sent" and target.sent_at is None:
+        target.sent_at = utcnow()
+    if target.status != "failed":
+        target.failed_at = None
 
 
 __all__ = ["Campaign", "CampaignSend", "utcnow"]

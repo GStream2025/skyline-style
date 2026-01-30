@@ -37,20 +37,27 @@ _slug_re = re.compile(r"[^a-z0-9\-]+")
 _space_re = re.compile(r"\s+")
 _dash_re = re.compile(r"-{2,}")
 _strip_tags_re = re.compile(r"<[^>]+>")
+_zero_width_re = re.compile(r"[\u200b\u200c\u200d\ufeff]")
+_ctrl_re = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _norm_text(v: Any) -> str:
+    s = "" if v is None else str(v)
+    s = s.replace("\x00", "")
+    s = _zero_width_re.sub("", s)
+    s = _ctrl_re.sub("", s)
+    return " ".join(s.strip().split())
+
+
 def _clean_text(v: Any, max_len: int, *, default: str = "") -> str:
-    if v is None:
-        return default
-    s = str(v).replace("\x00", "").strip()
-    if not s:
-        return default
-    s = " ".join(s.split())
     if max_len <= 0:
+        return default
+    s = _norm_text(v)
+    if not s:
         return default
     return s[:max_len]
 
@@ -64,7 +71,7 @@ def _clamp_int(v: Any, default: int = 0, *, min_v: int = 0, max_v: int = _STOCK_
     try:
         n = int(str(v).strip())
     except Exception:
-        return int(default)
+        n = int(default)
     if n < min_v:
         return min_v
     if n > max_v:
@@ -84,7 +91,7 @@ def _dec(v: Any, default: Decimal = Decimal("0.00")) -> Decimal:
     except (InvalidOperation, ValueError, TypeError):
         d = default
 
-    if d.is_nan() or d.is_infinite():
+    if getattr(d, "is_nan", lambda: False)() or getattr(d, "is_infinite", lambda: False)():
         d = default
 
     if d < Decimal("0.00"):
@@ -104,15 +111,16 @@ def _ascii_fold(s: str) -> str:
 
 
 def slugify(text: str, max_len: int = _SLUG_MAX, *, default: str = "product") -> str:
-    s = (text or "").strip().lower()
+    mx = max(1, int(max_len or _SLUG_MAX))
+    s = _norm_text(text).lower()
     if not s:
-        return default[:max_len]
+        return default[:mx]
     s = _ascii_fold(s)
     s = _space_re.sub("-", s)
     s = _slug_re.sub("", s)
     s = _dash_re.sub("-", s).strip("-")
     out = s or default
-    return out[:max_len]
+    return out[:mx]
 
 
 def _unique_slug(conn, base_slug: str, product_id: Optional[int] = None) -> str:
@@ -135,6 +143,25 @@ def _unique_slug(conn, base_slug: str, product_id: Optional[int] = None) -> str:
             return cand
 
     return (base[: max(1, _SLUG_MAX - 2)] + "-x")[:_SLUG_MAX]
+
+
+def _safe_url(v: Any, max_len: int) -> Optional[str]:
+    s = _clean_text(v, max_len, default="")
+    if not s:
+        return None
+    if any(c in s for c in ("\r", "\n", "\x00")):
+        return None
+    return s
+
+
+def _status(v: Any, allowed: set[str], default: str) -> str:
+    s = _clean_text(v or default, 20, default=default).lower()
+    return s if s in allowed else default
+
+
+def _currency(v: Any) -> str:
+    s = _clean_text(v or "USD", 3, default="USD").upper()
+    return s if len(s) == 3 and s.isalpha() else "USD"
 
 
 product_tags = db.Table(
@@ -205,6 +232,10 @@ class Product(db.Model):
         CheckConstraint("price >= 0", name="ck_products_price_nonneg"),
         CheckConstraint("(compare_at_price IS NULL) OR (compare_at_price >= 0)", name="ck_products_compare_nonneg"),
         CheckConstraint("length(currency) = 3", name="ck_products_currency_len3"),
+        CheckConstraint("status IN ('draft','active','hidden')", name="ck_products_status_allowed"),
+        CheckConstraint("source IN ('manual','printful','dropship','temu')", name="ck_products_source_allowed"),
+        CheckConstraint("stock_mode IN ('finite','unlimited','external')", name="ck_products_stock_mode_allowed"),
+        CheckConstraint("(external_url IS NULL) OR (length(external_url) <= 500)", name="ck_products_ext_url_len"),
         Index("ix_products_status_source", "status", "source", "id"),
         Index("ix_products_category_status", "category_id", "status", "id"),
         Index("ix_products_price", "price", "id"),
@@ -247,6 +278,14 @@ class Product(db.Model):
     def is_active(cls):  # type: ignore[override]
         return func.lower(func.coalesce(cls.status, "")) == "active"
 
+    @hybrid_property
+    def is_external(self) -> bool:
+        return (self.stock_mode or "").strip().lower() == "external"
+
+    @is_external.expression
+    def is_external(cls):  # type: ignore[override]
+        return func.lower(func.coalesce(cls.stock_mode, "")) == "external"
+
     @validates("title")
     def _v_title(self, _k, v: Any) -> str:
         return _clean_text(v, _TITLE_MAX, default="Producto")
@@ -257,23 +296,19 @@ class Product(db.Model):
 
     @validates("currency")
     def _v_currency(self, _k, v: Any) -> str:
-        s = _clean_text(v or "USD", 3, default="USD").upper()
-        return s if len(s) == 3 else "USD"
+        return _currency(v)
 
     @validates("source")
     def _v_source(self, _k, v: Any) -> str:
-        s = _clean_text(v or "manual", 20, default="manual").lower()
-        return s if s in _ALLOWED_SOURCE else "manual"
+        return _status(v, _ALLOWED_SOURCE, "manual")
 
     @validates("status")
     def _v_status(self, _k, v: Any) -> str:
-        s = _clean_text(v or "draft", 20, default="draft").lower()
-        return s if s in _ALLOWED_STATUS else "draft"
+        return _status(v, _ALLOWED_STATUS, "draft")
 
     @validates("stock_mode")
     def _v_stock_mode(self, _k, v: Any) -> str:
-        s = _clean_text(v or "finite", 20, default="finite").lower()
-        return s if s in _ALLOWED_STOCK_MODE else "finite"
+        return _status(v, _ALLOWED_STOCK_MODE, "finite")
 
     @validates("stock_qty")
     def _v_stock_qty(self, _k, v: Any) -> int:
@@ -285,8 +320,7 @@ class Product(db.Model):
 
     @validates("external_url")
     def _v_external_url(self, _k, v: Any) -> Optional[str]:
-        s = _clean_text(v, _EXT_URL_MAX, default="")
-        return s or None
+        return _safe_url(v, _EXT_URL_MAX)
 
     @validates("supplier_name")
     def _v_supplier(self, _k, v: Any) -> Optional[str]:
@@ -336,14 +370,22 @@ class Product(db.Model):
             return None
 
     def main_image_url(self) -> Optional[str]:
-        items = [m for m in (self.media or []) if (m.type or "").strip().lower() == "image" and (m.url or "").strip()]
+        items = [
+            m
+            for m in (self.media or [])
+            if (m.type or "").strip().lower() == "image" and (m.url or "").strip()
+        ]
         if not items:
             return None
         items.sort(key=lambda x: (x.sort_order or 0, x.id or 0))
         return (items[0].url or "").strip() or None
 
     def main_video_url(self) -> Optional[str]:
-        items = [m for m in (self.media or []) if (m.type or "").strip().lower() == "video" and (m.url or "").strip()]
+        items = [
+            m
+            for m in (self.media or [])
+            if (m.type or "").strip().lower() == "video" and (m.url or "").strip()
+        ]
         if not items:
             return None
         items.sort(key=lambda x: (x.sort_order or 0, x.id or 0))
@@ -355,7 +397,9 @@ class Product(db.Model):
         if br and br.lower() in base.lower():
             return base[:_SEO_TITLE_MAX]
         if br:
-            return f"{base} - {br}"[:_SEO_TITLE_MAX]
+            tail = f" - {br}"
+            head = base[: max(1, _SEO_TITLE_MAX - len(tail))]
+            return (head + tail)[:_SEO_TITLE_MAX]
         return base[:_SEO_TITLE_MAX]
 
     def seo_description_final(self) -> str:
@@ -384,6 +428,7 @@ class Product(db.Model):
             "stock_mode": self.stock_mode,
             "stock_qty": int(self.stock_qty or 0),
             "category_id": self.category_id,
+            "external_url": (self.external_url or None),
             "main_image": self.main_image_url(),
             "main_video": self.main_video_url(),
             "created_at": self.created_at.isoformat() if self.created_at else None,
@@ -411,25 +456,25 @@ class ProductMedia(db.Model):
 
     __table_args__ = (
         CheckConstraint("sort_order >= -1000000 AND sort_order <= 1000000", name="ck_product_media_sort_range"),
+        CheckConstraint("type IN ('image','video')", name="ck_product_media_type_allowed"),
         Index("ix_product_media_product_sort", "product_id", "sort_order", "id"),
         Index("ix_product_media_type", "type", "id"),
     )
 
     @validates("type")
     def _v_type(self, _k, v: Any) -> str:
-        s = _clean_text(v or "image", 10, default="image").lower()
-        return s if s in _ALLOWED_MEDIA_TYPE else "image"
+        return _status(v, _ALLOWED_MEDIA_TYPE, "image")
 
     @validates("url")
     def _v_url(self, _k, v: Any) -> str:
-        s = _clean_text(v, _URL_MAX, default="")
+        s = _safe_url(v, _URL_MAX) or ""
         if not s:
             raise ValueError("ProductMedia.url empty")
         return s
 
     @validates("poster_url")
     def _v_poster(self, _k, v: Any) -> Optional[str]:
-        return _clean_optional(v, _URL_MAX)
+        return _safe_url(v, _URL_MAX)
 
     @validates("alt_text")
     def _v_alt(self, _k, v: Any) -> Optional[str]:
@@ -454,8 +499,7 @@ class Tag(db.Model):
 
     @validates("name")
     def _v_name(self, _k, v: Any) -> str:
-        s = _clean_text(v, _TAG_NAME_MAX, default="tag")
-        return s or "tag"
+        return _clean_text(v, _TAG_NAME_MAX, default="tag") or "tag"
 
     @validates("slug")
     def _v_slug(self, _k, v: Any) -> str:
@@ -473,6 +517,23 @@ def _product_before_insert(_mapper, conn, target: Product):
     target.slug = slugify(base, max_len=_SLUG_MAX, default="product")
     target.slug = _unique_slug(conn, target.slug)
 
+    target.source = _status(target.source, _ALLOWED_SOURCE, "manual")
+    target.status = _status(target.status, _ALLOWED_STATUS, "draft")
+    target.stock_mode = _status(target.stock_mode, _ALLOWED_STOCK_MODE, "finite")
+    target.currency = _currency(target.currency)
+
+    target.stock_qty = _clamp_int(target.stock_qty, default=0, min_v=0, max_v=_STOCK_MAX)
+    target.price = _dec(target.price, Decimal("0.00"))
+    target.compare_at_price = _dec(target.compare_at_price, Decimal("0.00")) if target.compare_at_price is not None else None
+    if target.compare_at_price is not None and target.compare_at_price <= Decimal("0.00"):
+        target.compare_at_price = None
+
+    target.external_url = _safe_url(target.external_url, _EXT_URL_MAX)
+    target.supplier_name = _clean_optional(target.supplier_name, _SUPPLIER_MAX)
+    target.short_description = _clean_optional(target.short_description, _SHORT_DESC_MAX)
+    target.seo_title = _clean_optional(target.seo_title, _SEO_TITLE_MAX)
+    target.seo_description = _clean_optional(target.seo_description, _SEO_DESC_MAX)
+
     now = utcnow()
     target.updated_at = now
     if not target.created_at:
@@ -486,6 +547,23 @@ def _product_before_update(_mapper, conn, target: Product):
     base = (target.slug or "").strip() or (target.title or "product")
     target.slug = slugify(base, max_len=_SLUG_MAX, default="product")
     target.slug = _unique_slug(conn, target.slug, product_id=target.id)
+
+    target.source = _status(target.source, _ALLOWED_SOURCE, "manual")
+    target.status = _status(target.status, _ALLOWED_STATUS, "draft")
+    target.stock_mode = _status(target.stock_mode, _ALLOWED_STOCK_MODE, "finite")
+    target.currency = _currency(target.currency)
+
+    target.stock_qty = _clamp_int(target.stock_qty, default=0, min_v=0, max_v=_STOCK_MAX)
+    target.price = _dec(target.price, Decimal("0.00"))
+    target.compare_at_price = _dec(target.compare_at_price, Decimal("0.00")) if target.compare_at_price is not None else None
+    if target.compare_at_price is not None and target.compare_at_price <= Decimal("0.00"):
+        target.compare_at_price = None
+
+    target.external_url = _safe_url(target.external_url, _EXT_URL_MAX)
+    target.supplier_name = _clean_optional(target.supplier_name, _SUPPLIER_MAX)
+    target.short_description = _clean_optional(target.short_description, _SHORT_DESC_MAX)
+    target.seo_title = _clean_optional(target.seo_title, _SEO_TITLE_MAX)
+    target.seo_description = _clean_optional(target.seo_description, _SEO_DESC_MAX)
 
     target.updated_at = utcnow()
 

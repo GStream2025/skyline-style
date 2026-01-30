@@ -20,12 +20,12 @@ from app.models import db, init_models
 
 try:
     from sqlalchemy import text as sql_text  # type: ignore
-except Exception:
+except Exception:  # pragma: no cover
     sql_text = None  # type: ignore
 
 try:
     from werkzeug.security import safe_join  # type: ignore
-except Exception:
+except Exception:  # pragma: no cover
     safe_join = None  # type: ignore
 
 
@@ -246,14 +246,20 @@ def _register_blueprints(app: Flask) -> dict[str, Any]:
 
 
 def _apply_runtime_defaults(app: Flask) -> None:
-    app.config.setdefault("MAX_CONTENT_LENGTH", _env_int("MAX_CONTENT_LENGTH", 2_000_000, min_v=200_000, max_v=25_000_000))
+    app.config.setdefault(
+        "MAX_CONTENT_LENGTH",
+        _env_int("MAX_CONTENT_LENGTH", 2_000_000, min_v=200_000, max_v=25_000_000),
+    )
     app.config.setdefault("JSON_SORT_KEYS", False)
     app.config.setdefault("TEMPLATES_AUTO_RELOAD", not _is_prod(app))
     app.config.setdefault("SEND_FILE_MAX_AGE_DEFAULT", 31536000 if _is_prod(app) else 0)
 
     app.config.setdefault("SESSION_COOKIE_HTTPONLY", True)
     app.config.setdefault("SESSION_COOKIE_SAMESITE", "Lax")
-    app.config.setdefault("PERMANENT_SESSION_LIFETIME", timedelta(days=_env_int("SESSION_DAYS", 14, min_v=1, max_v=90)))
+    app.config.setdefault(
+        "PERMANENT_SESSION_LIFETIME",
+        timedelta(days=_env_int("SESSION_DAYS", 14, min_v=1, max_v=90)),
+    )
     app.config.setdefault("SESSION_REFRESH_EACH_REQUEST", False)
     app.config.setdefault("PREFERRED_URL_SCHEME", "https" if _is_prod(app) else "http")
     app.config.setdefault("SESSION_COOKIE_SECURE", _is_prod(app))
@@ -325,7 +331,16 @@ def _apply_security_headers(app: Flask, resp: Response) -> Response:
     if bool(app.config.get("CSP_ENABLED", False)):
         policy = str(app.config.get("CSP_POLICY") or "").strip()
         if not policy:
-            policy = "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https:; script-src 'self' 'unsafe-inline' https:; font-src 'self' data: https:; connect-src 'self' https:; frame-ancestors 'self'; base-uri 'self'"
+            policy = (
+                "default-src 'self'; "
+                "img-src 'self' data: https:; "
+                "style-src 'self' 'unsafe-inline' https:; "
+                "script-src 'self' 'unsafe-inline' https:; "
+                "font-src 'self' data: https:; "
+                "connect-src 'self' https:; "
+                "frame-ancestors 'self'; "
+                "base-uri 'self'"
+            )
         resp.headers.setdefault("Content-Security-Policy", policy)
 
     return resp
@@ -438,11 +453,13 @@ def create_app() -> Flask:
         g.request_id = rid[:128] if rid else secrets.token_urlsafe(10)
         g._t0 = time.time()
 
-        p = request.path.rstrip("/") or "/"
-        if p in {"/login", "/auth/login"}:
-            return _best_redirect_to_account(app, "login")
-        if p in {"/register", "/auth/register"}:
-            return _best_redirect_to_account(app, "register")
+        # ✅ FIX CRÍTICO: redirigir /login y /register SOLO en GET/HEAD (no romper POST)
+        if request.method in {"GET", "HEAD"}:
+            p = request.path.rstrip("/") or "/"
+            if p in {"/login", "/auth/login"}:
+                return _best_redirect_to_account(app, "login")
+            if p in {"/register", "/auth/register"}:
+                return _best_redirect_to_account(app, "register")
         return None
 
     @app.after_request
@@ -488,6 +505,7 @@ def create_app() -> Flask:
 
     stats = _register_blueprints(app)
 
+    # Fallbacks de GET/HEAD para /auth/login y /auth/register (solo si no existen endpoints reales)
     if not _endpoint_exists(app, "_fallback_auth_login"):
         app.add_url_rule(
             "/auth/login",
@@ -504,6 +522,7 @@ def create_app() -> Flask:
             methods=["GET", "HEAD"],
         )
 
+    # Alias /login y /register (solo GET/HEAD), sin pisar reglas existentes
     for rule, endpoint, tab in (
         ("/login", "_fallback_login", "login"),
         ("/register", "_fallback_register", "register"),
@@ -519,7 +538,7 @@ def create_app() -> Flask:
             if tab not in {"login", "register"}:
                 tab = "login"
             nxt = _safe_next_path(request.args.get("next", "")) or "/"
-            headers = {}
+            headers: dict[str, str] = {}
             if bool(app.config.get("NO_STORE_ERROR_PAGES", True)):
                 headers["Cache-Control"] = "no-store, max-age=0, must-revalidate"
                 headers["Pragma"] = "no-cache"
@@ -540,7 +559,7 @@ def create_app() -> Flask:
         rr = stats.get("routes_report") if isinstance(stats.get("routes_report"), dict) else {}
         imports_failed = rr.get("imports_failed", []) if isinstance(rr, dict) else []
         reveal = bool(app.config.get("HEALTH_REVEAL_ERRORS", not _is_prod(app)))
-        payload = {
+        payload: dict[str, Any] = {
             "status": "ok" if init_ok else "degraded",
             "env": _env_name(app),
             "app": app.config.get("APP_NAME", "Skyline Store"),
@@ -549,7 +568,10 @@ def create_app() -> Flask:
             "bp_registered": int(stats.get("registered", 0)),
             "bp_failed": int(stats.get("failed", 0)),
             "bp_skipped": int(stats.get("skipped", 0)),
-            "auth_account": bool(_endpoint_exists(app, str(app.config.get("AUTH_ACCOUNT_ENDPOINT", "auth.account"))) or _rule_exists(app, "/auth/account")),
+            "auth_account": bool(
+                _endpoint_exists(app, str(app.config.get("AUTH_ACCOUNT_ENDPOINT", "auth.account")))
+                or _rule_exists(app, "/auth/account")
+            ),
             "init_models_ok": bool(init_ok),
             "ts": int(time.time()),
         }
