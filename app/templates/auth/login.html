@@ -1,494 +1,51 @@
-{# templates/auth/login.html #}
 <!doctype html>
 <html lang="es">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <meta name="robots" content="noindex,nofollow" />
-  <meta name="theme-color" content="#0b1220" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="theme-color" content="#0b1220">
   <title>{{ (APP_NAME or "Skyline Store")|e }} · Iniciar sesión</title>
 
-  <style>
-    :root{
-      --bg0:#070b14;
-      --bg1:#0b1220;
-      --card: rgba(17,24,39,.78);
-      --card2: rgba(17,24,39,.52);
-      --stroke: rgba(148,163,184,.16);
-      --stroke2: rgba(148,163,184,.12);
-      --text:#e5e7eb;
-      --muted:#9ca3af;
-      --muted2:#cbd5e1;
-      --good:#22c55e;
-      --warn:#f59e0b;
-      --bad:#ef4444;
-      --a:#38bdf8;
-      --b:#2563eb;
-      --ring: 0 0 0 4px rgba(56,189,248,.16);
-      --shadow: 0 26px 80px rgba(0,0,0,.55);
-      --r: 18px;
-      --r2: 22px;
-      --max: 1080px;
-      --pad: clamp(14px, 2.2vw, 22px);
-      --gap: clamp(10px, 1.8vw, 16px);
-      --btnH: 46px;
-      --iH: 46px;
-      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-      --sans: system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial;
-    }
-    *{box-sizing:border-box}
-    html,body{height:100%}
-    body{
-      margin:0;
-      font-family:var(--sans);
-      color:var(--text);
-      background:
-        radial-gradient(1200px 700px at 10% 8%, rgba(56,189,248,.16), transparent 55%),
-        radial-gradient(1000px 600px at 92% 10%, rgba(37,99,235,.14), transparent 55%),
-        radial-gradient(900px 700px at 55% 95%, rgba(34,197,94,.08), transparent 55%),
-        linear-gradient(180deg, var(--bg0), var(--bg1));
-      display:flex;
-      align-items:stretch;
-      justify-content:center;
-    }
-    a{color:inherit}
-    .wrap{
-      width:100%;
-      max-width:var(--max);
-      margin:0 auto;
-      padding: clamp(18px, 3vw, 34px);
-      display:grid;
-      grid-template-columns: 1.05fr .95fr;
-      gap: clamp(14px, 2.4vw, 28px);
-      align-items:center;
-      min-height:100vh;
-    }
-    @media (max-width: 940px){
-      .wrap{grid-template-columns:1fr; align-items:stretch}
-    }
-
-    .hero{
-      position:relative;
-      border:1px solid var(--stroke);
-      border-radius: var(--r2);
-      background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
-      box-shadow: var(--shadow);
-      overflow:hidden;
-      padding: clamp(18px, 3vw, 28px);
-      min-height: 420px;
-      display:flex;
-      flex-direction:column;
-      justify-content:space-between;
-    }
-    .hero::before{
-      content:"";
-      position:absolute; inset:-1px;
-      background:
-        radial-gradient(520px 220px at 20% 15%, rgba(56,189,248,.20), transparent 70%),
-        radial-gradient(520px 220px at 75% 20%, rgba(37,99,235,.18), transparent 70%),
-        radial-gradient(520px 220px at 55% 85%, rgba(34,197,94,.12), transparent 70%);
-      pointer-events:none;
-      filter: blur(0px);
-    }
-    .hero > *{position:relative; z-index:1}
-    .brand{
-      display:flex; gap:12px; align-items:center;
-    }
-    .logo{
-      width:44px;height:44px;border-radius: 14px;
-      background: linear-gradient(135deg, rgba(56,189,248,.9), rgba(37,99,235,.9));
-      box-shadow: 0 18px 40px rgba(37,99,235,.26);
-      display:grid; place-items:center;
-      border:1px solid rgba(255,255,255,.18);
-    }
-    .logo svg{width:24px;height:24px;opacity:.95}
-    .brand .name{
-      display:flex;flex-direction:column;line-height:1.1;
-    }
-    .brand .name strong{font-size:15px; letter-spacing:.2px}
-    .brand .name span{font-size:12px; color:var(--muted)}
-
-    .headline{
-      margin: 14px 0 0;
-      font-size: clamp(22px, 3vw, 34px);
-      letter-spacing: -.4px;
-    }
-    .sub{
-      margin: 10px 0 0;
-      color: var(--muted2);
-      font-size: 14px;
-      max-width: 56ch;
-    }
-    .badges{
-      display:flex; flex-wrap:wrap;
-      gap:10px;
-      margin-top: 16px;
-    }
-    .badge{
-      display:flex; gap:8px; align-items:center;
-      padding:8px 10px;
-      border-radius: 999px;
-      border: 1px solid var(--stroke2);
-      background: rgba(2,6,23,.25);
-      color: rgba(226,232,240,.92);
-      font-size: 12px;
-    }
-    .badge svg{width:16px;height:16px;opacity:.9}
-    .fine{
-      display:flex; flex-wrap:wrap; gap:12px;
-      color: var(--muted);
-      font-size: 12px;
-      margin-top: 18px;
-    }
-    .fine code{
-      font-family: var(--mono);
-      font-size: 11px;
-      padding: 2px 6px;
-      border-radius: 8px;
-      border: 1px solid var(--stroke2);
-      background: rgba(2,6,23,.35);
-      color: rgba(226,232,240,.86);
-    }
-
-    .card{
-      border:1px solid var(--stroke);
-      border-radius: var(--r2);
-      background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
-      box-shadow: var(--shadow);
-      overflow:hidden;
-    }
-    .card-inner{
-      padding: var(--pad);
-      display:flex;
-      flex-direction:column;
-      gap: var(--gap);
-    }
-    .card-top{
-      display:flex; align-items:flex-start; justify-content:space-between;
-      gap: 12px;
-    }
-    .title{
-      margin:0;
-      font-size: 18px;
-      letter-spacing: -.2px;
-    }
-    .hint{
-      margin:4px 0 0;
-      color: var(--muted);
-      font-size: 13px;
-    }
-
-    .alert{
-      display:flex;
-      gap:10px;
-      align-items:flex-start;
-      padding: 12px 12px;
-      border-radius: 14px;
-      border: 1px solid var(--stroke2);
-      background: rgba(2,6,23,.32);
-    }
-    .alert i{
-      width:22px;height:22px;border-radius:7px;
-      display:grid; place-items:center;
-      background: rgba(56,189,248,.14);
-      border: 1px solid rgba(56,189,248,.20);
-      margin-top: 1px;
-      flex: 0 0 auto;
-    }
-    .alert i svg{width:14px;height:14px}
-    .alert .msg{font-size: 13px; color: rgba(226,232,240,.95)}
-    .alert.success i{background: rgba(34,197,94,.14); border-color: rgba(34,197,94,.22)}
-    .alert.danger i{background: rgba(239,68,68,.14); border-color: rgba(239,68,68,.22)}
-    .alert.warning i{background: rgba(245,158,11,.14); border-color: rgba(245,158,11,.22)}
-    .alert.info i{background: rgba(56,189,248,.14); border-color: rgba(56,189,248,.20)}
-
-    .grid{
-      display:grid;
-      gap: 12px;
-    }
-    .field{
-      display:flex;
-      flex-direction:column;
-      gap: 7px;
-    }
-    label{
-      font-size: 12px;
-      color: rgba(226,232,240,.88);
-      letter-spacing: .2px;
-    }
-
-    .control{
-      position:relative;
-      display:flex;
-      align-items:center;
-      gap: 10px;
-      padding: 0 12px;
-      height: var(--iH);
-      border-radius: 14px;
-      border: 1px solid var(--stroke);
-      background: rgba(2,6,23,.34);
-      transition: border-color .15s ease, box-shadow .15s ease, transform .12s ease;
-    }
-    .control:focus-within{
-      border-color: rgba(56,189,248,.55);
-      box-shadow: var(--ring);
-      transform: translateY(-1px);
-    }
-    .control svg{
-      width: 18px; height: 18px;
-      opacity: .9;
-      flex: 0 0 auto;
-    }
-    input{
-      width:100%;
-      border:0;
-      outline:none;
-      background:transparent;
-      color: var(--text);
-      font-size: 14px;
-      min-width: 0;
-    }
-    input::placeholder{color: rgba(148,163,184,.75)}
-    .endbtn{
-      border:0;
-      background: transparent;
-      color: rgba(226,232,240,.92);
-      cursor: pointer;
-      padding: 8px;
-      border-radius: 10px;
-      display:grid; place-items:center;
-      transition: background .12s ease, transform .12s ease;
-      flex: 0 0 auto;
-    }
-    .endbtn:hover{background: rgba(148,163,184,.10)}
-    .endbtn:active{transform: translateY(1px)}
-    .endbtn svg{width:18px;height:18px;opacity:.92}
-
-    .row{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap: 12px;
-      flex-wrap:wrap;
-      margin-top: 2px;
-    }
-    .check{
-      display:flex; align-items:center; gap:10px;
-      user-select:none;
-      cursor:pointer;
-      font-size: 13px;
-      color: rgba(226,232,240,.88);
-    }
-    .check input{
-      width: 16px;
-      height: 16px;
-      accent-color: #38bdf8;
-    }
-
-    .link{
-      color: rgba(226,232,240,.92);
-      text-decoration: none;
-      font-size: 13px;
-      padding: 6px 10px;
-      border-radius: 999px;
-      border: 1px solid transparent;
-      transition: border-color .12s ease, background .12s ease;
-      background: rgba(2,6,23,.14);
-    }
-    .link:hover{
-      border-color: rgba(148,163,184,.18);
-      background: rgba(2,6,23,.25);
-    }
-
-    .cta{
-      margin-top: 6px;
-      display:flex;
-      gap: 10px;
-      flex-wrap:wrap;
-    }
-    .btn{
-      height: var(--btnH);
-      border-radius: 14px;
-      border: 1px solid rgba(255,255,255,.14);
-      cursor: pointer;
-      font-weight: 650;
-      letter-spacing: .2px;
-      padding: 0 14px;
-      display:inline-flex;
-      align-items:center;
-      justify-content:center;
-      gap: 10px;
-      transition: transform .12s ease, box-shadow .14s ease, filter .14s ease, border-color .14s ease;
-      text-decoration:none;
-      user-select:none;
-    }
-    .btn.primary{
-      background: linear-gradient(135deg, rgba(56,189,248,.95), rgba(37,99,235,.92));
-      box-shadow: 0 18px 40px rgba(37,99,235,.24);
-    }
-    .btn.primary:hover{filter: brightness(1.03)}
-    .btn.primary:active{transform: translateY(1px)}
-    .btn.ghost{
-      background: rgba(2,6,23,.18);
-      border-color: rgba(148,163,184,.16);
-      color: rgba(226,232,240,.92);
-    }
-    .btn.ghost:hover{border-color: rgba(148,163,184,.26)}
-    .btn:focus-visible{
-      outline:none;
-      box-shadow: var(--ring);
-    }
-    .btn svg{width:18px;height:18px;opacity:.95}
-
-    .split{
-      display:flex; gap:10px; align-items:center;
-      color: rgba(148,163,184,.85);
-      font-size: 12px;
-      margin: 2px 0;
-    }
-    .split::before,.split::after{
-      content:"";
-      height:1px;
-      flex: 1 1 auto;
-      background: rgba(148,163,184,.14);
-    }
-
-    .foot{
-      display:flex; align-items:center; justify-content:space-between;
-      gap: 12px;
-      padding-top: 6px;
-      color: rgba(148,163,184,.90);
-      font-size: 12px;
-      flex-wrap:wrap;
-    }
-    .caps{
-      font-variant-numeric: tabular-nums;
-      font-family: var(--mono);
-      color: rgba(226,232,240,.82);
-    }
-
-    .toast{
-      position: fixed;
-      right: 14px;
-      bottom: 14px;
-      width: min(420px, calc(100vw - 28px));
-      border-radius: 16px;
-      border: 1px solid rgba(148,163,184,.16);
-      background: rgba(2,6,23,.72);
-      backdrop-filter: blur(10px);
-      box-shadow: 0 26px 80px rgba(0,0,0,.55);
-      padding: 12px 12px;
-      display:none;
-      gap: 10px;
-      align-items:flex-start;
-      z-index: 80;
-    }
-    .toast.show{display:flex}
-    .toast i{
-      width:24px;height:24px;border-radius:8px;
-      display:grid;place-items:center;
-      background: rgba(56,189,248,.14);
-      border: 1px solid rgba(56,189,248,.20);
-      margin-top: 1px;
-      flex: 0 0 auto;
-    }
-    .toast i svg{width:14px;height:14px}
-    .toast .t{
-      display:flex;flex-direction:column;gap:2px;
-      min-width: 0;
-    }
-    .toast .t strong{font-size:13px}
-    .toast .t span{
-      font-size: 12px;
-      color: rgba(226,232,240,.86);
-      overflow:hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    @media (prefers-reduced-motion: reduce){
-      .control,.btn{transition:none}
-      .btn:active{transform:none}
-      .control:focus-within{transform:none}
-    }
-  </style>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="{{ (url_for('static', filename='css/auth-login.css') if url_for is defined else '/static/css/auth-login.css') }}">
 </head>
 
-<body>
-  <div class="wrap">
-    <section class="hero" aria-label="Presentación">
-      <div>
-        <div class="brand">
-          <div class="logo" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none">
-              <path d="M6 15.5 12 6l6 9.5" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M7.5 15.5h9" stroke="white" stroke-width="2.2" stroke-linecap="round"/>
-            </svg>
-          </div>
-          <div class="name">
-            <strong>{{ (APP_NAME or "Skyline Store")|e }}</strong>
-            <span>Accedé a tu cuenta para ver pedidos, favoritos y ofertas</span>
-          </div>
-        </div>
-
-        <h1 class="headline">Iniciá sesión en segundos</h1>
-        <p class="sub">
-          Compras seguras, seguimiento de pedidos y una experiencia premium en PC y móvil.
-        </p>
-
-        <div class="badges" aria-label="Confianza">
-          <div class="badge">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M12 3 20 7v6c0 5-3.6 8.6-8 9-4.4-.4-8-4-8-9V7l8-4Z" stroke="currentColor" stroke-width="1.8"/><path d="m9.3 12 1.9 2.1 3.7-4.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            Pagos y sesiones protegidas
-          </div>
-          <div class="badge">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-            Historial de pedidos
-          </div>
-          <div class="badge">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M12 22a8 8 0 1 0-8-8" stroke="currentColor" stroke-width="1.8"/><path d="M2 14h6v6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-            Soporte rápido
-          </div>
-        </div>
-      </div>
-
-      <div class="fine">
-        <span>Tip: usá <code>next</code> para volver a donde estabas.</span>
-        <span class="caps">/auth/login</span>
-      </div>
-    </section>
-
-    <section class="card" aria-label="Formulario de inicio de sesión">
-      <div class="card-inner">
-        <div class="card-top">
+<body class="auth-page">
+  <main class="auth-wrap" role="main">
+    <section class="auth-card" aria-label="Iniciar sesión">
+      <header class="auth-head">
+        <div class="auth-brand">
+          <div class="auth-logo" aria-hidden="true">S</div>
           <div>
-            <h2 class="title">Acceso</h2>
-            <p class="hint">Ingresá con tu email y contraseña.</p>
+            <h1 class="auth-title">Acceso</h1>
+            <p class="auth-subtitle">Ingresá con tu email y contraseña para continuar.</p>
           </div>
-          <a class="link" href="{{ (url_for('auth.register_get', next=next) if url_for is defined else '/auth/register') }}">Crear cuenta</a>
         </div>
+      </header>
 
+      <div class="auth-body">
         {% with messages = get_flashed_messages(with_categories=true) %}
           {% if messages %}
-            <div class="grid" role="status" aria-live="polite">
+            <div class="auth-form" role="status" aria-live="polite">
               {% for cat, msg in messages %}
                 {% set c = (cat or '')|lower %}
-                <div class="alert {{ 'success' if 'success' in c else ('danger' if 'danger' in c or 'error' in c else ('warning' if 'warn' in c else 'info')) }}">
-                  <i aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none">
-                      <path d="M12 9v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                      <path d="M12 17h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
-                      <path d="M10.3 4.4h3.4L21 20H3L10.3 4.4Z" stroke="currentColor" stroke-width="1.8" opacity=".9"/>
-                    </svg>
-                  </i>
-                  <div class="msg">{{ msg }}</div>
+                {% set tone = 'good' if 'success' in c else ('bad' if 'danger' in c or 'error' in c else ('warn' if 'warn' in c else 'info')) %}
+                <div class="auth-alert" data-tone="{{ tone }}">
+                  <div style="min-width:0">
+                    <p class="auth-alert-title">
+                      {{ 'Listo' if tone=='good' else ('Atención' if tone=='warn' else ('Error' if tone=='bad' else 'Aviso')) }}
+                    </p>
+                    <p class="auth-alert-text">{{ msg }}</p>
+                  </div>
                 </div>
               {% endfor %}
             </div>
           {% endif %}
         {% endwith %}
 
-        <form id="loginForm"
+        <form class="auth-form"
+              id="loginForm"
               method="post"
               action="{{ (url_for('auth.login_post') if url_for is defined else '/auth/login') }}"
               autocomplete="on"
@@ -496,128 +53,89 @@
 
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
           <input type="hidden" name="next" value="{{ next|default('')|e }}">
-          <input type="text" name="website" value="" style="position:absolute;left:-9999px;opacity:0" tabindex="-1" autocomplete="off" aria-hidden="true">
+          <input type="text" name="website" value="" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;opacity:0">
 
-          <div class="grid">
-            <div class="field">
+          <div class="auth-row">
+            <div class="auth-label">
               <label for="email">Email</label>
-              <div class="control">
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M4 6h16v12H4V6Z" stroke="currentColor" stroke-width="1.8"/>
-                  <path d="m4 7 8 6 8-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-                <input id="email"
-                       name="email"
-                       type="email"
-                       inputmode="email"
-                       autocomplete="email"
-                       required
-                       minlength="5"
-                       maxlength="254"
-                       placeholder="tu@email.com"
-                       value="{{ prefill_email|default('')|e }}" />
-                <button class="endbtn" type="button" id="pasteEmail" aria-label="Pegar email">
-                  <svg viewBox="0 0 24 24" fill="none">
-                    <path d="M8 7h10v14H8V7Z" stroke="currentColor" stroke-width="1.8"/>
-                    <path d="M6 3h10v4H6V3Z" stroke="currentColor" stroke-width="1.8"/>
-                  </svg>
-                </button>
-              </div>
+              <a href="{{ (url_for('auth.register_get', next=next) if url_for is defined else '/auth/register') }}">Crear cuenta</a>
             </div>
+            <div class="auth-field">
+              <input class="auth-input"
+                     id="email"
+                     name="email"
+                     type="email"
+                     inputmode="email"
+                     autocomplete="email"
+                     required
+                     minlength="5"
+                     maxlength="254"
+                     placeholder="tu@email.com"
+                     value="{{ prefill_email|default('')|e }}">
+            </div>
+          </div>
 
-            <div class="field">
+          <div class="auth-row">
+            <div class="auth-label">
               <label for="password">Contraseña</label>
-              <div class="control">
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M7 11V8a5 5 0 0 1 10 0v3" stroke="currentColor" stroke-width="1.8"/>
-                  <path d="M6 11h12v10H6V11Z" stroke="currentColor" stroke-width="1.8"/>
-                  <path d="M12 16v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                </svg>
-                <input id="password"
-                       name="password"
-                       type="password"
-                       autocomplete="current-password"
-                       required
-                       minlength="8"
-                       maxlength="256"
-                       placeholder="••••••••" />
-                <button class="endbtn" type="button" id="togglePw" aria-label="Mostrar u ocultar contraseña">
-                  <svg id="eyeOn" viewBox="0 0 24 24" fill="none">
-                    <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" stroke="currentColor" stroke-width="1.8"/>
-                    <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="currentColor" stroke-width="1.8"/>
-                  </svg>
-                  <svg id="eyeOff" viewBox="0 0 24 24" fill="none" style="display:none">
-                    <path d="M3 5l18 14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                    <path d="M2 12s3.5-7 10-7c2.1 0 3.9.7 5.4 1.6M22 12s-3.5 7-10 7c-2.2 0-4.1-.7-5.7-1.7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                    <path d="M10 10a3 3 0 0 0 4.2 4.2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                  </svg>
-                </button>
-              </div>
+              <a href="{{ (url_for('auth.forgot_password_get', next=next) if url_for is defined else '/auth/forgot-password') }}">Olvidé mi contraseña</a>
             </div>
-
-            <div class="row">
-              <label class="check" title="Mantener la sesión en este dispositivo">
-                <input type="checkbox" id="remember" name="remember" value="1">
-                Recordarme
-              </label>
-
-              <a class="link"
-                 href="{{ (url_for('auth.register_get', next=next) if url_for is defined else '/auth/register') }}"
-                 aria-label="Ir a crear cuenta">
-                Crear cuenta
-              </a>
-            </div>
-
-            <div class="cta">
-              <button class="btn primary" id="submitBtn" type="submit">
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M5 12h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                  <path d="m13 6 6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <div class="auth-field">
+              <input class="auth-input"
+                     id="password"
+                     name="password"
+                     type="password"
+                     autocomplete="current-password"
+                     required
+                     minlength="8"
+                     maxlength="256"
+                     placeholder="••••••••">
+              <button class="auth-icon-btn" type="button" id="togglePw" aria-label="Mostrar u ocultar contraseña">
+                <svg id="eyeOn" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" stroke="currentColor" stroke-width="1.8"/>
+                  <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="currentColor" stroke-width="1.8"/>
                 </svg>
-                Iniciar sesión
+                <svg id="eyeOff" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="display:none">
+                  <path d="M3 5l18 14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                  <path d="M2 12s3.5-7 10-7c2.1 0 3.9.7 5.4 1.6M22 12s-3.5 7-10 7c-2.2 0-4.1-.7-5.7-1.7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                  <path d="M10 10a3 3 0 0 0 4.2 4.2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                </svg>
               </button>
-
-              <a class="btn ghost"
-                 href="{{ (url_for('shop.shop') if url_for is defined else '/shop') }}"
-                 aria-label="Volver a la tienda">
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M6 8h15l-1.5 12H6L4 4h2l.6 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
-                  <path d="M9 22a1 1 0 1 0 0-2 1 1 0 0 0 0 2ZM18 22a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" stroke="currentColor" stroke-width="1.8"/>
-                </svg>
-                Seguir comprando
-              </a>
             </div>
+          </div>
 
-            <div class="split">o</div>
+          <div class="auth-inline">
+            <label class="auth-check" title="Mantener sesión en este dispositivo">
+              <input type="checkbox" id="remember" name="remember" value="1">
+              <span>Recordarme</span>
+            </label>
+            <span class="auth-kbd">/auth/login</span>
+          </div>
 
-            <div class="foot">
-              <span>¿Problemas con tu acceso? <span class="caps">Soporte</span></span>
-              <span class="caps">CSRF: {{ (csrf_token|string)|length }} chars</span>
-            </div>
+          <div class="auth-actions">
+            <button class="auth-btn primary" id="submitBtn" type="submit">Iniciar sesión</button>
+            <a class="auth-btn secondary" href="{{ (url_for('shop.shop') if url_for is defined else '/shop') }}">Seguir comprando</a>
+          </div>
+
+          <div class="auth-divider">o</div>
+
+          <div class="auth-meta">
+            <a href="{{ (url_for('auth.register_get', next=next) if url_for is defined else '/auth/register') }}">Crear una cuenta</a>
+            <a href="{{ (url_for('main.index', _external=False) if url_for is defined else '/') }}">Ir al inicio</a>
           </div>
         </form>
       </div>
+
+      <footer class="auth-foot">
+        <span>¿Necesitás ayuda? <a href="{{ (url_for('main.contact', _external=False) if url_for is defined else '/about') }}">Soporte</a></span>
+      </footer>
     </section>
-  </div>
+  </main>
 
-  <div class="toast" id="toast" role="status" aria-live="polite">
-    <i aria-hidden="true">
-      <svg viewBox="0 0 24 24" fill="none">
-        <path d="M12 9v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-        <path d="M12 17h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
-        <path d="M10.3 4.4h3.4L21 20H3L10.3 4.4Z" stroke="currentColor" stroke-width="1.8" opacity=".9"/>
-      </svg>
-    </i>
-    <div class="t">
-      <strong id="toastTitle">Aviso</strong>
-      <span id="toastMsg">—</span>
-    </div>
-  </div>
-
+  <script src="{{ (url_for('static', filename='js/login.js') if url_for is defined else '/static/js/login.js') }}" defer></script>
   <script>
     (function(){
       const $ = (id)=>document.getElementById(id);
-
       const form = $("loginForm");
       const email = $("email");
       const pw = $("password");
@@ -625,119 +143,58 @@
       const togglePw = $("togglePw");
       const eyeOn = $("eyeOn");
       const eyeOff = $("eyeOff");
-      const pasteEmail = $("pasteEmail");
 
-      const toast = $("toast");
-      const toastTitle = $("toastTitle");
-      const toastMsg = $("toastMsg");
-
-      const showToast = (title, msg)=>{
-        toastTitle.textContent = title || "Aviso";
-        toastMsg.textContent = msg || "";
-        toast.classList.add("show");
-        window.clearTimeout(showToast._t);
-        showToast._t = window.setTimeout(()=>toast.classList.remove("show"), 3400);
-      };
+      const normalizeEmail = (v)=>String(v||"").trim().toLowerCase().slice(0,254);
+      const validEmail = (v)=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(v));
 
       const setBusy = (busy)=>{
+        if (!submitBtn) return;
         submitBtn.disabled = !!busy;
-        submitBtn.style.opacity = busy ? ".82" : "1";
-        submitBtn.style.cursor = busy ? "not-allowed" : "pointer";
-        if (busy) submitBtn.dataset._txt = submitBtn.textContent;
-        if (busy) submitBtn.textContent = "Ingresando…";
-        else submitBtn.textContent = (submitBtn.dataset._txt || "Iniciar sesión").trim();
-      };
-
-      const normalizeEmail = (v)=>{
-        return (v || "").toString().trim().toLowerCase().slice(0, 254);
-      };
-
-      const validEmail = (v)=>{
-        v = normalizeEmail(v);
-        if (!v || v.length < 6 || v.length > 254) return false;
-        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
-      };
-
-      const safeTrim = (v, max)=>{
-        v = (v || "").toString().replace(/\u0000/g,"").trim();
-        return v.length > max ? v.slice(0, max) : v;
-      };
-
-      const preSubmitCheck = ()=>{
-        const e = normalizeEmail(email.value);
-        const p = safeTrim(pw.value, 256);
-        email.value = e;
-        pw.value = p;
-
-        if (!validEmail(e)){
-          showToast("Revisá tu email", "Ingresá un email válido.");
-          email.focus();
-          return false;
+        if (busy){
+          submitBtn.dataset._txt = submitBtn.textContent || "Iniciar sesión";
+          submitBtn.textContent = "Ingresando…";
+        } else {
+          submitBtn.textContent = (submitBtn.dataset._txt || "Iniciar sesión").trim();
         }
-        if (!p || p.length < 8){
-          showToast("Contraseña", "La contraseña debe tener al menos 8 caracteres.");
-          pw.focus();
-          return false;
-        }
-        return true;
       };
 
       togglePw?.addEventListener("click", ()=>{
         const isPw = pw.type === "password";
         pw.type = isPw ? "text" : "password";
-        eyeOn.style.display = isPw ? "none" : "";
-        eyeOff.style.display = isPw ? "" : "none";
+        if (eyeOn) eyeOn.style.display = isPw ? "none" : "";
+        if (eyeOff) eyeOff.style.display = isPw ? "" : "none";
         pw.focus({preventScroll:true});
       });
 
-      pasteEmail?.addEventListener("click", async ()=>{
-        try{
-          if (navigator.clipboard && navigator.clipboard.readText){
-            const t = await navigator.clipboard.readText();
-            const e = normalizeEmail(t);
-            if (e){
-              email.value = e;
-              showToast("Listo", "Email pegado.");
-              email.focus({preventScroll:true});
-            }
-          }
-        }catch(e){}
-      });
-
-      let locked = false;
       form?.addEventListener("submit", (ev)=>{
-        if (locked){
+        const e = normalizeEmail(email?.value);
+        if (email) email.value = e;
+        if (!validEmail(e)){
           ev.preventDefault();
+          email?.focus();
           return;
         }
-        if (!preSubmitCheck()){
+        if (!pw?.value || String(pw.value).length < 8){
           ev.preventDefault();
+          pw?.focus();
           return;
         }
-        locked = true;
         setBusy(true);
-        window.setTimeout(()=>{ locked = false; setBusy(false); }, 9000);
-      });
-
-      document.addEventListener("keydown", (ev)=>{
-        if (ev.key === "Enter" && (document.activeElement === email)){
-          ev.preventDefault();
-          pw.focus();
-        }
+        window.setTimeout(()=>setBusy(false), 9000);
       });
 
       try{
-        if (!email.value){
+        if (email && !email.value){
           const last = localStorage.getItem("last_email") || "";
           if (last && validEmail(last)) email.value = last;
         }
-        email.addEventListener("input", ()=>{
+        email?.addEventListener("input", ()=>{
           const v = normalizeEmail(email.value);
           if (validEmail(v)) localStorage.setItem("last_email", v);
         });
       }catch(e){}
 
-      window.addEventListener("pageshow", ()=> setBusy(false));
+      window.addEventListener("pageshow", ()=>setBusy(false));
     })();
   </script>
 </body>

@@ -6,6 +6,7 @@
 <meta name="theme-color" content="#0b1220">
 {% set _csrf = (csrf_token() if csrf_token is defined else (csrf_token_value if csrf_token_value is defined else (session.get('csrf_token') if session is defined else ''))) %}
 {% if _csrf %}<meta name="csrf-token" content="{{ _csrf|e }}">{% endif %}
+<link rel="stylesheet" href="{{ (url_for('static', filename='css/account.css') if url_for is defined else '/static/css/account.css') }}">
 {% endblock %}
 
 {% block content %}
@@ -99,9 +100,7 @@
 {% else %}
 
 {% set name = (user_name if user_name is defined and user_name else '')|string|trim %}
-{% if not name and _cu %}
-  {% if _cu.name is defined and _cu.name %}{% set name = (_cu.name|string)|trim %}{% endif %}
-{% endif %}
+{% if not name and _cu and _cu.name is defined and _cu.name %}{% set name = (_cu.name|string)|trim %}{% endif %}
 {% if not name and _cu and _cu.email is defined and _cu.email %}{% set name = (_cu.email|string)|trim %}{% endif %}
 {% if not name %}{% set name = 'Usuario' %}{% endif %}
 
@@ -133,9 +132,7 @@
 
             <h1 class="ss-title">Bienvenido a <span class="ss-title__name">{{ (APP_NAME or "Skyline Store")|e }}</span> 👋</h1>
 
-            <p class="ss-subtitle">
-              Iniciá sesión o creá tu cuenta para acceder a pedidos, puntos, favoritos y beneficios.
-            </p>
+            <p class="ss-subtitle">Iniciá sesión o creá tu cuenta para acceder a pedidos, puntos, favoritos y beneficios.</p>
 
             <div class="ss-btnrow" role="group" aria-label="Acciones principales">
               <a class="ss-btn ss-btn--primary" href="{{ login_href|e }}">Iniciar sesión</a>
@@ -160,9 +157,7 @@
               </div>
             </div>
 
-            <div class="ss-card__hint">
-              Sumá puntos comprando, guardá favoritos y recibí ofertas personalizadas.
-            </div>
+            <div class="ss-card__hint">Sumá puntos comprando, guardá favoritos y recibí ofertas personalizadas.</div>
 
             <div class="ss-divider" aria-hidden="true"></div>
 
@@ -184,9 +179,7 @@
 
             <h1 class="ss-title">Hola, <span class="ss-title__name">{{ name|e }}</span></h1>
 
-            <p class="ss-subtitle">
-              Tu panel premium: pedidos, puntos, accesos rápidos y actividad.
-            </p>
+            <p class="ss-subtitle">Tu panel premium: pedidos, puntos, accesos rápidos y actividad.</p>
 
             <div class="ss-chiprow" role="list" aria-label="Indicadores rápidos">
               {% if orders > 0 %}<span class="ss-chip" role="listitem">Pedidos: <b>{{ orders }}</b></span>{% endif %}
@@ -224,9 +217,7 @@
               <div class="ss-progress__bar" style="width: {{ pct }}%"></div>
             </div>
 
-            <div class="ss-card__hint">
-              <b>{{ points }}</b> / {{ next_pts }} pts para el próximo nivel
-            </div>
+            <div class="ss-card__hint"><b>{{ points }}</b> / {{ next_pts }} pts para el próximo nivel</div>
 
             <div class="ss-divider" aria-hidden="true"></div>
 

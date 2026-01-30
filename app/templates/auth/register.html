@@ -1,556 +1,54 @@
 <!doctype html>
 <html lang="es">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <meta name="robots" content="noindex,nofollow" />
-  <meta name="theme-color" content="#0b1220" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="theme-color" content="#0b1220">
   <title>{{ (APP_NAME or "Skyline Store")|e }} · Crear cuenta</title>
 
-  <style>
-    :root{
-      --bg0:#070b14;
-      --bg1:#0b1220;
-      --card: rgba(17,24,39,.78);
-      --card2: rgba(17,24,39,.52);
-      --stroke: rgba(148,163,184,.16);
-      --stroke2: rgba(148,163,184,.12);
-      --text:#e5e7eb;
-      --muted:#9ca3af;
-      --muted2:#cbd5e1;
-      --good:#22c55e;
-      --warn:#f59e0b;
-      --bad:#ef4444;
-      --a:#38bdf8;
-      --b:#2563eb;
-      --ring: 0 0 0 4px rgba(56,189,248,.16);
-      --shadow: 0 26px 80px rgba(0,0,0,.55);
-      --r: 18px;
-      --r2: 22px;
-      --max: 1120px;
-      --pad: clamp(14px, 2.2vw, 22px);
-      --gap: clamp(10px, 1.8vw, 16px);
-      --btnH: 46px;
-      --iH: 46px;
-      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-      --sans: system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial;
-    }
-    *{box-sizing:border-box}
-    html,body{height:100%}
-    body{
-      margin:0;
-      font-family:var(--sans);
-      color:var(--text);
-      background:
-        radial-gradient(1200px 700px at 10% 8%, rgba(56,189,248,.16), transparent 55%),
-        radial-gradient(1000px 600px at 92% 10%, rgba(37,99,235,.14), transparent 55%),
-        radial-gradient(900px 700px at 55% 95%, rgba(34,197,94,.08), transparent 55%),
-        linear-gradient(180deg, var(--bg0), var(--bg1));
-      display:flex;
-      align-items:stretch;
-      justify-content:center;
-    }
-    a{color:inherit}
-    .wrap{
-      width:100%;
-      max-width:var(--max);
-      margin:0 auto;
-      padding: clamp(18px, 3vw, 34px);
-      display:grid;
-      grid-template-columns: 1.05fr .95fr;
-      gap: clamp(14px, 2.4vw, 28px);
-      align-items:center;
-      min-height:100vh;
-    }
-    @media (max-width: 980px){
-      .wrap{grid-template-columns:1fr; align-items:stretch}
-    }
-
-    .hero{
-      position:relative;
-      border:1px solid var(--stroke);
-      border-radius: var(--r2);
-      background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
-      box-shadow: var(--shadow);
-      overflow:hidden;
-      padding: clamp(18px, 3vw, 28px);
-      min-height: 460px;
-      display:flex;
-      flex-direction:column;
-      justify-content:space-between;
-    }
-    .hero::before{
-      content:"";
-      position:absolute; inset:-1px;
-      background:
-        radial-gradient(520px 240px at 20% 15%, rgba(56,189,248,.20), transparent 70%),
-        radial-gradient(520px 240px at 75% 20%, rgba(37,99,235,.18), transparent 70%),
-        radial-gradient(520px 240px at 55% 85%, rgba(34,197,94,.12), transparent 70%);
-      pointer-events:none;
-    }
-    .hero > *{position:relative; z-index:1}
-    .brand{
-      display:flex; gap:12px; align-items:center;
-    }
-    .logo{
-      width:44px;height:44px;border-radius: 14px;
-      background: linear-gradient(135deg, rgba(56,189,248,.9), rgba(37,99,235,.9));
-      box-shadow: 0 18px 40px rgba(37,99,235,.26);
-      display:grid; place-items:center;
-      border:1px solid rgba(255,255,255,.18);
-    }
-    .logo svg{width:24px;height:24px;opacity:.95}
-    .brand .name{
-      display:flex;flex-direction:column;line-height:1.1;
-    }
-    .brand .name strong{font-size:15px; letter-spacing:.2px}
-    .brand .name span{font-size:12px; color:var(--muted)}
-
-    .headline{
-      margin: 14px 0 0;
-      font-size: clamp(22px, 3vw, 34px);
-      letter-spacing: -.4px;
-    }
-    .sub{
-      margin: 10px 0 0;
-      color: var(--muted2);
-      font-size: 14px;
-      max-width: 60ch;
-    }
-    .badges{
-      display:flex; flex-wrap:wrap;
-      gap:10px;
-      margin-top: 16px;
-    }
-    .badge{
-      display:flex; gap:8px; align-items:center;
-      padding:8px 10px;
-      border-radius: 999px;
-      border: 1px solid var(--stroke2);
-      background: rgba(2,6,23,.25);
-      color: rgba(226,232,240,.92);
-      font-size: 12px;
-    }
-    .badge svg{width:16px;height:16px;opacity:.9}
-    .fine{
-      display:flex; flex-wrap:wrap; gap:12px;
-      color: var(--muted);
-      font-size: 12px;
-      margin-top: 18px;
-      align-items:center;
-    }
-    .fine code{
-      font-family: var(--mono);
-      font-size: 11px;
-      padding: 2px 6px;
-      border-radius: 8px;
-      border: 1px solid var(--stroke2);
-      background: rgba(2,6,23,.35);
-      color: rgba(226,232,240,.86);
-    }
-
-    .card{
-      border:1px solid var(--stroke);
-      border-radius: var(--r2);
-      background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
-      box-shadow: var(--shadow);
-      overflow:hidden;
-    }
-    .card-inner{
-      padding: var(--pad);
-      display:flex;
-      flex-direction:column;
-      gap: var(--gap);
-    }
-    .card-top{
-      display:flex; align-items:flex-start; justify-content:space-between;
-      gap: 12px;
-    }
-    .title{
-      margin:0;
-      font-size: 18px;
-      letter-spacing: -.2px;
-    }
-    .hint{
-      margin:4px 0 0;
-      color: var(--muted);
-      font-size: 13px;
-    }
-
-    .alert{
-      display:flex;
-      gap:10px;
-      align-items:flex-start;
-      padding: 12px 12px;
-      border-radius: 14px;
-      border: 1px solid var(--stroke2);
-      background: rgba(2,6,23,.32);
-    }
-    .alert i{
-      width:22px;height:22px;border-radius:7px;
-      display:grid; place-items:center;
-      background: rgba(56,189,248,.14);
-      border: 1px solid rgba(56,189,248,.20);
-      margin-top: 1px;
-      flex: 0 0 auto;
-    }
-    .alert i svg{width:14px;height:14px}
-    .alert .msg{font-size: 13px; color: rgba(226,232,240,.95)}
-    .alert.success i{background: rgba(34,197,94,.14); border-color: rgba(34,197,94,.22)}
-    .alert.danger i{background: rgba(239,68,68,.14); border-color: rgba(239,68,68,.22)}
-    .alert.warning i{background: rgba(245,158,11,.14); border-color: rgba(245,158,11,.22)}
-    .alert.info i{background: rgba(56,189,248,.14); border-color: rgba(56,189,248,.20)}
-
-    .grid{display:grid; gap: 12px}
-    .cols{
-      display:grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-    }
-    @media (max-width: 520px){
-      .cols{grid-template-columns:1fr}
-    }
-
-    .field{display:flex;flex-direction:column;gap:7px}
-    label{
-      font-size: 12px;
-      color: rgba(226,232,240,.88);
-      letter-spacing: .2px;
-    }
-
-    .control{
-      position:relative;
-      display:flex;
-      align-items:center;
-      gap: 10px;
-      padding: 0 12px;
-      height: var(--iH);
-      border-radius: 14px;
-      border: 1px solid var(--stroke);
-      background: rgba(2,6,23,.34);
-      transition: border-color .15s ease, box-shadow .15s ease, transform .12s ease;
-    }
-    .control:focus-within{
-      border-color: rgba(56,189,248,.55);
-      box-shadow: var(--ring);
-      transform: translateY(-1px);
-    }
-    .control svg{
-      width: 18px; height: 18px;
-      opacity: .9;
-      flex: 0 0 auto;
-    }
-    input, select{
-      width:100%;
-      border:0;
-      outline:none;
-      background:transparent;
-      color: var(--text);
-      font-size: 14px;
-      min-width: 0;
-      appearance:none;
-    }
-    input::placeholder{color: rgba(148,163,184,.75)}
-    select{cursor:pointer}
-    .endbtn{
-      border:0;
-      background: transparent;
-      color: rgba(226,232,240,.92);
-      cursor: pointer;
-      padding: 8px;
-      border-radius: 10px;
-      display:grid; place-items:center;
-      transition: background .12s ease, transform .12s ease;
-      flex: 0 0 auto;
-    }
-    .endbtn:hover{background: rgba(148,163,184,.10)}
-    .endbtn:active{transform: translateY(1px)}
-    .endbtn svg{width:18px;height:18px;opacity:.92}
-
-    .row{
-      display:flex;
-      align-items:flex-start;
-      justify-content:space-between;
-      gap: 12px;
-      flex-wrap:wrap;
-      margin-top: 2px;
-    }
-    .check{
-      display:flex; align-items:flex-start; gap:10px;
-      user-select:none;
-      cursor:pointer;
-      font-size: 13px;
-      color: rgba(226,232,240,.88);
-      line-height: 1.25;
-    }
-    .check input{
-      margin-top: 2px;
-      width: 16px;
-      height: 16px;
-      accent-color: #38bdf8;
-      flex: 0 0 auto;
-    }
-
-    .link{
-      color: rgba(226,232,240,.92);
-      text-decoration: none;
-      font-size: 13px;
-      padding: 6px 10px;
-      border-radius: 999px;
-      border: 1px solid transparent;
-      transition: border-color .12s ease, background .12s ease;
-      background: rgba(2,6,23,.14);
-    }
-    .link:hover{
-      border-color: rgba(148,163,184,.18);
-      background: rgba(2,6,23,.25);
-    }
-
-    .cta{
-      margin-top: 6px;
-      display:flex;
-      gap: 10px;
-      flex-wrap:wrap;
-    }
-    .btn{
-      height: var(--btnH);
-      border-radius: 14px;
-      border: 1px solid rgba(255,255,255,.14);
-      cursor: pointer;
-      font-weight: 650;
-      letter-spacing: .2px;
-      padding: 0 14px;
-      display:inline-flex;
-      align-items:center;
-      justify-content:center;
-      gap: 10px;
-      transition: transform .12s ease, box-shadow .14s ease, filter .14s ease, border-color .14s ease;
-      text-decoration:none;
-      user-select:none;
-      white-space: nowrap;
-    }
-    .btn.primary{
-      background: linear-gradient(135deg, rgba(56,189,248,.95), rgba(37,99,235,.92));
-      box-shadow: 0 18px 40px rgba(37,99,235,.24);
-    }
-    .btn.primary:hover{filter: brightness(1.03)}
-    .btn.primary:active{transform: translateY(1px)}
-    .btn.ghost{
-      background: rgba(2,6,23,.18);
-      border-color: rgba(148,163,184,.16);
-      color: rgba(226,232,240,.92);
-    }
-    .btn.ghost:hover{border-color: rgba(148,163,184,.26)}
-    .btn:focus-visible{outline:none; box-shadow: var(--ring)}
-    .btn svg{width:18px;height:18px;opacity:.95}
-
-    .helper{
-      display:flex;
-      gap: 10px;
-      align-items:flex-start;
-      justify-content:space-between;
-      flex-wrap:wrap;
-      color: rgba(148,163,184,.92);
-      font-size: 12px;
-      margin-top: -4px;
-    }
-    .meter{
-      display:flex;
-      align-items:center;
-      gap: 10px;
-      width: 100%;
-    }
-    .bar{
-      height: 8px;
-      border-radius: 999px;
-      background: rgba(148,163,184,.14);
-      border: 1px solid rgba(148,163,184,.14);
-      overflow:hidden;
-      flex: 1 1 auto;
-      min-width: 120px;
-    }
-    .bar > span{
-      display:block;
-      height: 100%;
-      width: 0%;
-      background: linear-gradient(90deg, rgba(239,68,68,.95), rgba(245,158,11,.95), rgba(34,197,94,.95));
-      transition: width .18s ease;
-    }
-    .meter .txt{
-      font-family: var(--mono);
-      font-size: 11px;
-      color: rgba(226,232,240,.82);
-      white-space: nowrap;
-    }
-
-    .pill{
-      display:inline-flex;
-      gap:8px;
-      align-items:center;
-      padding: 8px 10px;
-      border-radius: 999px;
-      border: 1px solid rgba(148,163,184,.16);
-      background: rgba(2,6,23,.20);
-      font-size: 12px;
-      color: rgba(226,232,240,.90);
-    }
-    .pill svg{width:16px;height:16px;opacity:.9}
-
-    .split{
-      display:flex; gap:10px; align-items:center;
-      color: rgba(148,163,184,.85);
-      font-size: 12px;
-      margin: 2px 0;
-    }
-    .split::before,.split::after{
-      content:"";
-      height:1px;
-      flex: 1 1 auto;
-      background: rgba(148,163,184,.14);
-    }
-
-    .foot{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap: 12px;
-      padding-top: 6px;
-      color: rgba(148,163,184,.90);
-      font-size: 12px;
-      flex-wrap:wrap;
-    }
-    .caps{
-      font-variant-numeric: tabular-nums;
-      font-family: var(--mono);
-      color: rgba(226,232,240,.82);
-    }
-
-    .toast{
-      position: fixed;
-      right: 14px;
-      bottom: 14px;
-      width: min(420px, calc(100vw - 28px));
-      border-radius: 16px;
-      border: 1px solid rgba(148,163,184,.16);
-      background: rgba(2,6,23,.72);
-      backdrop-filter: blur(10px);
-      box-shadow: 0 26px 80px rgba(0,0,0,.55);
-      padding: 12px 12px;
-      display:none;
-      gap: 10px;
-      align-items:flex-start;
-      z-index: 80;
-    }
-    .toast.show{display:flex}
-    .toast i{
-      width:24px;height:24px;border-radius:8px;
-      display:grid;place-items:center;
-      background: rgba(56,189,248,.14);
-      border: 1px solid rgba(56,189,248,.20);
-      margin-top: 1px;
-      flex: 0 0 auto;
-    }
-    .toast i svg{width:14px;height:14px}
-    .toast .t{display:flex;flex-direction:column;gap:2px;min-width:0}
-    .toast .t strong{font-size:13px}
-    .toast .t span{
-      font-size: 12px;
-      color: rgba(226,232,240,.86);
-      overflow:hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    @media (prefers-reduced-motion: reduce){
-      .control,.btn,.bar>span{transition:none}
-      .btn:active{transform:none}
-      .control:focus-within{transform:none}
-    }
-  </style>
+  <link rel="stylesheet" href="{{ (url_for('static', filename='css/auth-register.css') if url_for is defined else '/static/css/auth-register.css') }}">
 </head>
 
-<body>
+<body class="auth-page">
   {% set _login_url = (url_for('auth.login_get', next=next) if url_for is defined else '/auth/login') %}
   {% set _post_url = (url_for('auth.register') if url_for is defined else '/auth/register') %}
   {% set _shop = (url_for('shop.shop') if url_for is defined else '/shop') %}
 
-  <div class="wrap">
-    <section class="hero" aria-label="Presentación">
-      <div>
-        <div class="brand">
-          <div class="logo" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none">
-              <path d="M6 15.5 12 6l6 9.5" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M7.5 15.5h9" stroke="white" stroke-width="2.2" stroke-linecap="round"/>
-            </svg>
-          </div>
-          <div class="name">
-            <strong>{{ (APP_NAME or "Skyline Store")|e }}</strong>
-            <span>Creá tu cuenta para comprar más rápido y ver tu historial</span>
-          </div>
-        </div>
-
-        <h1 class="headline">Creá tu cuenta premium</h1>
-        <p class="sub">
-          Registrate con tu email. Te enviamos un correo de verificación y luego podés comprar y hacer seguimiento de pedidos.
-        </p>
-
-        <div class="badges" aria-label="Confianza">
-          <div class="badge">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M12 3 20 7v6c0 5-3.6 8.6-8 9-4.4-.4-8-4-8-9V7l8-4Z" stroke="currentColor" stroke-width="1.8"/><path d="m9.3 12 1.9 2.1 3.7-4.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            Cuenta protegida
-          </div>
-          <div class="badge">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-            Pedidos y favoritos
-          </div>
-          <div class="badge">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M12 22a8 8 0 1 0-8-8" stroke="currentColor" stroke-width="1.8"/><path d="M2 14h6v6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-            Soporte y devoluciones
-          </div>
-        </div>
-      </div>
-
-      <div class="fine">
-        <span class="pill">
-          <svg viewBox="0 0 24 24" fill="none"><path d="M12 8v4l3 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M12 22a10 10 0 1 0-10-10 10 10 0 0 0 10 10Z" stroke="currentColor" stroke-width="1.8"/></svg>
-          Verificación por email
-        </span>
-        <span class="caps">/auth/register</span>
-      </div>
-    </section>
-
-    <section class="card" aria-label="Formulario de registro">
-      <div class="card-inner">
-        <div class="card-top">
+  <main class="auth-wrap" role="main">
+    <section class="auth-card" aria-label="Crear cuenta">
+      <header class="auth-head">
+        <div class="auth-brand">
+          <div class="auth-logo" aria-hidden="true">S</div>
           <div>
-            <h2 class="title">Crear cuenta</h2>
-            <p class="hint">Completá tus datos para registrarte.</p>
+            <h1 class="auth-title">Crear cuenta</h1>
+            <p class="auth-subtitle">Registrate con tu email. Te enviamos un correo para verificar la cuenta.</p>
           </div>
-          <a class="link" href="{{ _login_url }}">Ya tengo cuenta</a>
         </div>
+      </header>
 
+      <div class="auth-body">
         {% with messages = get_flashed_messages(with_categories=true) %}
           {% if messages %}
-            <div class="grid" role="status" aria-live="polite">
+            <div class="auth-form" role="status" aria-live="polite">
               {% for cat, msg in messages %}
                 {% set c = (cat or '')|lower %}
-                <div class="alert {{ 'success' if 'success' in c else ('danger' if 'danger' in c or 'error' in c else ('warning' if 'warn' in c else 'info')) }}">
-                  <i aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none">
-                      <path d="M12 9v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                      <path d="M12 17h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
-                      <path d="M10.3 4.4h3.4L21 20H3L10.3 4.4Z" stroke="currentColor" stroke-width="1.8" opacity=".9"/>
-                    </svg>
-                  </i>
-                  <div class="msg">{{ msg }}</div>
+                {% set tone = 'good' if 'success' in c else ('bad' if 'danger' in c or 'error' in c else ('warn' if 'warn' in c else 'info')) %}
+                <div class="auth-alert" data-tone="{{ tone }}">
+                  <div style="min-width:0">
+                    <p class="auth-alert-title">
+                      {{ 'Listo' if tone=='good' else ('Atención' if tone=='warn' else ('Error' if tone=='bad' else 'Aviso')) }}
+                    </p>
+                    <p class="auth-alert-text">{{ msg }}</p>
+                  </div>
                 </div>
               {% endfor %}
             </div>
           {% endif %}
         {% endwith %}
 
-        <form id="registerForm"
+        <form class="auth-form"
+              id="registerForm"
               method="post"
               action="{{ _post_url }}"
               autocomplete="on"
@@ -558,201 +56,164 @@
 
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
           <input type="hidden" name="next" value="{{ next|default('')|e }}">
-          <input type="text" name="website" value="" style="position:absolute;left:-9999px;opacity:0" tabindex="-1" autocomplete="off" aria-hidden="true">
+          <input type="text" name="website" value="" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;opacity:0">
 
-          <div class="grid">
-            <div class="field">
+          <div class="auth-row">
+            <div class="auth-label">
               <label for="name">Nombre (opcional)</label>
-              <div class="control">
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M20 21a8 8 0 0 0-16 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                  <path d="M12 13a5 5 0 1 0-5-5 5 5 0 0 0 5 5Z" stroke="currentColor" stroke-width="1.8"/>
-                </svg>
-                <input id="name"
-                       name="name"
-                       type="text"
-                       autocomplete="name"
-                       maxlength="120"
-                       placeholder="Tu nombre"
-                       value="{{ prefill_name|default('')|e }}" />
-                <button class="endbtn" type="button" id="clearName" aria-label="Limpiar nombre">
-                  <svg viewBox="0 0 24 24" fill="none">
-                    <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                  </svg>
-                </button>
-              </div>
+              <a href="{{ _login_url }}">Ya tengo cuenta</a>
             </div>
+            <div class="auth-field">
+              <input class="auth-input"
+                     id="name"
+                     name="name"
+                     type="text"
+                     autocomplete="name"
+                     maxlength="120"
+                     placeholder="Tu nombre"
+                     value="{{ prefill_name|default('')|e }}">
+              <button class="auth-icon-btn" type="button" id="clearName" aria-label="Limpiar nombre">×</button>
+            </div>
+          </div>
 
-            <div class="field">
+          <div class="auth-row">
+            <div class="auth-label">
               <label for="email">Email</label>
-              <div class="control">
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M4 6h16v12H4V6Z" stroke="currentColor" stroke-width="1.8"/>
-                  <path d="m4 7 8 6 8-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-                <input id="email"
-                       name="email"
-                       type="email"
-                       inputmode="email"
-                       autocomplete="email"
+              <small id="emailPreview"></small>
+            </div>
+            <div class="auth-field">
+              <input class="auth-input"
+                     id="email"
+                     name="email"
+                     type="email"
+                     inputmode="email"
+                     autocomplete="email"
+                     required
+                     minlength="5"
+                     maxlength="254"
+                     placeholder="tu@email.com"
+                     value="{{ prefill_email|default('')|e }}">
+              <button class="auth-icon-btn" type="button" id="pasteEmail" aria-label="Pegar email">⎘</button>
+            </div>
+          </div>
+
+          <div class="auth-grid" role="group" aria-label="Contraseña">
+            <div class="auth-row">
+              <div class="auth-label">
+                <label for="password">Contraseña</label>
+                <small id="capsWarn" style="display:none">Caps Lock</small>
+              </div>
+              <div class="auth-field">
+                <input class="auth-input"
+                       id="password"
+                       name="password"
+                       type="password"
+                       autocomplete="new-password"
                        required
-                       minlength="5"
-                       maxlength="254"
-                       placeholder="tu@email.com"
-                       value="{{ prefill_email|default('')|e }}" />
-                <button class="endbtn" type="button" id="pasteEmail" aria-label="Pegar email">
-                  <svg viewBox="0 0 24 24" fill="none">
-                    <path d="M8 7h10v14H8V7Z" stroke="currentColor" stroke-width="1.8"/>
-                    <path d="M6 3h10v4H6V3Z" stroke="currentColor" stroke-width="1.8"/>
+                       minlength="8"
+                       maxlength="256"
+                       placeholder="Mínimo 8 caracteres">
+                <button class="auth-icon-btn" type="button" id="togglePw" aria-label="Mostrar u ocultar contraseña">
+                  <svg id="eyeOn" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" stroke="currentColor" stroke-width="1.8"/>
+                    <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="currentColor" stroke-width="1.8"/>
+                  </svg>
+                  <svg id="eyeOff" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="display:none">
+                    <path d="M3 5l18 14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                    <path d="M2 12s3.5-7 10-7c2.1 0 3.9.7 5.4 1.6M22 12s-3.5 7-10 7c-2.2 0-4.1-.7-5.7-1.7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                    <path d="M10 10a3 3 0 0 0 4.2 4.2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
                   </svg>
                 </button>
               </div>
             </div>
 
-            <div class="cols">
-              <div class="field">
-                <label for="password">Contraseña</label>
-                <div class="control">
-                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path d="M7 11V8a5 5 0 0 1 10 0v3" stroke="currentColor" stroke-width="1.8"/>
-                    <path d="M6 11h12v10H6V11Z" stroke="currentColor" stroke-width="1.8"/>
-                    <path d="M12 16v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                  </svg>
-                  <input id="password"
-                         name="password"
-                         type="password"
-                         autocomplete="new-password"
-                         required
-                         minlength="8"
-                         maxlength="256"
-                         placeholder="Mínimo 8 caracteres" />
-                  <button class="endbtn" type="button" id="togglePw" aria-label="Mostrar u ocultar contraseña">
-                    <svg id="eyeOn" viewBox="0 0 24 24" fill="none">
-                      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" stroke="currentColor" stroke-width="1.8"/>
-                      <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="currentColor" stroke-width="1.8"/>
-                    </svg>
-                    <svg id="eyeOff" viewBox="0 0 24 24" fill="none" style="display:none">
-                      <path d="M3 5l18 14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                      <path d="M2 12s3.5-7 10-7c2.1 0 3.9.7 5.4 1.6M22 12s-3.5 7-10 7c-2.2 0-4.1-.7-5.7-1.7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                      <path d="M10 10a3 3 0 0 0 4.2 4.2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                    </svg>
-                  </button>
-                </div>
-              </div>
-
-              <div class="field">
+            <div class="auth-row">
+              <div class="auth-label">
                 <label for="password2">Repetir contraseña</label>
-                <div class="control">
-                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path d="M7 11V8a5 5 0 0 1 10 0v3" stroke="currentColor" stroke-width="1.8"/>
-                    <path d="M6 11h12v10H6V11Z" stroke="currentColor" stroke-width="1.8"/>
-                    <path d="M9 16h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <small id="pwMatch" style="opacity:.85"></small>
+              </div>
+              <div class="auth-field">
+                <input class="auth-input"
+                       id="password2"
+                       name="password2"
+                       type="password"
+                       autocomplete="new-password"
+                       required
+                       minlength="8"
+                       maxlength="256"
+                       placeholder="Repetí la contraseña">
+                <button class="auth-icon-btn" type="button" id="togglePw2" aria-label="Mostrar u ocultar contraseña (repetir)">
+                  <svg id="eyeOn2" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" stroke="currentColor" stroke-width="1.8"/>
+                    <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="currentColor" stroke-width="1.8"/>
                   </svg>
-                  <input id="password2"
-                         name="password2"
-                         type="password"
-                         autocomplete="new-password"
-                         required
-                         minlength="8"
-                         maxlength="256"
-                         placeholder="Repetí la contraseña" />
-                  <button class="endbtn" type="button" id="togglePw2" aria-label="Mostrar u ocultar contraseña (repetir)">
-                    <svg id="eyeOn2" viewBox="0 0 24 24" fill="none">
-                      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" stroke="currentColor" stroke-width="1.8"/>
-                      <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="currentColor" stroke-width="1.8"/>
-                    </svg>
-                    <svg id="eyeOff2" viewBox="0 0 24 24" fill="none" style="display:none">
-                      <path d="M3 5l18 14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                      <path d="M2 12s3.5-7 10-7c2.1 0 3.9.7 5.4 1.6M22 12s-3.5 7-10 7c-2.2 0-4.1-.7-5.7-1.7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                      <path d="M10 10a3 3 0 0 0 4.2 4.2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                    </svg>
-                  </button>
-                </div>
+                  <svg id="eyeOff2" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="display:none">
+                    <path d="M3 5l18 14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                    <path d="M2 12s3.5-7 10-7c2.1 0 3.9.7 5.4 1.6M22 12s-3.5 7-10 7c-2.2 0-4.1-.7-5.7-1.7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                    <path d="M10 10a3 3 0 0 0 4.2 4.2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                  </svg>
+                </button>
               </div>
             </div>
+          </div>
 
-            <div class="helper" aria-live="polite">
-              <div class="meter" title="Fortaleza estimada (cliente)">
-                <div class="bar" aria-hidden="true"><span id="pwBar"></span></div>
-                <div class="txt" id="pwTxt">fuerza: —</div>
-              </div>
-              <div class="caps" id="capsWarn" style="display:none;">Caps Lock activado</div>
+          <div class="auth-strength" aria-live="polite">
+            <div class="auth-strength-top">
+              <p class="auth-strength-title">Fortaleza</p>
+              <span class="auth-strength-badge" id="pwTxt">—</span>
             </div>
+            <div class="auth-meter" aria-hidden="true"><i id="pwBar"></i></div>
+            <ul class="auth-rules" id="pwRules">
+              <li class="auth-rule" data-rule="len"><span class="auth-dot"></span><span>8+ caracteres</span></li>
+              <li class="auth-rule" data-rule="mix"><span class="auth-dot"></span><span>Mayúsculas y minúsculas</span></li>
+              <li class="auth-rule" data-rule="num"><span class="auth-dot"></span><span>Un número</span></li>
+              <li class="auth-rule" data-rule="sym"><span class="auth-dot"></span><span>Un símbolo</span></li>
+            </ul>
+          </div>
 
-            <div class="field">
+          <div class="auth-row">
+            <div class="auth-label">
               <label for="role">Tipo de cuenta</label>
-              <div class="control">
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M7 7h10M7 12h10M7 17h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                </svg>
-                <select id="role" name="role" aria-label="Tipo de cuenta">
-                  <option value="customer" selected>Cliente</option>
-                  <option value="affiliate">Afiliado</option>
-                </select>
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" style="opacity:.75">
-                  <path d="m7 10 5 5 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </div>
-              <div class="helper">
-                <span>Afiliado: ganá comisiones compartiendo tu link.</span>
-                <span class="caps" id="emailPreview"></span>
-              </div>
+              <small>Cliente / Afiliado</small>
+            </div>
+            <div class="auth-field">
+              <select class="auth-input" id="role" name="role" aria-label="Tipo de cuenta">
+                <option value="customer" selected>Cliente</option>
+                <option value="affiliate">Afiliado</option>
+              </select>
               <input type="hidden" name="want_affiliate" id="want_affiliate" value="0">
             </div>
+            <p class="auth-hint">Afiliado: ganá comisiones compartiendo tu link.</p>
+          </div>
 
-            <div class="row">
-              <label class="check">
-                <input type="checkbox" id="terms" required>
-                Acepto los términos y la política de privacidad.
-              </label>
+          <div class="auth-consent">
+            <label class="auth-check">
+              <input type="checkbox" id="terms" required>
+              <span>Acepto los términos y la política de privacidad.</span>
+            </label>
+          </div>
 
-              <a class="link" href="{{ _login_url }}">Iniciar sesión</a>
-            </div>
+          <div class="auth-actions">
+            <button class="auth-btn primary" id="submitBtn" type="submit">Crear cuenta</button>
+            <a class="auth-btn secondary" href="{{ _shop }}">Seguir comprando</a>
+          </div>
 
-            <div class="cta">
-              <button class="btn primary" id="submitBtn" type="submit">
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M12 5v14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                  <path d="M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                </svg>
-                Crear cuenta
-              </button>
+          <div class="auth-divider">verificación</div>
 
-              <a class="btn ghost" href="{{ _shop }}" aria-label="Volver a la tienda">
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M6 8h15l-1.5 12H6L4 4h2l.6 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
-                  <path d="M9 22a1 1 0 1 0 0-2 1 1 0 0 0 0 2ZM18 22a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" stroke="currentColor" stroke-width="1.8"/>
-                </svg>
-                Seguir comprando
-              </a>
-            </div>
-
-            <div class="split">verificación</div>
-
-            <div class="foot">
-              <span>Luego del registro, te enviamos un email para verificar tu cuenta.</span>
-              <span class="caps">CSRF: {{ (csrf_token|string)|length }} chars</span>
-            </div>
+          <div class="auth-meta">
+            <a href="{{ _login_url }}">Iniciar sesión</a>
+            <span class="auth-kbd">/auth/register</span>
           </div>
         </form>
       </div>
+
+      <footer class="auth-foot">
+        <span>Después del registro te enviamos un email para verificar tu cuenta.</span>
+      </footer>
     </section>
-  </div>
+  </main>
 
-  <div class="toast" id="toast" role="status" aria-live="polite">
-    <i aria-hidden="true">
-      <svg viewBox="0 0 24 24" fill="none">
-        <path d="M12 9v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-        <path d="M12 17h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
-        <path d="M10.3 4.4h3.4L21 20H3L10.3 4.4Z" stroke="currentColor" stroke-width="1.8" opacity=".9"/>
-      </svg>
-    </i>
-    <div class="t">
-      <strong id="toastTitle">Aviso</strong>
-      <span id="toastMsg">—</span>
-    </div>
-  </div>
-
+  <script src="{{ (url_for('static', filename='js/register.js') if url_for is defined else '/static/js/register.js') }}" defer></script>
   <script>
     (function(){
       const $ = (id)=>document.getElementById(id);
@@ -779,58 +240,30 @@
 
       const pwBar = $("pwBar");
       const pwTxt = $("pwTxt");
+      const pwRules = $("pwRules");
       const capsWarn = $("capsWarn");
+      const pwMatch = $("pwMatch");
       const emailPreview = $("emailPreview");
 
-      const toast = $("toast");
-      const toastTitle = $("toastTitle");
-      const toastMsg = $("toastMsg");
+      const normEmail = (v)=>String(v||"").trim().toLowerCase().slice(0,254);
+      const validEmail = (v)=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normEmail(v));
+      const normName = (v)=>String(v||"").replace(/\u0000/g,"").replace(/\s+/g," ").trim().slice(0,120);
+      const safeTrim = (v,max)=>String(v||"").replace(/\u0000/g,"").trim().slice(0,max);
 
-      const showToast = (title, msg)=>{
-        toastTitle.textContent = title || "Aviso";
-        toastMsg.textContent = msg || "";
-        toast.classList.add("show");
-        window.clearTimeout(showToast._t);
-        showToast._t = window.setTimeout(()=>toast.classList.remove("show"), 3600);
-      };
-
-      const setBusy = (busy)=>{
-        submitBtn.disabled = !!busy;
-        submitBtn.style.opacity = busy ? ".82" : "1";
-        submitBtn.style.cursor = busy ? "not-allowed" : "pointer";
-        if (busy) submitBtn.dataset._txt = submitBtn.textContent;
-        if (busy) submitBtn.textContent = "Creando…";
-        else submitBtn.textContent = (submitBtn.dataset._txt || "Crear cuenta").trim();
-      };
-
-      const normEmail = (v)=> (v || "").toString().trim().toLowerCase().slice(0,254);
-      const validEmail = (v)=>{
-        v = normEmail(v);
-        if (!v || v.length < 6 || v.length > 254) return false;
-        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
-      };
-      const normName = (v)=>{
-        v = (v || "").toString().replace(/\u0000/g,"").replace(/\s+/g," ").trim();
-        return v.length > 120 ? v.slice(0,120) : v;
-      };
-      const safeTrim = (v, max)=>{
-        v = (v || "").toString().replace(/\u0000/g,"").trim();
-        return v.length > max ? v.slice(0, max) : v;
-      };
       const scorePassword = (p)=>{
         p = p || "";
         let s = 0;
-        if (p.length >= 8) s += 20;
-        if (p.length >= 12) s += 20;
+        if (p.length >= 8) s += 22;
+        if (p.length >= 12) s += 18;
         if (/[a-z]/.test(p)) s += 10;
         if (/[A-Z]/.test(p)) s += 10;
         if (/\d/.test(p)) s += 15;
         if (/[^A-Za-z0-9]/.test(p)) s += 20;
-        if (/(.)\1{2,}/.test(p)) s -= 15;
-        if (/password|123456|qwerty|skyline/i.test(p)) s -= 25;
-        s = Math.max(0, Math.min(100, s));
-        return s;
+        if (/(.)\1{2,}/.test(p)) s -= 14;
+        if (/password|123456|qwerty|skyline/i.test(p)) s -= 26;
+        return Math.max(0, Math.min(100, s));
       };
+
       const pwLabel = (s)=>{
         if (s >= 85) return "muy fuerte";
         if (s >= 70) return "fuerte";
@@ -838,42 +271,74 @@
         if (s >= 25) return "débil";
         return "muy débil";
       };
-      const updateMeter = ()=>{
-        const p = pw1.value || "";
-        const s = scorePassword(p);
-        pwBar.style.width = String(s) + "%";
-        pwTxt.textContent = "fuerza: " + pwLabel(s);
-      };
 
-      const syncRole = ()=>{
-        const v = (roleEl.value || "customer").toString();
-        wantAffiliate.value = (v === "affiliate") ? "1" : "0";
+      const setRule = (key, ok)=>{
+        if (!pwRules) return;
+        const el = pwRules.querySelector('[data-rule="'+key+'"]');
+        if (!el) return;
+        el.classList.toggle("is-ok", !!ok);
       };
 
       const updateEmailPreview = ()=>{
-        const e = normEmail(emailEl.value);
-        emailPreview.textContent = validEmail(e) ? ("✔ " + e) : "";
+        const e = normEmail(emailEl?.value);
+        if (emailPreview) emailPreview.textContent = validEmail(e) ? ("✔ " + e) : "";
+      };
+
+      const updateMeter = ()=>{
+        const p = pw1?.value || "";
+        const s = scorePassword(p);
+        if (pwBar) pwBar.style.width = String(s) + "%";
+        if (pwTxt) pwTxt.textContent = pwLabel(s);
+        setRule("len", p.length >= 8);
+        setRule("mix", /[a-z]/.test(p) && /[A-Z]/.test(p));
+        setRule("num", /\d/.test(p));
+        setRule("sym", /[^A-Za-z0-9]/.test(p));
+      };
+
+      const updateMatch = ()=>{
+        const a = String(pw1?.value || "");
+        const b = String(pw2?.value || "");
+        if (!pwMatch) return;
+        if (!b) { pwMatch.textContent = ""; return; }
+        pwMatch.textContent = (a === b) ? "✔ coincide" : "no coincide";
       };
 
       const capsState = (ev)=>{
         try{
           const on = ev && typeof ev.getModifierState === "function" ? ev.getModifierState("CapsLock") : false;
-          capsWarn.style.display = on ? "" : "none";
+          if (capsWarn) capsWarn.style.display = on ? "" : "none";
         }catch(e){}
+      };
+
+      const syncRole = ()=>{
+        const v = String(roleEl?.value || "customer");
+        if (wantAffiliate) wantAffiliate.value = (v === "affiliate") ? "1" : "0";
+      };
+
+      const setBusy = (busy)=>{
+        if (!submitBtn) return;
+        submitBtn.disabled = !!busy;
+        if (busy){
+          submitBtn.dataset._txt = submitBtn.textContent || "Crear cuenta";
+          submitBtn.textContent = "Creando…";
+        } else {
+          submitBtn.textContent = (submitBtn.dataset._txt || "Crear cuenta").trim();
+        }
       };
 
       togglePw?.addEventListener("click", ()=>{
         const isPw = pw1.type === "password";
         pw1.type = isPw ? "text" : "password";
-        eyeOn.style.display = isPw ? "none" : "";
-        eyeOff.style.display = isPw ? "" : "none";
+        if (eyeOn) eyeOn.style.display = isPw ? "none" : "";
+        if (eyeOff) eyeOff.style.display = isPw ? "" : "none";
         pw1.focus({preventScroll:true});
       });
+
       togglePw2?.addEventListener("click", ()=>{
         const isPw = pw2.type === "password";
         pw2.type = isPw ? "text" : "password";
-        eyeOn2.style.display = isPw ? "none" : "";
-        eyeOff2.style.display = isPw ? "" : "none";
+        if (eyeOn2) eyeOn2.style.display = isPw ? "none" : "";
+        if (eyeOff2) eyeOff2.style.display = isPw ? "" : "none";
         pw2.focus({preventScroll:true});
       });
 
@@ -885,7 +350,6 @@
             if (e){
               emailEl.value = e;
               updateEmailPreview();
-              showToast("Listo", "Email pegado.");
               emailEl.focus({preventScroll:true});
             }
           }
@@ -893,50 +357,60 @@
       });
 
       clearName?.addEventListener("click", ()=>{
+        if (!nameEl) return;
         nameEl.value = "";
         nameEl.focus({preventScroll:true});
       });
 
       roleEl?.addEventListener("change", syncRole);
-      emailEl?.addEventListener("input", ()=>{ emailEl.value = normEmail(emailEl.value); updateEmailPreview(); });
-      nameEl?.addEventListener("input", ()=>{ nameEl.value = normName(nameEl.value); });
-      pw1?.addEventListener("input", ()=>{ pw1.value = safeTrim(pw1.value, 256); updateMeter(); });
-      pw2?.addEventListener("input", ()=>{ pw2.value = safeTrim(pw2.value, 256); });
+
+      emailEl?.addEventListener("input", ()=>{
+        emailEl.value = normEmail(emailEl.value);
+        updateEmailPreview();
+      });
+
+      nameEl?.addEventListener("input", ()=>{
+        nameEl.value = normName(nameEl.value);
+      });
+
+      pw1?.addEventListener("input", ()=>{
+        pw1.value = safeTrim(pw1.value, 256);
+        updateMeter();
+        updateMatch();
+      });
+
+      pw2?.addEventListener("input", ()=>{
+        pw2.value = safeTrim(pw2.value, 256);
+        updateMatch();
+      });
 
       pw1?.addEventListener("keydown", capsState);
       pw2?.addEventListener("keydown", capsState);
 
       const preSubmitCheck = ()=>{
-        nameEl.value = normName(nameEl.value);
-        emailEl.value = normEmail(emailEl.value);
-        pw1.value = safeTrim(pw1.value, 256);
-        pw2.value = safeTrim(pw2.value, 256);
+        if (nameEl) nameEl.value = normName(nameEl.value);
+        if (emailEl) emailEl.value = normEmail(emailEl.value);
+        if (pw1) pw1.value = safeTrim(pw1.value, 256);
+        if (pw2) pw2.value = safeTrim(pw2.value, 256);
+
         syncRole();
         updateMeter();
         updateEmailPreview();
+        updateMatch();
 
         if (!validEmail(emailEl.value)){
-          showToast("Revisá tu email", "Ingresá un email válido.");
           emailEl.focus();
           return false;
         }
         if (!pw1.value || pw1.value.length < 8){
-          showToast("Contraseña", "La contraseña debe tener al menos 8 caracteres.");
-          pw1.focus();
-          return false;
-        }
-        if (pw1.value.length > 256){
-          showToast("Contraseña", "La contraseña es demasiado larga.");
           pw1.focus();
           return false;
         }
         if (pw1.value !== pw2.value){
-          showToast("Confirmación", "Las contraseñas no coinciden.");
           pw2.focus();
           return false;
         }
-        if (!terms.checked){
-          showToast("Términos", "Tenés que aceptar los términos para continuar.");
+        if (!terms?.checked){
           terms.focus();
           return false;
         }
@@ -945,19 +419,13 @@
 
       let locked = false;
       form?.addEventListener("submit", (ev)=>{
-        if (locked){
-          ev.preventDefault();
-          return;
-        }
-        if (!preSubmitCheck()){
-          ev.preventDefault();
-          return;
-        }
+        if (locked){ ev.preventDefault(); return; }
+        if (!preSubmitCheck()){ ev.preventDefault(); return; }
         locked = true;
         setBusy(true);
         try{
           if (validEmail(emailEl.value)) localStorage.setItem("last_email", emailEl.value);
-          if (nameEl.value) localStorage.setItem("last_name", nameEl.value);
+          if (nameEl?.value) localStorage.setItem("last_name", nameEl.value);
         }catch(e){}
         window.setTimeout(()=>{ locked = false; setBusy(false); }, 9500);
       });
@@ -965,14 +433,15 @@
       try{
         const lastEmail = localStorage.getItem("last_email") || "";
         const lastName = localStorage.getItem("last_name") || "";
-        if (!emailEl.value && lastEmail) emailEl.value = normEmail(lastEmail);
-        if (!nameEl.value && lastName) nameEl.value = normName(lastName);
-        updateEmailPreview();
+        if (emailEl && !emailEl.value && lastEmail) emailEl.value = normEmail(lastEmail);
+        if (nameEl && !nameEl.value && lastName) nameEl.value = normName(lastName);
       }catch(e){}
 
       syncRole();
+      updateEmailPreview();
       updateMeter();
-      window.addEventListener("pageshow", ()=> setBusy(false));
+      updateMatch();
+      window.addEventListener("pageshow", ()=>setBusy(false));
     })();
   </script>
 </body>

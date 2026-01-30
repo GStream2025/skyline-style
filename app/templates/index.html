@@ -9,6 +9,11 @@
   {% set _path = (_req.path if _req and _req.path else '') %}
   {% set _vf  = (view_functions if view_functions is defined and view_functions else {}) %}
   {% set _home_ver = (HOME_CSS_VER if HOME_CSS_VER is defined and HOME_CSS_VER else (ASSET_VER if ASSET_VER is defined and ASSET_VER else '165'))|string|trim %}
+  {% set _nonce = (csp_nonce if csp_nonce is defined and csp_nonce else (nonce if nonce is defined and nonce else '')) %}
+
+  {% macro safe_static(f) -%}
+    {%- if url_for is defined -%}{{ url_for('static', filename=f) ~ '?v=' ~ _home_ver }}{%- else -%}{{ '/static/' ~ f }}{%- endif -%}
+  {%- endmacro %}
 
   {% set _canonical = (_req.base_url if _req and _req.base_url else 'https://skyline-style.onrender.com/') %}
   {% set _root = (_req.url_root if _req and _req.url_root else 'https://skyline-style.onrender.com/') %}
@@ -32,7 +37,7 @@
   <meta name="description" content="{{ _desc|e }}">
   <meta name="robots" content="{{ 'index,follow' if _env == 'production' else 'noindex,nofollow' }}">
   <meta name="theme-color" content="#2563eb">
-  <meta name="color-scheme" content="light">
+  <meta name="color-scheme" content="light dark">
   <meta name="referrer" content="strict-origin-when-cross-origin">
 
   <link rel="canonical" href="{{ _canonical|e }}">
@@ -54,18 +59,14 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://skyline-style.onrender.com" crossorigin>
 
-  <link rel="preload" as="image" href="{{ hero_webp|e }}" fetchpriority="high"
-        imagesizes="(max-width: 900px) 92vw, 720px">
-  <link rel="preload" as="image" href="{{ hero_png|e }}" fetchpriority="high"
-        imagesizes="(max-width: 900px) 92vw, 720px">
+  <link rel="preload" as="image" href="{{ hero_webp|e }}" fetchpriority="high" imagesizes="(max-width: 900px) 92vw, 720px">
+  <link rel="preload" as="image" href="{{ hero_png|e }}" fetchpriority="high" imagesizes="(max-width: 900px) 92vw, 720px">
 
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/home.css') }}?v={{ _home_ver|e }}">
+  <link rel="stylesheet" href="{{ safe_static('css/home.css')|e }}">
 
   <link rel="prefetch" href="{{ _shop_url|e }}" as="document">
 
-  {% set _csp_nonce = (csp_nonce if csp_nonce is defined and csp_nonce else (nonce if nonce is defined and nonce else '')) %}
-
-  <script type="application/ld+json"{% if _csp_nonce %} nonce="{{ _csp_nonce|e }}"{% endif %}>
+  <script type="application/ld+json"{% if _nonce %} nonce="{{ _nonce|e }}"{% endif %}>
   {
     "@context":"https://schema.org",
     "@graph":[
@@ -80,10 +81,12 @@
   }
   </script>
 
-  <style>
-    :root{color-scheme:light}
+  <style{% if _nonce %} nonce="{{ _nonce|e }}"{% endif %}>
+    :root{color-scheme:light dark}
     html,body{background:#f6f8fc;color:#0b1220}
+    @media (prefers-color-scheme: dark){html,body{background:#070b14;color:#e5e7eb}}
     .hp :focus-visible{outline:none;box-shadow:0 0 0 4px rgba(37,99,235,.18);border-radius:14px}
+    .hp .btn:focus-visible{box-shadow:0 0 0 4px rgba(56,189,248,.22)}
   </style>
 {% endblock %}
 
@@ -110,7 +113,8 @@
   {% set featured_list = (featured if featured is defined and featured else []) %}
   {% if featured_list is none %}{% set featured_list = [] %}{% endif %}
 
-  {% set _hero_overlay = "linear-gradient(90deg, rgba(255,255,255,.97) 0%, rgba(255,255,255,.90) 44%, rgba(255,255,255,.56) 72%, rgba(255,255,255,0) 100%)" %}
+  {% set _hero_overlay = "linear-gradient(90deg, rgba(255,255,255,.98) 0%, rgba(255,255,255,.92) 46%, rgba(255,255,255,.58) 73%, rgba(255,255,255,0) 100%)" %}
+  {% set _hero_overlay_dark = "linear-gradient(90deg, rgba(2,6,23,.92) 0%, rgba(2,6,23,.78) 46%, rgba(2,6,23,.30) 73%, rgba(2,6,23,0) 100%)" %}
 
   <div class="hp hp-v15 hp-v161" id="hp" role="main" aria-label="Inicio Skyline Store" data-home-ver="{{ _home_ver|e }}" data-env="{{ _env|e }}">
     <section class="hp-top" aria-label="Beneficios">
@@ -125,14 +129,19 @@
             <div><b>Envíos con tracking</b><small>Seguimiento del pedido</small></div>
           </li>
           <li class="hp-topTrust__item" role="listitem">
-            <span class="hp-ico" aria-hidden="true">✅</span>
-            <div><b>Políticas claras</b><small>Comprá con confianza</small></div>
+            <span class="hp-ico" aria-hidden="true">↩️</span>
+            <div><b>Devoluciones claras</b><small>Políticas simples</small></div>
+          </li>
+          <li class="hp-topTrust__item" role="listitem">
+            <span class="hp-ico" aria-hidden="true">⚡</span>
+            <div><b>Ofertas reales</b><small>Promos y drops</small></div>
           </li>
         </ul>
       </div>
     </section>
 
-    <section class="hp-hero hp-heroFull" aria-labelledby="hpTitle" style="--hero-url:url('{{ hero_png|e }}'); --hero-overlay: {{ _hero_overlay }};">
+    <section class="hp-hero hp-heroFull" aria-labelledby="hpTitle"
+             style="--hero-url:url('{{ hero_png|e }}'); --hero-overlay: {{ _hero_overlay }}; --hero-overlay-dark: {{ _hero_overlay_dark }};">
       <div class="hp-wrap hp-hero__grid">
         <div class="hp-hero__copy">
           <div class="hp-kickerRow">
@@ -140,6 +149,7 @@
             <span class="hp-verified" aria-label="Verificado">Verificado</span>
             <button class="hp-pill" type="button" data-pill data-target="#hpCats" aria-controls="hpCats" aria-expanded="false">Categorías</button>
             <button class="hp-pill" type="button" data-pill data-target="#hpGrid" aria-controls="hpGrid" aria-expanded="false">Destacados</button>
+            <a class="hp-pill hp-pill--link" href="{{ offers_url|e }}" aria-label="Ver ofertas">Ofertas</a>
           </div>
 
           <h1 id="hpTitle" class="hp-title">Tech + Streetwear <span class="hp-grad">premium</span></h1>
@@ -151,25 +161,29 @@
 
           <div class="hp-mini" role="list" aria-label="Diferenciales">
             <div class="hp-mini__item" role="listitem"><b>Curado</b><span>Productos elegidos</span></div>
-            <div class="hp-mini__item" role="listitem"><b>Ofertas</b><span>Promos reales</span></div>
-            <div class="hp-mini__item" role="listitem"><b>Drops</b><span>Marca propia</span></div>
+            <div class="hp-mini__item" role="listitem"><b>Envío</b><span>Tracking y soporte</span></div>
+            <div class="hp-mini__item" role="listitem"><b>Marca</b><span>Drops Skyline</span></div>
+            <div class="hp-mini__item" role="listitem"><b>Pagos</b><span>Protección</span></div>
           </div>
 
           <div class="hp-ctas" role="group" aria-label="Acciones principales">
             <a href="{{ shop_url|e }}" class="btn primary">Explorar tienda</a>
             <a href="{{ offers_url|e }}" class="btn ghost">Ver ofertas</a>
+            <a href="{{ account_register_url|e }}" class="btn soft">Crear cuenta</a>
           </div>
 
           <div class="hp-chips" aria-label="Garantías" role="list">
             <span class="hp-chip" role="listitem">✅ Soporte post-compra</span>
             <span class="hp-chip" role="listitem">✅ Seguimiento del pedido</span>
-            <span class="hp-chip" role="listitem">✅ Políticas claras</span>
+            <span class="hp-chip" role="listitem">✅ Devoluciones claras</span>
           </div>
 
           <nav class="hp-miniLinks" aria-label="Cuenta">
             <a href="{{ account_login_url|e }}" class="hp-link">Entrar</a>
             <span aria-hidden="true">·</span>
             <a href="{{ account_register_url|e }}" class="hp-link">Crear cuenta</a>
+            <span aria-hidden="true">·</span>
+            <a href="{{ shop_url|e }}" class="hp-link">Catálogo</a>
           </nav>
         </div>
 
@@ -193,6 +207,7 @@
             <div class="hp-stat" role="listitem"><b>Marketplace</b><span>Catálogo en crecimiento</span></div>
             <div class="hp-stat" role="listitem"><b>Marca propia</b><span>Streetwear Skyline</span></div>
             <div class="hp-stat" role="listitem"><b>Compra segura</b><span>Soporte y políticas claras</span></div>
+            <div class="hp-stat" role="listitem"><b>Ofertas</b><span>Promos y drops</span></div>
           </div>
         </div>
       </div>
@@ -203,7 +218,8 @@
         {% set trust = [
           {'img':'img/banners/service_payment.png','title':'Pago seguro','desc':'Transacciones protegidas y soporte'},
           {'img':'img/banners/service_shipping.png','title':'Envío con tracking','desc':'Seguimiento de tu pedido'},
-          {'img':'img/banners/service_support.png','title':'Soporte real','desc':'Atención y ayuda post-compra'}
+          {'img':'img/banners/service_support.png','title':'Soporte real','desc':'Atención y ayuda post-compra'},
+          {'img':'img/banners/service_quality.png','title':'Calidad curada','desc':'Selección premium y transparente'}
         ] %}
         {% for t in trust %}
           <article class="hp-trustCard" data-reveal aria-label="{{ t.title|e }}">
@@ -295,6 +311,7 @@
                   <div class="hp-prod__micro" aria-label="Beneficios del producto">
                     <span class="hp-microChip">⚡ Envío rápido</span>
                     <span class="hp-microChip">🔒 Pago seguro</span>
+                    <span class="hp-microChip">↩️ Devoluciones</span>
                   </div>
                 </div>
 
@@ -369,6 +386,15 @@
       onScroll();
       toTop.addEventListener('click', () => window.scrollTo({ top:0, behavior: prefersReduced ? 'auto' : 'smooth' }));
     }
+
+    try{
+      const st = document.getElementById('hpSticky');
+      if (st){
+        const onS = () => st.classList.toggle('is-on', (window.scrollY || 0) > 520);
+        window.addEventListener('scroll', onS, { passive:true });
+        onS();
+      }
+    }catch(_){}
   })();
   </script>
 {% endblock %}

@@ -3,6 +3,8 @@
 
 {% block extra_head %}
 <meta name="robots" content="{{ 'index,follow' if (ENV|default('')|lower == 'production') else 'noindex,nofollow' }}">
+<meta name="theme-color" content="#0b1220">
+
 {% set _csp_nonce = (csp_nonce if csp_nonce is defined and csp_nonce else (nonce if nonce is defined and nonce else '')) %}
 
 {% set _csrf = '' %}
@@ -10,81 +12,97 @@
   {% set _csrf = csrf_token() %}
 {% elif csrf_token_value is defined and csrf_token_value %}
   {% set _csrf = csrf_token_value %}
+{% elif session is defined and session.get is defined %}
+  {% set _csrf = (session.get('csrf_token') or '') %}
 {% endif %}
 <meta name="csrf-token" content="{{ (_csrf|string)|e }}">
 
 {% set _has_ep = has_endpoint if has_endpoint is defined else none %}
-{% macro safe_url(ep, fb='') %}{% if _has_ep and _has_ep(ep) %}{{ url_for(ep) }}{% else %}{{ fb }}{% endif %}{% endmacro %}
+{% macro safe_url(ep, fb='') -%}
+  {%- if url_for is defined and ep -%}
+    {%- if _has_ep and _has_ep(ep) -%}
+      {{- url_for(ep) -}}
+    {%- else -%}
+      {%- set u = '' -%}
+      {%- try -%}{%- set u = url_for(ep) -%}{%- except -%}{%- set u = '' -%}{%- endtry -%}
+      {{- u if u else fb -}}
+    {%- endif -%}
+  {%- else -%}
+    {{- fb -}}
+  {%- endif -%}
+{%- endmacro %}
 
-<style{% if _csp_nonce %} nonce="{{ _csp_nonce|e }}"{% endif %}>
-.ss-ve{min-height:70vh;display:grid;place-items:center;padding:32px 14px}
-.ss-ve__card{max-width:560px;width:100%;border-radius:26px;border:1px solid rgba(148,163,184,.22);background:rgba(255,255,255,.9);box-shadow:0 22px 60px rgba(2,6,23,.12)}
-.ss-ve__head{padding:20px;border-bottom:1px solid rgba(148,163,184,.16)}
-.ss-ve__body{padding:20px}
-.ss-ve__title{font-size:clamp(1.4rem,3vw,1.9rem);font-weight:900}
-.ss-ve__sub{margin-top:.4rem;color:rgba(11,18,32,.7);font-weight:700}
-.ss-ve__flash{margin-top:12px;padding:10px 12px;border-radius:14px;font-weight:800}
-.ss-ve__flash.error{background:rgba(255,0,0,.06)}
-.ss-ve__flash.success{background:rgba(34,197,94,.1)}
-.ss-ve__flash.info{background:rgba(47,123,255,.08)}
-.ss-ve__note{margin-top:14px;padding:12px;border-radius:16px;border:1px dashed rgba(148,163,184,.32);font-size:.86rem}
-.ss-ve__actions{display:grid;gap:10px;margin-top:16px}
-.ss-ve__btn{padding:12px 14px;border-radius:999px;border:1px solid rgba(15,23,42,.12);font-weight:900;cursor:pointer}
-.ss-ve__btn[disabled]{opacity:.65;cursor:not-allowed}
-.ss-ve__live{display:none;margin-top:12px;font-size:.86rem;font-weight:800}
-.ss-ve__live.is-on{display:block}
-.ss-ve__spin{width:16px;height:16px;border-radius:999px;border:2px solid rgba(253,230,138,.25);border-top-color:rgba(253,230,138,.95);animation:spin .9s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-@media(prefers-reduced-motion:reduce){.ss-ve__spin{animation:none}}
-</style>
+<link rel="stylesheet" href="{{ (url_for('static', filename='css/account.css') if url_for is defined else '/static/css/account.css') }}">
 {% endblock %}
 
 {% block content %}
-{% set email = (user.email if user is defined and user and user.email is defined else '')|trim %}
+{% set email = (user.email if user is defined and user and user.email is defined else '')|string|trim %}
 {% set home_url = safe_url('main.home','/') %}
 {% set shop_url = safe_url('shop.shop','/shop') %}
+{% set login_url = safe_url('auth.login_get','/auth/login') %}
 {% set resend_json = safe_url('auth.resend_verification_json','') %}
 {% set resend_post = safe_url('auth.resend_verification','') %}
 {% set resend_ep = resend_json if resend_json else resend_post %}
 {% set resend_is_json = true if resend_json else false %}
 
-<section class="ss-ve">
-  <div class="ss-ve__card">
+<section class="ss-ve" aria-label="Verificación de correo">
+  <div class="ss-ve__card" role="region" aria-labelledby="veTitle">
     <div class="ss-ve__head">
-      <h1 class="ss-ve__title">Verificá tu correo</h1>
-      <p class="ss-ve__sub">
-        {% if email %}Enviamos un enlace a <b>{{ email|e }}</b>.{% else %}Enviamos un enlace a tu correo.{% endif %}
-        Confirmalo para activar tu cuenta.
-      </p>
+      <div class="ss-ve__badge" aria-hidden="true">✓</div>
+      <div style="min-width:0">
+        <h1 class="ss-ve__title" id="veTitle">Verificá tu correo</h1>
+        <p class="ss-ve__sub">
+          {% if email %}Enviamos un enlace a <b>{{ email|e }}</b>.{% else %}Enviamos un enlace a tu correo.{% endif %}
+          Confirmalo para activar tu cuenta.
+        </p>
+      </div>
     </div>
 
     <div class="ss-ve__body">
-      {% for c,m in get_flashed_messages(with_categories=true) %}
-        {% set k = c if c in ['error','success','info'] else 'info' %}
-        <div class="ss-ve__flash {{ k }}">{{ m }}</div>
-      {% endfor %}
+      {% set _msgs = get_flashed_messages(with_categories=true) %}
+      {% if _msgs %}
+        <div class="ss-ve__flashes" role="status" aria-live="polite">
+          {% for c,m in _msgs %}
+            {% set k = (c|string|lower) %}
+            {% set tone = 'bad' if (k in ['error','danger'] or 'error' in k or 'danger' in k) else ('good' if 'success' in k else ('warn' if 'warn' in k else 'info')) %}
+            <div class="ss-ve__flash" data-tone="{{ tone }}">
+              <div class="ss-ve__flashTitle">
+                {{ 'Error' if tone=='bad' else ('Listo' if tone=='good' else ('Atención' if tone=='warn' else 'Aviso')) }}
+              </div>
+              <div class="ss-ve__flashMsg">{{ m }}</div>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
 
-      <div class="ss-ve__note">
-        Revisá Spam o Promociones. El enlace puede tardar unos minutos.
+      <div class="ss-ve__note" role="note">
+        Revisá <b>Spam</b> o <b>Promociones</b>. El enlace puede tardar unos minutos.
       </div>
 
-      <div id="veLive" class="ss-ve__live" role="status"></div>
+      <div class="ss-ve__tips" role="list" aria-label="Ayuda rápida">
+        <div class="ss-ve__tip" role="listitem"><span class="ss-ve__dot" aria-hidden="true"></span><span>Si cambiaste de dispositivo, volvé a iniciar sesión.</span></div>
+        <div class="ss-ve__tip" role="listitem"><span class="ss-ve__dot" aria-hidden="true"></span><span>Si el correo no llega, pedí un reenvío y esperá 30 segundos.</span></div>
+      </div>
+
+      <div id="veLive" class="ss-ve__live" role="status" aria-live="polite"></div>
 
       <form id="resendForm" method="post" action="{{ resend_ep }}">
         <input type="hidden" name="csrf_token" value="{{ (_csrf|string)|e }}">
         {% if email %}<input type="hidden" name="email" value="{{ email|e }}">{% endif %}
       </form>
 
-      <div class="ss-ve__actions">
-        <button id="btnResend" class="ss-ve__btn"
+      <div class="ss-ve__actions" role="group" aria-label="Acciones">
+        <button id="btnResend" class="ss-ve__btn ss-ve__btn--primary" type="button"
                 {% if not resend_ep %}disabled aria-disabled="true"{% endif %}>
-          <span id="veSpin" class="ss-ve__spin" style="display:none"></span>
+          <span id="veSpin" class="ss-ve__spin" aria-hidden="true" style="display:none"></span>
           <span id="btnTxt">{% if resend_ep %}Reenviar correo{% else %}Reenvío no disponible{% endif %}</span>
         </button>
-        <a class="ss-ve__btn" href="{{ home_url }}">Volver al inicio</a>
+
+        <a class="ss-ve__btn ss-ve__btn--soft" href="{{ login_url }}">Volver a iniciar sesión</a>
+        <a class="ss-ve__btn ss-ve__btn--ghost" href="{{ home_url }}">Volver al inicio</a>
       </div>
 
-      <p style="margin-top:14px;font-size:.82rem">
+      <p class="ss-ve__foot">
         ¿Ya verificaste? Cerrá sesión y volvé a entrar.
         <a href="{{ shop_url }}">Ir a la tienda</a>
       </p>
@@ -96,67 +114,120 @@
 {% block extra_js %}
 <script{% if _csp_nonce %} nonce="{{ _csp_nonce|e }}"{% endif %}>
 (() => {
-  const btn = document.getElementById('btnResend');
-  const txt = document.getElementById('btnTxt');
-  const spin = document.getElementById('veSpin');
-  const live = document.getElementById('veLive');
-  const form = document.getElementById('resendForm');
+  const btn = document.getElementById("btnResend");
+  const txt = document.getElementById("btnTxt");
+  const spin = document.getElementById("veSpin");
+  const live = document.getElementById("veLive");
+  const form = document.getElementById("resendForm");
 
   const endpoint = {{ resend_ep|tojson }};
   const isJson = {{ resend_is_json|tojson }};
+
   const COOLDOWN = 30000;
   const KEY = "ss_verify_cd";
+  const KEY_SENT = "ss_verify_last_sent";
 
-  const say = m => { if(live){ live.textContent=m||''; live.classList.toggle('is-on',!!m);} };
-  const getCd = () => parseInt(localStorage.getItem(KEY)||"0",10);
-  const setCd = t => localStorage.setItem(KEY,String(t));
+  const now = () => Date.now();
+  const readInt = (k) => {
+    try {
+      const v = parseInt(localStorage.getItem(k) || "0", 10);
+      return Number.isFinite(v) ? v : 0;
+    } catch (_) { return 0; }
+  };
+  const writeInt = (k, v) => {
+    try { localStorage.setItem(k, String(v)); } catch (_) {}
+  };
+
+  const say = (m) => {
+    if (!live) return;
+    live.textContent = m || "";
+    live.classList.toggle("is-on", !!m);
+  };
+
+  const setBusy = (busy) => {
+    if (!btn || !spin) return;
+    btn.disabled = !!busy || !endpoint;
+    spin.style.display = busy ? "inline-block" : "none";
+    btn.setAttribute("aria-busy", busy ? "true" : "false");
+  };
 
   const updateBtn = () => {
-    const left = Math.ceil((getCd()-Date.now())/1000);
-    if(left>0){
-      btn.disabled=true; txt.textContent=`Reenviar en ${left}s`;
-    }else{
-      btn.disabled=!endpoint; txt.textContent=endpoint?"Reenviar correo":"Reenvío no disponible";
+    if (!btn || !txt) return;
+    const cdUntil = readInt(KEY);
+    const left = Math.ceil((cdUntil - now()) / 1000);
+    if (!endpoint) {
+      btn.disabled = true;
+      txt.textContent = "Reenvío no disponible";
+      return;
+    }
+    if (left > 0) {
+      btn.disabled = true;
+      txt.textContent = `Reenviar en ${left}s`;
+    } else {
+      btn.disabled = false;
+      txt.textContent = "Reenviar correo";
     }
   };
 
+  const sendJson = async () => {
+    const csrf = document.querySelector('meta[name="csrf-token"]')?.content || "";
+    const r = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "X-CSRF-Token": csrf
+      },
+      credentials: "same-origin",
+      body: JSON.stringify({})
+    });
+    let j = null;
+    try { j = await r.json(); } catch (_) {}
+    if (!r.ok || (j && j.ok === false)) {
+      const msg = (j && (j.message || j.error)) ? String(j.message || j.error) : "Error";
+      throw new Error(msg);
+    }
+    return j;
+  };
+
   const send = async () => {
-    if(!endpoint || btn.disabled) return;
-    setCd(Date.now()+COOLDOWN);
+    if (!endpoint || !btn || btn.disabled) return;
+    writeInt(KEY, now() + COOLDOWN);
+    writeInt(KEY_SENT, now());
     updateBtn();
-    spin.style.display='inline-block';
+    setBusy(true);
     say("Enviando correo…");
 
-    if(!isJson){
-      try{ form.submit(); }catch(_){}
+    if (!isJson) {
+      try { form.submit(); } catch (_) {}
       return;
     }
 
-    try{
-      const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
-      const r = await fetch(endpoint,{
-        method:"POST",
-        headers:{
-          "Content-Type":"application/json",
-          "Accept":"application/json",
-          "X-CSRF-Token":csrf
-        },
-        credentials:"same-origin"
-      });
-      const j = await r.json();
-      if(!r.ok || j.ok===false) throw new Error(j.message||"Error");
+    try {
+      await sendJson();
       say("Correo reenviado. Revisá tu email.");
-    }catch(e){
+    } catch (_) {
       say("No se pudo reenviar automáticamente. Intentá más tarde.");
-    }finally{
-      spin.style.display='none';
+      writeInt(KEY, Math.min(readInt(KEY), now() + 8000));
+    } finally {
+      setBusy(false);
       updateBtn();
     }
   };
 
-  if(btn) btn.addEventListener('click', send);
-  setInterval(updateBtn,500);
-  updateBtn();
+  if (btn) btn.addEventListener("click", send);
+
+  const boot = () => {
+    updateBtn();
+    const lastSent = readInt(KEY_SENT);
+    if (lastSent && (now() - lastSent) < 15000) {
+      say("Reenvío reciente. Esperá unos segundos y revisá tu correo.");
+    }
+  };
+
+  window.setInterval(updateBtn, 500);
+  window.addEventListener("pageshow", boot);
+  boot();
 })();
 </script>
 {% endblock %}
