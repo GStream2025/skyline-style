@@ -106,6 +106,7 @@ C:.
 │   │   ├───05
 │   │   │       58ec48e6d6fff714ebc96ef495d64dfa3e0020
 │   │   │       8d63804afe4538ab7658d4a75d999a5368a785
+│   │   │       94543676a0299a11726349a6a4921ffc3dc1fb
 │   │   │       a83eff42e86059111999c26a962cb25f987c7d
 │   │   │       e45c40ad66fe7e34853904d76ba01c33362809
 │   │   │
@@ -235,6 +236,7 @@ C:.
 │   │   ├───14
 │   │   │       61c90c7b67b5d3aca4445624e2dca750ffc969
 │   │   │       72e47c826e1c7098fb1e50a16a908494a1aa56
+│   │   │       73296d3ea907234f4812015989df096e4e8d85
 │   │   │       7c4433166e7bf8860625f85c56b853007dea28
 │   │   │       8f0d2ba86dc2ac494858c89bb0e6c76927b072
 │   │   │       ade5d312375b52fd1eaf7cd9b970b0e0f2f310
@@ -297,6 +299,7 @@ C:.
 │   │   │       637a7bbd5c6dbb751e616f4dc369dbf3797a9a
 │   │   │       6649e5f73fe8e9cfec4ed879ebae87dcb680f0
 │   │   │       6b4e9d58a141b4992d4ab585373fea996d6583
+│   │   │       d15fe74b81d6e727e97a4385a3327e26d145ba
 │   │   │       d1da0b3353f7ba975451b31897ecff80032b98
 │   │   │       e1626af2fff4272c72fd2f9fa8d673f9c6de2c
 │   │   │       fe84d47f4f9518ccdd742e9cf3f227740119be
@@ -392,6 +395,7 @@ C:.
 │   │   │       d4a6f8f2efaa08266c704efc6bc6af76208ce5
 │   │   │       e652bb855854db572a65c0230de877d3150197
 │   │   │       f3dca538a078395edadbecb0900e4854502913
+│   │   │       fc2f81ca00db6afe43fd543ff150896799d664
 │   │   │
 │   │   ├───25
 │   │   │       136ae7ac3ef71952a1a1a5a3bcfd46c79255f0
@@ -417,6 +421,7 @@ C:.
 │   │   │       7c5fa502412674206a7627ed1d86f350d54988
 │   │   │       83348a064f77a97a403b36f17a288b38e8a2b0
 │   │   │       94d6421ab9db26a8ae9cb02a6d7bae31231dcf
+│   │   │       fa564b985400bee1ef1f33748befb24dba5aab
 │   │   │
 │   │   ├───29
 │   │   │       6e1d27012f6c803548676768dca9207a1eb3df
@@ -576,6 +581,8 @@ C:.
 │   │   │       343e238acdd64931299b647a67cbcd1353ac87
 │   │   │       36343b95640737b3f7832113b43d1535a50c5d
 │   │   │       373e322caabddc111dbcb1339a88d41167b41d
+│   │   │       46937617e5ece9c643d7c9ce7be3dae52c75d9
+│   │   │       b5d2e828778cc05280dbd2b4d6751b1fa0e7cb
 │   │   │       d1d1904cf81f3d5e7937e6b3bbfea78295f550
 │   │   │
 │   │   ├───3a
@@ -682,6 +689,7 @@ C:.
 │   │   │       4c32fdd6780778acfe29810dec743913ac9bbb
 │   │   │       5221c39a7f9340035c56b7af80d9d0f7f50fc6
 │   │   │       782ef049ef8c8df26875ce8411b8acd66ff217
+│   │   │       7b841df25b223b6cc15d906951788f6ffc5362
 │   │   │       903b9a9665278be99d1cca8557ae8cd3d274db
 │   │   │       bebc22dc0821d9e949b1842bce2cc6d6f9b9f8
 │   │   │
@@ -754,6 +762,8 @@ C:.
 │   │   │
 │   │   ├───4e
 │   │   │       178093cc19c1da5be06a43849e1b85f926fa00
+│   │   │       2599bec973762dec2467205103712e6777917f
+│   │   │       39c821265da54098c0fe3f4eeb5ac2c036fa9f
 │   │   │       54744a3b39b771e3a1491cd9a092c1d9d4c653
 │   │   │
 │   │   ├───4f
@@ -786,6 +796,7 @@ C:.
 │   │   │       466c12355e71f684c40934d5f55303a7202588
 │   │   │       a00e40fac86a16c10206cc18d552b53e3955d7
 │   │   │       c69866804294be1bc59df64a8791771b41d80d
+│   │   │       d9c3cba15a8b530c9c123469aa84be3575c758
 │   │   │
 │   │   ├───53
 │   │   │       0bfe0f1385336b776bfed916841b8d2db8ed96
@@ -860,6 +871,7 @@ C:.
 │   │   │
 │   │   ├───5a
 │   │   │       068f192ff19ebd81d4354e2514f4948fa44042
+│   │   │       1d312b59e67ef948cb264d227146d2be456821
 │   │   │       209aa4c08d25af80dce820fd8416b94eab3ac1
 │   │   │       48a900b6ecca270c0e93fc8a3063aa615bdd64
 │   │   │       53a9065b54111cd1c4ec5d949812ba0113c2cc
@@ -884,6 +896,7 @@ C:.
 │   │   │       64f5e6fb017024e23fb44fe7f014596a7c6ddb
 │   │   │       86824b4ec9d1c3890c62a1b3c80ee0e230009f
 │   │   │       988b35605e9bed81ad6883c5fddab3ab0ffe22
+│   │   │       a0a7eba2278d184631b678b3529b97dd662d00
 │   │   │       ce7b9337450a6358e95c741faf12df5a5d5c1d
 │   │   │       f65829310a96d9a1700b07a8dae36f019c315d
 │   │   │       ff8a58f469616a7467844677b3ef5e1192c453
@@ -894,6 +907,7 @@ C:.
 │   │   │       343312a8df9e059be66577fe5bda22eda6d2be
 │   │   │       59904f647e065bf3fbd74c83518586401ef33b
 │   │   │       7502b8e1eb1482074e9252f55a3f16c79c11dd
+│   │   │       7c434b0d1f161dd772a10b828cb2b55bf35615
 │   │   │       8e27e7c5adf22ea2cc57d0517026e03d19d9b8
 │   │   │       9456d1bb69a6e68e67122bbac48db3e80f785c
 │   │   │       a5e64597502a58d196c578d9e769082d53c64f
@@ -962,9 +976,11 @@ C:.
 │   │   │       017db84d9c1ea4040dab3747e40c85ed2b7ae5
 │   │   │       31bb6138c829c126d6ab4ea5834afcb1596048
 │   │   │       3669dfaae19f5792ad76ab70010df3a4c5d9dd
+│   │   │       3e8509acb424557ad5d560c652a710ee2233ee
 │   │   │       6a0a20da3e940b01e568ea00349644cee9b71b
 │   │   │       8f1348226167baf0ec8bb8b4692204615f1168
 │   │   │       8fec6156ab07e292088bb31a724bd68615ecba
+│   │   │       a1308ab2453f75ec63988d660721d50ef0bb2b
 │   │   │       b61441e8887826eaa215064ae65c23c0dc8300
 │   │   │       b9e0de762014bb2fa209368491c817f9890147
 │   │   │       c3607b297bc31d0000cc4e05a90d45c959fc0d
@@ -1034,6 +1050,7 @@ C:.
 │   │   ├───6b
 │   │   │       0ad6565be3b1135f13004fe7781e4b6c2b58aa
 │   │   │       3513314a8fe22a98f147f48fe39a482862f71f
+│   │   │       3ab33aeb569440a3c8d2467e3473faea3ce34a
 │   │   │       672588b35aedad601fbe6e511fb7742bc4ab3d
 │   │   │       6e356d23309cdf5b5b2a05fd6acf14ec0eaeae
 │   │   │       8a9d4b2d099a11cb4a030ba968434d483ad68a
@@ -1076,6 +1093,7 @@ C:.
 │   │   │
 │   │   ├───71
 │   │   │       37fb6d52f4a86bd2de9997d3fa5f14f29d02c1
+│   │   │       8dc18411248111a3f3a57af728c024258c8fe8
 │   │   │       92f46d47da16d1df969a02b804a1d9be4703c5
 │   │   │       a9b150725fd1608df58964cf1c3ca9ef41ebe4
 │   │   │
@@ -1179,6 +1197,7 @@ C:.
 │   │   │       9e7f8681ea1de9c519ef39ede024e48cd49209
 │   │   │
 │   │   ├───7c
+│   │   │       282c3cde7eec8bc265917cfdf7c8cd1d78aa1f
 │   │   │       2ef595b6a31d8f53e76726700b28c77e004dca
 │   │   │       9e13c928d60be3070b0c968335458a3a57a76b
 │   │   │       c35013460b6808b684a2a418361e7bd218b241
@@ -1260,6 +1279,7 @@ C:.
 │   │   ├───85
 │   │   │       2e2430992f11229f404c6786324dd900aee371
 │   │   │       4a54fecac85121545a081ba0991b3a73904a3f
+│   │   │       5c536163227af807d9b77f1d08d7a15b5dd14c
 │   │   │       7406a3ef1c8502f24ad06337ab9a95694f66f0
 │   │   │       9f1494c975add635c6224cb384ad7307298dd0
 │   │   │       ce0d2b5f9a2b2c1ca61cf8231c435d228dbe21
@@ -1271,6 +1291,7 @@ C:.
 │   │   │       409d4790fb71f49cc2bf15bf9925367ee47d19
 │   │   │       440ac9fb07eb3c77792853c9298893a2773cc0
 │   │   │       4726f5eaee4c85842b6e6210e0a618d9b641c3
+│   │   │       9b5c9d9e53eab6d82edb6be2c9d2e0efe71a23
 │   │   │       9b91f5fc7a1749b8524f97b359eb2df811ad82
 │   │   │       ab84314f43bdbb1fd89352ab4dbeb9ea53a907
 │   │   │       b08d4d5f3a1a266f9e4f54685987c82b2ce531
@@ -1310,6 +1331,7 @@ C:.
 │   │   │       160a600bc40b030907c2666c0ea55d2f5ef0d6
 │   │   │       170da7ec48e3db94ac4521a69d2c6f6062673f
 │   │   │       2f41c4441ee9c3c41b2c5399ff160048f3ebe5
+│   │   │       48a22d1ed3127d076ca6cfb899ccc4cb226969
 │   │   │       4b4bf222c94632b71d8d6765351f75923535a3
 │   │   │       5cc0beb0c60d014203a1709590e3f834bd3c24
 │   │   │       78c9b4cebe4b2e7afdf1576da7091749cba735
@@ -1371,6 +1393,7 @@ C:.
 │   │   │       0f69dce0b42577a06130f316ec99c0851ef928
 │   │   │       4ac6a79382a5d6fa78bdfc008841f13190d390
 │   │   │       5d86509b553328ae4c8b6c7993085c109b5644
+│   │   │       67ce740936b36fc81d84e06c7fa1346d0a9838
 │   │   │       d08ec505f521312cb7725ff2e79b7f32fec877
 │   │   │       ead04eab225d860534d269e4f713715a0c4178
 │   │   │       f1d1be52b9524f9a6ee88cfaeffcca7a8d3c20
@@ -1421,6 +1444,7 @@ C:.
 │   │   ├───97
 │   │   │       148f84b6ce8fdc51fc4b4da64e4e9c812c72cd
 │   │   │       149a4bfa05d4c90b859cfc57fffd92b95b50b8
+│   │   │       a47888da7d6731cd5f865240644d3c4e4c9343
 │   │   │       a8a928fac291fa4fc7bcd73d4a112e53cb6f52
 │   │   │       bcaeccae12218d73cffb7fb74cb8e427d3288e
 │   │   │       e15023f34fd9c1bb5cdb3ee41555ef2b10b6e1
@@ -1458,6 +1482,7 @@ C:.
 │   │   ├───9b
 │   │   │       0bf5217898fd2bf69deed60a5f87040307eb48
 │   │   │       0d1bdc960f3f51840cec12863681f298c7c4b9
+│   │   │       10e04fdaffff41995e65bb515e8637712adfba
 │   │   │       327c629f9b9828fed7ec134c1041484d5fc06b
 │   │   │       4be7a1880f6cb2cd039f1ecd460c92ea530caa
 │   │   │       bb54cdbb98357fa00d42392b54a9c85219b5c7
@@ -1511,11 +1536,14 @@ C:.
 │   │   │
 │   │   ├───a2
 │   │   │       09c68e89f3269bf52cc4146be89617a99abc4d
+│   │   │       1af0a6c2fd4e13304ccc4b44c89d45aa6b6602
 │   │   │       1bbe83a12a3cb98dbfc67b617f52f4979ad409
 │   │   │       2e902ee43599d6770508e1b4450e1b0a528798
+│   │   │       516392f72a56358ec56a9818e7ba912a92bd72
 │   │   │       65864c69724b0534ab7dfc571b9bc585d019da
 │   │   │       8842f9dba85337c8e2849545cff67e77e5cdf9
 │   │   │       90b8802ecca4cf61dd95a3e22afb8dfb97c250
+│   │   │       911852126b0574553dc865ada1d4aed56edc87
 │   │   │       93ae253be62f22d53ed468b2c6135a1baa7add
 │   │   │       a1115fcba4273c56db3ddd58afaac4a65970bb
 │   │   │       a53cce4f7e39be0ed9473707bba829735b167d
@@ -1527,6 +1555,7 @@ C:.
 │   │   │       969e472b8edd67cd4704f7f6b8bc18bd9c45f1
 │   │   │       a9b038db87f344218a3c73f6a4553554c4299e
 │   │   │       e9e4f5ff1ba66f5ed9cb0b76b327a88d71853c
+│   │   │       fc8766067639c229a13ce74e482001793fada6
 │   │   │
 │   │   ├───a4
 │   │   │       08337649054b9ba2ecc70378ce64dbb86d2d9f
@@ -1579,6 +1608,7 @@ C:.
 │   │   │       50e2547a308de26366c3f713ce58c68b52c1a3
 │   │   │       7a6383363ecb414973f45a4a42f08df4fe8bba
 │   │   │       8a33f6d65be052fe73d20c9c3d8725ae2d89d4
+│   │   │       a163456ffe08519441ff2ba40f659fafe1058b
 │   │   │       dd300499cab6b41c34da727def0e12677ec16b
 │   │   │       e8580d532b06920a38fe4b4f1d6c29c8e1b9ee
 │   │   │       f0ff487aabdf60338f1e4fc50aefe43b8ace42
@@ -1587,6 +1617,7 @@ C:.
 │   │   ├───aa
 │   │   │       3e0903c6d0b69dd3434c4ecdfc85dbc29ac01c
 │   │   │       62d55e926663bb504745053134fe2c4cd90a56
+│   │   │       bf27d697a3373e8d54191240e37cfb18075124
 │   │   │       e1aa7d67e7379b1ca4f6af755ee28eec15fc75
 │   │   │       fcfac6da4bb0ae76339669fa7d38d52715aeaf
 │   │   │
@@ -1599,6 +1630,7 @@ C:.
 │   │   ├───ac
 │   │   │       34e5d3c22b4a63e97ab8c92218d62a9c79b246
 │   │   │       5c8ca7f3ee98932b75ae518f626ceab82a7b2a
+│   │   │       918b6754eac2c6e7e16de41dccdaf58d9054be
 │   │   │       b2b2613510186d2809cd443b33f53388c1e4da
 │   │   │       b586cd6dbe43dcc51d4f2a17d340f92f17eee2
 │   │   │       cf8e7cca3785df201acdfd892d399e7a4ddf99
@@ -1631,6 +1663,7 @@ C:.
 │   │   │       7db9689d38495be6087855030cb8d1c879e9d2
 │   │   │       ad942adc0a984467d29b7dd77d85ecbf9f540e
 │   │   │       e3e589bcebe704ee4725159904ec14ce284963
+│   │   │       f34e309e4337aa93836434bed4e9b568b9b8fd
 │   │   │       fd6805db4a1de25cb9e511de9c425bd6af87f4
 │   │   │
 │   │   ├───b0
@@ -1662,6 +1695,7 @@ C:.
 │   │   │       662944584a3a6dfa0533290a81b31bd52e0aee
 │   │   │       79fac3c9cc629a4240820e7030a1aaf1e7b70e
 │   │   │       7bf9a18eb731edd2fd3b246fda3cf19462bea2
+│   │   │       f9552b703677fbbec0e4789781926b8b5ffe82
 │   │   │
 │   │   ├───b3
 │   │   │       135c57f29a62afc49e9ca215c6d8daeb35425f
@@ -1695,15 +1729,18 @@ C:.
 │   │   │       14bb8fb9ba10cea0974887a5b05e8a7f302948
 │   │   │       44171b6a0c39bb8c9118bc12496d2403a0d9c4
 │   │   │       5f2b6f99cc3edd5b0f64f568ff4f0874c00c63
+│   │   │       71c067a4182df367f30e4339d00118308085fe
 │   │   │       752711f3465381dc4558ecd68d136cb3020385
 │   │   │       8d7bfba119f14c32f1da165254999e571185cf
 │   │   │       9aba3eb09244c49652bfc488f787ef9b1a761c
 │   │   │       afd9e56ffedb7e43de4ec03deb73e31079b66f
+│   │   │       b548deb9f50189b7909d01c4f4ad5290982b88
 │   │   │
 │   │   ├───b7
 │   │   │       093ed4371d161d0fd76f9b5dd7254d5330964c
 │   │   │       130e408e96bdc3da9055ee7e1a879ada6560e8
 │   │   │       4468e5f7e852415a2359656beb4754bcc96b5a
+│   │   │       4e7eafa07b852e359476971273f4f464a9b0e2
 │   │   │       646349b72e752fd79454441c787b23f30481b9
 │   │   │       6ee2cb96bc031e727a17221f81c601b37a53d0
 │   │   │       8bc3d53a5dc065a23f93ff944f0ceeec512176
@@ -1716,6 +1753,7 @@ C:.
 │   │   │       58ccb2c10fe73c59673e4689b22ee1094e626a
 │   │   │       64f1672e85311fa15c866d58bdc601482354c6
 │   │   │       6b84a35f0b318620c3e5de167de396701f772b
+│   │   │       b06d455efcf20c0f8ecfaf1c2afdb87ca3fac3
 │   │   │       c4861ff069229c90bc3390ba6fb91a35b0e271
 │   │   │       d84687fce1a371c9d14cd31e4f78be7899938e
 │   │   │
@@ -1892,6 +1930,7 @@ C:.
 │   │   │       47ae72adedbe2f3ff50ea4d6b25d3192002634
 │   │   │       4f1d1479cc938f02cb5f1802898731040af057
 │   │   │       6897310415f249a910742c779d3b21d916b46b
+│   │   │       abb3c0701a32d8a6b2c1b0ee8efc5070c59aa8
 │   │   │       b6685591fd9aed5b22df8a74dfffa09e372c65
 │   │   │       d47ee15edcb9c1aea4cd43d4c511a186871781
 │   │   │       d75f44e6335ce9ff96eb5ffbaa0f88fe24d738
@@ -2024,6 +2063,7 @@ C:.
 │   │   │       3eec13bd651ac778b4f6bcfaa36886413a4117
 │   │   │       7d7eee444f140d6326a712db9409cc7b1a2e3f
 │   │   │       90df7e17e1ef42bd303dab0e885048a8269c2d
+│   │   │       a6139b0566683e7086c09762e4abadf263da97
 │   │   │       aef7e0d185a38ec8acf5124c365f6853f93fa1
 │   │   │       f93bbdb4de94053a8eb9bc5aafbc160646a09b
 │   │   │
@@ -2040,6 +2080,7 @@ C:.
 │   │   ├───db
 │   │   │       30702059abb6c537702416233dd40155796686
 │   │   │       436ccfbc54429c953e513a91815e44358da6b3
+│   │   │       612985864f3b06455eb8f12b5bc9bf0ebeab3d
 │   │   │       8ed6339717902f290f277fffb2c2aceb913478
 │   │   │       b12e25e046dea37fa29d725b4d44fd0509124d
 │   │   │       b481c1ac2350d29aaf3c35f3c0235dc505709c
@@ -2052,8 +2093,10 @@ C:.
 │   │   │       7b9814fe452855f1524a4ef3e28dddb395f275
 │   │   │       9d6503e87750289e6d82e5b2b0e0e39854c589
 │   │   │       a103567ae83f2e1962537b735a1d80742c5ea0
+│   │   │       be255ed10c6489d33ee3e55b54459ac87d1516
 │   │   │       d42f73092857687563ac64b681951c60becb65
 │   │   │       e79423e28aa79d2dd2b5919499b8feef5fcaee
+│   │   │       ea12caa91a2688da85937151e47eb996b07333
 │   │   │       ec19697f4cf24510512b14f10023f71ce0d40e
 │   │   │       f1c4bf9b88a33878517a3e3439c6e71daa74a8
 │   │   │
@@ -2104,6 +2147,7 @@ C:.
 │   │   │       5061862766a9f3d8e1be64f77737ae121ae2f1
 │   │   │       57a8219f32048bc5e8a2e167103d0bf6223401
 │   │   │       7886bf9af75792e43d9768a421eba2596a0847
+│   │   │       abda46aeaf7f122897014b3d6af909c76970b1
 │   │   │
 │   │   ├───e4
 │   │   │       0e92d7e69faf47b66f1c8b61e914a8c883981e
@@ -2182,9 +2226,11 @@ C:.
 │   │   ├───eb
 │   │   │       3b6502005e6e3ed2308d7e3784a8cfdc861298
 │   │   │       43c8fbcf5fbe541201fb05fd4710d205f371ec
+│   │   │       45b2fc38c49366efffda32d3bac75b11e7d008
 │   │   │       97d391c153a793ca75f29736c339d19d3546d6
 │   │   │       9b63e39ff86a10051b9c0f3ac88bb9a022ec75
 │   │   │       c9ef51d1e14b50dd2ff211ec482541749f992e
+│   │   │       cd4458271d3fd8c94e3e7815e27c6c18fc3b53
 │   │   │       db41771d8bb19368c27aeef3930e4b190e94ea
 │   │   │       deb89e30aa81332d3241b52795048b4b2b0ff6
 │   │   │       f52050af84ede95dd271718d680cffb070597a
@@ -2294,6 +2340,7 @@ C:.
 │   │   │       78b72713b76ce7797b514438eb7cddacd7304f
 │   │   │       7d0763013014beef63b6e49d7cc7ede6d192bb
 │   │   │       abfe9d272666cc9270a76db8497342f2dcf576
+│   │   │       c300950247911ac3724b82c1179b67cfea2b39
 │   │   │       ef19458fc2120c69ed5631358e85b15ef3ee2c
 │   │   │
 │   │   ├───f9
@@ -2321,6 +2368,7 @@ C:.
 │   │   │       6c1a34a5a61fecdb0b684c0de6a47e9f32a54f
 │   │   │       a80bae5fa34f4fa86e53563cc34b2fd562debe
 │   │   │       c8c820a32b42b1f630680b01e04867d0bfcc8c
+│   │   │       d34e3a6a48b44599e3c9f6aa1b6017ad56b3b8
 │   │   │       f72d2f40c82b32499c4ed70376c5a989d59d1b
 │   │   │
 │   │   ├───fc
@@ -2338,6 +2386,7 @@ C:.
 │   │   ├───fd
 │   │   │       122a826baa8c8abf435ecd372c06081ddd82a8
 │   │   │       86049c275a4c7de30b72a350fe164293619ce4
+│   │   │       c3ad31b83187bb40fc06503609d2ed36cc4416
 │   │   │       f3f158ab104ab94c5d7afe1796b4950ed4a19b
 │   │   │
 │   │   ├───fe
@@ -2417,6 +2466,7 @@ C:.
 │   │           wise_handler.cpython-312.pyc
 │   │
 │   ├───models
+│   │   │   affiliate.py
 │   │   │   affiliate_profile.py
 │   │   │   campaign.py
 │   │   │   category.py
@@ -2424,6 +2474,7 @@ C:.
 │   │   │   commission_ledger.py
 │   │   │   event.py
 │   │   │   media.py
+│   │   │   Nuevo Documento de texto.txt
 │   │   │   offer.py
 │   │   │   order.py
 │   │   │   payment_provider.py
@@ -2432,57 +2483,26 @@ C:.
 │   │   │   __init__.py
 │   │   │
 │   │   └───__pycache__
-│   │           affiliate_profile.cpython-312.pyc
-│   │           campaign.cpython-312.pyc
-│   │           category.cpython-312.pyc
-│   │           commission.cpython-312.pyc
-│   │           commission_ledger.cpython-312.pyc
-│   │           event.cpython-312.pyc
-│   │           media.cpython-312.pyc
-│   │           offer.cpython-312.pyc
-│   │           order.cpython-312.pyc
-│   │           payment_provider.cpython-312.pyc
-│   │           product.cpython-312.pyc
-│   │           user.cpython-312.pyc
 │   │           __init__.cpython-312.pyc
 │   │
 │   ├───routes
-│   │   │   account_routes.py
-│   │   │   address_routes.py
-│   │   │   admin_payments_routes.py
-│   │   │   admin_routes.py
-│   │   │   affiliate.py
-│   │   │   affiliate_routes.py
-│   │   │   api_routes.py
-│   │   │   auth_routes.py
-│   │   │   cart_routes.py
-│   │   │   checkout_routes.py
-│   │   │   main_routes.py
-│   │   │   marketing_routes.py
-│   │   │   printful_routes.py
-│   │   │   profile_routes.py
-│   │   │   shop_routes.py
-│   │   │   webhook_routes.py
-│   │   │   __init__.py
-│   │   │
-│   │   └───__pycache__
-│   │           account_routes.cpython-312.pyc
-│   │           address_routes.cpython-312.pyc
-│   │           admin_payments_routes.cpython-312.pyc
-│   │           admin_routes.cpython-312.pyc
-│   │           affiliate.cpython-312.pyc
-│   │           affiliate_routes.cpython-312.pyc
-│   │           api_routes.cpython-312.pyc
-│   │           auth_routes.cpython-312.pyc
-│   │           cart_routes.cpython-312.pyc
-│   │           checkout_routes.cpython-312.pyc
-│   │           main_routes.cpython-312.pyc
-│   │           marketing_routes.cpython-312.pyc
-│   │           printful_routes.cpython-312.pyc
-│   │           profile_routes.cpython-312.pyc
-│   │           shop_routes.cpython-312.pyc
-│   │           webhook_routes.cpython-312.pyc
-│   │           __init__.cpython-312.pyc
+│   │       account_routes.py
+│   │       address_routes.py
+│   │       admin_auth_routes.py
+│   │       admin_payments_routes.py
+│   │       admin_routes.py
+│   │       affiliate_routes.py
+│   │       api_routes.py
+│   │       auth_routes.py
+│   │       cart_routes.py
+│   │       checkout_routes.py
+│   │       main_routes.py
+│   │       marketing_routes.py
+│   │       printful_routes.py
+│   │       profile_routes.py
+│   │       shop_routes.py
+│   │       webhook_routes.py
+│   │       __init__.py
 │   │
 │   ├───services
 │   │   │   checkout_flow.py
@@ -2592,10 +2612,13 @@ C:.
 │   │   │       payments.html
 │   │   │       products_list.html
 │   │   │       product_edit.html
+│   │   │       register.html
 │   │   │
 │   │   ├───auth
 │   │   │       account.html
 │   │   │       forgot_password.html
+│   │   │       login.html
+│   │   │       registrer.html
 │   │   │       reset_password.html
 │   │   │       verify_email.html
 │   │   │
@@ -2636,19 +2659,13 @@ C:.
 │   │           order_success.html
 │   │
 │   ├───utils
-│   │   │   auth.py
-│   │   │   passwords.py
-│   │   │   password_engine.py
-│   │   │   printful_mapper.py
-│   │   │   security.py
-│   │   │   __init__.py
-│   │   │
-│   │   └───__pycache__
-│   │           passwords.cpython-312.pyc
-│   │           password_engine.cpython-312.pyc
-│   │           printful_mapper.cpython-312.pyc
-│   │           security.cpython-312.pyc
-│   │           __init__.cpython-312.pyc
+│   │       admin_gate.py
+│   │       auth.py
+│   │       passwords.py
+│   │       password_engine.py
+│   │       printful_mapper.py
+│   │       security.py
+│   │       __init__.py
 │   │
 │   └───__pycache__
 │           config.cpython-312.pyc
@@ -2657,6 +2674,9 @@ C:.
 │           seed.cpython-312.pyc
 │           _legacy_models_py__20251226_210547.cpython-312.pyc
 │           __init__.cpython-312.pyc
+│
+├───instance
+│       skyline_local.db
 │
 ├───migrations
 │   │   alembic.ini
@@ -2668,12 +2688,21 @@ C:.
 │           c322043c1ad9_init.py
 │
 └───tests
-        conftest.py
-        test_auth_login.py
-        test_auth_protected_routes.py
-        test_auth_rate_limit.py
-        test_auth_register.py
-        test_auth_verify.py
-        test_templates_compile.py
+    │   conftest.py
+    │   test_auth_login.py
+    │   test_auth_protected_routes.py
+    │   test_auth_rate_limit.py
+    │   test_auth_register.py
+    │   test_auth_verify.py
+    │   test_templates_compile.py
+    │
+    └───__pycache__
+            conftest.cpython-312-pytest-8.3.4.pyc
+            test_auth_login.cpython-312-pytest-8.3.4.pyc
+            test_auth_protected_routes.cpython-312-pytest-8.3.4.pyc
+            test_auth_rate_limit.cpython-312-pytest-8.3.4.pyc
+            test_auth_register.cpython-312-pytest-8.3.4.pyc
+            test_auth_verify.cpython-312-pytest-8.3.4.pyc
+            test_templates_compile.cpython-312-pytest-8.3.4.pyc
 
 PS C:\Users\User\Desktop\Dev\skyline_style_PRO_READY\skyline-style>

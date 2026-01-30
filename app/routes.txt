@@ -29,6 +29,7 @@ C:.
 │           wise_handler.cpython-312.pyc
 │
 ├───models
+│   │   affiliate.py
 │   │   affiliate_profile.py
 │   │   campaign.py
 │   │   category.py
@@ -36,6 +37,7 @@ C:.
 │   │   commission_ledger.py
 │   │   event.py
 │   │   media.py
+│   │   Nuevo Documento de texto.txt
 │   │   offer.py
 │   │   order.py
 │   │   payment_provider.py
@@ -44,7 +46,7 @@ C:.
 │   │   __init__.py
 │   │
 │   └───__pycache__
-│           affiliate_profile.cpython-312.pyc
+│           affiliate.cpython-312.pyc
 │           campaign.cpython-312.pyc
 │           category.cpython-312.pyc
 │           commission.cpython-312.pyc
@@ -64,7 +66,6 @@ C:.
 │   │   admin_auth_routes.py
 │   │   admin_payments_routes.py
 │   │   admin_routes.py
-│   │   affiliate.py
 │   │   affiliate_routes.py
 │   │   api_routes.py
 │   │   auth_routes.py
@@ -83,7 +84,6 @@ C:.
 │           address_routes.cpython-312.pyc
 │           admin_payments_routes.cpython-312.pyc
 │           admin_routes.cpython-312.pyc
-│           affiliate.cpython-312.pyc
 │           affiliate_routes.cpython-312.pyc
 │           api_routes.cpython-312.pyc
 │           auth_routes.cpython-312.pyc
@@ -262,10 +262,8 @@ C:.
 │   │
 │   └───__pycache__
 │           auth.cpython-312.pyc
-│           passwords.cpython-312.pyc
 │           password_engine.cpython-312.pyc
 │           printful_mapper.cpython-312.pyc
-│           security.cpython-312.pyc
 │           __init__.cpython-312.pyc
 │
 └───__pycache__

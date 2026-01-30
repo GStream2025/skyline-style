@@ -1,37 +1,13 @@
 ﻿from __future__ import annotations
 
-"""
-URL / Redirect Security — ULTRA PRO / BULLETPROOF (FINAL)
-
-Mejoras clave (10+):
-1) Bloquea esquemas peligrosos (javascript:, data:, file:, etc.)
-2) Bloquea //evil.com (scheme-relative)
-3) Bloquea backslashes (\) y control chars (CRLF)
-4) Soporta paths relativos internos y URLs absolutas SOLO si son mismo host
-5) Normaliza y “limpia” next antes de validar
-6) Evita open-redirect incluso si target viene raro (espacios, tabs, %0a)
-7) Permite whitelist opcional por prefix (SAFE_NEXT_PREFIXES)
-8) Fallback seguro a endpoint interno
-9) No rompe sin request context (dev/tests)
-10) API estable: is_safe_url(), safe_next_url()
-"""
-
 import os
 import re
 from typing import Optional
 from urllib.parse import urlparse, unquote
 
-from flask import request, url_for
+from flask import redirect, request, url_for
 
-# Prefijos internos permitidos (opcional)
-# Ej: SAFE_NEXT_PREFIXES="/,/shop,/account,/admin"
-_DEFAULT_PREFIXES = "/"
-_SAFE_PREFIXES_ENV = (os.getenv("SAFE_NEXT_PREFIXES") or "").strip()
-
-# Control chars (CR/LF/TAB/etc.) -> potencial header injection / weird parsing
 _CTRL_RE = re.compile(r"[\x00-\x1F\x7F]")
-
-# Esquemas explícitamente prohibidos (aunque urlparse a veces es creativo)
 _BAD_SCHEMES = {
     "javascript",
     "data",
@@ -45,37 +21,46 @@ _BAD_SCHEMES = {
     "tel",
 }
 
+_DEFAULT_PREFIXES = "/"
+_SAFE_PREFIXES_ENV = (os.getenv("SAFE_NEXT_PREFIXES") or "").strip()
 
-def _strip_and_decode(s: str) -> str:
-    """
-    Limpia:
-    - strip espacios
-    - decode %xx (1 vez) para detectar cosas como %0d%0a
-    - corta si hay control chars
-    """
-    s = (s or "").strip()
+
+def _safe_strip(s: Optional[str], *, max_len: int = 2048) -> str:
+    if s is None:
+        return ""
+    out = str(s).replace("\x00", "").replace("\u200b", "").strip()
+    if max_len > 0 and len(out) > max_len:
+        out = out[:max_len]
+    return out
+
+
+def _decode_once(s: str) -> str:
+    try:
+        return unquote(s)
+    except Exception:
+        return s
+
+
+def _normalize_target(raw: Optional[str]) -> str:
+    s = _safe_strip(raw)
     if not s:
         return ""
-    try:
-        s = unquote(s)
-    except Exception:
-        pass
-    # elimina control chars
-    s = _CTRL_RE.sub("", s)
-    return s.strip()
+    s = _decode_once(s)
+    s = _CTRL_RE.sub("", s).strip()
+    if not s:
+        return ""
+    s2 = _decode_once(s)
+    if s2 != s:
+        s = _CTRL_RE.sub("", s2).strip()
+    return s
 
 
 def _allowed_prefixes() -> list[str]:
-    """
-    Lista de prefijos internos permitidos.
-    Si no seteás env => permite todo lo interno.
-    """
     raw = _SAFE_PREFIXES_ENV
     if not raw:
-        return [_DEFAULT_PREFIXES]  # "/" permite todo interno
+        return [_DEFAULT_PREFIXES]
     parts = [p.strip() for p in raw.split(",") if p.strip()]
-    # asegura que empiezan con /
-    out = []
+    out: list[str] = []
     for p in parts:
         if not p.startswith("/"):
             p = "/" + p
@@ -84,123 +69,115 @@ def _allowed_prefixes() -> list[str]:
 
 
 def _matches_prefix(path: str) -> bool:
-    """
-    Permite controlar por prefijo: /admin, /shop, etc.
-    Por defecto "/" => todo ok.
-    """
     prefixes = _allowed_prefixes()
     if prefixes == ["/"]:
         return True
     return any(path.startswith(p) for p in prefixes)
 
 
-def is_safe_url(target: Optional[str]) -> bool:
-    """
-    Valida que target sea seguro para redirigir.
-
-    Permite:
-      - Rutas internas: "/shop", "/account/orders"
-      - URL absoluta SOLO si es del mismo host: "https://tudominio.com/shop"
-
-    Bloquea:
-      - http(s) externos
-      - esquemas peligrosos (javascript:, data:, etc.)
-      - //evil.com
-      - backslashes tipo "\\evil.com"
-      - control chars / CRLF
-    """
-    if not target:
-        return False
-
-    t = _strip_and_decode(str(target))
-    if not t:
-        return False
-
-    # bloquea backslash (Windows paths / evasiones)
-    if "\\" in t:
-        return False
-
-    # bloquea scheme-relative: //evil.com
-    if t.startswith("//"):
-        return False
-
-    # si es una ruta interna
-    if t.startswith("/"):
-        # evita "/\evil" etc.
-        if t.startswith("/\\"):
-            return False
-        # whitelist de prefijos (opcional)
-        return _matches_prefix(t)
-
-    # si viene absoluto: solo permitimos si host coincide
+def _same_host(url: str) -> bool:
     try:
-        # Si no hay request context, no podemos validar host -> no seguro
-        host_url = request.host_url  # puede lanzar si no hay contexto
-    except Exception:
-        return False
-
-    try:
-        ref = urlparse(host_url)
-        test = urlparse(t)
-
-        scheme = (test.scheme or "").lower()
-        if scheme and scheme not in {"http", "https"}:
-            return False
-        if scheme in _BAD_SCHEMES:
-            return False
-
-        # netloc vacío no debería pasar acá (porque no empezaba con /),
-        # pero por seguridad:
+        test = urlparse(url)
         if not test.netloc:
             return False
 
-        # mismo host exacto
-        if test.netloc != ref.netloc:
-            return False
+        try:
+            req_host = urlparse(request.host_url).netloc
+        except Exception:
+            req_host = ""
 
-        # whitelist opcional por prefijos del path
-        path = test.path or "/"
+        cfg_hosts = set()
+        for k in ("SITE_URL", "APP_URL", "RENDER_EXTERNAL_URL"):
+            v = (os.getenv(k) or "").strip()
+            if v:
+                try:
+                    cfg_hosts.add(urlparse(v if "://" in v else f"https://{v}").netloc)
+                except Exception:
+                    pass
+
+        server_name = (os.getenv("SERVER_NAME") or "").strip()
+        if server_name:
+            cfg_hosts.add(server_name)
+
+        allowed = {h for h in {req_host, *cfg_hosts} if h}
+        return bool(allowed) and (test.netloc in allowed)
+    except Exception:
+        return False
+
+
+def is_safe_url(target: Optional[str]) -> bool:
+    t = _normalize_target(target)
+    if not t:
+        return False
+
+    if "\\" in t:
+        return False
+    if t.startswith("//"):
+        return False
+
+    if t.startswith("/"):
+        if t.startswith("/\\"):
+            return False
+        parsed = urlparse(t)
+        path = parsed.path or "/"
         if not path.startswith("/"):
             path = "/" + path
         return _matches_prefix(path)
 
-    except Exception:
+    parsed = urlparse(t)
+    scheme = (parsed.scheme or "").lower()
+    if not scheme or scheme not in {"http", "https"}:
         return False
+    if scheme in _BAD_SCHEMES:
+        return False
+    if not parsed.netloc:
+        return False
+    if not _same_host(t):
+        return False
+
+    path = parsed.path or "/"
+    if not path.startswith("/"):
+        path = "/" + path
+    return _matches_prefix(path)
 
 
 def safe_next_url(default_endpoint: str = "main.home", **endpoint_kwargs) -> str:
-    """
-    Devuelve next seguro o fallback a endpoint interno.
-
-    Lee next de:
-      - ?next=
-      - form next
-    """
     try:
-        nxt = request.args.get("next") or request.form.get("next") or ""
+        raw = request.args.get("next") or request.form.get("next") or ""
     except Exception:
-        nxt = ""
+        raw = ""
 
-    nxt = _strip_and_decode(nxt)
-
+    nxt = _normalize_target(raw)
     if nxt and is_safe_url(nxt):
-        # Si viene absoluto del mismo host, devolvemos solo path+query para consistencia
         try:
             u = urlparse(nxt)
             if u.scheme and u.netloc:
-                path = u.path or "/"
+                out = u.path or "/"
                 if u.query:
-                    path = f"{path}?{u.query}"
-                return path
+                    out = f"{out}?{u.query}"
+                if u.fragment:
+                    out = f"{out}#{u.fragment}"
+                return out
         except Exception:
             pass
         return nxt
 
-    # fallback endpoint interno
     try:
         return url_for(default_endpoint, **endpoint_kwargs)
     except Exception:
         return "/"
 
 
-__all__ = ["is_safe_url", "safe_next_url"]
+def safe_redirect(default_endpoint: str = "main.home", **endpoint_kwargs):
+    return redirect(safe_next_url(default_endpoint, **endpoint_kwargs), code=302)
+
+
+def with_next(url: str, next_value: str) -> str:
+    base = _safe_strip(url, max_len=2048)
+    nxt = _normalize_target(next_value)
+    if not base:
+        base = "/"
+    if not nxt or not is_safe_url(nxt):
+        return base
+    sep = "&" if "?" in base else "?"
+    return f"{base}{sep}next={nxt}"

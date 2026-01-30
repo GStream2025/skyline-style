@@ -1,52 +1,36 @@
 from __future__ import annotations
 
+import base64
 import hmac
+import hashlib
 import os
+import re
 import secrets
 import time
 from dataclasses import dataclass
-from functools import wraps
-from typing import Any, Callable, Dict, Optional, Set, Tuple, TypeVar, cast
+from typing import Any, Dict, Optional, Tuple, TypeVar, Callable, cast
 from urllib.parse import quote
 
 from flask import abort, current_app, flash, jsonify, redirect, request, session, url_for
 
 F = TypeVar("F", bound=Callable[..., Any])
 
-ADMIN_SESSION_KEY_DEFAULT = "admin_logged_in"
-ADMIN_NEXT_PARAM_DEFAULT = "next"
-ADMIN_LOGIN_ENDPOINT_DEFAULT = "admin.login"
-ADMIN_LOGIN_FALLBACK_PATH_DEFAULT = "/admin/login"
-
-DEFAULT_FLASH_CATEGORY = "warning"
-DEFAULT_FLASH_MESSAGE = "Tenés que iniciar sesión como admin."
-
-CFG_ADMIN_EMAIL = "ADMIN_EMAIL"
-CFG_ADMIN_PASSWORD = "ADMIN_PASSWORD"
-CFG_ADMIN_PASSWORD_HASH = "ADMIN_PASSWORD_HASH"
-CFG_ADMIN_EMAILS = "ADMIN_EMAILS"
-
-CFG_ADMIN_SESSION_KEY = "ADMIN_SESSION_KEY"
-CFG_ADMIN_LOGIN_ENDPOINT = "ADMIN_LOGIN_ENDPOINT"
-CFG_ADMIN_LOGIN_FALLBACK = "ADMIN_LOGIN_FALLBACK_PATH"
-CFG_ADMIN_DEFAULT_NEXT = "ADMIN_DEFAULT_NEXT"
-CFG_ADMIN_ABORT_JSON = "ADMIN_ABORT_CODE_JSON"
-CFG_ADMIN_ABORT_HTML = "ADMIN_ABORT_CODE_HTML"
-CFG_ADMIN_FLASH_MESSAGE = "ADMIN_FLASH_MESSAGE"
-CFG_ADMIN_FLASH_CATEGORY = "ADMIN_FLASH_CATEGORY"
-CFG_ADMIN_BYPASS = "ADMIN_BYPASS"
-
-CFG_ADMIN_ROLE_KEY = "ADMIN_ROLE_KEY"
-CFG_ADMIN_ALLOWED_ROLES = "ADMIN_ALLOWED_ROLES"
-
-CFG_MAINTENANCE_MODE = "MAINTENANCE_MODE"
-CFG_MAINTENANCE_ALLOW_READONLY = "MAINTENANCE_ALLOW_READONLY"
-CFG_MAINTENANCE_MESSAGE = "MAINTENANCE_MESSAGE"
-
+CFG_AUTH_SECRET = "AUTH_SECRET"
 CFG_AUTH_AUDIT_CALLBACK = "AUTH_AUDIT_CALLBACK"
 
-CFG_ADMIN_SOFT_RL_WINDOW_S = "ADMIN_SOFT_RL_WINDOW_S"
-CFG_ADMIN_SOFT_RL_MAX = "ADMIN_SOFT_RL_MAX"
+CFG_AUTH_NEXT_PARAM = "AUTH_NEXT_PARAM"
+CFG_AUTH_DEFAULT_NEXT = "AUTH_DEFAULT_NEXT"
+
+CFG_AUTH_SOFT_RL_WINDOW_S = "AUTH_SOFT_RL_WINDOW_S"
+CFG_AUTH_SOFT_RL_MAX = "AUTH_SOFT_RL_MAX"
+
+CFG_VERIFY_TTL_S = "AUTH_VERIFY_TTL_S"
+CFG_RESET_TTL_S = "AUTH_RESET_TTL_S"
+
+CFG_REQUIRE_EMAIL_VERIFIED = "AUTH_REQUIRE_EMAIL_VERIFIED"
+
+DEFAULT_NEXT_PARAM = "next"
+DEFAULT_DEFAULT_NEXT = "/account"
 
 _NO_STORE_HEADERS: Dict[str, str] = {
     "Cache-Control": "no-store, max-age=0, must-revalidate",
@@ -54,16 +38,17 @@ _NO_STORE_HEADERS: Dict[str, str] = {
     "Expires": "0",
 }
 
+_EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+
 _TRUE = {"1", "true", "yes", "y", "on", "checked"}
 _FALSE = {"0", "false", "no", "n", "off", "unchecked"}
 
 
 @dataclass(frozen=True)
-class GateDecision:
-    allowed: bool
+class TokenDecision:
+    ok: bool
     reason: str
-    login_url: Optional[str] = None
-    next_path: Optional[str] = None
+    payload: Optional[Dict[str, Any]] = None
 
 
 def _cfg(name: str, default: Any) -> Any:
@@ -71,13 +56,6 @@ def _cfg(name: str, default: Any) -> Any:
         return current_app.config.get(name, default)
     except Exception:
         return default
-
-
-def _env(name: str, default: str = "") -> str:
-    v = os.getenv(name)
-    if v is None:
-        return default
-    return str(v).strip()
 
 
 def _safe_str(v: Any, *, max_len: int = 512) -> str:
@@ -144,7 +122,71 @@ def _is_json_like_request() -> bool:
     return False
 
 
-def _clean_next_path(raw: Optional[str], *, default_path: str = "/admin") -> str:
+def _audit(event: Dict[str, Any]) -> None:
+    e = dict(event or {})
+    e.setdefault("ip", _client_ip())
+    try:
+        e.setdefault("ua", _safe_str(request.headers.get("User-Agent"), max_len=180))
+    except Exception:
+        pass
+
+    try:
+        cb = _cfg(CFG_AUTH_AUDIT_CALLBACK, None)
+        if callable(cb):
+            cb(e)
+    except Exception:
+        pass
+
+    try:
+        if current_app and current_app.debug:
+            current_app.logger.debug("auth_audit %s", e)
+    except Exception:
+        pass
+
+
+def _soft_rate_limit(bucket: str) -> Tuple[bool, int]:
+    window_s = int(_cfg(CFG_AUTH_SOFT_RL_WINDOW_S, 10) or 10)
+    max_hits = int(_cfg(CFG_AUTH_SOFT_RL_MAX, 25) or 25)
+    window_s = max(1, window_s)
+    max_hits = max(1, max_hits)
+
+    key = f"_rl:{bucket}"
+    try:
+        now = int(time.time())
+        data = session.get(key)
+        if not isinstance(data, dict):
+            data = {}
+        start = int(data.get("start") or 0)
+        hits = int(data.get("hits") or 0)
+
+        if start <= 0 or now - start >= window_s:
+            start = now
+            hits = 0
+
+        hits += 1
+        session[key] = {"start": start, "hits": hits}
+        session.modified = True
+
+        remaining = max(0, max_hits - hits)
+        return (hits <= max_hits, remaining)
+    except Exception:
+        return (True, max_hits)
+
+
+def normalize_email(email: Any) -> str:
+    s = _safe_str(email, max_len=254).lower()
+    s = s.replace(" ", "")
+    return s
+
+
+def email_is_valid(email: Any) -> bool:
+    e = normalize_email(email)
+    if not e or len(e) > 254:
+        return False
+    return bool(_EMAIL_RE.match(e))
+
+
+def _clean_next_path(raw: Optional[str], *, default_path: str) -> str:
     p = (raw or "").strip()
     if not p:
         return default_path
@@ -174,6 +216,24 @@ def _clean_next_path(raw: Optional[str], *, default_path: str = "/admin") -> str
     return p or default_path
 
 
+def resolve_next_path(*, default_next: Optional[str] = None) -> str:
+    next_param = _safe_str(_cfg(CFG_AUTH_NEXT_PARAM, DEFAULT_NEXT_PARAM), max_len=32) or DEFAULT_NEXT_PARAM
+    dnext = _safe_str(_cfg(CFG_AUTH_DEFAULT_NEXT, default_next or DEFAULT_DEFAULT_NEXT), max_len=256) or DEFAULT_DEFAULT_NEXT
+    raw = None
+    try:
+        raw = request.args.get(next_param)
+    except Exception:
+        raw = None
+    try:
+        fallback = request.path or dnext
+    except Exception:
+        fallback = dnext
+    out = _clean_next_path(raw, default_path=_clean_next_path(fallback, default_path=dnext))
+    if out.startswith("/auth/login") or out.startswith("/auth/register"):
+        out = dnext
+    return out
+
+
 def _safe_url_for(endpoint: str, **values: Any) -> Optional[str]:
     try:
         return url_for(endpoint, **values)
@@ -181,388 +241,243 @@ def _safe_url_for(endpoint: str, **values: Any) -> Optional[str]:
         return None
 
 
-def _resolve_login_url(*, endpoint: str, next_param: str, next_path: str) -> str:
-    candidates = (
-        endpoint,
-        _safe_str(_cfg(CFG_ADMIN_LOGIN_ENDPOINT, endpoint), max_len=128) or endpoint,
-        "admin_routes.login",
-        "admin.login_admin",
-        "admin_routes.admin_login",
-    )
-    for ep in candidates:
-        if not ep:
-            continue
-        u = _safe_url_for(ep, **{next_param: next_path})
-        if u:
-            return u
-
-    fallback = _safe_str(_cfg(CFG_ADMIN_LOGIN_FALLBACK, ADMIN_LOGIN_FALLBACK_PATH_DEFAULT), max_len=240) or (
-        ADMIN_LOGIN_FALLBACK_PATH_DEFAULT
-    )
-    sep = "&" if "?" in fallback else "?"
-    return f"{fallback}{sep}{next_param}={quote(next_path, safe='/')}"
+def _b64u(b: bytes) -> str:
+    return base64.urlsafe_b64encode(b).decode("ascii").rstrip("=")
 
 
-def _audit(event: Dict[str, Any]) -> None:
-    event = dict(event or {})
-    event.setdefault("ip", _client_ip())
+def _b64u_dec(s: str) -> Optional[bytes]:
     try:
-        event.setdefault("ua", _safe_str(request.headers.get("User-Agent"), max_len=160))
+        pad = "=" * (-len(s) % 4)
+        return base64.urlsafe_b64decode((s + pad).encode("ascii"))
     except Exception:
-        pass
-
-    try:
-        cb = _cfg(CFG_AUTH_AUDIT_CALLBACK, None)
-        if callable(cb):
-            cb(event)
-    except Exception:
-        pass
-
-    try:
-        if current_app and current_app.debug:
-            current_app.logger.debug("auth_audit %s", event)
-    except Exception:
-        pass
-
-
-def _soft_rate_limit(bucket: str) -> Tuple[bool, int]:
-    window_s = int(_cfg(CFG_ADMIN_SOFT_RL_WINDOW_S, 10) or 10)
-    max_hits = int(_cfg(CFG_ADMIN_SOFT_RL_MAX, 25) or 25)
-    window_s = max(1, window_s)
-    max_hits = max(1, max_hits)
-
-    key = f"_rl:{bucket}"
-    try:
-        now = int(time.time())
-        data = session.get(key)
-        if not isinstance(data, dict):
-            data = {}
-        start = int(data.get("start") or 0)
-        hits = int(data.get("hits") or 0)
-
-        if start <= 0 or now - start >= window_s:
-            start = now
-            hits = 0
-
-        hits += 1
-        session[key] = {"start": start, "hits": hits}
-        session.modified = True
-
-        remaining = max(0, max_hits - hits)
-        return (hits <= max_hits, remaining)
-    except Exception:
-        return (True, max_hits)
-
-
-def _maintenance_block() -> Optional[str]:
-    if not bool(_cfg(CFG_MAINTENANCE_MODE, False)):
         return None
 
-    allow_readonly = bool(_cfg(CFG_MAINTENANCE_ALLOW_READONLY, False))
-    if allow_readonly and request.method in ("GET", "HEAD", "OPTIONS"):
+
+def _auth_secret() -> bytes:
+    cfg = _safe_str(_cfg(CFG_AUTH_SECRET, ""), max_len=256)
+    env = _safe_str(os.getenv("AUTH_SECRET"), max_len=256)
+    raw = cfg or env
+    if raw:
+        return raw.encode("utf-8")
+    try:
+        return current_app.secret_key.encode("utf-8")  # type: ignore[union-attr]
+    except Exception:
+        return b"change-me"
+
+
+def _sign(data: bytes) -> str:
+    sig = hmac.new(_auth_secret(), data, hashlib.sha256).digest()
+    return _b64u(sig)
+
+
+def _make_token(payload: Dict[str, Any], *, ttl_s: int) -> str:
+    now = int(time.time())
+    body = dict(payload or {})
+    body["iat"] = now
+    body["exp"] = now + max(60, int(ttl_s))
+    raw = _safe_str(body, max_len=10_000).encode("utf-8")
+    mac = _sign(raw)
+    return f"{_b64u(raw)}.{mac}"
+
+
+def _read_token(token: str) -> TokenDecision:
+    t = _safe_str(token, max_len=4096)
+    if not t or "." not in t:
+        return TokenDecision(False, "bad_format")
+
+    a, b = t.split(".", 1)
+    raw = _b64u_dec(a)
+    if raw is None:
+        return TokenDecision(False, "bad_b64")
+
+    expected = _sign(raw)
+    try:
+        ok_sig = secrets.compare_digest(expected, b)
+    except Exception:
+        ok_sig = hmac.compare_digest(expected, b)
+    if not ok_sig:
+        return TokenDecision(False, "bad_sig")
+
+    try:
+        s = raw.decode("utf-8", errors="strict")
+        payload: Dict[str, Any] = eval(s, {"__builtins__": {}}, {})  # noqa: S307
+        if not isinstance(payload, dict):
+            return TokenDecision(False, "bad_payload")
+    except Exception:
+        return TokenDecision(False, "bad_payload")
+
+    now = int(time.time())
+    exp = int(payload.get("exp") or 0)
+    if exp <= 0 or now > exp:
+        return TokenDecision(False, "expired")
+
+    return TokenDecision(True, "ok", payload)
+
+
+def make_verify_email_token(*, user_id: Any, email: Any, ttl_s: Optional[int] = None) -> str:
+    ttl = int(_cfg(CFG_VERIFY_TTL_S, ttl_s or 60 * 60 * 24) or (60 * 60 * 24))
+    return _make_token({"typ": "verify", "uid": str(user_id), "email": normalize_email(email)}, ttl_s=ttl)
+
+
+def make_password_reset_token(*, user_id: Any, email: Any, ttl_s: Optional[int] = None) -> str:
+    ttl = int(_cfg(CFG_RESET_TTL_S, ttl_s or 60 * 60) or (60 * 60))
+    return _make_token({"typ": "reset", "uid": str(user_id), "email": normalize_email(email)}, ttl_s=ttl)
+
+
+def verify_token(token: str, *, expected_type: str) -> TokenDecision:
+    d = _read_token(token)
+    if not d.ok:
+        return d
+    typ = _safe_str((d.payload or {}).get("typ"), max_len=16)
+    if typ != expected_type:
+        return TokenDecision(False, "wrong_type")
+    uid = _safe_str((d.payload or {}).get("uid"), max_len=128)
+    email = _safe_str((d.payload or {}).get("email"), max_len=254).lower()
+    if not uid or not email or not email_is_valid(email):
+        return TokenDecision(False, "bad_claims")
+    return d
+
+
+def load_user_by_email(email: str) -> Optional[Any]:
+    try:
+        from app.models import User, db  # type: ignore
+    except Exception:
+        return None
+    e = normalize_email(email)
+    if not email_is_valid(e):
+        return None
+    try:
+        q = getattr(User, "query", None)
+        if q is not None:
+            return q.filter_by(email=e).first()
+    except Exception:
+        pass
+    try:
+        return db.session.query(User).filter(User.email == e).first()  # type: ignore[attr-defined]
+    except Exception:
         return None
 
-    msg = _safe_str(_cfg(CFG_MAINTENANCE_MESSAGE, "Sistema en mantenimiento. Probá más tarde."), max_len=180)
-    return msg or "Sistema en mantenimiento."
 
-
-def _session_role_ok() -> bool:
-    role_key = _safe_str(_cfg(CFG_ADMIN_ROLE_KEY, "role"), max_len=64) or "role"
-    allowed = _cfg(CFG_ADMIN_ALLOWED_ROLES, {"admin", "staff"})
-
+def load_user_by_id(user_id: Any) -> Optional[Any]:
     try:
-        allowed_set: Set[str] = set(allowed) if allowed else {"admin", "staff"}
+        from app.models import User, db  # type: ignore
     except Exception:
-        allowed_set = {"admin", "staff"}
-
-    try:
-        role = session.get(role_key)
-    except Exception:
-        return True
-
-    if role is None:
-        return True
-
-    role_s = _safe_str(role, max_len=32).lower()
-    return role_s in allowed_set
-
-
-def _current_user_is_admin() -> bool:
-    try:
-        from flask_login import current_user  # type: ignore
-    except Exception:
-        return False
-
-    try:
-        if not current_user or not getattr(current_user, "is_authenticated", False):
-            return False
-    except Exception:
-        return False
-
-    for attr in ("is_admin", "admin", "is_staff"):
+        return None
+    uid = _safe_str(user_id, max_len=128)
+    if not uid:
+        return None
+    for attr in ("id", "user_id", "uuid"):
         try:
-            if _is_truthy(getattr(current_user, attr, False)):
-                return True
+            col = getattr(User, attr, None)
+            if col is not None:
+                return db.session.query(User).filter(col == uid).first()  # type: ignore[attr-defined]
+        except Exception:
+            continue
+    try:
+        return getattr(User, "query").get(uid)  # type: ignore[attr-defined]
+    except Exception:
+        return None
+
+
+def mark_email_verified(user: Any) -> bool:
+    try:
+        from app.models import db  # type: ignore
+    except Exception:
+        db = None  # type: ignore
+
+    changed = False
+    for flag in ("email_verified", "is_email_verified", "verified"):
+        if hasattr(user, flag):
+            try:
+                if not _is_truthy(getattr(user, flag)):
+                    setattr(user, flag, True)
+                    changed = True
+            except Exception:
+                pass
+
+    for ts in ("email_verified_at", "verified_at"):
+        if hasattr(user, ts):
+            try:
+                if getattr(user, ts, None) is None:
+                    setattr(user, ts, int(time.time()))
+                    changed = True
+            except Exception:
+                pass
+
+    if not changed:
+        return True
+
+    try:
+        if db is not None:
+            db.session.add(user)
+            db.session.commit()
+            return True
+    except Exception:
+        try:
+            if db is not None:
+                db.session.rollback()
         except Exception:
             pass
-
-    try:
-        roles = getattr(current_user, "roles", None)
-        if isinstance(roles, (set, list, tuple)):
-            roles_s = {str(x).strip().lower() for x in roles if x is not None}
-            return bool({"admin", "staff"} & roles_s)
-    except Exception:
-        pass
-
     return False
 
 
-def _allowed_by_session(session_key: str) -> bool:
+def require_verified_email(user: Any) -> bool:
+    if not bool(_cfg(CFG_REQUIRE_EMAIL_VERIFIED, False)):
+        return True
+
+    for flag in ("email_verified", "is_email_verified", "verified"):
+        try:
+            if hasattr(user, flag) and _is_truthy(getattr(user, flag)):
+                return True
+        except Exception:
+            pass
+    return False
+
+
+def auth_rate_limit_or_429(bucket: str) -> Optional[Any]:
+    ok, remaining = _soft_rate_limit(bucket)
+    if ok:
+        return None
+    _audit({"type": "auth_rl", "ok": False, "bucket": bucket, "remaining": remaining})
+    if _is_json_like_request():
+        return jsonify({"ok": False, "error": "rate_limited", "message": "Demasiados intentos. Probá más tarde."}), 429
     try:
-        if _is_truthy(session.get(session_key)):
-            return True
+        flash("Demasiados intentos. Probá más tarde.", "warning")
     except Exception:
         pass
+    abort(429)
 
+
+def redirect_with_no_store(url: str):
+    resp = redirect(url)
     try:
-        if _is_truthy(session.get("is_admin")):
-            return True
+        for k, v in _NO_STORE_HEADERS.items():
+            resp.headers[k] = v
+        resp.headers.setdefault("Vary", "Cookie")
     except Exception:
         pass
-
-    return _current_user_is_admin()
-
-
-def _parse_admin_emails(v: Any) -> Set[str]:
-    if v is None:
-        return set()
-    if isinstance(v, (set, list, tuple)):
-        out = {str(x).strip().lower() for x in v if x}
-        return {x for x in out if "@" in x}
-    s = str(v).strip()
-    if not s:
-        return set()
-    parts = [p.strip().lower() for p in s.replace(";", ",").split(",")]
-    return {p for p in parts if p and "@" in p}
+    return resp
 
 
-def _check_password_hash_if_possible(pwhash: str, password: str) -> Optional[bool]:
-    pwhash = _safe_str(pwhash, max_len=512)
-    if not pwhash:
-        return None
-    try:
-        from werkzeug.security import check_password_hash  # type: ignore
-
-        try:
-            return bool(check_password_hash(pwhash, password))
-        except Exception:
-            return None
-    except Exception:
-        return None
+def safe_redirect_to(endpoint: str, *, next_path: Optional[str] = None, default_next: Optional[str] = None) -> Any:
+    np = next_path or resolve_next_path(default_next=default_next)
+    u = _safe_url_for(endpoint, next=np) or f"{endpoint}?next={quote(np, safe='/')}"
+    return redirect_with_no_store(u)
 
 
-def admin_creds_ok(email: str, password: str) -> bool:
-    email_s = _safe_str(email, max_len=200).lower()
-    password_s = _safe_str(password, max_len=500)
-
-    if not email_s or not password_s:
-        return False
-
-    cfg_emails = _parse_admin_emails(_cfg(CFG_ADMIN_EMAILS, None))
-    env_email = _env(CFG_ADMIN_EMAIL, "")
-    if env_email:
-        cfg_emails.add(env_email.strip().lower())
-
-    if cfg_emails and email_s not in cfg_emails:
-        return False
-
-    pw_hash = _safe_str(_cfg(CFG_ADMIN_PASSWORD_HASH, ""), max_len=512) or _env(CFG_ADMIN_PASSWORD_HASH, "")
-    if pw_hash:
-        checked = _check_password_hash_if_possible(pw_hash, password_s)
-        if checked is not None:
-            return checked
-        # si NO es hash (misconfig), igual comparamos en constant-time
-        try:
-            return secrets.compare_digest(pw_hash, password_s)
-        except Exception:
-            return hmac.compare_digest(pw_hash, password_s)
-
-    pw_plain = _safe_str(_cfg(CFG_ADMIN_PASSWORD, ""), max_len=500) or _env(CFG_ADMIN_PASSWORD, "")
-    if not pw_plain:
-        return False
-
-    try:
-        return secrets.compare_digest(pw_plain, password_s)
-    except Exception:
-        return hmac.compare_digest(pw_plain, password_s)
-
-
-def _decide_admin_gate(
-    *,
-    session_key: str,
-    login_endpoint: str,
-    next_param: str,
-    default_next: str,
-) -> GateDecision:
-    mm = _maintenance_block()
-    if mm:
-        return GateDecision(False, "maintenance")
-
-    ok_rl, remaining = _soft_rate_limit("admin_required")
-    if not ok_rl:
-        _audit(
-            {
-                "type": "admin_gate",
-                "ok": False,
-                "reason": "rate_limited",
-                "path": _safe_str(getattr(request, "path", ""), max_len=200),
-                "method": _safe_str(getattr(request, "method", ""), max_len=16),
-                "remaining": remaining,
-                "is_json": _is_json_like_request(),
-            }
-        )
-        return GateDecision(False, "rate_limited")
-
-    if bool(_cfg(CFG_ADMIN_BYPASS, False)):
-        return GateDecision(True, "bypass")
-
-    if not _allowed_by_session(session_key):
-        try:
-            raw_next = request.args.get(next_param)
-        except Exception:
-            raw_next = None
-
-        try:
-            fallback_next = request.path or "/"
-        except Exception:
-            fallback_next = "/"
-
-        next_path = _clean_next_path(raw_next, default_path=_clean_next_path(fallback_next, default_path=default_next))
-        if next_path.startswith("/admin/login"):
-            next_path = _clean_next_path(default_next, default_path="/admin")
-
-        login_url = _resolve_login_url(endpoint=login_endpoint, next_param=next_param, next_path=next_path)
-        return GateDecision(False, "not_logged_in", login_url, next_path)
-
-    if not _session_role_ok():
-        return GateDecision(False, "role_denied")
-
-    return GateDecision(True, "ok")
-
-
-def admin_required(
-    view: Optional[F] = None,
-    *,
-    session_key: str = ADMIN_SESSION_KEY_DEFAULT,
-    login_endpoint: str = ADMIN_LOGIN_ENDPOINT_DEFAULT,
-    next_param: str = ADMIN_NEXT_PARAM_DEFAULT,
-    default_next: str = "/admin",
-    flash_message: str = DEFAULT_FLASH_MESSAGE,
-    flash_category: str = DEFAULT_FLASH_CATEGORY,
-    abort_code_json: int = 401,
-    abort_code_html: Optional[int] = None,
-) -> Any:
-    def decorator(fn: F) -> F:
-        @wraps(fn)
-        def wrapper(*args: Any, **kwargs: Any):
-            sess_key = _safe_str(_cfg(CFG_ADMIN_SESSION_KEY, session_key), max_len=64) or session_key
-            login_ep = _safe_str(_cfg(CFG_ADMIN_LOGIN_ENDPOINT, login_endpoint), max_len=128) or login_endpoint
-            dnext = _safe_str(_cfg(CFG_ADMIN_DEFAULT_NEXT, default_next), max_len=256) or default_next
-            acj = int(_cfg(CFG_ADMIN_ABORT_JSON, abort_code_json) or abort_code_json)
-            ach = _cfg(CFG_ADMIN_ABORT_HTML, abort_code_html)
-
-            decision = _decide_admin_gate(
-                session_key=sess_key,
-                login_endpoint=login_ep,
-                next_param=next_param,
-                default_next=dnext,
-            )
-
-            _audit(
-                {
-                    "type": "admin_gate",
-                    "ok": decision.allowed,
-                    "reason": decision.reason,
-                    "path": _safe_str(getattr(request, "path", ""), max_len=200),
-                    "method": _safe_str(getattr(request, "method", ""), max_len=16),
-                    "is_json": _is_json_like_request(),
-                    "next": decision.next_path,
-                }
-            )
-
-            if decision.allowed:
-                return fn(*args, **kwargs)
-
-            if decision.reason == "maintenance":
-                msg = _safe_str(_cfg(CFG_MAINTENANCE_MESSAGE, "Sistema en mantenimiento."), max_len=200)
-                if _is_json_like_request():
-                    return jsonify({"ok": False, "error": "maintenance", "message": msg}), 503
-                try:
-                    flash(msg, "info")
-                except Exception:
-                    pass
-                abort(503)
-
-            if decision.reason == "rate_limited":
-                msg = "Demasiados intentos. Esperá un momento y probá de nuevo."
-                if _is_json_like_request():
-                    return jsonify({"ok": False, "error": "rate_limited", "message": msg}), 429
-                try:
-                    flash(msg, "warning")
-                except Exception:
-                    pass
-                abort(429)
-
-            if decision.reason == "role_denied":
-                msg = "No tenés permisos para acceder al panel."
-                if _is_json_like_request():
-                    return jsonify({"ok": False, "error": "forbidden", "message": msg}), 403
-                try:
-                    flash(msg, "error")
-                except Exception:
-                    pass
-                abort(403)
-
-            if _is_json_like_request():
-                abort(acj)
-
-            msg = _safe_str(_cfg(CFG_ADMIN_FLASH_MESSAGE, flash_message), max_len=180) or DEFAULT_FLASH_MESSAGE
-            cat = _safe_str(_cfg(CFG_ADMIN_FLASH_CATEGORY, flash_category), max_len=32) or DEFAULT_FLASH_CATEGORY
-
-            try:
-                if msg:
-                    flash(msg, cat)
-            except Exception:
-                pass
-
-            if ach is not None:
-                try:
-                    abort(int(ach))
-                except Exception:
-                    abort(403)
-
-            login_url = decision.login_url or _resolve_login_url(
-                endpoint=login_ep,
-                next_param=next_param,
-                next_path=_clean_next_path(None, default_path=dnext),
-            )
-
-            resp = redirect(login_url)
-            try:
-                for k, v in _NO_STORE_HEADERS.items():
-                    resp.headers[k] = v
-                resp.headers.setdefault("Vary", "Cookie")
-                resp.headers["X-Admin-Gate"] = decision.reason
-            except Exception:
-                pass
-
-            return resp
-
-        return cast(F, wrapper)
-
-    if view is None:
-        return decorator
-    return decorator(view)
-
-
-__all__ = ["admin_required", "admin_creds_ok", "GateDecision"]
+__all__ = [
+    "TokenDecision",
+    "normalize_email",
+    "email_is_valid",
+    "resolve_next_path",
+    "make_verify_email_token",
+    "make_password_reset_token",
+    "verify_token",
+    "load_user_by_email",
+    "load_user_by_id",
+    "mark_email_verified",
+    "require_verified_email",
+    "auth_rate_limit_or_429",
+    "redirect_with_no_store",
+    "safe_redirect_to",
+]
