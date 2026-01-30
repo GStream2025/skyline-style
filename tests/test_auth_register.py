@@ -5,8 +5,8 @@ def test_register_ok(client):
         "/auth/register",
         data={
             "email": email,
-            "password": "password123",
-            "password2": "password123",
+            "password": "StrongPass123",
+            "password2": "StrongPass123",
         },
         headers={
             "Accept": "application/json",
@@ -27,7 +27,8 @@ def test_register_ok(client):
     assert "verificar" in data["message"].lower() or "email" in data["message"].lower()
 
     # El usuario debe existir en la DB
-    from app.models import User, db
+    from app.models import db
+    from app.models.user import User
 
     u = db.session.execute(
         db.select(User).where(User.email == email)

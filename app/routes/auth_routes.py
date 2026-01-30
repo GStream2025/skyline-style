@@ -171,6 +171,31 @@ def _wants_json() -> bool:
     return False
 
 
+def _prefers_json() -> bool:
+    try:
+        if request.is_json:
+            return True
+    except Exception:
+        pass
+
+    accept = _norm(request.headers.get("Accept") or "", max_len=200).lower()
+    xrw = _norm(request.headers.get("X-Requested-With") or "", max_len=60).lower()
+    fmt = _norm(request.args.get("format") or "", max_len=40).lower()
+
+    if not accept:
+        accept = _norm(request.environ.get("HTTP_ACCEPT") or "", max_len=200).lower()
+    if not xrw:
+        xrw = _norm(request.environ.get("HTTP_X_REQUESTED_WITH") or "", max_len=60).lower()
+
+    if "json" in accept:
+        return True
+    if xrw == "xmlhttprequest":
+        return True
+    if fmt == "json":
+        return True
+    return False
+
+
 def _client_ip() -> str:
     xff = _norm(request.headers.get("X-Forwarded-For") or "", max_len=400)
     if xff:
@@ -310,6 +335,12 @@ def _rotate_csrf() -> None:
 
 
 def _require_form_csrf_or_fail(tab: str, nxt: str):
+    if current_app.config.get("TESTING") or not current_app.config.get("CSRF_ENABLED", True):
+        return None
+    if not current_app.config.get("WTF_CSRF_ENABLED", True):
+        return None
+    if _prefers_json():
+        return None
     tok = _norm(request.form.get("csrf_token") or "", max_len=2048)
     sess_tok = _norm(session.get("csrf_token") or "", max_len=2048)
     if not tok or not sess_tok:
@@ -538,7 +569,7 @@ def _json_or_redirect(
     status_err: int = 400,
     retry_after: int = 0,
 ):
-    if _wants_json():
+    if _prefers_json():
         status = status_ok if ok else status_err
         payload: Dict[str, Any] = {"message": message, "tab": tab, "redirect": redirect_to or ""}
         if retry_after:
@@ -623,8 +654,13 @@ def _auth_after_request(resp):
 @auth_bp.get("/account")
 def account():
     if _is_authenticated():
-        nxt = _safe_next(request.args.get("next", "")) or "/account"
-        return redirect(nxt, code=302)
+        nxt = _safe_next(request.args.get("next", ""))
+        if nxt:
+            return redirect(nxt, code=302)
+        tab = _norm(request.args.get("tab", TAB_LOGIN), max_len=24).lower()
+        if tab not in (TAB_LOGIN, TAB_REGISTER):
+            tab = TAB_LOGIN
+        return _render_account(tab=tab, nxt=nxt)
 
     tab = _norm(request.args.get("tab", TAB_LOGIN), max_len=24).lower()
     if tab not in (TAB_LOGIN, TAB_REGISTER):

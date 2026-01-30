@@ -14,6 +14,7 @@
   {% set _desc  = (meta_description if meta_description is defined and meta_description else 'Marketplace premium de tecnología y streetwear.')|string %}
   {% set _cssv = (BASE_CSS_VER if BASE_CSS_VER is defined else (ASSET_VER if ASSET_VER is defined else '1'))|string %}
   {% set _nonce = (csp_nonce if csp_nonce is defined and csp_nonce else (nonce if nonce is defined else '')) %}
+  {% set _vf = (current_app.view_functions if current_app is defined and current_app else {}) %}
 
   {% set _csrf = '' %}
   {% if csrf_token is defined %}
@@ -25,10 +26,8 @@
   {% endif %}
 
   {% macro safe_url(ep, fb='/') -%}
-    {%- if url_for is defined and ep -%}
-      {%- set u = '' -%}
-      {%- try -%}{%- set u = url_for(ep) -%}{%- except -%}{%- set u = '' -%}{%- endtry -%}
-      {{- u if u else fb -}}
+    {%- if url_for is defined and ep and ep in _vf -%}
+      {{- url_for(ep) -}}
     {%- else -%}
       {{- fb -}}
     {%- endif -%}

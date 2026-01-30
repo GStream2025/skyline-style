@@ -450,8 +450,6 @@ class Tag(db.Model):
     name = db.Column(db.String(_TAG_NAME_MAX), nullable=False, unique=True)
     slug = db.Column(db.String(_TAG_SLUG_MAX), nullable=False, unique=True, index=True)
 
-    __table_args__ = (Index("ix_tags_slug", "slug"),)
-
     @validates("name")
     def _v_name(self, _k, v: Any) -> str:
         s = _clean_text(v, _TAG_NAME_MAX, default="tag")

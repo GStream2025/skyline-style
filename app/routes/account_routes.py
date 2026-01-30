@@ -395,7 +395,12 @@ def account_home():
     if not u:
         return _redirect_login(next_url=_safe_next(default="/"))
 
-    tpl = "account/dashboard.html" if _template_exists("account/dashboard.html") else "account/account.html"
+    if _template_exists("account/dashboard.html"):
+        tpl = "account/dashboard.html"
+    elif _template_exists("account/account.html"):
+        tpl = "account/account.html"
+    else:
+        tpl = "account_dashboard.html"
 
     payload = {
         "ok": True,

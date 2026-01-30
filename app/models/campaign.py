@@ -251,7 +251,7 @@ class CampaignSend(db.Model):
     to_email = db.Column(db.String(_EMAIL_MAX), nullable=False, index=True)
     status = db.Column(db.String(30), nullable=False, default="pending", index=True)
 
-    sent_at = db.Column(db.DateTime(timezone=True), nullable=True, index=True)
+    sent_at = db.Column(db.DateTime(timezone=True), nullable=True)
     delivered_at = db.Column(db.DateTime(timezone=True), nullable=True)
     failed_at = db.Column(db.DateTime(timezone=True), nullable=True)
 

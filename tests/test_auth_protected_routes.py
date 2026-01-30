@@ -35,16 +35,24 @@ def _assert_redirect(resp, *, expected_prefix: str = "/auth"):
 
 @pytest.fixture()
 def protected_user(app):
-    with app.app_context():
-        u = User(
-            email="protected@example.com",
-            email_verified=True,
-            is_active=True,
-            role="customer",
-        )
-        db.session.add(u)
-        db.session.commit()
-        return u
+    ctx = app.app_context()
+    ctx.push()
+    u = User(
+        email="protected@example.com",
+        email_verified=True,
+        is_active=True,
+        role="customer",
+    )
+    db.session.add(u)
+    db.session.commit()
+    try:
+        yield u
+    finally:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        ctx.pop()
 
 
 # ----------------------------
@@ -53,22 +61,22 @@ def protected_user(app):
 
 def test_account_redirects_if_not_logged(client):
     """
-    /auth/account NO debe ser accesible sin login
+    /account NO debe ser accesible sin login
     """
-    r = client.get("/auth/account", follow_redirects=False)
+    r = client.get("/account/", follow_redirects=False)
     _assert_redirect(r, expected_prefix="/auth")
 
 
 def test_account_accessible_when_logged(client, protected_user):
     """
-    /auth/account debe abrir si el usuario está logueado
+    /account debe abrir si el usuario está logueado
     """
     with client.session_transaction() as s:
         s["user_id"] = protected_user.id
         s["user_email"] = protected_user.email
         s["email_verified"] = True
 
-    r = client.get("/auth/account", follow_redirects=False)
+    r = client.get("/account/", follow_redirects=False)
     assert r.status_code == 200
     assert b"Mi cuenta" in r.data or b"Cuenta" in r.data
 
@@ -113,7 +121,7 @@ def test_protected_route_respects_next(client):
     """
     Si se pasa ?next=/shop debe preservarse
     """
-    r = client.get("/auth/account?next=/shop", follow_redirects=False)
+    r = client.get("/account/?next=/shop", follow_redirects=False)
     loc = _assert_redirect(r, expected_prefix="/auth")
     assert "next=%2Fshop" in loc or "next=/shop" in loc
 
@@ -123,7 +131,7 @@ def test_protected_route_blocks_external_next(client):
     next=https://evil.com NO debe aceptarse
     """
     r = client.get(
-        "/auth/account?next=https://evil.com",
+        "/account/?next=https://evil.com",
         follow_redirects=False,
     )
     loc = _assert_redirect(r, expected_prefix="/auth")
