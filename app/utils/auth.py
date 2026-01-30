@@ -9,7 +9,8 @@ import re
 import secrets
 import time
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional, Tuple, TypeVar
+from functools import wraps
+from typing import Any, Callable, Dict, Mapping, Optional, Tuple, TypeVar, cast
 from urllib.parse import quote
 
 from flask import abort, current_app, flash, jsonify, redirect, request, session, url_for
@@ -33,7 +34,7 @@ CFG_REQUIRE_EMAIL_VERIFIED = "AUTH_REQUIRE_EMAIL_VERIFIED"
 
 CFG_AUTH_TOKEN_LEN_MAX = "AUTH_TOKEN_LEN_MAX"
 CFG_AUTH_PAYLOAD_LEN_MAX = "AUTH_PAYLOAD_LEN_MAX"
-CFG_AUTH_IP_LEN_MAX = "AUTH_IP_LEN_MAX"
+CFG_AUTH_IP_LEN_MAX = "AUTH_AUTH_IP_LEN_MAX"  # backwards-safe alias support below
 CFG_AUTH_UA_LEN_MAX = "AUTH_UA_LEN_MAX"
 CFG_AUTH_EMAIL_LEN_MAX = "AUTH_EMAIL_LEN_MAX"
 
@@ -56,8 +57,6 @@ _EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 _TRUE = {"1", "true", "yes", "y", "on", "checked"}
 _FALSE = {"0", "false", "no", "n", "off", "unchecked"}
 
-_ADMIN_CREDS_FALLBACK: AdminCredsFn
-
 
 def _admin_creds_false(_: str, __: str) -> bool:
     return False
@@ -78,16 +77,18 @@ class TokenDecision:
 
 def _cfg(name: str, default: Any) -> Any:
     try:
-        return current_app.config.get(name, default)
+        cfg = current_app.config  # type: ignore[attr-defined]
+        return cfg.get(name, default)
     except Exception:
         return default
 
 
 def _cfg_int(name: str, default: int, *, min_v: int, max_v: int) -> int:
     try:
-        v = int(_cfg(name, default) or default)
+        raw = _cfg(name, default)
+        v = int(raw) if raw is not None else int(default)
     except Exception:
-        v = default
+        v = int(default)
     if v < min_v:
         return min_v
     if v > max_v:
@@ -131,19 +132,19 @@ def _is_truthy(v: Any) -> bool:
     if v is False or v is None:
         return False
     if isinstance(v, (int, float)):
-        return v == 1
+        return v == 1 or v == 1.0
     if isinstance(v, str):
         s = v.strip().lower()
         if not s or s in _FALSE:
             return False
         return s in _TRUE or s == "1"
-    return False
+    return bool(v)
 
 
 def _client_ip() -> str:
-    max_len = _cfg_int(CFG_AUTH_IP_LEN_MAX, 64, min_v=16, max_v=256)
+    max_len = _cfg_int("AUTH_IP_LEN_MAX", 64, min_v=16, max_v=256)
     try:
-        fwd = (request.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
+        fwd = (request.headers.get("X-Forwarded-For") or "").split(",", 1)[0].strip()
         if fwd:
             return fwd[:max_len]
     except Exception:
@@ -191,21 +192,19 @@ def _is_json_like_request() -> bool:
     return False
 
 
-def _audit(event: Dict[str, Any]) -> None:
-    e = dict(event or {})
+def _audit(event: Mapping[str, Any]) -> None:
+    e: Dict[str, Any] = dict(event or {})
     e.setdefault("ip", _client_ip())
     e.setdefault("ua", _client_ua())
     e.setdefault("ts", int(time.time()))
-
     try:
         cb = _cfg(CFG_AUTH_AUDIT_CALLBACK, None)
         if callable(cb):
-            cb(e)
+            cb(dict(e))
     except Exception:
         pass
-
     try:
-        if current_app and getattr(current_app, "debug", False):
+        if getattr(current_app, "debug", False):
             current_app.logger.debug("auth_audit %s", e)
     except Exception:
         pass
@@ -242,8 +241,7 @@ def _soft_rate_limit(bucket: str) -> Tuple[bool, int]:
 def normalize_email(email: Any) -> str:
     max_len = _cfg_int(CFG_AUTH_EMAIL_LEN_MAX, 254, min_v=64, max_v=320)
     s = _safe_str(email, max_len=max_len).lower()
-    s = s.replace(" ", "")
-    return s
+    return s.replace(" ", "")
 
 
 def email_is_valid(email: Any) -> bool:
@@ -272,7 +270,6 @@ def _clean_next_path(raw: Optional[str], *, default_path: str) -> str:
         or pl.startswith("/%5c")
         or pl.startswith("/%2f%2f")
         or pl.startswith("/%2f%5c")
-        or pl.startswith("/%2f%2f")
         or pl.startswith("/%5c%5c")
     ):
         return default_path
@@ -282,29 +279,25 @@ def _clean_next_path(raw: Optional[str], *, default_path: str) -> str:
     if "#" in p:
         p = p.split("#", 1)[0]
 
-    if not p.startswith("/"):
-        return default_path
-
-    return p or default_path
+    return p if p.startswith("/") and p else default_path
 
 
 def resolve_next_path(*, default_next: Optional[str] = None) -> str:
     next_param = _safe_str(_cfg(CFG_AUTH_NEXT_PARAM, DEFAULT_NEXT_PARAM), max_len=32) or DEFAULT_NEXT_PARAM
     dnext = _safe_str(_cfg(CFG_AUTH_DEFAULT_NEXT, default_next or DEFAULT_DEFAULT_NEXT), max_len=256) or DEFAULT_DEFAULT_NEXT
 
-    raw = None
     try:
-        raw = request.args.get(next_param)
+        raw = request.args.get(next_param)  # type: ignore[union-attr]
     except Exception:
         raw = None
 
     try:
-        fallback = request.path or dnext
+        fallback = request.path or dnext  # type: ignore[union-attr]
     except Exception:
         fallback = dnext
 
     out = _clean_next_path(raw, default_path=_clean_next_path(fallback, default_path=dnext))
-    if out.startswith("/auth/login") or out.startswith("/auth/register") or out.startswith("/admin/login") or out.startswith("/admin/register"):
+    if out.startswith(("/auth/login", "/auth/register", "/admin/login", "/admin/register")):
         out = dnext
     return out
 
@@ -329,23 +322,30 @@ def _b64u_dec(s: str) -> Optional[bytes]:
 
 
 def _auth_secret() -> bytes:
-    cfg = _safe_str(_cfg(CFG_AUTH_SECRET, ""), max_len=256)
-    env = _safe_str(os.getenv("AUTH_SECRET"), max_len=256)
+    cfg = _safe_str(_cfg(CFG_AUTH_SECRET, ""), max_len=512)
+    env = _safe_str(os.getenv("AUTH_SECRET"), max_len=512)
     raw = cfg or env
     if raw:
         return raw.encode("utf-8")
+
     try:
         sk = getattr(current_app, "secret_key", None)
         if isinstance(sk, str) and sk:
             return sk.encode("utf-8")
     except Exception:
         pass
+
+    try:
+        if not getattr(current_app, "debug", False):
+            current_app.logger.warning("AUTH_SECRET missing; using weak fallback")  # type: ignore[attr-defined]
+    except Exception:
+        pass
+
     return b"change-me"
 
 
 def _sign(data: bytes) -> str:
-    sig = hmac.new(_auth_secret(), data, hashlib.sha256).digest()
-    return _b64u(sig)
+    return _b64u(hmac.new(_auth_secret(), data, hashlib.sha256).digest())
 
 
 def _payload_json(payload: Dict[str, Any]) -> bytes:
@@ -389,6 +389,7 @@ def _read_token(token: str) -> TokenDecision:
         ok_sig = secrets.compare_digest(expected, b)
     except Exception:
         ok_sig = hmac.compare_digest(expected, b)
+
     if not ok_sig:
         return TokenDecision(False, "bad_sig")
 
@@ -488,9 +489,13 @@ def load_user_by_id(user_id: Any) -> Optional[Any]:
             continue
 
     try:
-        return getattr(User, "query").get(uid)  # type: ignore[attr-defined]
+        q = getattr(User, "query", None)
+        if q is not None:
+            return q.get(uid)
     except Exception:
-        return None
+        pass
+
+    return None
 
 
 def mark_email_verified(user: Any) -> bool:
@@ -500,6 +505,7 @@ def mark_email_verified(user: Any) -> bool:
         db = None  # type: ignore
 
     changed = False
+
     for flag in ("email_verified", "is_email_verified", "verified"):
         if hasattr(user, flag):
             try:
@@ -556,7 +562,10 @@ def auth_rate_limit_or_429(bucket: str) -> Optional[Any]:
     _audit({"type": "auth_rl", "ok": False, "bucket": _safe_str(bucket, max_len=48), "remaining": remaining})
 
     if _is_json_like_request():
-        return jsonify({"ok": False, "error": "rate_limited", "message": "Demasiados intentos. Probá más tarde."}), 429
+        return (
+            jsonify({"ok": False, "error": "rate_limited", "message": "Demasiados intentos. Probá más tarde."}),
+            429,
+        )
 
     if not _cfg_bool(CFG_AUTH_DISABLE_FLASH, False):
         try:
@@ -567,8 +576,9 @@ def auth_rate_limit_or_429(bucket: str) -> Optional[Any]:
     abort(429)
 
 
-def redirect_with_no_store(url: str):
-    resp = redirect(url, code=_cfg_int(CFG_AUTH_REDIRECT_CODE, 302, min_v=301, max_v=308))
+def redirect_with_no_store(url: str) -> Any:
+    code = _cfg_int(CFG_AUTH_REDIRECT_CODE, 302, min_v=301, max_v=308)
+    resp = redirect(url, code=code)
     try:
         for k, v in _NO_STORE_HEADERS.items():
             resp.headers[k] = v
@@ -580,8 +590,86 @@ def redirect_with_no_store(url: str):
 
 def safe_redirect_to(endpoint: str, *, next_path: Optional[str] = None, default_next: Optional[str] = None) -> Any:
     np = next_path or resolve_next_path(default_next=default_next)
-    u = _safe_url_for(endpoint, next=np) or f"{endpoint}?next={quote(np, safe='/')}"
-    return redirect_with_no_store(u)
+    u = _safe_url_for(endpoint, next=np)
+    if u:
+        return redirect_with_no_store(u)
+
+    ep = _safe_str(endpoint, max_len=128).lstrip()
+    if ep.startswith("/"):
+        base = ep
+    else:
+        base = f"/{ep}" if ep else "/"
+    if "?" in base:
+        base = base.split("?", 1)[0]
+    base = base if base.startswith("/") else "/"
+    return redirect_with_no_store(f"{base}?next={quote(np, safe='/')}")
+
+
+def _is_admin_session() -> bool:
+    try:
+        v = session.get("is_admin") or session.get("ADMIN_SESSION") or session.get("admin")
+        if isinstance(v, str):
+            return v.strip().lower() in _TRUE
+        return bool(v)
+    except Exception:
+        return False
+
+
+def _clean_admin_next(raw: Optional[str], *, fallback: str = "/admin") -> str:
+    p = (raw or "").strip()
+    if (
+        not p
+        or not p.startswith("/")
+        or p.startswith("//")
+        or "://" in p
+        or "\\" in p
+        or "\n" in p
+        or "\r" in p
+        or "\t" in p
+        or " " in p
+        or ".." in p
+    ):
+        return fallback
+    if "?" in p:
+        p = p.split("?", 1)[0]
+    if "#" in p:
+        p = p.split("#", 1)[0]
+    if p.startswith(("/admin/login", "/admin/register", "/admin/logout")):
+        return fallback
+    return p or fallback
+
+
+def admin_required(fn: F) -> F:
+    @wraps(fn)
+    def _wrap(*args: Any, **kwargs: Any):
+        if _is_admin_session():
+            return fn(*args, **kwargs)
+
+        try:
+            if request.is_json or request.accept_mimetypes.best == "application/json":
+                abort(401)
+        except Exception:
+            pass
+
+        try:
+            if not _cfg_bool("ADMIN_DISABLE_FLASH", False):
+                flash("Necesitás iniciar sesión como admin.", "warning")
+        except Exception:
+            pass
+
+        try:
+            raw_next = request.full_path or request.path
+        except Exception:
+            raw_next = "/admin"
+        nxt = _clean_admin_next(raw_next, fallback="/admin")
+
+        ep = _safe_str(_cfg("ADMIN_LOGIN_ENDPOINT", "admin.login"), max_len=120) or "admin.login"
+        u = _safe_url_for(ep, next=nxt)
+        if u:
+            return redirect(u, code=302)
+        return redirect(f"/admin/login?next={quote(nxt, safe='/')}", code=302)
+
+    return cast(F, _wrap)
 
 
 __all__ = [
@@ -599,83 +687,6 @@ __all__ = [
     "auth_rate_limit_or_429",
     "redirect_with_no_store",
     "safe_redirect_to",
-    "admin_creds_ok",
-]
-from __future__ import annotations
-
-from functools import wraps
-from typing import Any, Callable, Optional, TypeVar, cast
-
-from flask import abort, current_app, flash, redirect, request, session, url_for
-
-F = TypeVar("F", bound=Callable[..., Any])
-
-_TRUE = {"1", "true", "yes", "y", "on", "checked"}
-
-
-def _is_admin_session() -> bool:
-    try:
-        v = session.get("is_admin") or session.get("ADMIN_SESSION") or session.get("admin")
-        if isinstance(v, str):
-            return v.strip().lower() in _TRUE
-        return bool(v)
-    except Exception:
-        return False
-
-
-def _clean_next(raw: Optional[str], *, fallback: str = "/admin") -> str:
-    p = (raw or "").strip()
-    if not p or not p.startswith("/") or p.startswith("//") or "://" in p or "\\" in p or ".." in p:
-        return fallback
-    if "?" in p:
-        p = p.split("?", 1)[0]
-    if "#" in p:
-        p = p.split("#", 1)[0]
-    if p.startswith("/admin/login") or p.startswith("/admin/register") or p.startswith("/admin/logout"):
-        return fallback
-    return p or fallback
-
-
-def admin_required(fn: F) -> F:
-    @wraps(fn)
-    def _wrap(*args: Any, **kwargs: Any):
-        if _is_admin_session():
-            return fn(*args, **kwargs)
-
-        try:
-            if request.accept_mimetypes.best == "application/json" or request.is_json:
-                abort(401)
-        except Exception:
-            pass
-
-        try:
-            flash("Necesitás iniciar sesión como admin.", "warning")
-        except Exception:
-            pass
-
-        try:
-            nxt = _clean_next(request.full_path or request.path, fallback="/admin")
-        except Exception:
-            nxt = "/admin"
-
-        try:
-            ep = current_app.config.get("ADMIN_LOGIN_ENDPOINT", "admin.login")
-            return redirect(url_for(ep, next=nxt), code=302)
-        except Exception:
-            return redirect(f"/admin/login?next={nxt}", code=302)
-
-    return cast(F, _wrap)
-
-
-try:
-    from app.utils.admin_gate import admin_creds_ok  # type: ignore
-except Exception:
-    def admin_creds_ok(*args: Any, **kwargs: Any) -> bool:  # type: ignore
-        return False
-
-
-__all__ = [
-    *(__all__ if "__all__" in globals() else []),
     "admin_required",
     "admin_creds_ok",
 ]
