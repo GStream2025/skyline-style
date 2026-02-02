@@ -6,13 +6,22 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Dict, Mapping, Optional, Tuple, cast
 
-from flask import Blueprint, Response, current_app, flash, jsonify, redirect, render_template, request, session, url_for
+from flask import (
+    Blueprint,
+    Response,
+    current_app,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
 from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.models import User, db
-
-log = current_app.logger if hasattr(current_app, "logger") else None  # type: ignore
 
 profile_bp = Blueprint("profile", __name__, url_prefix="/account", template_folder="../templates")
 profile_bp.strict_slashes = False
@@ -53,6 +62,13 @@ _NO_STORE_HEADERS = {
 }
 
 
+def _log_exc(msg: str, exc: Exception) -> None:
+    try:
+        current_app.logger.exception("%s: %s", msg, exc)
+    except Exception:
+        pass
+
+
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -66,10 +82,11 @@ def _norm(v: Any, *, max_len: int) -> str:
         return ""
     s = v if isinstance(v, str) else str(v)
     s = s.replace("\x00", "").replace("\u200b", "").strip()
-    s = s.replace("\r", "").replace("\n", "")
+    s = s.replace("\r", " ").replace("\n", " ")
+    s = " ".join(s.split())
     if max_len <= 0:
         return s
-    return s[:max_len]
+    return s[: max(0, int(max_len))]
 
 
 def _bool(v: Any) -> Optional[bool]:
@@ -156,6 +173,24 @@ def _client_ip() -> str:
     return ip or "unknown"
 
 
+def _trim_store(store: Dict[str, Any], cap: int) -> Dict[str, Any]:
+    if len(store) <= cap:
+        return store
+    items: list[tuple[int, str]] = []
+    for k, v in list(store.items()):
+        if isinstance(v, dict):
+            try:
+                items.append((int(v.get("t") or 0), str(k)))
+            except Exception:
+                items.append((0, str(k)))
+        else:
+            items.append((0, str(k)))
+    items.sort()
+    for _, k in items[: max(0, len(store) - cap)]:
+        store.pop(k, None)
+    return store
+
+
 def _rl_store() -> Dict[str, Dict[str, Any]]:
     store = session.get(_RL_SESSION_KEY)
     if not isinstance(store, dict):
@@ -175,17 +210,7 @@ def _rl_store() -> Dict[str, Dict[str, Any]]:
             if t0 and t0 < cutoff:
                 store.pop(k, None)
 
-    if len(store) > _MAX_RL_KEYS:
-        items: list[tuple[int, str]] = []
-        for k, v in list(store.items()):
-            if isinstance(v, dict):
-                try:
-                    items.append((int(v.get("t") or 0), str(k)))
-                except Exception:
-                    items.append((0, str(k)))
-        items.sort()
-        for _, k in items[: max(0, len(store) - _MAX_RL_KEYS)]:
-            store.pop(k, None)
+    store = _trim_store(store, _MAX_RL_KEYS)
 
     session[_RL_SESSION_KEY] = store
     session.modified = True
@@ -253,8 +278,7 @@ def _soft_logout() -> None:
 
 
 def _login_required():
-    uid = session.get("user_id")
-    if uid:
+    if session.get("user_id"):
         return None
     if _wants_json():
         return _json({"ok": False, "error": "auth_required"}, 401)
@@ -360,10 +384,7 @@ def _commit(label: str) -> bool:
         db.session.commit()
         return True
     except Exception as exc:
-        try:
-            current_app.logger.exception("%s commit failed: %s", label, exc)
-        except Exception:
-            pass
+        _log_exc(f"{label} commit failed", exc)
         try:
             db.session.rollback()
         except Exception:
@@ -523,11 +544,8 @@ def _password_is_reasonable(pw: str) -> bool:
 def _render_safe(template: str, **ctx: Any):
     try:
         return render_template(template, **ctx)
-    except Exception:
-        try:
-            current_app.logger.exception("Template render failed: %s", template)
-        except Exception:
-            pass
+    except Exception as exc:
+        _log_exc(f"Template render failed: {template}", exc)
         title = _norm(ctx.get("title") or "Perfil", max_len=80) or "Perfil"
         body = (
             "<!doctype html><html lang='es'><head><meta charset='utf-8'>"
@@ -668,7 +686,8 @@ def profile_change_email():
     try:
         stmt = select(User.id).where(func.lower(User.email) == new_email)
         exists_id = db.session.execute(stmt).scalar_one_or_none()
-    except SQLAlchemyError:
+    except SQLAlchemyError as exc:
+        _log_exc("profile_email query failed", exc)
         try:
             db.session.rollback()
         except Exception:

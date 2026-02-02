@@ -1,4 +1,3 @@
-# app/routes/address_routes.py — Skyline Store (ULTRA PRO / FINAL / NO BREAK)
 from __future__ import annotations
 
 import re
@@ -24,8 +23,6 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.models import db, User, UserAddress
 
-log = current_app.logger if "current_app" in globals() else None  # safe for linters
-
 address_bp = Blueprint("address", __name__, url_prefix="/account", template_folder="../templates")
 address_bp.strict_slashes = False
 
@@ -42,7 +39,6 @@ _MAX_STR_50 = 50
 _MAX_STR_80 = 80
 _MAX_STR_120 = 120
 _MAX_STR_200 = 200
-_MAX_STR_300 = 300
 
 _RL_KEYS_CAP = 220
 _DEDUPE_CAP = 180
@@ -68,6 +64,13 @@ _CACHE_HEADERS = {
 }
 
 
+def _log_exc(msg: str, exc: Exception) -> None:
+    try:
+        current_app.logger.exception("%s: %s", msg, exc)
+    except Exception:
+        pass
+
+
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -81,9 +84,9 @@ def _s(v: Any, max_len: int, *, default: str = "") -> str:
         return default
     s = v if isinstance(v, str) else str(v)
     s = s.replace("\x00", "").replace("\u200b", "").strip()
-    s = s.replace("\r", "").replace("\n", "").replace("\t", "")
     if not s:
         return default
+    s = s.replace("\r", " ").replace("\n", " ").replace("\t", " ")
     s = " ".join(s.split())
     return s[: max(0, int(max_len))]
 
@@ -178,16 +181,13 @@ def _url_for_safe(endpoint: str, **values: Any) -> str:
 
 def _safe_redirect(endpoint: str, **values: Any) -> Response:
     u = _url_for_safe(endpoint, **values)
-    if u:
-        return redirect(u, code=302)
-    return redirect("/", code=302)
+    return redirect(u or "/", code=302)
 
 
 def _safe_next(raw: Any, *, default: str = "/account/addresses") -> str:
     s = _s(raw, 512, default="")
     if not s:
         return default
-
     if not s.startswith("/") or s.startswith("//"):
         return default
     if any(c in s for c in ("\x00", "\\", "\r", "\n", "\t", " ")):
@@ -205,11 +205,8 @@ def _safe_next(raw: Any, *, default: str = "/account/addresses") -> str:
 
     if not path.startswith("/") or path.startswith("//"):
         return default
-
-    # sin loops
     if path.startswith("/auth/") or path.startswith("/admin/"):
         return default
-
     return path or default
 
 
@@ -275,12 +272,12 @@ def _csrf_from_request() -> str:
 
 
 def _check_csrf() -> bool:
-    sess = _s(session.get(_SESSION_CSRF_KEY), 512, default="")
+    sess_tok = _s(session.get(_SESSION_CSRF_KEY), 512, default="")
     got = _csrf_from_request()
-    if not sess or not got:
+    if not sess_tok or not got:
         return False
     try:
-        return secrets.compare_digest(sess, got)
+        return secrets.compare_digest(sess_tok, got)
     except Exception:
         return False
 
@@ -294,23 +291,29 @@ def _csrf_required() -> Optional[Response]:
     return None
 
 
+def _trim_store(store: Dict[str, Any], cap: int) -> Dict[str, Any]:
+    if len(store) <= cap:
+        return store
+    items: List[Tuple[int, str]] = []
+    for k, v in list(store.items()):
+        if isinstance(v, dict):
+            try:
+                items.append((int(v.get("t") or 0), str(k)))
+            except Exception:
+                items.append((0, str(k)))
+        else:
+            items.append((0, str(k)))
+    items.sort()
+    for _, k in items[: max(0, len(store) - cap)]:
+        store.pop(k, None)
+    return store
+
+
 def _rl_store() -> Dict[str, Dict[str, int]]:
     store = session.get(_SESSION_RL_KEY)
     if not isinstance(store, dict):
         store = {}
-    if len(store) > _RL_KEYS_CAP:
-        items: List[Tuple[int, str]] = []
-        for k, v in list(store.items()):
-            if isinstance(v, dict):
-                try:
-                    items.append((int(v.get("t") or 0), str(k)))
-                except Exception:
-                    items.append((0, str(k)))
-            else:
-                items.append((0, str(k)))
-        items.sort()
-        for _, k in items[: max(0, len(store) - _RL_KEYS_CAP)]:
-            store.pop(k, None)
+    store = _trim_store(store, _RL_KEYS_CAP)
     session[_SESSION_RL_KEY] = store
     session.modified = True
     return store  # type: ignore[return-value]
@@ -363,19 +366,7 @@ def _dedupe_store() -> Dict[str, Dict[str, int]]:
     store = session.get(_SESSION_DEDUPE_KEY)
     if not isinstance(store, dict):
         store = {}
-    if len(store) > _DEDUPE_CAP:
-        items: List[Tuple[int, str]] = []
-        for k, v in list(store.items()):
-            if isinstance(v, dict):
-                try:
-                    items.append((int(v.get("t") or 0), str(k)))
-                except Exception:
-                    items.append((0, str(k)))
-            else:
-                items.append((0, str(k)))
-        items.sort()
-        for _, k in items[: max(0, len(store) - _DEDUPE_CAP)]:
-            store.pop(k, None)
+    store = _trim_store(store, _DEDUPE_CAP)
     session[_SESSION_DEDUPE_KEY] = store
     session.modified = True
     return store  # type: ignore[return-value]
@@ -427,7 +418,7 @@ def _clean_phone(v: Any) -> Optional[str]:
     s2 = s[:40]
     if PHONE_RE.match(s2):
         return s2
-    return s2  # suave (no rompe UX)
+    return s2
 
 
 def _payload_from_request() -> Dict[str, Any]:
@@ -441,14 +432,12 @@ def _payload_from_request() -> Dict[str, Any]:
         payload = {}
 
     def g(name: str) -> Any:
-        if payload:
-            return payload.get(name)
-        return request.form.get(name)
+        return payload.get(name) if payload else request.form.get(name)
 
     is_default = _bool(g("is_default"))
 
     line1_raw = _s(g("line1"), _MAX_STR_200, default="")
-    data = {
+    return {
         "label": _clean_str(g("label"), _MAX_STR_50),
         "full_name": _clean_str(g("full_name"), _MAX_STR_120),
         "phone": _clean_phone(g("phone")),
@@ -460,7 +449,6 @@ def _payload_from_request() -> Dict[str, Any]:
         "country": _clean_country(g("country")),
         "is_default": bool(is_default),
     }
-    return data
 
 
 def _validate_payload(data: Dict[str, Any]) -> List[Dict[str, str]]:
@@ -629,7 +617,10 @@ def address_create():
         _flash_warn("Revisá los datos de la dirección (faltan campos).")
         return _safe_redirect("address.addresses_page")
 
-    sig = f"{_s(data.get('line1'), 220).lower()}|{_s(data.get('city'), 140).lower()}|{_s(data.get('postal_code'), 60).lower()}|{_s(data.get('country'), 8).lower()}"
+    sig = (
+        f"{_s(data.get('line1'), 220).lower()}|{_s(data.get('city'), 140).lower()}|"
+        f"{_s(data.get('postal_code'), 60).lower()}|{_s(data.get('country'), 8).lower()}"
+    )
     if not _dedupe_guard(int(user.id), sig, ttl=12):
         if _wants_json():
             return _json({"ok": False, "error": "duplicate_request"}, 409)
@@ -642,14 +633,13 @@ def address_create():
             addr = UserAddress(user_id=int(user.id), **data)
             db.session.add(addr)
             db.session.flush()
-
             _normalize_default(int(user.id), preferred_id=int(addr.id) if data.get("is_default") else None)
 
         session["addr_last_action"] = "create"
         session["addr_last_id"] = int(getattr(addr, "id", 0) or 0)
         session.modified = True
     except SQLAlchemyError as exc:
-        current_app.logger.exception("address_create SQLAlchemyError: %s", exc)
+        _log_exc("address_create SQLAlchemyError", exc)
         try:
             db.session.rollback()
         except Exception:
@@ -659,7 +649,7 @@ def address_create():
         _flash_err("No se pudo guardar la dirección.")
         return _safe_redirect("address.addresses_page")
     except Exception as exc:
-        current_app.logger.exception("address_create error: %s", exc)
+        _log_exc("address_create error", exc)
         try:
             db.session.rollback()
         except Exception:
@@ -717,7 +707,10 @@ def address_update(addr_id: int):
         _flash_warn("Revisá los datos de la dirección (faltan campos).")
         return _safe_redirect("address.addresses_page")
 
-    sig = f"upd:{addr_id}:{_s(data.get('line1'), 220).lower()}|{_s(data.get('city'), 140).lower()}|{_s(data.get('postal_code'), 60).lower()}|{_s(data.get('country'), 8).lower()}"
+    sig = (
+        f"upd:{addr_id}:{_s(data.get('line1'), 220).lower()}|{_s(data.get('city'), 140).lower()}|"
+        f"{_s(data.get('postal_code'), 60).lower()}|{_s(data.get('country'), 8).lower()}"
+    )
     if not _dedupe_guard(int(user.id), sig, ttl=10):
         if _wants_json():
             return _json({"ok": False, "error": "duplicate_request"}, 409)
@@ -728,14 +721,13 @@ def address_update(addr_id: int):
         with db.session.begin():
             for k, v in data.items():
                 setattr(addr, k, v)
-
             _normalize_default(int(user.id), preferred_id=int(addr.id) if data.get("is_default") else None)
 
         session["addr_last_action"] = "update"
         session["addr_last_id"] = int(addr_id)
         session.modified = True
     except SQLAlchemyError as exc:
-        current_app.logger.exception("address_update SQLAlchemyError: %s", exc)
+        _log_exc("address_update SQLAlchemyError", exc)
         try:
             db.session.rollback()
         except Exception:
@@ -745,7 +737,7 @@ def address_update(addr_id: int):
         _flash_err("No se pudo actualizar la dirección.")
         return _safe_redirect("address.addresses_page")
     except Exception as exc:
-        current_app.logger.exception("address_update error: %s", exc)
+        _log_exc("address_update error", exc)
         try:
             db.session.rollback()
         except Exception:
@@ -808,7 +800,7 @@ def address_delete(addr_id: int):
         session["addr_last_id"] = int(addr_id)
         session.modified = True
     except SQLAlchemyError as exc:
-        current_app.logger.exception("address_delete SQLAlchemyError: %s", exc)
+        _log_exc("address_delete SQLAlchemyError", exc)
         try:
             db.session.rollback()
         except Exception:
@@ -818,7 +810,7 @@ def address_delete(addr_id: int):
         _flash_err("No se pudo eliminar la dirección.")
         return _safe_redirect("address.addresses_page")
     except Exception as exc:
-        current_app.logger.exception("address_delete error: %s", exc)
+        _log_exc("address_delete error", exc)
         try:
             db.session.rollback()
         except Exception:
@@ -876,7 +868,7 @@ def address_set_default(addr_id: int):
         session["addr_last_id"] = int(addr_id)
         session.modified = True
     except SQLAlchemyError as exc:
-        current_app.logger.exception("address_set_default SQLAlchemyError: %s", exc)
+        _log_exc("address_set_default SQLAlchemyError", exc)
         try:
             db.session.rollback()
         except Exception:
@@ -886,7 +878,7 @@ def address_set_default(addr_id: int):
         _flash_err("No se pudo actualizar la dirección predeterminada.")
         return _safe_redirect("address.addresses_page")
     except Exception as exc:
-        current_app.logger.exception("address_set_default error: %s", exc)
+        _log_exc("address_set_default error", exc)
         try:
             db.session.rollback()
         except Exception:
