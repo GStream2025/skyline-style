@@ -1,0 +1,504 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% if ok %}Baja confirmada{% else %}Link inválido{% endif %} · Skyline Store</title>
+  <meta name="color-scheme" content="dark light" />
+  <meta name="robots" content="noindex,nofollow" />
+  <style>
+    :root{
+      --bg:#0b1120;
+      --panel:rgba(255,255,255,.06);
+      --panel2:rgba(255,255,255,.045);
+      --stroke:rgba(148,163,184,.18);
+      --stroke2:rgba(148,163,184,.12);
+      --txt:#e5e7eb;
+      --muted:#9ca3af;
+      --soft:#cbd5e1;
+      --a:#38bdf8;
+      --b:#2563eb;
+      --g:#22c55e;
+      --y:#f59e0b;
+      --r:#ef4444;
+      --radius:20px;
+      --radius2:14px;
+      --shadow:0 22px 70px rgba(0,0,0,.55);
+      --shadow2:0 14px 40px rgba(0,0,0,.35);
+      --ring:0 0 0 4px rgba(56,189,248,.16);
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      --sans: system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial;
+      --chip: rgba(255,255,255,.08);
+      --chip2: rgba(255,255,255,.06);
+      --ok: rgba(34,197,94,.16);
+      --warn: rgba(245,158,11,.16);
+      --bad: rgba(239,68,68,.14);
+      --glass: blur(14px);
+    }
+    @media (prefers-color-scheme: light){
+      :root{
+        --bg:#f7f9ff;
+        --panel:rgba(255,255,255,.88);
+        --panel2:rgba(255,255,255,.74);
+        --stroke:rgba(15,23,42,.14);
+        --stroke2:rgba(15,23,42,.10);
+        --txt:#0b1220;
+        --muted:#5b6b82;
+        --soft:#0b1220;
+        --shadow:0 18px 52px rgba(2,6,23,.12);
+        --shadow2:0 12px 36px rgba(2,6,23,.10);
+        --chip: rgba(2,6,23,.06);
+        --chip2: rgba(2,6,23,.04);
+        --ok: rgba(34,197,94,.12);
+        --warn: rgba(245,158,11,.12);
+        --bad: rgba(239,68,68,.10);
+      }
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family:var(--sans);
+      color:var(--txt);
+      background:
+        radial-gradient(900px 600px at 0% 0%, rgba(56,189,248,.14), transparent 60%),
+        radial-gradient(900px 600px at 100% 0%, rgba(37,99,235,.14), transparent 60%),
+        radial-gradient(900px 700px at 50% 120%, rgba(34,197,94,.08), transparent 65%),
+        var(--bg);
+      display:grid;
+      place-items:center;
+      padding:22px;
+    }
+    a{color:inherit}
+    .shell{
+      width:min(820px, 100%);
+      position:relative;
+    }
+    .glow{
+      position:absolute; inset:-22px;
+      background:
+        radial-gradient(600px 220px at 20% 0%, rgba(56,189,248,.22), transparent 70%),
+        radial-gradient(600px 220px at 80% 0%, rgba(37,99,235,.22), transparent 70%),
+        radial-gradient(560px 240px at 50% 120%, rgba(34,197,94,.14), transparent 70%);
+      filter: blur(14px);
+      opacity:.75;
+      z-index:0;
+      pointer-events:none;
+    }
+    .card{
+      position:relative;
+      z-index:1;
+      border:1px solid var(--stroke);
+      background:linear-gradient(180deg, var(--panel), var(--panel2));
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      overflow:hidden;
+      backdrop-filter: var(--glass);
+    }
+    .head{
+      display:flex; align-items:center; justify-content:space-between; gap:14px;
+      padding:18px 18px 12px;
+      border-bottom:1px solid var(--stroke2);
+      background:rgba(255,255,255,.02);
+    }
+    .brand{
+      display:flex; align-items:center; gap:12px;
+      min-width: 260px;
+    }
+    .logo{
+      width:46px; height:46px;
+      border-radius:16px;
+      background:linear-gradient(135deg, var(--a), var(--b));
+      box-shadow:0 18px 36px rgba(56,189,248,.16);
+      flex:0 0 auto;
+    }
+    .twrap{display:flex; flex-direction:column; gap:3px}
+    .title{
+      margin:0;
+      font-size:16px;
+      font-weight:950;
+      letter-spacing:.2px;
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+    .sub{
+      margin:0;
+      color:var(--muted);
+      font-size:12px;
+      line-height:1.2;
+    }
+    .chip{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:9px 12px;
+      border-radius:999px;
+      border:1px solid var(--stroke2);
+      background:var(--chip);
+      font-size:12px;
+      font-weight:900;
+      white-space:nowrap;
+    }
+    .dot{width:10px; height:10px; border-radius:10px; background:rgba(148,163,184,.55)}
+    .dot.ok{background:rgba(34,197,94,.95)}
+    .dot.bad{background:rgba(239,68,68,.95)}
+    .dot.warn{background:rgba(245,158,11,.95)}
+    .body{
+      padding:18px;
+    }
+    .hero{
+      display:flex;
+      align-items:flex-start;
+      gap:14px;
+      padding:14px;
+      border:1px solid var(--stroke2);
+      border-radius:var(--radius2);
+      background:rgba(255,255,255,.03);
+    }
+    .badge{
+      width:52px; height:52px;
+      border-radius:18px;
+      border:1px solid var(--stroke2);
+      display:grid;
+      place-items:center;
+      flex:0 0 auto;
+      background:rgba(255,255,255,.04);
+    }
+    .badge.ok{background:var(--ok); border-color:rgba(34,197,94,.30)}
+    .badge.bad{background:var(--bad); border-color:rgba(239,68,68,.30)}
+    .badge svg{width:24px;height:24px}
+    .msgwrap{min-width:0}
+    .h1{
+      margin:0 0 6px;
+      font-size:18px;
+      font-weight:980;
+      letter-spacing:.2px;
+      line-height:1.15;
+    }
+    .msg{
+      margin:0;
+      color:var(--soft);
+      font-size:13px;
+      line-height:1.5;
+    }
+    .grid{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:12px;
+      margin-top:14px;
+    }
+    @media (max-width: 760px){
+      .grid{grid-template-columns:1fr}
+      .head{flex-wrap:wrap}
+      .brand{min-width:auto}
+    }
+    .panel{
+      border:1px solid var(--stroke2);
+      border-radius:var(--radius2);
+      background:rgba(255,255,255,.03);
+      padding:14px;
+      min-width:0;
+    }
+    .label{
+      font-size:12px;
+      color:var(--muted);
+      margin:0 0 6px;
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+    .val{
+      font-family:var(--mono);
+      font-size:12px;
+      color:var(--txt);
+      margin:0;
+      word-break:break-word;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .btn{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:9px;
+      padding:10px 12px;
+      border-radius:14px;
+      border:1px solid var(--stroke2);
+      background:rgba(255,255,255,.04);
+      color:var(--txt);
+      text-decoration:none;
+      font-weight:950;
+      font-size:12px;
+      cursor:pointer;
+      user-select:none;
+      transition:transform .08s ease, border-color .15s ease, background .15s ease;
+      white-space:nowrap;
+    }
+    .btn:active{transform:translateY(1px)}
+    .btn:focus{outline:none; box-shadow:var(--ring); border-color:rgba(56,189,248,.45)}
+    .btn.primary{
+      border:0;
+      color:#06121f;
+      background:linear-gradient(135deg, var(--a), var(--b));
+      box-shadow:0 14px 36px rgba(37,99,235,.18);
+    }
+    .btn.ghost{
+      background:rgba(255,255,255,.02);
+    }
+    .btnrow{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      margin-top:14px;
+      align-items:center;
+      justify-content:space-between;
+    }
+    .btns{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+    .trust{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      align-items:center;
+      color:var(--muted);
+      font-size:12px;
+    }
+    .k{
+      font-family:var(--mono);
+      font-weight:900;
+      font-size:11px;
+      padding:3px 7px;
+      border-radius:10px;
+      border:1px solid var(--stroke2);
+      background:rgba(255,255,255,.04);
+      color:var(--soft);
+      white-space:nowrap;
+    }
+    .foot{
+      padding:14px 18px;
+      border-top:1px solid var(--stroke2);
+      background:rgba(255,255,255,.02);
+      color:var(--muted);
+      font-size:12px;
+      display:flex;
+      gap:10px;
+      justify-content:space-between;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+    .foot a{
+      text-decoration:none;
+      border-bottom:1px dashed rgba(148,163,184,.45);
+    }
+    .toast{
+      position:fixed;
+      right:18px; bottom:18px;
+      padding:12px 14px;
+      border-radius:14px;
+      border:1px solid var(--stroke2);
+      background:rgba(15,23,42,.84);
+      color:#e5e7eb;
+      box-shadow:var(--shadow2);
+      backdrop-filter: blur(12px);
+      font-size:12px;
+      font-weight:900;
+      opacity:0;
+      transform:translateY(8px);
+      transition:opacity .18s ease, transform .18s ease;
+      pointer-events:none;
+      max-width:min(360px, calc(100vw - 36px));
+    }
+    @media (prefers-color-scheme: light){
+      .toast{background:rgba(255,255,255,.92); color:#0b1220}
+    }
+    .toast.show{opacity:1; transform:translateY(0)}
+    .sr{
+      position:absolute;
+      width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+      clip:rect(0,0,0,0);white-space:nowrap;border:0;
+    }
+  </style>
+</head>
+<body>
+  {% set _ok = true if ok else false %}
+  {% set _msg = message if message is defined and message else (_ok and 'Baja confirmada.' or 'Link inválido o expirado.') %}
+  {% set _email = email if email is defined else '' %}
+
+  <div class="shell">
+    <div class="glow" aria-hidden="true"></div>
+
+    <main class="card" role="main" aria-label="Estado de suscripción">
+      <header class="head">
+        <div class="brand">
+          <div class="logo" aria-hidden="true"></div>
+          <div class="twrap">
+            <h1 class="title">
+              {% if _ok %}
+                <span class="chip"><span class="dot ok"></span> Acción confirmada</span>
+              {% else %}
+                <span class="chip"><span class="dot bad"></span> No se pudo validar</span>
+              {% endif %}
+            </h1>
+            <p class="sub">Skyline Store · Preferencias de marketing</p>
+          </div>
+        </div>
+
+        <a class="btn ghost" href="/" aria-label="Volver a la tienda">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 12l9-9 9 9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M9 21V9h6v12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          Tienda
+        </a>
+      </header>
+
+      <section class="body">
+        <div class="hero">
+          {% if _ok %}
+            <div class="badge ok" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <div class="msgwrap">
+              <p class="h1">Listo, ya no vas a recibir emails de marketing.</p>
+              <p class="msg">{{ _msg }}</p>
+            </div>
+          {% else %}
+            <div class="badge bad" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M12 9v4" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M12 17h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/><path d="M10.3 4.7l-7 12.1A2 2 0 005 20h14a2 2 0 001.7-3.2l-7-12.1a2 2 0 00-3.4 0z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+            </div>
+            <div class="msgwrap">
+              <p class="h1">No pudimos validar tu enlace.</p>
+              <p class="msg">{{ _msg }}</p>
+            </div>
+          {% endif %}
+        </div>
+
+        <div class="grid">
+          <div class="panel">
+            <p class="label">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 4h16v16H4V4z" stroke="currentColor" stroke-width="2"/><path d="M4 8h16" stroke="currentColor" stroke-width="2"/></svg>
+              Detalle
+            </p>
+            <p class="msg">
+              {% if _ok %}
+                Tu preferencia fue actualizada de forma segura. Si fue un error, podés volver a suscribirte desde el sitio.
+              {% else %}
+                Esto suele pasar si el link expiró, ya fue usado, o se copió incompleto. Podés gestionar tu preferencia desde el sitio.
+              {% endif %}
+            </p>
+          </div>
+
+          <div class="panel" aria-label="Email asociado">
+            <p class="label">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 6h16v12H4V6z" stroke="currentColor" stroke-width="2"/><path d="M4 7l8 6 8-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Email
+            </p>
+            <p class="val">
+              <span id="emailVal">{{ _email }}</span>
+              <button class="btn" type="button" id="copyEmail" {% if not _email %}disabled aria-disabled="true"{% endif %}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 9h10v10H9V9z" stroke="currentColor" stroke-width="2"/><path d="M5 15H4a1 1 0 01-1-1V4a1 1 0 011-1h10a1 1 0 011 1v1" stroke="currentColor" stroke-width="2"/></svg>
+                Copiar
+              </button>
+            </p>
+          </div>
+        </div>
+
+        <div class="btnrow">
+          <div class="btns">
+            <a class="btn primary" href="/" aria-label="Volver a inicio">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 12l9-9 9 9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M9 21V9h6v12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+              Ir a la tienda
+            </a>
+
+            <a class="btn ghost" href="/shop" aria-label="Ver productos">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 7h15l-2 10H8L6 7z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M6 7l-2-3H1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+              Ver productos
+            </a>
+
+            {% if not _ok %}
+              <a class="btn" href="mailto:soporte@skyline.store?subject=Problema%20con%20baja%20de%20suscripci%C3%B3n" aria-label="Contactar soporte">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 4h16v16H4V4z" stroke="currentColor" stroke-width="2"/><path d="M7 12h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 7v10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                Soporte
+              </a>
+            {% endif %}
+          </div>
+
+          <div class="trust" aria-label="Seguridad">
+            <span class="k">HTTPS</span>
+            <span class="k">Tokens firmados</span>
+            <span class="k">Privacidad</span>
+          </div>
+        </div>
+      </section>
+
+      <footer class="foot">
+        <span>Preferencias de marketing · Skyline Store</span>
+        <span>
+          <a href="/" aria-label="Inicio">Inicio</a> ·
+          <a href="/about" aria-label="Sobre nosotros">About</a>
+        </span>
+      </footer>
+    </main>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    (function(){
+      const emailEl = document.getElementById("emailVal");
+      const btn = document.getElementById("copyEmail");
+      const toast = document.getElementById("toast");
+      let t = null;
+
+      function showToast(msg){
+        toast.textContent = msg;
+        toast.classList.add("show");
+        clearTimeout(t);
+        t = setTimeout(()=>toast.classList.remove("show"), 1400);
+      }
+
+      async function copyText(text){
+        try{
+          await navigator.clipboard.writeText(text);
+          showToast("Copiado ✅");
+          return true;
+        }catch(e){
+          try{
+            const ta = document.createElement("textarea");
+            ta.value = text;
+            ta.style.position = "fixed";
+            ta.style.opacity = "0";
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand("copy");
+            ta.remove();
+            showToast("Copiado ✅");
+            return true;
+          }catch(_){
+            showToast("No se pudo copiar");
+            return false;
+          }
+        }
+      }
+
+      if(btn){
+        btn.addEventListener("click", ()=>{
+          const v = (emailEl && emailEl.textContent || "").trim();
+          if(!v){ showToast("Sin email"); return; }
+          copyText(v);
+        });
+      }
+
+      document.addEventListener("keydown", (e)=>{
+        if(e.key === "Escape"){
+          window.location.href = "/";
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="x-apple-disable-message-reformatting" />
+  <meta name="color-scheme" content="dark light" />
+  <meta name="supported-color-schemes" content="dark light" />
+  <title>Suscripción confirmada</title>
+  <style>
+    :root{
+      color-scheme: light dark;
+      supported-color-schemes: light dark;
+      --bg:#0b1120;
+      --card:#0f172a;
+      --txt:#e5e7eb;
+      --muted:#9ca3af;
+      --soft:#cbd5e1;
+      --stroke:rgba(148,163,184,.20);
+      --a:#38bdf8;
+      --b:#2563eb;
+      --g:#22c55e;
+      --y:#f59e0b;
+      --r:#ef4444;
+      --shadow:0 20px 60px rgba(0,0,0,.45);
+      --radius:18px;
+      --radius2:14px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      --sans: system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial;
+    }
+    @media (prefers-color-scheme: light){
+      :root{
+        --bg:#f7f9ff;
+        --card:#ffffff;
+        --txt:#0b1220;
+        --muted:#5b6b82;
+        --soft:#0b1220;
+        --stroke:rgba(15,23,42,.14);
+        --shadow:0 14px 40px rgba(2,6,23,.12);
+      }
+    }
+    html,body{margin:0;padding:0}
+    body{
+      background: var(--bg);
+      font-family: var(--sans);
+      color: var(--txt);
+      -webkit-text-size-adjust:100%;
+      -ms-text-size-adjust:100%;
+    }
+    a{color:inherit}
+    .preheader{
+      display:none!important;
+      visibility:hidden;
+      opacity:0;
+      color:transparent;
+      height:0;
+      width:0;
+      overflow:hidden;
+      mso-hide:all;
+    }
+    .wrap{width:100%; background: var(--bg); padding: 22px 0}
+    .container{
+      width: 100%;
+      max-width: 620px;
+      margin: 0 auto;
+      padding: 0 14px;
+    }
+    .card{
+      background: var(--card);
+      border: 1px solid var(--stroke);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .head{
+      padding: 18px 18px 12px;
+      border-bottom: 1px solid var(--stroke);
+      background: rgba(255,255,255,.02);
+    }
+    .brand{
+      display: table;
+      width:100%;
+    }
+    .brandL, .brandR{
+      display: table-cell;
+      vertical-align: middle;
+    }
+    .brandR{text-align:right}
+    .logo{
+      width:44px; height:44px; border-radius:16px;
+      background: linear-gradient(135deg, var(--a), var(--b));
+      display:inline-block;
+    }
+    .title{
+      margin:0;
+      font-size:18px;
+      line-height:1.2;
+      font-weight:900;
+      letter-spacing:.2px;
+    }
+    .sub{
+      margin:6px 0 0;
+      font-size:12px;
+      line-height:1.4;
+      color: var(--muted);
+    }
+    .pill{
+      display:inline-block;
+      padding:7px 10px;
+      border-radius:999px;
+      border:1px solid var(--stroke);
+      background: rgba(255,255,255,.03);
+      font-size:12px;
+      color: var(--soft);
+      font-weight:800;
+      white-space:nowrap;
+    }
+    .body{
+      padding: 18px;
+    }
+    .hero{
+      border: 1px solid var(--stroke);
+      border-radius: var(--radius2);
+      background: rgba(255,255,255,.03);
+      padding: 14px;
+    }
+    .h1{
+      margin:0 0 8px;
+      font-size:18px;
+      line-height:1.25;
+      font-weight:950;
+      letter-spacing:.2px;
+    }
+    .p{
+      margin:0;
+      font-size:13px;
+      line-height:1.55;
+      color: var(--soft);
+    }
+    .row{margin-top:12px}
+    .info{
+      margin-top:12px;
+      border:1px solid var(--stroke);
+      border-radius: var(--radius2);
+      background: rgba(255,255,255,.02);
+      padding: 12px 12px;
+    }
+    .label{
+      margin:0 0 6px;
+      font-size:12px;
+      color: var(--muted);
+      line-height:1.3;
+    }
+    .mono{
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.45;
+      color: var(--txt);
+      word-break: break-word;
+      margin:0;
+    }
+    .ctaWrap{
+      margin-top:14px;
+      text-align:left;
+    }
+    .btn{
+      display:inline-block;
+      text-decoration:none;
+      font-weight:950;
+      font-size:13px;
+      line-height:1;
+      padding: 12px 16px;
+      border-radius: 14px;
+      border: 1px solid rgba(0,0,0,0);
+      background: linear-gradient(135deg, var(--a), var(--b));
+      color:#06121f!important;
+      box-shadow: 0 14px 32px rgba(37,99,235,.18);
+      white-space:nowrap;
+    }
+    .btn2{
+      display:inline-block;
+      text-decoration:none;
+      font-weight:900;
+      font-size:12px;
+      line-height:1;
+      padding: 11px 14px;
+      border-radius: 14px;
+      border: 1px solid var(--stroke);
+      background: rgba(255,255,255,.03);
+      color: var(--txt)!important;
+      white-space:nowrap;
+    }
+    .btnRow{
+      margin-top:12px;
+      display:block;
+    }
+    .btnRow a{margin-right:10px; margin-bottom:10px}
+    .divider{
+      height:1px;
+      background: var(--stroke);
+      margin: 14px 0;
+    }
+    .small{
+      margin:0;
+      font-size:12px;
+      line-height:1.5;
+      color: var(--muted);
+    }
+    .foot{
+      padding: 14px 18px;
+      border-top: 1px solid var(--stroke);
+      background: rgba(255,255,255,.02);
+    }
+    .foot a{
+      color: inherit!important;
+      text-decoration: none;
+      border-bottom: 1px dashed rgba(148,163,184,.45);
+    }
+    .safe{
+      margin-top:10px;
+      padding:12px;
+      border-radius: var(--radius2);
+      border:1px solid var(--stroke);
+      background: rgba(255,255,255,.02);
+    }
+    .badge{
+      display:inline-block;
+      padding:7px 10px;
+      border-radius:999px;
+      border:1px solid rgba(34,197,94,.28);
+      background: rgba(34,197,94,.10);
+      color: var(--soft);
+      font-weight:900;
+      font-size:12px;
+    }
+    @media screen and (max-width: 480px){
+      .wrap{padding:14px 0}
+      .head{padding:16px 14px 10px}
+      .body{padding:14px}
+      .foot{padding:12px 14px}
+      .title{font-size:16px}
+      .h1{font-size:16px}
+      .btn{display:block; text-align:center}
+      .btn2{display:block; text-align:center}
+      .btnRow a{margin-right:0}
+      .brandR{display:none}
+    }
+  </style>
+</head>
+
+<body>
+  <div class="preheader">Tu suscripción fue confirmada. Podés darte de baja en cualquier momento desde este email.</div>
+
+  {% set _email = email if email is defined else '' %}
+  {% set _unsub = unsubscribe_url if unsubscribe_url is defined else '' %}
+  {% set _has_unsub = true if _unsub else false %}
+
+  <div class="wrap">
+    <div class="container">
+      <div class="card">
+        <div class="head">
+          <div class="brand">
+            <div class="brandL">
+              <span class="logo" aria-hidden="true"></span>
+            </div>
+            <div class="brandR">
+              <span class="pill">Skyline Store · Marketing</span>
+            </div>
+          </div>
+          <h1 class="title">Suscripción confirmada</h1>
+          <p class="sub">Gracias por sumarte. Te vamos a enviar novedades, lanzamientos y ofertas selectas.</p>
+        </div>
+
+        <div class="body">
+          <div class="hero">
+            <p class="h1">✅ Listo, ya estás suscripto.</p>
+            <p class="p">Si en algún momento querés dejar de recibir emails, podés hacerlo con un click desde este mismo mensaje.</p>
+
+            <div class="info" role="group" aria-label="Detalle de suscripción">
+              <p class="label">Email registrado</p>
+              <p class="mono">{{ _email }}</p>
+            </div>
+
+            <div class="ctaWrap">
+              <div class="btnRow">
+                <a class="btn" href="{{ '/' }}" target="_blank" rel="noopener">Ver la tienda</a>
+                <a class="btn2" href="{{ '/shop' }}" target="_blank" rel="noopener">Ver productos</a>
+              </div>
+
+              {% if _has_unsub %}
+                <div class="divider"></div>
+                <p class="small"><span class="badge">Baja segura</span> Podés darte de baja cuando quieras:</p>
+                <div class="btnRow">
+                  <a class="btn2" href="{{ _unsub }}" target="_blank" rel="noopener">Darme de baja</a>
+                </div>
+              {% else %}
+                <div class="divider"></div>
+                <p class="small">No se generó el link de baja en este mensaje. Podés gestionar tu preferencia desde el sitio.</p>
+              {% endif %}
+            </div>
+          </div>
+
+          <div class="safe">
+            <p class="small"><b>Privacidad:</b> nunca compartimos tu email. Si no solicitaste esta suscripción, simplemente ignorá este mensaje.</p>
+            <p class="small" style="margin-top:8px">
+              <b>Soporte:</b> respondé a este email o contactanos desde la tienda.
+            </p>
+          </div>
+        </div>
+
+        <div class="foot">
+          <p class="small" style="margin:0">
+            Skyline Store · Preferencias de marketing
+            {% if _has_unsub %}
+              · <a href="{{ _unsub }}" target="_blank" rel="noopener">Darme de baja</a>
+            {% endif %}
+          </p>
+          <p class="small" style="margin:8px 0 0">
+            Si el botón no funciona, copiá y pegá este enlace en tu navegador:
+          </p>
+          <p class="mono" style="margin-top:6px">
+            {% if _has_unsub %}{{ _unsub }}{% else %}—{% endif %}
+          </p>
+        </div>
+      </div>
+
+      <div style="height:14px"></div>
+
+      <p class="small" style="text-align:center; margin:0; color: var(--muted)">
+        Este email fue enviado automáticamente. © Skyline Store
+      </p>
+    </div>
+  </div>
+
+  <div style="display:none; white-space:nowrap; font-size:0; line-height:0;">
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  </div>
+</body>
+</html>

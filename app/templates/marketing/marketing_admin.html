@@ -1,0 +1,781 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Marketing · Suscriptores</title>
+  <meta name="color-scheme" content="dark light" />
+  <style>
+    :root{
+      --bg:#0b1120;
+      --panel:rgba(255,255,255,.06);
+      --panel2:rgba(255,255,255,.045);
+      --stroke:rgba(148,163,184,.18);
+      --stroke2:rgba(148,163,184,.12);
+      --txt:#e5e7eb;
+      --muted:#9ca3af;
+      --soft:#cbd5e1;
+      --a:#38bdf8;
+      --b:#2563eb;
+      --g:#22c55e;
+      --y:#f59e0b;
+      --r:#ef4444;
+      --radius:18px;
+      --radius2:14px;
+      --shadow:0 22px 70px rgba(0,0,0,.55);
+      --shadow2:0 14px 40px rgba(0,0,0,.35);
+      --ring:0 0 0 4px rgba(56,189,248,.16);
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      --sans: system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial;
+      --w:1200px;
+      --rowh:48px;
+      --chip: rgba(255,255,255,.08);
+      --chip2: rgba(255,255,255,.06);
+      --ok: rgba(34,197,94,.16);
+      --warn: rgba(245,158,11,.16);
+      --bad: rgba(239,68,68,.16);
+    }
+    @media (prefers-color-scheme: light){
+      :root{
+        --bg:#f7f9ff;
+        --panel:rgba(255,255,255,.85);
+        --panel2:rgba(255,255,255,.72);
+        --stroke:rgba(15,23,42,.14);
+        --stroke2:rgba(15,23,42,.10);
+        --txt:#0b1220;
+        --muted:#5b6b82;
+        --soft:#0b1220;
+        --shadow:0 18px 50px rgba(2,6,23,.12);
+        --shadow2:0 12px 36px rgba(2,6,23,.10);
+        --chip: rgba(2,6,23,.06);
+        --chip2: rgba(2,6,23,.04);
+        --ok: rgba(34,197,94,.12);
+        --warn: rgba(245,158,11,.12);
+        --bad: rgba(239,68,68,.10);
+      }
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family:var(--sans);
+      color:var(--txt);
+      background:
+        radial-gradient(900px 600px at 0% 0%, rgba(56,189,248,.14), transparent 60%),
+        radial-gradient(900px 600px at 100% 0%, rgba(37,99,235,.14), transparent 60%),
+        radial-gradient(900px 700px at 50% 120%, rgba(34,197,94,.08), transparent 65%),
+        var(--bg);
+    }
+    a{color:inherit}
+    .wrap{max-width:var(--w); margin:0 auto; padding:20px}
+    .top{
+      display:flex; gap:14px; align-items:flex-end; justify-content:space-between;
+      margin-bottom:14px;
+    }
+    .brand{
+      display:flex; align-items:center; gap:12px;
+      min-width:260px;
+    }
+    .logo{
+      width:44px; height:44px; border-radius:16px;
+      background:linear-gradient(135deg, var(--a), var(--b));
+      box-shadow:0 18px 36px rgba(56,189,248,.16);
+      flex:0 0 auto;
+    }
+    .twrap{display:flex; flex-direction:column; gap:3px}
+    h1{margin:0; font-size:18px; font-weight:950; letter-spacing:.2px}
+    .meta{color:var(--muted); font-size:12px; line-height:1.2}
+    .right{
+      display:flex; flex-wrap:wrap; justify-content:flex-end;
+      gap:10px;
+    }
+    .card{
+      border:1px solid var(--stroke);
+      background:linear-gradient(180deg, var(--panel), var(--panel2));
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      overflow:hidden;
+    }
+    .toolbar{
+      padding:14px;
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+      justify-content:space-between;
+      border-bottom:1px solid var(--stroke2);
+      background:rgba(255,255,255,.02);
+      backdrop-filter: blur(10px);
+    }
+    .lefttools{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+    .field{
+      display:flex; align-items:center; gap:10px;
+      padding:10px 12px;
+      border:1px solid var(--stroke2);
+      border-radius:14px;
+      background:rgba(255,255,255,.04);
+      min-width:260px;
+    }
+    .field:focus-within{box-shadow:var(--ring); border-color:rgba(56,189,248,.45)}
+    .field input{
+      width:100%;
+      border:0; outline:0;
+      background:transparent;
+      color:var(--txt);
+      font-size:13px;
+    }
+    .field input::placeholder{color:color-mix(in oklab, var(--muted), transparent 12%)}
+    .icon{
+      width:18px; height:18px; opacity:.9; flex:0 0 auto
+    }
+    .select{
+      appearance:none;
+      border:1px solid var(--stroke2);
+      background:rgba(255,255,255,.04);
+      color:var(--txt);
+      border-radius:14px;
+      padding:10px 38px 10px 12px;
+      font-size:13px;
+      outline:none;
+      min-width:170px;
+    }
+    .select:focus{box-shadow:var(--ring); border-color:rgba(56,189,248,.45)}
+    .selectwrap{position:relative}
+    .chev{
+      position:absolute; right:12px; top:50%; transform:translateY(-50%);
+      pointer-events:none; opacity:.8;
+    }
+    .btn{
+      display:inline-flex; align-items:center; justify-content:center; gap:9px;
+      padding:10px 12px;
+      border-radius:14px;
+      border:1px solid var(--stroke2);
+      background:rgba(255,255,255,.04);
+      color:var(--txt);
+      text-decoration:none;
+      font-weight:900;
+      font-size:12px;
+      cursor:pointer;
+      user-select:none;
+      transition:transform .08s ease, border-color .15s ease, background .15s ease;
+      white-space:nowrap;
+    }
+    .btn:active{transform:translateY(1px)}
+    .btn:focus{outline:none; box-shadow:var(--ring); border-color:rgba(56,189,248,.45)}
+    .btn.primary{
+      border:0;
+      color:#06121f;
+      background:linear-gradient(135deg, var(--a), var(--b));
+      box-shadow:0 14px 36px rgba(37,99,235,.18);
+    }
+    .btn.danger{
+      border:1px solid rgba(239,68,68,.35);
+      background:rgba(239,68,68,.10);
+    }
+    .btn .k{
+      font-family:var(--mono);
+      font-weight:800;
+      font-size:11px;
+      opacity:.85;
+      padding:3px 6px;
+      border-radius:10px;
+      border:1px solid var(--stroke2);
+      background:rgba(255,255,255,.04);
+    }
+
+    .stats{
+      display:flex; flex-wrap:wrap; gap:10px;
+      padding:14px;
+      border-bottom:1px solid var(--stroke2);
+      background:rgba(255,255,255,.02);
+    }
+    .chip{
+      display:inline-flex; align-items:center; gap:8px;
+      padding:10px 12px;
+      border-radius:999px;
+      border:1px solid var(--stroke2);
+      background:var(--chip);
+      font-size:12px;
+      color:var(--soft);
+      white-space:nowrap;
+    }
+    .dot{width:9px;height:9px;border-radius:9px;background:rgba(148,163,184,.5)}
+    .dot.ok{background:rgba(34,197,94,.9)}
+    .dot.warn{background:rgba(245,158,11,.9)}
+    .dot.bad{background:rgba(239,68,68,.9)}
+    .chip strong{font-weight:950}
+    .hint{color:var(--muted); font-size:12px; padding:12px 14px; border-bottom:1px solid var(--stroke2)}
+    .tablewrap{overflow:auto; max-height: calc(100vh - 220px)}
+    table{width:100%; border-collapse:separate; border-spacing:0; min-width: 880px}
+    thead th{
+      position:sticky; top:0; z-index:2;
+      text-align:left;
+      padding:12px;
+      font-size:12px;
+      color:#cbd5e1;
+      background:rgba(255,255,255,.03);
+      border-bottom:1px solid var(--stroke2);
+      backdrop-filter: blur(10px);
+      cursor:pointer;
+      user-select:none;
+    }
+    @media (prefers-color-scheme: light){
+      thead th{color:#223049}
+    }
+    tbody td{
+      padding:12px;
+      border-bottom:1px solid var(--stroke2);
+      font-size:13px;
+      height:var(--rowh);
+      vertical-align:middle;
+    }
+    tbody tr:hover td{background:rgba(255,255,255,.03)}
+    .mono{font-family:var(--mono); font-size:12px}
+    .email{
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+    }
+    .copy{
+      border:1px solid var(--stroke2);
+      background:rgba(255,255,255,.04);
+      color:var(--txt);
+      border-radius:12px;
+      padding:8px 10px;
+      font-size:12px;
+      font-weight:900;
+      cursor:pointer;
+      transition:transform .08s ease;
+      white-space:nowrap;
+    }
+    .copy:active{transform:translateY(1px)}
+    .copy:focus{outline:none; box-shadow:var(--ring); border-color:rgba(56,189,248,.45)}
+    .badge{
+      display:inline-flex; align-items:center; gap:8px;
+      border-radius:999px;
+      padding:8px 10px;
+      border:1px solid var(--stroke2);
+      background:var(--chip2);
+      font-size:12px;
+      font-weight:900;
+      white-space:nowrap;
+    }
+    .badge.ok{background:var(--ok); border-color:rgba(34,197,94,.30)}
+    .badge.warn{background:var(--warn); border-color:rgba(245,158,11,.30)}
+    .badge.bad{background:var(--bad); border-color:rgba(239,68,68,.30)}
+    .pill{
+      display:inline-flex; align-items:center;
+      padding:7px 10px;
+      border-radius:999px;
+      border:1px solid var(--stroke2);
+      background:rgba(255,255,255,.04);
+      color:var(--muted);
+      font-size:12px;
+      white-space:nowrap;
+    }
+    .foot{
+      display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:space-between;
+      padding:14px;
+      border-top:1px solid var(--stroke2);
+      background:rgba(255,255,255,.02);
+    }
+    .pager{
+      display:flex; gap:8px; align-items:center; flex-wrap:wrap;
+    }
+    .num{
+      padding:9px 12px;
+      border:1px solid var(--stroke2);
+      background:rgba(255,255,255,.04);
+      border-radius:14px;
+      font-size:12px;
+      color:var(--muted);
+      font-weight:800;
+    }
+    .sr{
+      position:absolute;
+      width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+      clip:rect(0,0,0,0);white-space:nowrap;border:0;
+    }
+    .toast{
+      position:fixed;
+      right:18px; bottom:18px;
+      padding:12px 14px;
+      border-radius:14px;
+      border:1px solid var(--stroke2);
+      background:rgba(15,23,42,.82);
+      color:#e5e7eb;
+      box-shadow:var(--shadow2);
+      backdrop-filter: blur(12px);
+      font-size:12px;
+      font-weight:850;
+      opacity:0;
+      transform:translateY(8px);
+      transition:opacity .18s ease, transform .18s ease;
+      pointer-events:none;
+      max-width:min(360px, calc(100vw - 36px));
+    }
+    @media (prefers-color-scheme: light){
+      .toast{background:rgba(255,255,255,.92); color:#0b1220}
+    }
+    .toast.show{opacity:1; transform:translateY(0)}
+    .empty{
+      padding:26px 14px 30px;
+      text-align:center;
+    }
+    .empty .big{
+      font-size:18px; font-weight:950; margin:0 0 6px;
+    }
+    .empty .small{color:var(--muted); font-size:13px; margin:0}
+    .kbdhelp{
+      display:flex; gap:8px; align-items:center; flex-wrap:wrap;
+      color:var(--muted); font-size:12px;
+    }
+    .kbdhelp .k{
+      font-family:var(--mono);
+      font-weight:900;
+      font-size:11px;
+      padding:3px 7px;
+      border-radius:10px;
+      border:1px solid var(--stroke2);
+      background:rgba(255,255,255,.04);
+      color:var(--soft);
+    }
+    @media (max-width: 760px){
+      .wrap{padding:14px}
+      .brand{min-width:auto}
+      .field{min-width: 220px}
+      .tablewrap{max-height: none}
+      table{min-width: 980px}
+    }
+  </style>
+</head>
+<body>
+  {% set _subs = subscribers or [] %}
+  {% set _total = (total if total is defined else (_subs|length)) %}
+  {% set _limit = (limit if limit is defined else 200) %}
+  {% set _offset = (offset if offset is defined else 0) %}
+  {% set _page = (_offset // _limit) + 1 %}
+  {% set _pages = ((_total + _limit - 1) // _limit) if _limit else 1 %}
+
+  <div class="wrap">
+    <div class="top">
+      <div class="brand">
+        <div class="logo" aria-hidden="true"></div>
+        <div class="twrap">
+          <h1>Marketing · Suscriptores</h1>
+          <div class="meta">
+            Total: <b>{{ _total }}</b> · Mostrando: <b>{{ _subs|length }}</b> · Página: <b>{{ _page }}</b>/<b>{{ _pages }}</b>
+            {% if fallback %} · <span class="pill">Fallback</span>{% endif %}
+          </div>
+        </div>
+      </div>
+
+      <div class="right">
+        <a class="btn primary" href="{{ url_for('marketing.marketing_export_csv') }}">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3v10m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          Exportar CSV
+        </a>
+        <a class="btn" href="/">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 12l9-9 9 9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M9 21V9h6v12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          Tienda
+        </a>
+        <button class="btn danger" type="button" id="btnClear">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 6h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M8 6V4h8v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M8 6l1 14h6l1-14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          Limpiar <span class="k">Esc</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="card" role="region" aria-label="Panel de suscriptores">
+      <div class="toolbar">
+        <div class="lefttools">
+          <div class="field" role="search">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M10.5 18a7.5 7.5 0 110-15 7.5 7.5 0 010 15z" stroke="currentColor" stroke-width="2"/><path d="M21 21l-4.3-4.3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            <label class="sr" for="q">Buscar</label>
+            <input id="q" type="search" placeholder="Buscar por email o source… (Ctrl/⌘ K)" autocomplete="off" spellcheck="false" />
+          </div>
+
+          <div class="selectwrap">
+            <label class="sr" for="status">Estado</label>
+            <select id="status" class="select">
+              <option value="">Todos</option>
+              <option value="subscribed">Suscribed</option>
+              <option value="unsubscribed">Unsubscribed</option>
+              <option value="pending">Pending</option>
+            </select>
+            <svg class="icon chev" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </div>
+
+          <div class="selectwrap">
+            <label class="sr" for="sort">Orden</label>
+            <select id="sort" class="select">
+              <option value="created_desc">Recientes</option>
+              <option value="created_asc">Más antiguos</option>
+              <option value="email_asc">Email A→Z</option>
+              <option value="email_desc">Email Z→A</option>
+              <option value="source_asc">Source A→Z</option>
+            </select>
+            <svg class="icon chev" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </div>
+
+          <div class="selectwrap">
+            <label class="sr" for="pageSize">Por página</label>
+            <select id="pageSize" class="select">
+              <option value="50">50</option>
+              <option value="100">100</option>
+              <option value="200" selected>200</option>
+              <option value="500">500</option>
+            </select>
+            <svg class="icon chev" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </div>
+
+          <button class="btn" type="button" id="btnCopyFiltered">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 9h10v10H9V9z" stroke="currentColor" stroke-width="2"/><path d="M5 15H4a1 1 0 01-1-1V4a1 1 0 011-1h10a1 1 0 011 1v1" stroke="currentColor" stroke-width="2"/></svg>
+            Copiar emails
+          </button>
+        </div>
+
+        <div class="kbdhelp" aria-label="Atajos">
+          <span class="k">Ctrl/⌘</span> <span class="k">K</span> buscar
+          <span class="k">↑</span><span class="k">↓</span> navegar
+          <span class="k">Enter</span> copiar
+        </div>
+      </div>
+
+      <div class="stats" id="stats">
+        <span class="chip"><span class="dot"></span> Mostrando <strong id="stShow">0</strong></span>
+        <span class="chip"><span class="dot ok"></span> Subscribed <strong id="stSub">0</strong></span>
+        <span class="chip"><span class="dot bad"></span> Unsubscribed <strong id="stUnsub">0</strong></span>
+        <span class="chip"><span class="dot warn"></span> Otros <strong id="stOther">0</strong></span>
+        <span class="chip"><span class="dot"></span> Source únicos <strong id="stSrc">0</strong></span>
+      </div>
+
+      <div class="hint" id="hint">Tip: podés filtrar por status y buscar por email/source. Copiar con un click.</div>
+
+      <div class="tablewrap" role="region" aria-label="Tabla de suscriptores">
+        <table id="tbl">
+          <thead>
+            <tr>
+              <th data-key="email" data-type="text">Email</th>
+              <th data-key="status" data-type="text">Estado</th>
+              <th data-key="source" data-type="text">Source</th>
+              <th data-key="created_at" data-type="date">Creado</th>
+              <th data-key="unsubscribed_at" data-type="date">Baja</th>
+            </tr>
+          </thead>
+          <tbody id="tbody">
+            {% if _subs|length == 0 %}
+              <tr>
+                <td colspan="5">
+                  <div class="empty">
+                    <p class="big">Sin suscriptores</p>
+                    <p class="small">Cuando haya registros, van a aparecer acá.</p>
+                  </div>
+                </td>
+              </tr>
+            {% else %}
+              {% for s in _subs %}
+                {% set email = (s.email if s.email is defined else s.get('email','')) %}
+                {% set status = (s.status if s.status is defined else s.get('status','')) %}
+                {% set source = (s.source if s.source is defined else s.get('source','')) %}
+                {% set created = (s.created_at if s.created_at is defined else s.get('created_at','')) %}
+                {% set unsub = (s.unsubscribed_at if s.unsubscribed_at is defined else s.get('unsubscribed_at','')) %}
+
+                <tr class="row"
+                    tabindex="0"
+                    data-email="{{ email|e }}"
+                    data-status="{{ (status or '')|lower|e }}"
+                    data-source="{{ (source or '')|lower|e }}"
+                    data-created="{{ created|e }}"
+                    data-unsub="{{ unsub|e }}">
+                  <td>
+                    <div class="email">
+                      <span class="mono">{{ email }}</span>
+                      <button class="copy" type="button" data-copy="{{ email|e }}" aria-label="Copiar email">Copiar</button>
+                    </div>
+                  </td>
+                  <td>
+                    {% set st = (status or '')|lower %}
+                    {% if st == 'subscribed' %}
+                      <span class="badge ok">subscribed</span>
+                    {% elif st == 'unsubscribed' %}
+                      <span class="badge bad">unsubscribed</span>
+                    {% elif st %}
+                      <span class="badge warn">{{ st }}</span>
+                    {% else %}
+                      <span class="badge warn">unknown</span>
+                    {% endif %}
+                  </td>
+                  <td><span class="pill">{{ source or 'web' }}</span></td>
+                  <td class="mono">{{ created }}</td>
+                  <td class="mono">{{ unsub }}</td>
+                </tr>
+              {% endfor %}
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="foot">
+        <div class="pager">
+          <a class="btn" id="prev" href="{{ url_for('marketing.marketing_admin', limit=_limit, offset=(_offset - _limit if _offset - _limit > 0 else 0)) }}">Anterior</a>
+          <span class="num">Página {{ _page }} / {{ _pages }}</span>
+          <a class="btn" id="next" href="{{ url_for('marketing.marketing_admin', limit=_limit, offset=(_offset + _limit)) }}">Siguiente</a>
+          <span class="num">Limit {{ _limit }} · Offset {{ _offset }}</span>
+        </div>
+
+        <div class="kbdhelp">
+          <span>Visor:</span> <span class="k" id="selCount">0</span>
+          <span>Filtrados:</span> <span class="k" id="fltCount">0</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    (function(){
+      const $ = (s, r=document) => r.querySelector(s);
+      const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
+
+      const q = $("#q");
+      const statusSel = $("#status");
+      const sortSel = $("#sort");
+      const pageSizeSel = $("#pageSize");
+      const btnClear = $("#btnClear");
+      const btnCopyFiltered = $("#btnCopyFiltered");
+      const toast = $("#toast");
+      const tbody = $("#tbody");
+      const rows = $$(".row", tbody);
+
+      const stShow = $("#stShow");
+      const stSub = $("#stSub");
+      const stUnsub = $("#stUnsub");
+      const stOther = $("#stOther");
+      const stSrc = $("#stSrc");
+      const selCount = $("#selCount");
+      const fltCount = $("#fltCount");
+
+      let activeIndex = -1;
+      let toastT = null;
+
+      function showToast(msg){
+        if(!toast) return;
+        toast.textContent = msg;
+        toast.classList.add("show");
+        clearTimeout(toastT);
+        toastT = setTimeout(()=>toast.classList.remove("show"), 1400);
+      }
+
+      async function copyText(text){
+        try{
+          await navigator.clipboard.writeText(text);
+          showToast("Copiado ✅");
+          return true;
+        }catch(e){
+          try{
+            const ta = document.createElement("textarea");
+            ta.value = text;
+            ta.style.position = "fixed";
+            ta.style.opacity = "0";
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand("copy");
+            ta.remove();
+            showToast("Copiado ✅");
+            return true;
+          }catch(_){
+            showToast("No se pudo copiar");
+            return false;
+          }
+        }
+      }
+
+      function norm(s){ return (s||"").toString().trim().toLowerCase(); }
+
+      function parseDate(v){
+        const s = (v||"").toString().trim();
+        if(!s) return 0;
+        const t = Date.parse(s);
+        if(!isNaN(t)) return t;
+        const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if(m) return Date.parse(`${m[1]}-${m[2]}-${m[3]}T00:00:00Z`);
+        return 0;
+      }
+
+      function getRowData(tr){
+        return {
+          el: tr,
+          email: tr.dataset.email || "",
+          status: tr.dataset.status || "",
+          source: tr.dataset.source || "",
+          created_at: tr.dataset.created || "",
+          unsubscribed_at: tr.dataset.unsub || ""
+        };
+      }
+
+      function applyFilter(){
+        const term = norm(q.value);
+        const st = norm(statusSel.value);
+        let show = 0, sub = 0, unsub = 0, other = 0;
+        const srcSet = new Set();
+
+        for(const tr of rows){
+          const d = getRowData(tr);
+          const hay = (term === "" ||
+            norm(d.email).includes(term) ||
+            norm(d.source).includes(term));
+
+          const okStatus = (st === "" || norm(d.status) === st);
+          const visible = hay && okStatus;
+
+          tr.style.display = visible ? "" : "none";
+          if(visible){
+            show++;
+            srcSet.add(norm(d.source || "web"));
+            if(d.status === "subscribed") sub++;
+            else if(d.status === "unsubscribed") unsub++;
+            else other++;
+          }
+        }
+
+        stShow.textContent = String(show);
+        stSub.textContent = String(sub);
+        stUnsub.textContent = String(unsub);
+        stOther.textContent = String(other);
+        stSrc.textContent = String(srcSet.size);
+        fltCount.textContent = String(show);
+
+        activeIndex = -1;
+        selCount.textContent = "0";
+      }
+
+      function visibleRows(){
+        return rows.filter(r => r.style.display !== "none");
+      }
+
+      function applySort(){
+        const mode = sortSel.value || "created_desc";
+        const v = visibleRows().map(getRowData);
+
+        const cmpText = (a,b,k,dir=1) => (a[k]||"").localeCompare((b[k]||""), undefined, {numeric:true, sensitivity:"base"}) * dir;
+        const cmpDate = (a,b,k,dir=1) => (parseDate(a[k]) - parseDate(b[k])) * dir;
+
+        if(mode === "created_desc") v.sort((a,b)=>cmpDate(a,b,"created_at",-1));
+        else if(mode === "created_asc") v.sort((a,b)=>cmpDate(a,b,"created_at",1));
+        else if(mode === "email_asc") v.sort((a,b)=>cmpText(a,b,"email",1));
+        else if(mode === "email_desc") v.sort((a,b)=>cmpText(a,b,"email",-1));
+        else if(mode === "source_asc") v.sort((a,b)=>cmpText(a,b,"source",1));
+
+        const frag = document.createDocumentFragment();
+        for(const it of v){ frag.appendChild(it.el); }
+        tbody.appendChild(frag);
+      }
+
+      function clearAll(){
+        q.value = "";
+        statusSel.value = "";
+        sortSel.value = "created_desc";
+        applyFilter();
+        applySort();
+      }
+
+      function focusSearch(){ q.focus(); q.select(); }
+
+      function setActive(idx){
+        const vis = visibleRows();
+        if(!vis.length){ activeIndex = -1; selCount.textContent = "0"; return; }
+        idx = Math.max(0, Math.min(idx, vis.length - 1));
+        activeIndex = idx;
+        vis[idx].focus({preventScroll:true});
+        vis[idx].scrollIntoView({block:"nearest"});
+        selCount.textContent = "1";
+      }
+
+      function copyActive(){
+        const vis = visibleRows();
+        if(activeIndex < 0 || activeIndex >= vis.length) return;
+        const email = vis[activeIndex].dataset.email || "";
+        if(email) copyText(email);
+      }
+
+      function copyFilteredEmails(){
+        const vis = visibleRows();
+        const emails = vis.map(r => (r.dataset.email||"").trim()).filter(Boolean);
+        if(!emails.length){ showToast("Nada para copiar"); return; }
+        copyText(emails.join("\n"));
+        showToast(`Copiados ${emails.length}`);
+      }
+
+      tbody.addEventListener("click", (e)=>{
+        const t = e.target;
+        if(!(t instanceof HTMLElement)) return;
+        const btn = t.closest("[data-copy]");
+        if(btn){
+          const val = btn.getAttribute("data-copy") || "";
+          if(val) copyText(val);
+          return;
+        }
+        const tr = t.closest(".row");
+        if(tr){
+          const vis = visibleRows();
+          const idx = vis.indexOf(tr);
+          if(idx >= 0) setActive(idx);
+        }
+      });
+
+      tbody.addEventListener("keydown", (e)=>{
+        const vis = visibleRows();
+        if(!vis.length) return;
+
+        const idx = vis.indexOf(document.activeElement);
+        if(idx >= 0) activeIndex = idx;
+
+        if(e.key === "Enter"){
+          e.preventDefault();
+          copyActive();
+        }else if(e.key === "ArrowDown"){
+          e.preventDefault();
+          setActive((activeIndex < 0 ? 0 : activeIndex + 1));
+        }else if(e.key === "ArrowUp"){
+          e.preventDefault();
+          setActive((activeIndex < 0 ? 0 : activeIndex - 1));
+        }else if(e.key === "Escape"){
+          e.preventDefault();
+          clearAll();
+        }
+      });
+
+      document.addEventListener("keydown", (e)=>{
+        const isMac = navigator.platform.toLowerCase().includes("mac");
+        const k = e.key.toLowerCase();
+        const mod = isMac ? e.metaKey : e.ctrlKey;
+
+        if(mod && k === "k"){
+          e.preventDefault();
+          focusSearch();
+        }
+        if(e.key === "Escape"){
+          clearAll();
+        }
+      });
+
+      q.addEventListener("input", ()=>{ applyFilter(); applySort(); });
+      statusSel.addEventListener("change", ()=>{ applyFilter(); applySort(); });
+      sortSel.addEventListener("change", ()=>{ applySort(); });
+      btnClear.addEventListener("click", clearAll);
+      btnCopyFiltered.addEventListener("click", copyFilteredEmails);
+
+      pageSizeSel.addEventListener("change", ()=>{
+        const n = parseInt(pageSizeSel.value || "200", 10) || 200;
+        const url = new URL(window.location.href);
+        url.searchParams.set("limit", String(n));
+        url.searchParams.set("offset", "0");
+        window.location.href = url.toString();
+      });
+
+      applyFilter();
+      applySort();
+    })();
+  </script>
+</body>
+</html>
