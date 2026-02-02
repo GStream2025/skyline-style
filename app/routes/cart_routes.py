@@ -1,13 +1,15 @@
-# app/routes/cart_routes.py — SKYLINE CART ULTRA PRO (v3.0 / FINAL / NO-ERROR)
+# app/routes/cart_routes.py — SKYLINE CART ULTRA PRO (v4.0 / FINAL / NO-ERROR)
 from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
 from time import time
 from typing import Any, Dict, List, Mapping, Optional, Tuple
+from urllib.parse import urlencode, urlparse
 
 from flask import (
     Blueprint,
+    Response,
     current_app,
     jsonify,
     redirect,
@@ -16,6 +18,8 @@ from flask import (
     session,
     url_for,
 )
+
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.models import db, Product
 
@@ -26,9 +30,10 @@ except Exception:  # pragma: no cover
 
 
 cart_bp = Blueprint("cart", __name__, url_prefix="/cart")
+cart_bp.strict_slashes = False
 
-CART_SESSION_KEY = "cart_v3"
-CART_SCHEMA_VERSION = 3
+CART_SESSION_KEY = "cart_v4"
+CART_SCHEMA_VERSION = 4
 
 MAX_QTY_PER_ITEM = 25
 MIN_QTY_PER_ITEM = 1
@@ -37,16 +42,55 @@ MAX_DISTINCT_ITEMS = 120
 DEFAULT_CURRENCY = "USD"
 ALLOWED_CURRENCIES = {"USD", "UYU", "ARS"}
 
+# RL per-session per bucket (windowed)
 RL_WINDOW_SEC = 2.0
 RL_MAX_ACTIONS = 14
-_RL_KEY = "cart_rl_v3"
+_RL_KEY = "cart_rl_v4"
 
+# CSRF compatible with your app-wide token
 CSRF_SESSION_KEY = "csrf_token"
-_REQ_CACHE_KEY = "_cart_snapshot_cache_v3"
+
+# Snapshot cache per-request
+_REQ_CACHE_KEY = "_cart_snapshot_cache_v4"
+
+# Security / cache headers for cart responses
+_CACHE_HEADERS = {
+    "Cache-Control": "no-store, max-age=0, must-revalidate",
+    "Pragma": "no-cache",
+    "Expires": "0",
+    "Vary": "Accept, Cookie",
+    "X-Frame-Options": "DENY",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Cross-Origin-Opener-Policy": "same-origin",
+}
+
+# Design tokens (template-friendly). Used by templates and JSON consumers.
+CART_UI_TOKENS = {
+    "brand": "skyline",
+    "radius": 18,
+    "shadow": "0 22px 70px rgba(0,0,0,.12)",
+    "surface": "rgba(255,255,255,.92)",
+    "surface2": "rgba(255,255,255,.78)",
+    "stroke": "rgba(15,23,42,.12)",
+    "muted": "#64748b",
+}
 
 
 def _now_ts() -> int:
     return int(time())
+
+
+def _s(v: Any, max_len: int, *, default: str = "") -> str:
+    if v is None:
+        return default
+    s = v if isinstance(v, str) else str(v)
+    s = s.replace("\x00", "").replace("\u200b", "").strip()
+    s = s.replace("\r", "").replace("\n", "").replace("\t", "")
+    if not s:
+        return default
+    s = " ".join(s.split())
+    return s[: max(0, int(max_len))]
 
 
 def _d(x: Any) -> Decimal:
@@ -62,10 +106,37 @@ def _money(x: Any) -> str:
     return str(_d(x).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
 
-def _is_json_request() -> bool:
-    accept = (request.headers.get("Accept") or "").lower()
-    ctype = (request.headers.get("Content-Type") or "").lower()
-    return ("application/json" in accept) or ("application/json" in ctype) or (request.args.get("json") == "1")
+def _wants_json() -> bool:
+    try:
+        if request.is_json:
+            return True
+    except Exception:
+        pass
+
+    fmt = _s(request.args.get("format") or request.args.get("json") or "", 16).lower()
+    if fmt in {"1", "json", "true", "yes"}:
+        return True
+
+    accept = _s(request.headers.get("Accept"), 200).lower()
+    if "application/json" in accept or "text/json" in accept:
+        return True
+
+    ctype = _s(request.headers.get("Content-Type"), 120).lower()
+    if ctype.startswith("application/json"):
+        return True
+
+    xrw = _s(request.headers.get("X-Requested-With"), 60).lower()
+    if xrw == "xmlhttprequest":
+        return True
+
+    try:
+        best = request.accept_mimetypes.best_match(["application/json", "text/html"])
+        if best == "application/json" and request.accept_mimetypes[best] > request.accept_mimetypes["text/html"]:
+            return True
+    except Exception:
+        pass
+
+    return False
 
 
 def _endpoint_exists(endpoint: str) -> bool:
@@ -75,7 +146,7 @@ def _endpoint_exists(endpoint: str) -> bool:
         return False
 
 
-def _url_for_safe(endpoint: str, fallback_path: str = "/cart", **kwargs) -> str:
+def _url_for_safe(endpoint: str, fallback_path: str = "/cart", **kwargs: Any) -> str:
     try:
         if _endpoint_exists(endpoint):
             return url_for(endpoint, **kwargs)
@@ -84,17 +155,28 @@ def _url_for_safe(endpoint: str, fallback_path: str = "/cart", **kwargs) -> str:
     return fallback_path
 
 
+def _no_store_headers(resp: Response) -> Response:
+    try:
+        for k, v in _CACHE_HEADERS.items():
+            resp.headers.setdefault(k, v)
+    except Exception:
+        pass
+    return resp
+
+
 def _reply(
     payload: Dict[str, Any],
     *,
-    html_redirect_endpoint: Optional[str] = None,
     status: int = 200,
+    html_redirect_endpoint: Optional[str] = None,
     fallback_path: str = "/cart",
-    **ep_kwargs,
+    **ep_kwargs: Any,
 ):
-    if _is_json_request() or html_redirect_endpoint is None:
-        return jsonify(payload), status
-    return redirect(_url_for_safe(html_redirect_endpoint, fallback_path=fallback_path, **ep_kwargs))
+    if _wants_json() or html_redirect_endpoint is None:
+        r = jsonify(payload)
+        r.status_code = int(status)
+        return _no_store_headers(r)
+    return redirect(_url_for_safe(html_redirect_endpoint, fallback_path=fallback_path, **ep_kwargs), code=302)
 
 
 def _err(
@@ -112,74 +194,104 @@ def _err(
 
 
 def _csrf_enabled() -> bool:
-    return bool((session.get(CSRF_SESSION_KEY) or "").strip())
+    tok = session.get(CSRF_SESSION_KEY)
+    return isinstance(tok, str) and len(tok.strip()) >= 16
+
+
+def _csrf_from_request() -> str:
+    h = _s(request.headers.get("X-CSRF-Token") or request.headers.get("X-CSRFToken"), 1024, default="")
+    if h:
+        return h
+    f = _s(request.form.get("csrf_token"), 1024, default="")
+    if f:
+        return f
+    try:
+        if request.is_json:
+            j = request.get_json(silent=True) or {}
+            if isinstance(j, dict):
+                return _s(j.get("csrf_token"), 1024, default="")
+    except Exception:
+        pass
+    return ""
 
 
 def _check_csrf() -> bool:
-    token = (session.get(CSRF_SESSION_KEY) or "").strip()
-    got = (
-        (request.headers.get("X-CSRF-Token") or "")
-        or (request.form.get("csrf_token") or "")
-        or (((request.get_json(silent=True) or {}).get("csrf_token")) if request.is_json else "")
-        or ""
-    )
-    got = str(got).strip()
-    if not token:
+    # If your app didn't set CSRF token, we do NOT block (same behavior as your v3).
+    if not _csrf_enabled():
         return True
+
+    token = _s(session.get(CSRF_SESSION_KEY), 1024, default="")
+    got = _csrf_from_request()
+    if not token or not got:
+        return False
+
     try:
-        import secrets
-        return bool(got) and secrets.compare_digest(token, got)
+        import secrets as _secrets
+
+        return _secrets.compare_digest(token, got)
     except Exception:
-        return token == got
+        return False
 
 
 def _csrf_required() -> Optional[Any]:
-    if request.method in {"POST", "PUT", "PATCH", "DELETE"} and _csrf_enabled():
+    if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
         if not _check_csrf():
             return _err("csrf_invalid", "Token inválido. Recargá la página e intentá de nuevo.", 400)
     return None
 
 
-def _rate_limit_ok(bucket: str) -> bool:
+def _rate_limit_ok(bucket: str) -> Tuple[bool, int]:
+    """
+    Window-based RL per session.
+    Returns (ok, retry_after_seconds).
+    """
+    now = float(time())
     try:
         st = session.get(_RL_KEY)
         if not isinstance(st, dict):
             st = {}
 
-        now = float(time())
         b = st.get(bucket)
         if not isinstance(b, dict):
             b = {}
 
         win_start = float(b.get("start", now))
-        count = int(b.get("count", 0))
+        count = int(b.get("count", 0) or 0)
 
-        if now - win_start > RL_WINDOW_SEC:
-            b = {"start": now, "count": 1}
-        else:
-            b["count"] = count + 1
+        if (now - win_start) > float(RL_WINDOW_SEC) or (now - win_start) < 0:
+            win_start = now
+            count = 0
 
+        count += 1
+        b = {"start": win_start, "count": count}
         st[bucket] = b
+
         session[_RL_KEY] = st
         session.modified = True
-        return int(b.get("count", 0)) <= RL_MAX_ACTIONS
+
+        if count <= int(RL_MAX_ACTIONS):
+            return True, 0
+
+        retry = max(1, int((win_start + float(RL_WINDOW_SEC)) - now))
+        return False, retry
     except Exception:
-        return True
+        # Never hard-break cart if sessions behave oddly.
+        return True, 0
 
 
 def _clamp_qty(qty: int) -> int:
-    if qty < MIN_QTY_PER_ITEM:
-        return MIN_QTY_PER_ITEM
-    if qty > MAX_QTY_PER_ITEM:
-        return MAX_QTY_PER_ITEM
-    return qty
+    if qty < int(MIN_QTY_PER_ITEM):
+        return int(MIN_QTY_PER_ITEM)
+    if qty > int(MAX_QTY_PER_ITEM):
+        return int(MAX_QTY_PER_ITEM)
+    return int(qty)
 
 
 def _parse_int(value: Any, default: int) -> int:
     try:
         return int(str(value).strip())
     except Exception:
-        return default
+        return int(default)
 
 
 def _parse_qty(value: Any, default: int = 1) -> int:
@@ -203,7 +315,8 @@ def _cart() -> Dict[str, Any]:
         session[CART_SESSION_KEY] = c
         session.modified = True
 
-    if int(c.get("v") or 0) != CART_SCHEMA_VERSION:
+    # Migration
+    if int(c.get("v") or 0) != int(CART_SCHEMA_VERSION):
         old_items = c.get("items") if isinstance(c.get("items"), dict) else {}
         new_items: Dict[str, Dict[str, Any]] = {}
         if isinstance(old_items, dict):
@@ -221,17 +334,20 @@ def _cart() -> Dict[str, Any]:
     c.setdefault("items", {})
     c.setdefault("meta", {})
 
-    cur = (str(c["meta"].get("currency") or DEFAULT_CURRENCY).strip().upper()[:3] or DEFAULT_CURRENCY)
+    meta = c["meta"] if isinstance(c["meta"], dict) else {}
+    cur = (_s(meta.get("currency"), 3, default=DEFAULT_CURRENCY).upper() or DEFAULT_CURRENCY)[:3]
     if cur not in ALLOWED_CURRENCIES:
         cur = DEFAULT_CURRENCY
-    c["meta"]["currency"] = cur
-    c["meta"].setdefault("updated_at", _now_ts())
+    meta["currency"] = cur
+    meta.setdefault("updated_at", _now_ts())
+    c["meta"] = meta
     return c
 
 
 def _save_cart(c: Dict[str, Any]) -> None:
     c.setdefault("meta", {})
-    c["meta"]["updated_at"] = _now_ts()
+    if isinstance(c["meta"], dict):
+        c["meta"]["updated_at"] = _now_ts()
     session[CART_SESSION_KEY] = c
     session.modified = True
     _invalidate_snapshot_cache()
@@ -267,7 +383,7 @@ def _product_image(p: Product) -> Optional[str]:
 
     try:
         media = getattr(p, "media", None)
-        if media and len(media) > 0:
+        if media and hasattr(media, "__len__") and len(media) > 0:
             u = getattr(media[0], "url", None)
             if u:
                 return str(u)
@@ -283,8 +399,7 @@ def _product_image(p: Product) -> Optional[str]:
 
 def _product_currency(p: Product) -> str:
     c = getattr(p, "currency", None) or DEFAULT_CURRENCY
-    c = str(c).strip().upper()
-    c = c[:3] if len(c) >= 3 else DEFAULT_CURRENCY
+    c = str(c).strip().upper()[:3] or DEFAULT_CURRENCY
     return c if c in ALLOWED_CURRENCIES else DEFAULT_CURRENCY
 
 
@@ -327,8 +442,9 @@ def _apply_offer_discount_if_any(p: Product, unit_price: Decimal) -> Tuple[Decim
             return unit_price, None, None
 
         try:
-            from datetime import datetime
-            now_dt = datetime.utcnow()
+            from datetime import datetime as _dt
+
+            now_dt = _dt.utcnow()
             starts = getattr(o, "starts_at", None)
             ends = getattr(o, "ends_at", None)
             if starts and starts > now_dt:
@@ -409,16 +525,19 @@ def cart_snapshot() -> Dict[str, Any]:
     c = _cart()
     items: Dict[str, Dict[str, Any]] = c.get("items", {}) or {}
 
-    if len(items) > MAX_DISTINCT_ITEMS:
-        keys = list(items.keys())[:MAX_DISTINCT_ITEMS]
+    if len(items) > int(MAX_DISTINCT_ITEMS):
+        # deterministic trim
+        keys = list(items.keys())[: int(MAX_DISTINCT_ITEMS)]
         items = {k: items[k] for k in keys}
         c["items"] = items
         _save_cart(c)
 
-    cart_currency = (str(c.get("meta", {}).get("currency") or DEFAULT_CURRENCY).upper()[:3] or DEFAULT_CURRENCY)
+    cart_currency = (_s(c.get("meta", {}).get("currency"), 3, default=DEFAULT_CURRENCY).upper() or DEFAULT_CURRENCY)[:3]
     if cart_currency not in ALLOWED_CURRENCIES:
         cart_currency = DEFAULT_CURRENCY
-        c["meta"]["currency"] = cart_currency
+        c.setdefault("meta", {})
+        if isinstance(c["meta"], dict):
+            c["meta"]["currency"] = cart_currency
 
     lines: List[CartLine] = []
     subtotal = Decimal("0.00")
@@ -426,7 +545,7 @@ def cart_snapshot() -> Dict[str, Any]:
     to_delete: List[str] = []
     mixed_currency = False
 
-    for pid_str, row in items.items():
+    for pid_str, row in list(items.items()):
         try:
             pid = int(pid_str)
         except Exception:
@@ -491,6 +610,7 @@ def cart_snapshot() -> Dict[str, Any]:
             )
         )
 
+        # normalize stored shape
         items[str(pid)] = {"q": qty, "a": added_at}
 
     for k in to_delete:
@@ -503,15 +623,16 @@ def cart_snapshot() -> Dict[str, Any]:
 
     out: Dict[str, Any] = {
         "schema": CART_SCHEMA_VERSION,
-        "items_count": sum(ln.qty for ln in lines),
+        "items_count": sum(int(ln.qty) for ln in lines),
         "distinct_items": len(lines),
         "currency": cart_currency,
         "lines": [ln.to_dict() for ln in lines],
         "subtotal": _money(subtotal),
         "discount_total": _money(discount_total),
         "total": _money(subtotal),
-        "updated_at": c.get("meta", {}).get("updated_at", _now_ts()),
+        "updated_at": int(c.get("meta", {}).get("updated_at") or _now_ts()),
         "has_items": bool(lines),
+        "ui": dict(CART_UI_TOKENS),
     }
     if mixed_currency:
         out["warning"] = "mixed_currency_detected"
@@ -524,8 +645,43 @@ def cart_snapshot() -> Dict[str, Any]:
 
 
 def merge_cart_items(into_user_id: int) -> None:
+    # hook for future: merge session cart into persisted cart
     _ = into_user_id
     return
+
+
+def _parse_payload() -> Mapping[str, Any]:
+    try:
+        if request.is_json:
+            j = request.get_json(silent=True)
+            if isinstance(j, Mapping):
+                return j
+    except Exception:
+        pass
+    try:
+        return request.form  # type: ignore[return-value]
+    except Exception:
+        return {}  # type: ignore[return-value]
+
+
+def _pid_from_payload(data: Mapping[str, Any]) -> Tuple[Optional[int], Optional[Response]]:
+    pid = data.get("product_id") or data.get("id")
+    try:
+        pid_int = int(str(pid).strip())
+        if pid_int <= 0:
+            raise ValueError("pid<=0")
+        return pid_int, None
+    except Exception:
+        return None, _err("product_id_invalid", "ID de producto inválido.", 400)
+
+
+def _qty_from_payload(data: Mapping[str, Any], *, default: int = 1) -> int:
+    return _parse_qty(data.get("qty") if isinstance(data, Mapping) else None, default)
+
+
+@cart_bp.after_request
+def _after_cart(resp: Response):
+    return _no_store_headers(resp)
 
 
 @cart_bp.get("/")
@@ -535,40 +691,50 @@ def cart_view():
     for tpl in ("cart/cart.html", "cart.html"):
         try:
             current_app.jinja_env.get_template(tpl)
-            return render_template(tpl, cart=snap)
+            r = render_template(tpl, cart=snap, csrf_token=session.get(CSRF_SESSION_KEY), ui=snap.get("ui"))
+            # render_template returns str; wrap into Response for headers
+            return _no_store_headers(current_app.make_response(r, 200))
         except Exception:
             continue
 
-    return jsonify(ok=True, cart=snap)
+    return _reply({"ok": True, "cart": snap}, status=200, html_redirect_endpoint=None)
 
 
 @cart_bp.get("/json")
 def cart_json():
-    return jsonify(ok=True, cart=cart_snapshot())
+    return _reply({"ok": True, "cart": cart_snapshot()}, status=200, html_redirect_endpoint=None)
 
 
 @cart_bp.get("/count")
 def cart_count():
     snap = cart_snapshot()
-    return jsonify(ok=True, items_count=int(snap.get("items_count") or 0), distinct_items=int(snap.get("distinct_items") or 0))
+    return _reply(
+        {
+            "ok": True,
+            "items_count": int(snap.get("items_count") or 0),
+            "distinct_items": int(snap.get("distinct_items") or 0),
+        },
+        status=200,
+        html_redirect_endpoint=None,
+    )
 
 
 @cart_bp.get("/checkout")
 def cart_checkout_bridge():
     snap = cart_snapshot()
     if not snap.get("has_items"):
-        if _is_json_request():
-            return jsonify(ok=False, error="cart_empty"), 400
-        return redirect(_url_for_safe("cart.cart_view", fallback_path="/cart"))
+        if _wants_json():
+            return _reply({"ok": False, "error": {"code": "cart_empty", "message": "El carrito está vacío."}}, status=400)
+        return redirect(_url_for_safe("cart.cart_view", fallback_path="/cart"), code=302)
 
     if _endpoint_exists("checkout.checkout_home"):
-        return redirect(url_for("checkout.checkout_home"))
+        return redirect(url_for("checkout.checkout_home"), code=302)
 
     for ep in ("shop.checkout", "shop.checkout_home", "main.checkout", "main.checkout_home"):
         if _endpoint_exists(ep):
-            return redirect(url_for(ep))
+            return redirect(url_for(ep), code=302)
 
-    return redirect("/checkout/")
+    return redirect("/checkout/", code=302)
 
 
 @cart_bp.post("/add")
@@ -576,33 +742,43 @@ def cart_add():
     gate = _csrf_required()
     if gate:
         return gate
-    if not _rate_limit_ok("add"):
-        return _err("rate_limited", "Demasiadas acciones. Probá de nuevo en un momento.", 429)
 
-    data = request.get_json(silent=True) or request.form
-    pid = data.get("product_id") or data.get("id")
-    qty = _parse_qty(data.get("qty") or 1, 1)
-    mode = str(data.get("mode") or "inc").strip().lower()
+    ok_rl, retry = _rate_limit_ok("add")
+    if not ok_rl:
+        r = _err("rate_limited", "Demasiadas acciones. Probá de nuevo en un momento.", 429, details={"retry_after": retry})
+        try:
+            if hasattr(r, "headers"):
+                r.headers["Retry-After"] = str(int(retry))
+        except Exception:
+            pass
+        return r
 
-    try:
-        pid_int = int(pid)
-    except Exception:
-        return _err("product_id_invalid", "ID de producto inválido.", 400)
+    data = _parse_payload()
+    pid, err_resp = _pid_from_payload(data)
+    if err_resp is not None:
+        return err_resp
+    qty = _qty_from_payload(data, default=1)
 
-    p = _get_product(pid_int)
+    mode = _s(data.get("mode") or "inc", 12, default="inc").lower()
+    if mode not in {"inc", "set"}:
+        mode = "inc"
+
+    p = _get_product(int(pid))
     if not p:
         return _err("product_not_found", "Producto no encontrado.", 404)
 
     c = _cart()
-    items: Dict[str, Dict[str, Any]] = c["items"]
+    items: Dict[str, Dict[str, Any]] = c["items"] if isinstance(c.get("items"), dict) else {}
+    c["items"] = items
 
-    cur = items.get(str(pid_int), {}) or {}
+    key = str(int(pid))
+    cur = items.get(key, {}) if isinstance(items.get(key), dict) else {}
     cur_qty = _parse_qty(cur.get("q", 0), 0)
 
     new_qty = qty if mode == "set" else _clamp_qty(cur_qty + qty)
 
     if new_qty <= 0:
-        items.pop(str(pid_int), None)
+        items.pop(key, None)
         _save_cart(c)
         return _reply({"ok": True, "cart": cart_snapshot()}, status=200, html_redirect_endpoint="cart.cart_view")
 
@@ -611,10 +787,10 @@ def cart_add():
         if allowed > 0:
             new_qty = _clamp_qty(allowed)
         else:
-            return _err("not_available", msg, 400)
+            return _err("not_available", msg or "Producto no disponible.", 400)
 
-    items[str(pid_int)] = {"q": new_qty, "a": int(cur.get("a") or _now_ts())}
-    c["items"] = items
+    added_at = int(cur.get("a") or _now_ts())
+    items[key] = {"q": int(new_qty), "a": added_at}
     _save_cart(c)
 
     return _reply({"ok": True, "cart": cart_snapshot()}, status=200, html_redirect_endpoint="cart.cart_view")
@@ -625,36 +801,48 @@ def cart_update():
     gate = _csrf_required()
     if gate:
         return gate
-    if not _rate_limit_ok("update"):
-        return _err("rate_limited", "Demasiadas acciones. Probá de nuevo en un momento.", 429)
 
-    data = request.get_json(silent=True) or request.form
+    ok_rl, retry = _rate_limit_ok("update")
+    if not ok_rl:
+        r = _err("rate_limited", "Demasiadas acciones. Probá de nuevo en un momento.", 429, details={"retry_after": retry})
+        try:
+            if hasattr(r, "headers"):
+                r.headers["Retry-After"] = str(int(retry))
+        except Exception:
+            pass
+        return r
+
+    data = _parse_payload()
 
     batch = None
     if isinstance(data, Mapping):
         batch = data.get("items")
 
     c = _cart()
-    items: Dict[str, Dict[str, Any]] = c["items"]
+    items: Dict[str, Dict[str, Any]] = c["items"] if isinstance(c.get("items"), dict) else {}
+    c["items"] = items
 
     def _update_one(pid_any: Any, qty_any: Any) -> Optional[Tuple[str, int, str]]:
         try:
-            pid_int = int(pid_any)
+            pid_int = int(str(pid_any).strip())
+            if pid_int <= 0:
+                raise ValueError("pid<=0")
         except Exception:
             return ("product_id_invalid", 400, "ID inválido.")
 
-        qty = _parse_qty(qty_any or 1, 1)
-
-        if str(pid_int) not in items:
+        key = str(pid_int)
+        if key not in items:
             return ("not_in_cart", 404, "El producto no está en el carrito.")
 
+        qty = _parse_qty(qty_any or 1, 1)
+
         if qty <= 0:
-            items.pop(str(pid_int), None)
+            items.pop(key, None)
             return None
 
         p = _get_product(pid_int)
         if not p:
-            items.pop(str(pid_int), None)
+            items.pop(key, None)
             return None
 
         ok, msg, allowed = _is_available(p, qty)
@@ -664,8 +852,8 @@ def cart_update():
             else:
                 return ("not_available", 400, msg or "Producto no disponible o sin stock.")
 
-        items[str(pid_int)]["q"] = qty
-        items[str(pid_int)].setdefault("a", _now_ts())
+        items[key]["q"] = int(qty)
+        items[key].setdefault("a", _now_ts())
         return None
 
     if isinstance(batch, list):
@@ -677,16 +865,14 @@ def cart_update():
                 code, status, msg = err
                 return _err(code, msg, status, details={"item": dict(it)})
     else:
-        pid = data.get("product_id") or data.get("id")
-        qty = data.get("qty") or 1
+        pid = data.get("product_id") or data.get("id") if isinstance(data, Mapping) else None
+        qty = data.get("qty") if isinstance(data, Mapping) else None
         err = _update_one(pid, qty)
         if err:
             code, status, msg = err
             return _err(code, msg, status)
 
-    c["items"] = items
     _save_cart(c)
-
     return _reply({"ok": True, "cart": cart_snapshot()}, status=200, html_redirect_endpoint="cart.cart_view")
 
 
@@ -695,19 +881,28 @@ def cart_remove():
     gate = _csrf_required()
     if gate:
         return gate
-    if not _rate_limit_ok("remove"):
-        return _err("rate_limited", "Demasiadas acciones. Probá de nuevo en un momento.", 429)
 
-    data = request.get_json(silent=True) or request.form
-    pid = data.get("product_id") or data.get("id")
+    ok_rl, retry = _rate_limit_ok("remove")
+    if not ok_rl:
+        r = _err("rate_limited", "Demasiadas acciones. Probá de nuevo en un momento.", 429, details={"retry_after": retry})
+        try:
+            if hasattr(r, "headers"):
+                r.headers["Retry-After"] = str(int(retry))
+        except Exception:
+            pass
+        return r
 
-    try:
-        pid_int = int(pid)
-    except Exception:
-        return _err("product_id_invalid", "ID de producto inválido.", 400)
+    data = _parse_payload()
+    pid, err_resp = _pid_from_payload(data)
+    if err_resp is not None:
+        return err_resp
 
     c = _cart()
-    c["items"].pop(str(pid_int), None)
+    items = c.get("items")
+    if not isinstance(items, dict):
+        items = {}
+    items.pop(str(int(pid)), None)
+    c["items"] = items
     _save_cart(c)
 
     return _reply({"ok": True, "cart": cart_snapshot()}, status=200, html_redirect_endpoint="cart.cart_view")
@@ -718,8 +913,16 @@ def cart_clear():
     gate = _csrf_required()
     if gate:
         return gate
-    if not _rate_limit_ok("clear"):
-        return _err("rate_limited", "Demasiadas acciones. Probá de nuevo en un momento.", 429)
+
+    ok_rl, retry = _rate_limit_ok("clear")
+    if not ok_rl:
+        r = _err("rate_limited", "Demasiadas acciones. Probá de nuevo en un momento.", 429, details={"retry_after": retry})
+        try:
+            if hasattr(r, "headers"):
+                r.headers["Retry-After"] = str(int(retry))
+        except Exception:
+            pass
+        return r
 
     session.pop(CART_SESSION_KEY, None)
     session.modified = True
@@ -728,4 +931,4 @@ def cart_clear():
     return _reply({"ok": True, "cart": cart_snapshot()}, status=200, html_redirect_endpoint="cart.cart_view")
 
 
-__all__ = ["cart_bp", "cart_snapshot", "merge_cart_items"]
+__all__ = ["cart_bp", "cart_snapshot", "merge_cart_items", "CART_UI_TOKENS"]

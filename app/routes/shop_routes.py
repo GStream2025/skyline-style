@@ -1,13 +1,26 @@
+# app/routes/shop_routes.py — SKYLINE SHOP ULTRA PRO (v4.0 / FINAL / NO-ERROR / NO-BREAK)
 from __future__ import annotations
 
+import hashlib
+import os
 import time
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, List, Optional, Tuple
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
-from flask import Blueprint, current_app, make_response, redirect, render_template, request, session, url_for
-from sqlalchemy import asc, desc, or_
+from flask import (
+    Blueprint,
+    Response,
+    current_app,
+    make_response,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
+from sqlalchemy import asc, desc, func, or_
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
@@ -25,42 +38,72 @@ AFF_COOKIE_SUB_NAME = "sk_sub"
 AFF_COOKIE_TTL_DAYS = 30
 
 _TRUE = {"1", "true", "yes", "y", "on", "checked"}
+_FALSE = {"0", "false", "no", "n", "off", "unchecked"}
+
+DEFAULT_CURRENCY = (os.getenv("DEFAULT_CURRENCY") or "USD").strip().upper()[:3] or "USD"
+
+# Design tokens (para templates: look premium sin tocar HTML todavía)
+SHOP_UI_TOKENS = {
+    "brand": "skyline",
+    "radius": 18,
+    "shadow": "0 22px 70px rgba(0,0,0,.10)",
+    "surface": "rgba(255,255,255,.92)",
+    "surface2": "rgba(255,255,255,.78)",
+    "stroke": "rgba(15,23,42,.12)",
+    "muted": "#64748b",
+    "ok": "#16a34a",
+    "warn": "#f59e0b",
+    "bad": "#ef4444",
+}
+
+# Cache headers
+_NO_STORE_HEADERS = {
+    "Cache-Control": "no-store, max-age=0, must-revalidate",
+    "Pragma": "no-cache",
+    "Expires": "0",
+    "Vary": "Accept, Cookie",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+}
+
+_PUBLIC_CACHE_FMT = "public, max-age={sec}, stale-while-revalidate=30"
+_MAX_PER = 120
+_MIN_PER = 12
 
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _norm(v: Any, *, max_len: int = 500) -> str:
+def _s(v: Any, *, max_len: int = 500, default: str = "") -> str:
     if v is None:
-        return ""
+        return default
     s = v.strip() if isinstance(v, str) else str(v).strip()
-    s = s.replace("\x00", "").replace("\u200b", "").replace("\r", "").replace("\n", "")
-    return s[:max_len]
-
-
-def _safe_str(v: Any, *, max_len: int = 500) -> str:
-    return _norm(v, max_len=max_len)
+    s = s.replace("\x00", "").replace("\u200b", "").replace("\r", "").replace("\n", "").replace("\t", "")
+    if not s:
+        return default
+    s = " ".join(s.split())
+    return s[: max(0, int(max_len))]
 
 
 def _safe_slug(v: Any, *, max_len: int = 80) -> str:
-    raw = _safe_str(v, max_len=max_len).lower().replace(" ", "-")
+    raw = _s(v, max_len=max_len).lower().replace(" ", "-")
     out = "".join(ch for ch in raw if ch.isalnum() or ch in {"-", "_"})
     out = out.strip("-_")
     return out[:max_len]
 
 
 def _int_arg(name: str, default: int, *, min_v: int, max_v: int) -> int:
-    raw = _safe_str(request.args.get(name), max_len=40)
+    raw = _s(request.args.get(name), max_len=40)
     try:
         val = int(raw) if raw else int(default)
     except Exception:
         val = int(default)
-    return max(min_v, min(max_v, val))
+    return max(int(min_v), min(int(max_v), int(val)))
 
 
 def _decimal_arg(name: str) -> Optional[Decimal]:
-    raw = _safe_str(request.args.get(name), max_len=40)
+    raw = _s(request.args.get(name), max_len=40)
     if not raw:
         return None
     raw = raw.replace(",", ".")
@@ -74,18 +117,16 @@ def _decimal_arg(name: str) -> Optional[Decimal]:
 
 
 def _get_client_ip() -> str:
-    xff = _safe_str(request.headers.get("X-Forwarded-For"), max_len=300)
-    ip = (xff.split(",")[0].strip() if xff else "") or _safe_str(request.remote_addr, max_len=120) or "unknown"
+    xff = _s(request.headers.get("X-Forwarded-For"), max_len=300)
+    ip = (xff.split(",")[0].strip() if xff else "") or _s(request.remote_addr, max_len=120) or "unknown"
     return ip[:80]
 
 
 def _escape_like(value: str) -> str:
-    # Escapa caracteres especiales para LIKE y evita wildcard injection
-    v = _safe_str(value, max_len=80).strip()
+    v = _s(value, max_len=80).strip()
     if not v:
         return ""
-    v = v.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-    return v
+    return v.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 def _safe_like(value: str) -> str:
@@ -100,7 +141,7 @@ def _safe_sort(raw: Any) -> str:
 
 
 def _safe_per(default: int = 48) -> int:
-    per = _int_arg("per", default, min_v=12, max_v=120)
+    per = _int_arg("per", default, min_v=_MIN_PER, max_v=_MAX_PER)
     presets = (12, 18, 24, 36, 48, 60, 72, 96, 120)
     return int(min(presets, key=lambda p: abs(p - per)))
 
@@ -116,8 +157,8 @@ def _qs(override: Dict[str, Any]) -> str:
 
 
 def _get_aff_params_from_request() -> Tuple[Optional[str], Optional[str]]:
-    aff = _safe_str(request.args.get("aff"), max_len=120) or None
-    sub = _safe_str(request.args.get("sub"), max_len=160) or None
+    aff = _s(request.args.get("aff"), max_len=120) or None
+    sub = _s(request.args.get("sub"), max_len=160) or None
 
     if aff:
         a = aff.lower().replace(" ", "-")[:80]
@@ -133,24 +174,16 @@ def _get_aff_attribution() -> Tuple[Optional[str], Optional[str]]:
     sub = session.get("aff_sub")
 
     if not aff:
-        aff = _safe_str(request.cookies.get(AFF_COOKIE_NAME), max_len=120) or None
+        aff = _s(request.cookies.get(AFF_COOKIE_NAME), max_len=120) or None
     if not sub:
-        sub = _safe_str(request.cookies.get(AFF_COOKIE_SUB_NAME), max_len=160) or None
+        sub = _s(request.cookies.get(AFF_COOKIE_SUB_NAME), max_len=160) or None
 
-    if isinstance(aff, str):
-        aff = aff[:80] or None
-    else:
-        aff = None
-
-    if isinstance(sub, str):
-        sub = sub[:120] or None
-    else:
-        sub = None
-
+    aff = (aff[:80] if isinstance(aff, str) else "") or None
+    sub = (sub[:120] if isinstance(sub, str) else "") or None
     return aff, sub
 
 
-def _capture_affiliation_for_response(resp):
+def _capture_affiliation_for_response(resp: Response) -> Response:
     aff, sub = _get_aff_params_from_request()
     if not aff:
         return resp
@@ -206,14 +239,26 @@ def _track_aff_click_if_any(product_id: int) -> None:
     if AffiliateClick is None:
         return
 
+    # micro-rate-limit para no spamear clicks por refresh
+    try:
+        k = f"aff_click:{int(product_id)}"
+        now = int(time.time())
+        last = int(session.get(k) or 0)
+        if now - last < 3:
+            return
+        session[k] = now
+        session.modified = True
+    except Exception:
+        pass
+
     try:
         click = AffiliateClick(
             aff_code=aff[:80],
             sub_code=(sub[:120] if sub else None),
             product_id=int(product_id),
             ip=_get_client_ip(),
-            user_agent=_safe_str(request.headers.get("User-Agent"), max_len=300) or None,
-            referrer=_safe_str(request.referrer, max_len=500) or None,
+            user_agent=_s(request.headers.get("User-Agent"), max_len=300) or None,
+            referrer=_s(request.referrer, max_len=500) or None,
             meta={"path": request.path, "ts": utcnow().isoformat()},
         )
         db.session.add(click)
@@ -241,24 +286,21 @@ def _product_cat_slug(p: Product) -> str:
 
 
 def _apply_active_filter(query):
-    # Compatible con distintos modelos
     try:
         if hasattr(Product, "status"):
-            query = query.filter(Product.status == "active")
-            return query
+            return query.filter(Product.status == "active")
     except Exception:
         pass
     try:
         if hasattr(Product, "is_active"):
-            query = query.filter(getattr(Product, "is_active").is_(True))
-            return query
+            return query.filter(getattr(Product, "is_active").is_(True))
     except Exception:
         pass
     return query
 
 
 def _apply_available_filter(query):
-    available = _safe_str(request.args.get("available"), max_len=20).lower()
+    available = _s(request.args.get("available"), max_len=20).lower()
     if available not in _TRUE:
         return query
 
@@ -282,42 +324,57 @@ def _apply_available_filter(query):
     return query
 
 
-def _safe_count(query) -> int:
+def _resp_no_store(resp: Response) -> Response:
     try:
-        return int(query.order_by(None).count())
+        for k, v in _NO_STORE_HEADERS.items():
+            resp.headers.setdefault(k, v)
+        resp.headers.setdefault("X-Served-By", "skyline")
     except Exception:
-        try:
-            return int(query.count())
-        except Exception:
-            return 0
-
-
-def _resp_no_store(resp):
-    resp.headers.setdefault("Cache-Control", "no-store")
-    resp.headers.setdefault("Pragma", "no-cache")
-    resp.headers.setdefault("Vary", "Cookie")
-    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
-    resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        pass
     return resp
 
 
-def _resp_public_cache(resp, seconds: int = 30):
+def _resp_public_cache(resp: Response, seconds: int = 30) -> Response:
     sec = max(0, int(seconds))
     if sec <= 0:
         return _resp_no_store(resp)
-    resp.headers["Cache-Control"] = f"public, max-age={sec}, stale-while-revalidate=30"
+    try:
+        resp.headers["Cache-Control"] = _PUBLIC_CACHE_FMT.format(sec=sec)
+        resp.headers.setdefault("Vary", "Accept")
+        resp.headers.setdefault("X-Served-By", "skyline")
+    except Exception:
+        pass
     return resp
 
 
 def _is_personalized() -> bool:
-    # Si hay afiliado en query/cookie/session, evitamos cache público
     aff_q, _ = _get_aff_params_from_request()
     if aff_q:
         return True
     aff_s, _ = _get_aff_attribution()
-    if aff_s:
+    return bool(aff_s)
+
+
+def _template_exists(name: str) -> bool:
+    try:
+        current_app.jinja_env.get_template(name)
         return True
-    return False
+    except Exception:
+        return False
+
+
+def _etag_for_shop_listing(args: Dict[str, Any], *, total: int, page: int, per: int) -> str:
+    raw = f"{sorted(args.items())}|t={total}|p={page}|per={per}|v=4"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _maybe_304(etag: str) -> Optional[Response]:
+    inm = _s(request.headers.get("If-None-Match"), max_len=200)
+    if inm and inm.strip('"') == etag:
+        r = make_response("", 304)
+        r.headers["ETag"] = f'"{etag}"'
+        return r
+    return None
 
 
 def _render_404():
@@ -329,12 +386,19 @@ def _render_404():
     except Exception:
         pass
     try:
-        return render_template("error.html", error_code=404, error_title="No encontrado", error_message="La página no existe."), 404
+        if _template_exists("error.html"):
+            return render_template(
+                "error.html",
+                error_code=404,
+                error_title="No encontrado",
+                error_message="La página no existe.",
+                ui=dict(SHOP_UI_TOKENS),
+            ), 404
+        if _template_exists("404.html"):
+            return render_template("404.html", ui=dict(SHOP_UI_TOKENS)), 404
     except Exception:
-        try:
-            return render_template("404.html"), 404
-        except Exception:
-            return ("Not Found", 404)
+        pass
+    return ("Not Found", 404)
 
 
 # -----------------------
@@ -342,7 +406,6 @@ def _render_404():
 # -----------------------
 @shop_compat_bp.get("/shop")
 def compat_shop_redirect():
-    # /shop -> /shop/ (home)
     qs = request.args.to_dict(flat=True)
     return redirect(url_for("shop.shop", **qs), code=301)
 
@@ -358,7 +421,7 @@ def compat_product_redirect(slug: str):
 # -----------------------
 @shop_bp.get("/")
 def shop():
-    q = _safe_str(request.args.get("q"), max_len=120)
+    q = _s(request.args.get("q"), max_len=120)
     cat = _safe_slug(request.args.get("categoria") or request.args.get("cat"), max_len=80)
     sort = _safe_sort(request.args.get("sort") or "new")
 
@@ -371,7 +434,11 @@ def shop():
     if minp is not None and maxp is not None and minp > maxp:
         minp, maxp = maxp, minp
 
-    query = Product.query
+    # Base query (compat Flask-SQLAlchemy y SQLAlchemy puro)
+    try:
+        query = Product.query
+    except Exception:
+        query = db.session.query(Product)
 
     opts = []
     if hasattr(Product, "category"):
@@ -385,20 +452,24 @@ def shop():
         except Exception:
             pass
     if opts:
-        query = query.options(*opts)
+        try:
+            query = query.options(*opts)
+        except Exception:
+            pass
 
     query = _apply_active_filter(query)
     query = _apply_available_filter(query)
 
+    # Category filter (robusto a distintos esquemas)
     if cat:
         try:
-            slug_path_attr = getattr(Category, "slug_path", None)
             query = query.join(Category, isouter=True)
-            if slug_path_attr is not None:
-                query = query.filter(or_(Category.slug == cat, slug_path_attr == cat))
+            if hasattr(Category, "slug_path"):
+                query = query.filter(or_(Category.slug == cat, Category.slug_path == cat))
             else:
                 query = query.filter(Category.slug == cat)
         except Exception:
+            # fallback: product fields
             for attr in ("category_slug", "category", "categoria", "cat"):
                 if hasattr(Product, attr):
                     try:
@@ -407,23 +478,25 @@ def shop():
                     except Exception:
                         pass
 
+    # Search filter
     if q:
         like = _safe_like(q)
         if like:
             conds = []
             for field in ("title", "slug", "short_description", "description_html", "description"):
                 if hasattr(Product, field):
+                    col = getattr(Product, field)
                     try:
-                        # escape LIKE si el dialecto lo soporta
-                        conds.append(getattr(Product, field).ilike(like, escape="\\"))
+                        conds.append(col.ilike(like, escape="\\"))
                     except Exception:
                         try:
-                            conds.append(getattr(Product, field).ilike(like))
+                            conds.append(col.ilike(like))
                         except Exception:
                             pass
             if conds:
                 query = query.filter(or_(*conds))
 
+    # Price filter
     if hasattr(Product, "price"):
         try:
             if minp is not None:
@@ -437,6 +510,7 @@ def shop():
     updated_field = getattr(Product, "updated_at", None)
     price_field = getattr(Product, "price", None)
 
+    # Sort
     try:
         if sort == "price_asc" and price_field is not None:
             query = query.order_by(asc(price_field), desc(Product.id))
@@ -456,15 +530,27 @@ def shop():
     except Exception:
         query = query.order_by(desc(Product.id))
 
-    total = _safe_count(query)
+    # Total count (safe) — y fallback a "no total" si falla
+    total = 0
+    try:
+        total = int(query.order_by(None).count())
+    except Exception:
+        try:
+            total = int(query.count())
+        except Exception:
+            total = 0
+
     offset = (page - 1) * per
 
+    # Si pidieron page muy grande, llevamos a la última
     if offset >= total and total > 0:
         last_page = max((total + per - 1) // per, 1)
-        return redirect(url_for("shop.shop", **{**request.args.to_dict(flat=True), "page": last_page}), code=302)
+        merged = {**request.args.to_dict(flat=True), "page": last_page}
+        return redirect(url_for("shop.shop", **merged), code=302)
 
+    products: List[Product] = []
     try:
-        products: List[Product] = query.offset(offset).limit(per).all()
+        products = query.offset(offset).limit(per).all()
     except SQLAlchemyError:
         try:
             db.session.rollback()
@@ -480,14 +566,22 @@ def shop():
 
     categories: List[Category] = []
     try:
-        categories = Category.query.order_by(asc(Category.name)).all()
+        try:
+            categories = Category.query.order_by(asc(Category.name)).all()  # type: ignore[attr-defined]
+        except Exception:
+            categories = db.session.query(Category).order_by(asc(Category.name)).all()
     except Exception:
         categories = []
 
     aff_code, aff_sub = _get_aff_attribution()
 
-    html = render_template(
-        "shop.html",
+    # URLs next/prev consistentes
+    has_next = (offset + per) < total
+    has_prev = page > 1
+    next_url = f"/shop/?{_qs({'page': page + 1})}" if has_next else None
+    prev_url = f"/shop/?{_qs({'page': page - 1})}" if has_prev else None
+
+    ctx = dict(
         products=products,
         grouped_products=grouped_products,
         categories=categories,
@@ -499,29 +593,47 @@ def shop():
         page=page,
         per=per,
         total=total,
-        has_next=(offset + per) < total,
-        has_prev=page > 1,
-        next_page=(page + 1) if (offset + per) < total else None,
-        prev_page=(page - 1) if page > 1 else None,
-        next_url=(f"/shop/?{_qs({'page': page + 1})}" if (offset + per) < total else None),
-        prev_url=(f"/shop/?{_qs({'page': page - 1})}" if page > 1 else None),
+        has_next=has_next,
+        has_prev=has_prev,
+        next_page=(page + 1) if has_next else None,
+        prev_page=(page - 1) if has_prev else None,
+        next_url=next_url,
+        prev_url=prev_url,
         aff_code=aff_code,
         aff_sub=aff_sub,
+        ui=dict(SHOP_UI_TOKENS),
+        currency=DEFAULT_CURRENCY,
     )
+
+    # Render template con fallback
+    tpl = "shop.html" if _template_exists("shop.html") else "shop/shop.html"
+    html = render_template(tpl, **ctx)
 
     resp = make_response(html)
     resp = _capture_affiliation_for_response(resp)
 
-    # Cache: solo si NO hay afiliación/personalización
+    # ETag (solo para listados “cacheables”)
     ttl = int(current_app.config.get("SHOP_CACHE_TTL", 30) or 30)
-    if _is_personalized() or q or cat or minp is not None or maxp is not None:
+    is_filtered = bool(q or cat or (minp is not None) or (maxp is not None))
+    if _is_personalized() or is_filtered:
         return _resp_no_store(resp)
+
+    try:
+        etag = _etag_for_shop_listing(request.args.to_dict(flat=True), total=total, page=page, per=per)
+        maybe = _maybe_304(etag)
+        if maybe:
+            maybe.headers["ETag"] = f'"{etag}"'
+            return _resp_public_cache(maybe, seconds=ttl)
+        resp.headers["ETag"] = f'"{etag}"'
+    except Exception:
+        pass
+
     return _resp_public_cache(resp, seconds=ttl)
 
 
 @shop_bp.get("/product/<path:slug>")
 def product_detail(slug: str):
-    slug = _safe_str(slug, max_len=220)
+    slug = _s(slug, max_len=220)
     if not slug:
         return _render_404()
 
@@ -557,11 +669,17 @@ def product_detail(slug: str):
     _track_aff_click_if_any(int(getattr(p, "id", 0) or 0))
 
     aff_code, aff_sub = _get_aff_attribution()
-    html = render_template("product_detail.html", product=p, aff_code=aff_code, aff_sub=aff_sub)
 
+    tpl = "product_detail.html"
+    if not _template_exists("product_detail.html") and _template_exists("shop/product_detail.html"):
+        tpl = "shop/product_detail.html"
+
+    html = render_template(tpl, product=p, aff_code=aff_code, aff_sub=aff_sub, ui=dict(SHOP_UI_TOKENS))
     resp = make_response(html)
     resp = _capture_affiliation_for_response(resp)
+
+    # Product pages: no-store (precio/stock/affiliate)
     return _resp_no_store(resp)
 
 
-__all__ = ["shop_bp", "shop_compat_bp"]
+__all__ = ["shop_bp", "shop_compat_bp", "SHOP_UI_TOKENS"]

@@ -4,21 +4,28 @@ import re
 import secrets
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, Mapping, Optional, Tuple
+from typing import Any, Dict, Mapping, Optional, Tuple, cast
 
-from flask import Blueprint, current_app, flash, jsonify, redirect, render_template, request, session, url_for
+from flask import Blueprint, Response, current_app, flash, jsonify, redirect, render_template, request, session, url_for
 from sqlalchemy import func, select
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.models import User, db
+
+log = current_app.logger if hasattr(current_app, "logger") else None  # type: ignore
 
 profile_bp = Blueprint("profile", __name__, url_prefix="/account", template_folder="../templates")
 profile_bp.strict_slashes = False
 
 _TRUE = {"1", "true", "yes", "y", "on", "checked"}
-_FALSE = {"0", "false", "no", "n", "off"}
+_FALSE = {"0", "false", "no", "n", "off", "unchecked"}
 
-EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
-PHONE_RE = re.compile(r"^[0-9+() \-]{6,40}$")
+_EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+_PHONE_RE = re.compile(r"^[0-9+() \-]{6,40}$")
+
+CSRF_SESSION_KEY = "csrf_token"
+_RL_SESSION_KEY = "profile_rl_v2"
+_MAX_RL_KEYS = 220
 
 RL_PROFILE_LIMIT = 20
 RL_PROFILE_WINDOW = 60
@@ -27,9 +34,23 @@ RL_EMAIL_WINDOW = 60
 RL_PASSWORD_LIMIT = 6
 RL_PASSWORD_WINDOW = 120
 
-CSRF_SESSION_KEY = "csrf_token"
-_RL_SESSION_KEY = "profile_rl_v1"
-_MAX_RL_KEYS = 200
+_MAX_STR_80 = 80
+_MAX_STR_120 = 120
+_MAX_STR_254 = 254
+_MAX_STR_512 = 512
+_MAX_STR_2048 = 2048
+
+_NO_STORE_HEADERS = {
+    "Cache-Control": "no-store, max-age=0, must-revalidate",
+    "Pragma": "no-cache",
+    "Expires": "0",
+    "Vary": "Cookie, Accept",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "X-Frame-Options": "DENY",
+    "Cross-Origin-Opener-Policy": "same-origin",
+    "Permissions-Policy": "geolocation=(), microphone=(), camera=()",
+}
 
 
 def _utcnow() -> datetime:
@@ -40,12 +61,30 @@ def _now() -> int:
     return int(time.time())
 
 
-def _safe_str(v: Any, *, max_len: int = 500) -> str:
+def _norm(v: Any, *, max_len: int) -> str:
     if v is None:
         return ""
-    s = v.strip() if isinstance(v, str) else str(v).strip()
-    s = s.replace("\x00", "").replace("\u200b", "").replace("\r", "").replace("\n", "")
+    s = v if isinstance(v, str) else str(v)
+    s = s.replace("\x00", "").replace("\u200b", "").strip()
+    s = s.replace("\r", "").replace("\n", "")
+    if max_len <= 0:
+        return s
     return s[:max_len]
+
+
+def _bool(v: Any) -> Optional[bool]:
+    if v is None:
+        return None
+    if isinstance(v, bool):
+        return v
+    s = _norm(v, max_len=32).lower()
+    if not s:
+        return None
+    if s in _TRUE:
+        return True
+    if s in _FALSE:
+        return False
+    return None
 
 
 def _wants_json() -> bool:
@@ -54,20 +93,33 @@ def _wants_json() -> bool:
             return True
     except Exception:
         pass
-    accept = _safe_str(request.headers.get("Accept") or "", max_len=200).lower()
-    fmt = _safe_str(request.args.get("format") or "", max_len=40).lower()
-    xrw = _safe_str(request.headers.get("X-Requested-With") or "", max_len=60).lower()
-    ctype = _safe_str(request.headers.get("Content-Type") or "", max_len=120).lower()
-    return (
-        "application/json" in accept
-        or "text/json" in accept
-        or fmt == "json"
-        or xrw == "xmlhttprequest"
-        or ctype.startswith("application/json")
-    )
+
+    fmt = _norm(request.args.get("format") or "", max_len=16).lower()
+    if fmt == "json":
+        return True
+
+    accept = _norm(request.headers.get("Accept") or "", max_len=200).lower()
+    if "application/json" in accept or "text/json" in accept:
+        return True
+
+    xrw = _norm(request.headers.get("X-Requested-With") or "", max_len=60).lower()
+    if xrw == "xmlhttprequest":
+        return True
+
+    ctype = _norm(request.headers.get("Content-Type") or "", max_len=120).lower()
+    if ctype.startswith("application/json"):
+        return True
+
+    try:
+        best = request.accept_mimetypes.best_match(["application/json", "text/html"])
+        if best == "application/json" and request.accept_mimetypes[best] > request.accept_mimetypes["text/html"]:
+            return True
+    except Exception:
+        pass
+    return False
 
 
-def _json(payload: Dict[str, Any], status: int = 200):
+def _json(payload: Dict[str, Any], status: int = 200) -> Response:
     resp = jsonify(payload)
     resp.status_code = int(status)
     if resp.status_code == 429 and "retry_after" in payload:
@@ -78,40 +130,53 @@ def _json(payload: Dict[str, Any], status: int = 200):
     return resp
 
 
-def _json_or_redirect(payload: Dict[str, Any], endpoint: str, **kwargs):
-    if _wants_json():
-        return _json(payload, int(payload.get("status", 200)))
-    return redirect(url_for(endpoint, **kwargs), code=302)
-
-
-def _no_store(resp):
+def _flash(category: str, msg: str) -> None:
     try:
-        resp.headers.setdefault("Cache-Control", "no-store, max-age=0, must-revalidate")
-        resp.headers.setdefault("Pragma", "no-cache")
-        resp.headers.setdefault("Expires", "0")
-        resp.headers.setdefault("Vary", "Cookie")
-        resp.headers.setdefault("X-Content-Type-Options", "nosniff")
-        resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
-        resp.headers.setdefault("X-Frame-Options", "DENY")
+        flash(_norm(msg, max_len=220) or "OK", category)
+    except Exception:
+        pass
+
+
+def _no_store(resp: Response) -> Response:
+    try:
+        for k, v in _NO_STORE_HEADERS.items():
+            resp.headers.setdefault(k, v)
     except Exception:
         pass
     return resp
 
 
 def _client_ip() -> str:
-    xff = _safe_str(request.headers.get("X-Forwarded-For") or "", max_len=400)
+    xff = _norm(request.headers.get("X-Forwarded-For") or "", max_len=400)
+    ip = ""
     if xff:
-        return _safe_str(xff.split(",")[0].strip(), max_len=80) or "unknown"
-    return _safe_str(request.remote_addr or "unknown", max_len=80) or "unknown"
+        ip = _norm(xff.split(",")[0].strip(), max_len=80)
+    if not ip:
+        ip = _norm(request.remote_addr or "unknown", max_len=80)
+    return ip or "unknown"
 
 
 def _rl_store() -> Dict[str, Dict[str, Any]]:
     store = session.get(_RL_SESSION_KEY)
     if not isinstance(store, dict):
         store = {}
-    # limpieza rápida para evitar crecimiento
+
+    if store:
+        cutoff = _now() - max(RL_PASSWORD_WINDOW, RL_PROFILE_WINDOW, RL_EMAIL_WINDOW) * 3
+        for k in list(store.keys()):
+            v = store.get(k)
+            if not isinstance(v, dict):
+                store.pop(k, None)
+                continue
+            try:
+                t0 = int(v.get("t") or 0)
+            except Exception:
+                t0 = 0
+            if t0 and t0 < cutoff:
+                store.pop(k, None)
+
     if len(store) > _MAX_RL_KEYS:
-        items = []
+        items: list[tuple[int, str]] = []
         for k, v in list(store.items()):
             if isinstance(v, dict):
                 try:
@@ -121,38 +186,36 @@ def _rl_store() -> Dict[str, Dict[str, Any]]:
         items.sort()
         for _, k in items[: max(0, len(store) - _MAX_RL_KEYS)]:
             store.pop(k, None)
+
     session[_RL_SESSION_KEY] = store
     session.modified = True
-    return store  # type: ignore[return-value]
+    return cast(Dict[str, Dict[str, Any]], store)
 
 
 def _rate_limit(bucket: str, limit: int, window_seconds: int) -> Tuple[bool, int]:
     now = _now()
-    ip = _client_ip()
     uid = str(session.get("user_id") or "anon")
-    key = f"{bucket}:{ip}:{uid}"
+    key = f"{bucket}:{_client_ip()}:{uid}"
 
     store = _rl_store()
     b = store.get(key)
     if not isinstance(b, dict):
         store[key] = {"t": now, "n": 1}
-        session[_RL_SESSION_KEY] = store
         session.modified = True
         return True, 0
 
     try:
-        t0 = int(b.get("t", now) or now)
+        t0 = int(b.get("t") or now)
     except Exception:
         t0 = now
     try:
-        n = int(b.get("n", 0) or 0)
+        n = int(b.get("n") or 0)
     except Exception:
         n = 0
 
     elapsed = now - t0
-    if elapsed >= int(window_seconds):
+    if elapsed >= int(window_seconds) or elapsed < 0:
         store[key] = {"t": now, "n": 1}
-        session[_RL_SESSION_KEY] = store
         session.modified = True
         return True, 0
 
@@ -162,12 +225,11 @@ def _rate_limit(bucket: str, limit: int, window_seconds: int) -> Tuple[bool, int
 
     b["n"] = n + 1
     store[key] = b
-    session[_RL_SESSION_KEY] = store
     session.modified = True
     return True, 0
 
 
-def _rate_limit_or_429(bucket: str, limit: int, window_seconds: int):
+def _rate_limit_or_fail(bucket: str, limit: int, window_seconds: int):
     ok, retry = _rate_limit(bucket, limit=limit, window_seconds=window_seconds)
     if ok:
         return None
@@ -175,7 +237,7 @@ def _rate_limit_or_429(bucket: str, limit: int, window_seconds: int):
     if _wants_json():
         return _json({"ok": False, "error": "too_many_requests", "retry_after": retry}, 429)
 
-    flash("Demasiados intentos. Esperá un minuto y probá de nuevo.", "warning")
+    _flash("warning", "Demasiados intentos. Esperá un minuto y probá de nuevo.")
     r = redirect(url_for("profile.profile_home"), code=302)
     try:
         r.headers["Retry-After"] = str(int(retry))
@@ -190,14 +252,15 @@ def _soft_logout() -> None:
     session.modified = True
 
 
-def _login_required() -> Optional[Any]:
-    if session.get("user_id"):
+def _login_required():
+    uid = session.get("user_id")
+    if uid:
         return None
     if _wants_json():
         return _json({"ok": False, "error": "auth_required"}, 401)
-    flash("Iniciá sesión para continuar.", "warning")
-    nxt = _safe_str(request.path or "/account/profile", max_len=300)
-    # conectamos al GET correcto del módulo auth
+
+    _flash("warning", "Iniciá sesión para continuar.")
+    nxt = _norm(request.path or "/account/profile", max_len=300)
     try:
         return redirect(url_for("auth.login_get", next=nxt), code=302)
     except Exception:
@@ -230,7 +293,7 @@ def _is_admin_session() -> bool:
 
 def _ensure_csrf() -> str:
     tok = session.get(CSRF_SESSION_KEY)
-    if isinstance(tok, str) and len(tok.strip()) >= 16:
+    if isinstance(tok, str) and len(tok.strip()) >= 24:
         return tok.strip()
     tok = secrets.token_urlsafe(32)
     session[CSRF_SESSION_KEY] = tok
@@ -239,29 +302,30 @@ def _ensure_csrf() -> str:
 
 
 def _rotate_csrf() -> None:
+    session[CSRF_SESSION_KEY] = secrets.token_urlsafe(32)
+    session.modified = True
+
+
+def _safe_get_json() -> Dict[str, Any]:
     try:
-        session[CSRF_SESSION_KEY] = secrets.token_urlsafe(32)
-        session.modified = True
+        if request.is_json:
+            j = request.get_json(silent=True) or {}
+            return dict(j) if isinstance(j, Mapping) else {}
     except Exception:
         pass
+    return {}
 
 
 def _check_csrf() -> bool:
-    token = _safe_str(session.get(CSRF_SESSION_KEY) or "", max_len=2048)
+    token = _norm(session.get(CSRF_SESSION_KEY) or "", max_len=_MAX_STR_2048)
     if not token:
         return False
 
-    got = _safe_str(request.headers.get("X-CSRF-Token") or "", max_len=2048)
+    got = _norm(request.headers.get("X-CSRF-Token") or "", max_len=_MAX_STR_2048)
     if not got:
-        got = _safe_str(request.form.get("csrf_token") or "", max_len=2048)
+        got = _norm(request.form.get("csrf_token") or "", max_len=_MAX_STR_2048)
     if not got:
-        try:
-            if request.is_json:
-                j = request.get_json(silent=True) or {}
-                if isinstance(j, dict):
-                    got = _safe_str(j.get("csrf_token") or "", max_len=2048)
-        except Exception:
-            got = ""
+        got = _norm(_safe_get_json().get("csrf_token") or "", max_len=_MAX_STR_2048)
     if not got:
         return False
 
@@ -271,68 +335,35 @@ def _check_csrf() -> bool:
         return token == got
 
 
-def _csrf_required() -> Optional[Any]:
+def _csrf_required():
     if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
         if not _check_csrf():
             if _wants_json():
                 return _json({"ok": False, "error": "csrf_invalid"}, 400)
-            flash("Token inválido. Recargá la página e intentá de nuevo.", "warning")
+            _flash("warning", "Token inválido. Recargá la página e intentá de nuevo.")
             return redirect(url_for("profile.profile_home"), code=302)
     return None
 
 
-def _clean_str(v: Any, max_len: int) -> Optional[str]:
-    s = _safe_str(v, max_len=max_len)
-    return s if s else None
-
-
-def _clean_country(v: Any) -> Optional[str]:
-    s = _clean_str(v, 8)
-    if not s:
-        return None
-    s = s.upper()
-    return s[:2] if len(s) >= 2 else None
-
-
-def _validate_email(v: Any) -> Tuple[bool, str]:
-    s = _safe_str(v, max_len=400).lower()
-    if not s:
-        return False, "Email requerido."
-    if len(s) > 254:
-        return False, "Email demasiado largo."
-    if not EMAIL_RE.match(s):
-        return False, "Email inválido."
-    return True, s[:254]
-
-
-def _validate_phone(v: Any) -> Optional[str]:
-    s = _clean_str(v, 80)
-    if not s:
-        return None
-    s = s[:40]
-    if PHONE_RE.match(s):
-        return s
-    # si no matchea, igual guardamos versión “suave” (no rompe UX)
-    return s
-
-
 def _read_payload() -> Dict[str, Any]:
-    ctype = _safe_str(request.headers.get("Content-Type") or "", max_len=120).lower()
+    ctype = _norm(request.headers.get("Content-Type") or "", max_len=120).lower()
     if ctype.startswith("application/json"):
-        try:
-            data = request.get_json(silent=True)
-            return dict(data) if isinstance(data, Mapping) else {}
-        except Exception:
-            return {}
-    return {k: v for k, v in (request.form or {}).items()}
+        return _safe_get_json()
+    try:
+        return {k: v for k, v in (request.form or {}).items()}
+    except Exception:
+        return {}
 
 
-def _commit_or_fail(label: str) -> bool:
+def _commit(label: str) -> bool:
     try:
         db.session.commit()
         return True
     except Exception as exc:
-        current_app.logger.exception("%s commit failed: %s", label, exc)
+        try:
+            current_app.logger.exception("%s commit failed: %s", label, exc)
+        except Exception:
+            pass
         try:
             db.session.rollback()
         except Exception:
@@ -343,41 +374,68 @@ def _commit_or_fail(label: str) -> bool:
 def _set_if_has(obj: Any, attr: str, value: Any) -> bool:
     if not hasattr(obj, attr):
         return False
-    cur = getattr(obj, attr, None)
-    if cur == value:
+    try:
+        cur = getattr(obj, attr, None)
+        if cur == value:
+            return False
+        setattr(obj, attr, value)
+        return True
+    except Exception:
         return False
-    setattr(obj, attr, value)
-    return True
 
 
-def _bool_from_any(v: Any) -> Optional[bool]:
-    if v is None:
-        return None
-    if isinstance(v, bool):
-        return v
-    s = _safe_str(v, max_len=32).lower()
+def _clean_str(v: Any, max_len: int) -> Optional[str]:
+    s = _norm(v, max_len=max_len)
+    return s if s else None
+
+
+def _clean_country(v: Any) -> Optional[str]:
+    s = _clean_str(v, 8)
     if not s:
         return None
-    if s in _TRUE:
-        return True
-    if s in _FALSE:
-        return False
-    return None
+    s2 = s.upper()
+    if len(s2) < 2:
+        return None
+    return s2[:2]
+
+
+def _validate_email(v: Any) -> Tuple[bool, str]:
+    s = _norm(v, max_len=400).lower()
+    if not s:
+        return False, "Email requerido."
+    if len(s) > _MAX_STR_254:
+        return False, "Email demasiado largo."
+    if not _EMAIL_RE.match(s):
+        return False, "Email inválido."
+    return True, s[:_MAX_STR_254]
+
+
+def _validate_phone(v: Any) -> Optional[str]:
+    s = _clean_str(v, 80)
+    if not s:
+        return None
+    s2 = s[:40]
+    if _PHONE_RE.match(s2):
+        return s2
+    return s2
 
 
 def _user_password_check(user: Any, password: str) -> bool:
     pw = password or ""
     if not pw:
         return False
+
     try:
         fn = getattr(user, "check_password", None)
         if callable(fn):
             return bool(fn(pw))
     except Exception:
         pass
+
     try:
         from app.utils.password_engine import verify_and_maybe_rehash  # type: ignore
-        stored = _safe_str(getattr(user, "password_hash", "") or getattr(user, "password", ""), max_len=4096)
+
+        stored = _norm(getattr(user, "password_hash", "") or getattr(user, "password", ""), max_len=4096)
         ok, new_hash = verify_and_maybe_rehash(stored, pw)
         if ok and new_hash and hasattr(user, "password_hash"):
             try:
@@ -388,21 +446,35 @@ def _user_password_check(user: Any, password: str) -> bool:
                     db.session.rollback()
                 except Exception:
                     pass
+        try:
+            secrets.compare_digest("a", "a" if ok else "b")
+        except Exception:
+            pass
         return bool(ok)
     except Exception:
         pass
+
     try:
         from werkzeug.security import check_password_hash  # type: ignore
-        stored = _safe_str(getattr(user, "password_hash", "") or getattr(user, "password", ""), max_len=4096)
-        return bool(stored) and bool(check_password_hash(stored, pw))
+
+        stored = _norm(getattr(user, "password_hash", "") or getattr(user, "password", ""), max_len=4096)
+        ok = bool(stored) and bool(check_password_hash(stored, pw))
+        try:
+            secrets.compare_digest("a", "a" if ok else "b")
+        except Exception:
+            pass
+        return ok
     except Exception:
         return False
 
 
 def _user_password_set(user: Any, password: str) -> bool:
     pw = password or ""
-    if len(pw) < 8 or len(pw) > 256:
+    min_len = 10
+    max_len = 256
+    if len(pw) < min_len or len(pw) > max_len:
         return False
+
     try:
         fn = getattr(user, "set_password", None)
         if callable(fn):
@@ -410,37 +482,73 @@ def _user_password_set(user: Any, password: str) -> bool:
             return True
     except Exception:
         pass
+
     try:
         from app.utils.password_engine import hash_password  # type: ignore
+
         h = hash_password(pw)
     except Exception:
         try:
             from werkzeug.security import generate_password_hash  # type: ignore
+
             h = generate_password_hash(pw)
         except Exception:
             return False
 
-    if hasattr(user, "password_hash"):
+    try:
+        if hasattr(user, "password_hash"):
+            setattr(user, "password_hash", h)
+            return True
+        if hasattr(user, "password"):
+            setattr(user, "password", h)
+            return True
         setattr(user, "password_hash", h)
         return True
-    if hasattr(user, "password"):
-        setattr(user, "password", h)
-        return True
-    setattr(user, "password_hash", h)
-    return True
+    except Exception:
+        return False
+
+
+def _password_is_reasonable(pw: str) -> bool:
+    s = pw or ""
+    if len(s) < 10 or len(s) > 256:
+        return False
+    bad = {"password", "password123", "12345678", "qwerty123", "admin12345"}
+    if s.lower() in bad:
+        return False
+    has_letter = any(c.isalpha() for c in s)
+    has_digit = any(c.isdigit() for c in s)
+    return has_letter and has_digit
+
+
+def _render_safe(template: str, **ctx: Any):
+    try:
+        return render_template(template, **ctx)
+    except Exception:
+        try:
+            current_app.logger.exception("Template render failed: %s", template)
+        except Exception:
+            pass
+        title = _norm(ctx.get("title") or "Perfil", max_len=80) or "Perfil"
+        body = (
+            "<!doctype html><html lang='es'><head><meta charset='utf-8'>"
+            "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+            f"<title>{title}</title></head>"
+            "<body style='font-family:system-ui;padding:24px;max-width:920px;margin:0 auto'>"
+            f"<h1 style='margin:0 0 10px'>{title}</h1>"
+            "<p style='opacity:.75;margin:0'>No se pudo renderizar el template. Revisá logs.</p>"
+            "</body></html>"
+        )
+        return body, 200, {"Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store"}
 
 
 @profile_bp.before_request
 def _before():
-    # asegura CSRF para forms
     _ensure_csrf()
-    # POST/PUT/etc deben validarlo
-    gate = _csrf_required()
-    return gate
+    return _csrf_required()
 
 
 @profile_bp.after_request
-def _after(resp):
+def _after(resp: Response):
     return _no_store(resp)
 
 
@@ -453,11 +561,15 @@ def profile_home():
     user = _current_user()
     if not user:
         _soft_logout()
-        flash("Sesión inválida. Volvé a iniciar sesión.", "warning")
-        return _login_required()  # ya redirige correcto
+        _flash("warning", "Sesión inválida. Volvé a iniciar sesión.")
+        return _login_required()
 
-    csrf = _ensure_csrf()
-    return render_template("account/profile.html", user=user, csrf_token=csrf, is_admin=_is_admin_session())
+    return _render_safe(
+        "account/profile.html",
+        user=user,
+        csrf_token=_ensure_csrf(),
+        is_admin=_is_admin_session(),
+    )
 
 
 @profile_bp.post("/profile/update")
@@ -466,22 +578,24 @@ def profile_update():
     if guard:
         return guard
 
-    rl = _rate_limit_or_429("profile_update", RL_PROFILE_LIMIT, RL_PROFILE_WINDOW)
+    rl = _rate_limit_or_fail("profile_update", RL_PROFILE_LIMIT, RL_PROFILE_WINDOW)
     if rl:
         return rl
 
     user = _current_user()
     if not user:
         _soft_logout()
-        return _json_or_redirect({"ok": False, "error": "session_invalid", "status": 401}, "auth.login_get")
+        if _wants_json():
+            return _json({"ok": False, "error": "session_invalid"}, 401)
+        return redirect(url_for("auth.login_get"), code=302)
 
     payload = _read_payload()
 
-    name = _clean_str(payload.get("name"), 120)
+    name = _clean_str(payload.get("name"), _MAX_STR_120)
     phone = _validate_phone(payload.get("phone"))
     country = _clean_country(payload.get("country"))
-    city = _clean_str(payload.get("city"), 80)
-    email_opt_in = _bool_from_any(payload.get("email_opt_in"))
+    city = _clean_str(payload.get("city"), _MAX_STR_80)
+    email_opt_in = _bool(payload.get("email_opt_in"))
 
     changed = False
     changed |= _set_if_has(user, "name", name)
@@ -500,16 +614,21 @@ def profile_update():
     if not changed:
         if _wants_json():
             return _json({"ok": True, "updated": False, "message": "no_changes"}, 200)
-        flash("No había cambios para guardar.", "info")
+        _flash("info", "No había cambios para guardar.")
         return redirect(url_for("profile.profile_home"), code=302)
 
-    if not _commit_or_fail("profile_update"):
-        return _json_or_redirect({"ok": False, "error": "save_failed", "status": 500}, "profile.profile_home")
+    if not _commit("profile_update"):
+        if _wants_json():
+            return _json({"ok": False, "error": "save_failed"}, 500)
+        _flash("error", "No se pudo guardar. Reintentá.")
+        return redirect(url_for("profile.profile_home"), code=302)
+
+    _rotate_csrf()
 
     if _wants_json():
         return _json({"ok": True, "updated": True}, 200)
 
-    flash("Perfil actualizado ✅", "success")
+    _flash("success", "Perfil actualizado ✅")
     return redirect(url_for("profile.profile_home"), code=302)
 
 
@@ -519,35 +638,51 @@ def profile_change_email():
     if guard:
         return guard
 
-    rl = _rate_limit_or_429("profile_email", RL_EMAIL_LIMIT, RL_EMAIL_WINDOW)
+    rl = _rate_limit_or_fail("profile_email", RL_EMAIL_LIMIT, RL_EMAIL_WINDOW)
     if rl:
         return rl
 
     user = _current_user()
     if not user:
         _soft_logout()
-        return _json_or_redirect({"ok": False, "error": "session_invalid", "status": 401}, "auth.login_get")
+        if _wants_json():
+            return _json({"ok": False, "error": "session_invalid"}, 401)
+        return redirect(url_for("auth.login_get"), code=302)
 
     payload = _read_payload()
     ok, out = _validate_email(payload.get("email"))
     if not ok:
-        return _json_or_redirect({"ok": False, "error": out, "status": 400}, "profile.profile_home")
+        if _wants_json():
+            return _json({"ok": False, "error": out}, 400)
+        _flash("warning", out)
+        return redirect(url_for("profile.profile_home"), code=302)
 
     new_email = out
-    cur_email = _safe_str(getattr(user, "email", "") or "", max_len=254).lower()
+    cur_email = _norm(getattr(user, "email", "") or "", max_len=_MAX_STR_254).lower()
     if cur_email == new_email:
-        return _json_or_redirect({"ok": True, "message": "same_email", "status": 200}, "profile.profile_home")
+        if _wants_json():
+            return _json({"ok": True, "message": "same_email"}, 200)
+        _flash("info", "Ese ya era tu email.")
+        return redirect(url_for("profile.profile_home"), code=302)
 
-    # existencia (case-insensitive)
     try:
         stmt = select(User.id).where(func.lower(User.email) == new_email)
         exists_id = db.session.execute(stmt).scalar_one_or_none()
-    except Exception:
-        current_app.logger.exception("profile_email: query failed")
-        return _json_or_redirect({"ok": False, "error": "query_failed", "status": 500}, "profile.profile_home")
+    except SQLAlchemyError:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        if _wants_json():
+            return _json({"ok": False, "error": "query_failed"}, 500)
+        _flash("error", "No se pudo validar el email. Reintentá.")
+        return redirect(url_for("profile.profile_home"), code=302)
 
     if exists_id:
-        return _json_or_redirect({"ok": False, "error": "Ese email ya está en uso.", "status": 409}, "profile.profile_home")
+        if _wants_json():
+            return _json({"ok": False, "error": "email_in_use"}, 409)
+        _flash("warning", "Ese email ya está en uso.")
+        return redirect(url_for("profile.profile_home"), code=302)
 
     _set_if_has(user, "email", new_email)
     if hasattr(user, "email_verified"):
@@ -555,8 +690,11 @@ def profile_change_email():
     if hasattr(user, "updated_at"):
         _set_if_has(user, "updated_at", _utcnow())
 
-    if not _commit_or_fail("profile_email"):
-        return _json_or_redirect({"ok": False, "error": "save_failed", "status": 500}, "profile.profile_home")
+    if not _commit("profile_email"):
+        if _wants_json():
+            return _json({"ok": False, "error": "save_failed"}, 500)
+        _flash("error", "No se pudo guardar. Reintentá.")
+        return redirect(url_for("profile.profile_home"), code=302)
 
     session["user_email"] = new_email
     session.modified = True
@@ -565,7 +703,7 @@ def profile_change_email():
     if _wants_json():
         return _json({"ok": True, "email_updated": True}, 200)
 
-    flash("Email actualizado ✅", "success")
+    _flash("success", "Email actualizado ✅")
     return redirect(url_for("profile.profile_home"), code=302)
 
 
@@ -575,54 +713,76 @@ def profile_change_password():
     if guard:
         return guard
 
-    rl = _rate_limit_or_429("profile_password", RL_PASSWORD_LIMIT, RL_PASSWORD_WINDOW)
+    rl = _rate_limit_or_fail("profile_password", RL_PASSWORD_LIMIT, RL_PASSWORD_WINDOW)
     if rl:
         return rl
 
     user = _current_user()
     if not user:
         _soft_logout()
-        return _json_or_redirect({"ok": False, "error": "session_invalid", "status": 401}, "auth.login_get")
+        if _wants_json():
+            return _json({"ok": False, "error": "session_invalid"}, 401)
+        return redirect(url_for("auth.login_get"), code=302)
 
     payload = _read_payload()
-    current_pw = _safe_str(payload.get("current_password") or "", max_len=512)
-    new_pw = _safe_str(payload.get("new_password") or "", max_len=512)
-    new_pw2 = _safe_str(payload.get("new_password_2") or "", max_len=512)
+    current_pw = _norm(payload.get("current_password") or "", max_len=_MAX_STR_512)
+    new_pw = _norm(payload.get("new_password") or "", max_len=_MAX_STR_512)
+    new_pw2 = _norm(payload.get("new_password_2") or "", max_len=_MAX_STR_512)
 
     if not current_pw:
-        return _json_or_redirect({"ok": False, "error": "Ingresá tu contraseña actual.", "status": 400}, "profile.profile_home")
+        if _wants_json():
+            return _json({"ok": False, "error": "missing_current_password"}, 400)
+        _flash("warning", "Ingresá tu contraseña actual.")
+        return redirect(url_for("profile.profile_home"), code=302)
 
     if not _user_password_check(user, current_pw):
-        return _json_or_redirect({"ok": False, "error": "Tu contraseña actual no coincide.", "status": 400}, "profile.profile_home")
+        if _wants_json():
+            return _json({"ok": False, "error": "wrong_password"}, 400)
+        _flash("warning", "Tu contraseña actual no coincide.")
+        return redirect(url_for("profile.profile_home"), code=302)
 
-    if len(new_pw) < 10:
-        return _json_or_redirect({"ok": False, "error": "La nueva contraseña debe tener al menos 10 caracteres.", "status": 400}, "profile.profile_home")
+    if not _password_is_reasonable(new_pw):
+        if _wants_json():
+            return _json({"ok": False, "error": "weak_password"}, 400)
+        _flash("warning", "La nueva contraseña debe tener mínimo 10 y letras+números.")
+        return redirect(url_for("profile.profile_home"), code=302)
 
     if new_pw != new_pw2:
-        return _json_or_redirect({"ok": False, "error": "La confirmación no coincide.", "status": 400}, "profile.profile_home")
+        if _wants_json():
+            return _json({"ok": False, "error": "password_mismatch"}, 400)
+        _flash("warning", "La confirmación no coincide.")
+        return redirect(url_for("profile.profile_home"), code=302)
 
-    # evita reusar misma contraseña (best-effort)
     try:
         if _user_password_check(user, new_pw):
-            return _json_or_redirect({"ok": False, "error": "La nueva contraseña no puede ser igual a la anterior.", "status": 400}, "profile.profile_home")
+            if _wants_json():
+                return _json({"ok": False, "error": "password_reuse"}, 400)
+            _flash("warning", "La nueva contraseña no puede ser igual a la anterior.")
+            return redirect(url_for("profile.profile_home"), code=302)
     except Exception:
         pass
 
     if not _user_password_set(user, new_pw):
-        return _json_or_redirect({"ok": False, "error": "No se pudo actualizar la contraseña.", "status": 500}, "profile.profile_home")
+        if _wants_json():
+            return _json({"ok": False, "error": "password_set_failed"}, 500)
+        _flash("error", "No se pudo actualizar la contraseña.")
+        return redirect(url_for("profile.profile_home"), code=302)
 
     if hasattr(user, "updated_at"):
         _set_if_has(user, "updated_at", _utcnow())
 
-    if not _commit_or_fail("profile_password"):
-        return _json_or_redirect({"ok": False, "error": "save_failed", "status": 500}, "profile.profile_home")
+    if not _commit("profile_password"):
+        if _wants_json():
+            return _json({"ok": False, "error": "save_failed"}, 500)
+        _flash("error", "No se pudo guardar. Reintentá.")
+        return redirect(url_for("profile.profile_home"), code=302)
 
     _rotate_csrf()
 
     if _wants_json():
         return _json({"ok": True, "password_updated": True}, 200)
 
-    flash("Contraseña actualizada ✅", "success")
+    _flash("success", "Contraseña actualizada ✅")
     return redirect(url_for("profile.profile_home"), code=302)
 
 
@@ -631,8 +791,7 @@ def profile_csrf_token():
     guard = _login_required()
     if guard:
         return guard
-    token = _ensure_csrf()
-    return _json({"ok": True, "csrf_token": token}, 200)
+    return _json({"ok": True, "csrf_token": _ensure_csrf()}, 200)
 
 
 __all__ = ["profile_bp"]

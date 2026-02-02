@@ -5,277 +5,481 @@ import re
 import secrets
 import time
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import urlencode, urlparse
 
 from flask import (
     Blueprint,
+    Response,
+    current_app,
     flash,
+    jsonify,
     redirect,
     render_template,
     request,
     session,
     url_for,
-    current_app,
-    jsonify,
 )
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.models import db, User, UserAddress
 
-# ============================================================
-# Blueprint
-# ============================================================
+log = current_app.logger if "current_app" in globals() else None  # safe for linters
 
-address_bp = Blueprint(
-    "address",
-    __name__,
-    url_prefix="/account",
-    template_folder="../templates",
-)
+address_bp = Blueprint("address", __name__, url_prefix="/account", template_folder="../templates")
+address_bp.strict_slashes = False
 
 _TRUE = {"1", "true", "yes", "y", "on", "checked"}
+_FALSE = {"0", "false", "no", "n", "off", "unchecked"}
+
 PHONE_RE = re.compile(r"^[0-9+() \-]{6,40}$")
 
+_SESSION_CSRF_KEY = "csrf_token"
+_SESSION_RL_KEY = "addr_rl_v2"
+_SESSION_DEDUPE_KEY = "addr_dedupe_v2"
 
-# ============================================================
-# Time / Negotiation
-# ============================================================
+_MAX_STR_50 = 50
+_MAX_STR_80 = 80
+_MAX_STR_120 = 120
+_MAX_STR_200 = 200
+_MAX_STR_300 = 300
+
+_RL_KEYS_CAP = 220
+_DEDUPE_CAP = 180
+
+RL_NEW_LIMIT = 8
+RL_NEW_WINDOW = 25
+RL_UPDATE_LIMIT = 14
+RL_UPDATE_WINDOW = 40
+RL_DELETE_LIMIT = 10
+RL_DELETE_WINDOW = 45
+RL_DEFAULT_LIMIT = 18
+RL_DEFAULT_WINDOW = 60
+
+_CACHE_HEADERS = {
+    "Cache-Control": "no-store, max-age=0, must-revalidate",
+    "Pragma": "no-cache",
+    "Expires": "0",
+    "Vary": "Accept, Cookie",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Cross-Origin-Opener-Policy": "same-origin",
+    "X-Frame-Options": "DENY",
+}
 
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _now() -> int:
+    return int(time.time())
+
+
+def _s(v: Any, max_len: int, *, default: str = "") -> str:
+    if v is None:
+        return default
+    s = v if isinstance(v, str) else str(v)
+    s = s.replace("\x00", "").replace("\u200b", "").strip()
+    s = s.replace("\r", "").replace("\n", "").replace("\t", "")
+    if not s:
+        return default
+    s = " ".join(s.split())
+    return s[: max(0, int(max_len))]
+
+
+def _bool(v: Any) -> bool:
+    if v is None:
+        return False
+    if isinstance(v, bool):
+        return v
+    s = _s(v, 16).lower()
+    if not s or s in _FALSE:
+        return False
+    return s in _TRUE or s == "1"
+
+
 def _wants_json() -> bool:
-    """
-    ✅ Mejora extra #1: negotiation PRO
-    - Accept application/json
-    - XHR
-    - ?format=json
-    """
-    if (request.args.get("format") or "").lower() == "json":
+    try:
+        if request.is_json:
+            return True
+    except Exception:
+        pass
+
+    fmt = _s(request.args.get("format"), 24).lower()
+    if fmt == "json":
         return True
-    accept = (request.headers.get("Accept") or "").lower()
-    if "application/json" in accept:
+
+    accept = _s(request.headers.get("Accept"), 200).lower()
+    if "application/json" in accept or "text/json" in accept:
         return True
-    if (request.headers.get("X-Requested-With") or "").lower() == "xmlhttprequest":
+
+    xrw = _s(request.headers.get("X-Requested-With"), 60).lower()
+    if xrw == "xmlhttprequest":
         return True
+
+    try:
+        best = request.accept_mimetypes.best_match(["application/json", "text/html"])
+        if best == "application/json" and request.accept_mimetypes[best] > request.accept_mimetypes["text/html"]:
+            return True
+    except Exception:
+        pass
+
     return False
 
 
-def _json(payload: Dict[str, Any], status: int = 200):
-    return jsonify(payload), status
+def _json(payload: Dict[str, Any], status: int = 200) -> Response:
+    r = jsonify(payload)
+    r.status_code = int(status)
+    if r.status_code == 429 and "retry_after" in payload:
+        try:
+            r.headers["Retry-After"] = str(int(payload.get("retry_after") or 0))
+        except Exception:
+            pass
+    return r
 
 
-def _json_or_redirect(payload: Dict[str, Any], endpoint: str, **kwargs):
-    if _wants_json():
-        status = int(payload.get("status", 200))
-        payload.pop("status", None)
-        return _json(payload, status)
-    return redirect(url_for(endpoint, **kwargs))
+def _flash_ok(msg: str) -> None:
+    flash(_s(msg, 240, default="OK"), "success")
 
 
-# ============================================================
-# Auth helpers
-# ============================================================
+def _flash_warn(msg: str) -> None:
+    flash(_s(msg, 240, default="Atención"), "warning")
 
 
-def _login_required() -> Optional[Any]:
+def _flash_err(msg: str) -> None:
+    flash(_s(msg, 240, default="Error"), "error")
+
+
+def _no_store(resp: Response) -> Response:
+    try:
+        for k, v in _CACHE_HEADERS.items():
+            resp.headers.setdefault(k, v)
+    except Exception:
+        pass
+    return resp
+
+
+def _endpoint_exists(endpoint: str) -> bool:
+    try:
+        return endpoint in (current_app.view_functions or {})
+    except Exception:
+        return False
+
+
+def _url_for_safe(endpoint: str, **values: Any) -> str:
+    try:
+        if _endpoint_exists(endpoint):
+            return url_for(endpoint, **values)
+    except Exception:
+        pass
+    return ""
+
+
+def _safe_redirect(endpoint: str, **values: Any) -> Response:
+    u = _url_for_safe(endpoint, **values)
+    if u:
+        return redirect(u, code=302)
+    return redirect("/", code=302)
+
+
+def _safe_next(raw: Any, *, default: str = "/account/addresses") -> str:
+    s = _s(raw, 512, default="")
+    if not s:
+        return default
+
+    if not s.startswith("/") or s.startswith("//"):
+        return default
+    if any(c in s for c in ("\x00", "\\", "\r", "\n", "\t", " ")):
+        return default
+    if "://" in s or ".." in s:
+        return default
+
+    try:
+        p = urlparse(s)
+        if p.scheme or p.netloc:
+            return default
+        path = (p.path or "").strip()
+    except Exception:
+        return default
+
+    if not path.startswith("/") or path.startswith("//"):
+        return default
+
+    # sin loops
+    if path.startswith("/auth/") or path.startswith("/admin/"):
+        return default
+
+    return path or default
+
+
+def _redirect_login(*, next_url: str) -> Response:
+    nxt = _safe_next(next_url, default="/account/addresses")
+    u = _url_for_safe("auth.login_get", next=nxt) or _url_for_safe("auth.login", next=nxt)
+    if u:
+        return redirect(u, code=302)
+    return redirect("/auth/login?" + urlencode({"next": nxt}), code=302)
+
+
+def _login_required() -> Optional[Response]:
     if session.get("user_id"):
         return None
     if _wants_json():
         return _json({"ok": False, "error": "auth_required"}, 401)
-    flash("Iniciá sesión para gestionar tus direcciones.", "warning")
-    return redirect(url_for("auth.login", next=request.path))
+    _flash_warn("Iniciá sesión para gestionar tus direcciones.")
+    return _redirect_login(next_url=request.path or "/account/addresses")
 
 
 def _current_user() -> Optional[User]:
-    uid = session.get("user_id")
-    if not uid:
+    try:
+        uid = int(session.get("user_id") or 0)
+    except Exception:
+        uid = 0
+    if uid <= 0:
         return None
     try:
-        return db.session.get(User, int(uid))
+        return db.session.get(User, uid)
     except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         return None
-
-
-# ============================================================
-# CSRF (sin Flask-WTF)
-# ============================================================
 
 
 def _ensure_csrf() -> str:
-    tok = session.get("csrf_token")
-    if not tok:
+    tok = session.get(_SESSION_CSRF_KEY)
+    if not isinstance(tok, str) or len(tok) < 24:
         tok = secrets.token_urlsafe(32)
-        session["csrf_token"] = tok
+        session[_SESSION_CSRF_KEY] = tok
+        session.permanent = True
+        session.modified = True
     return tok
 
 
-def _get_csrf_from_request() -> str:
-    """
-    ✅ Mejora extra #2: CSRF header aliases + JSON body
-    """
-    # Headers (dos variantes comunes)
-    h = (
-        request.headers.get("X-CSRF-Token") or request.headers.get("X-CSRFToken") or ""
-    ).strip()
+def _csrf_from_request() -> str:
+    h = _s(request.headers.get("X-CSRF-Token") or request.headers.get("X-CSRFToken"), 512, default="")
     if h:
         return h
-    # Form
-    f = (request.form.get("csrf_token") or "").strip()
+    f = _s(request.form.get("csrf_token"), 512, default="")
     if f:
         return f
-    # JSON
-    j = request.get_json(silent=True) or {}
     try:
-        v = (j.get("csrf_token") or "").strip()
-        return v
+        if request.is_json:
+            j = request.get_json(silent=True) or {}
+            if isinstance(j, dict):
+                return _s(j.get("csrf_token"), 512, default="")
     except Exception:
-        return ""
+        pass
+    return ""
 
 
 def _check_csrf() -> bool:
-    tok = (session.get("csrf_token") or "").strip()
-    got = _get_csrf_from_request()
-    return bool(tok) and bool(got) and secrets.compare_digest(tok, got)
+    sess = _s(session.get(_SESSION_CSRF_KEY), 512, default="")
+    got = _csrf_from_request()
+    if not sess or not got:
+        return False
+    try:
+        return secrets.compare_digest(sess, got)
+    except Exception:
+        return False
 
 
-def _csrf_required() -> Optional[Any]:
-    if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
-        if not _check_csrf():
-            if _wants_json():
-                return _json({"ok": False, "error": "csrf_invalid"}, 400)
-            flash("Token inválido. Recargá la página.", "warning")
-            return redirect(url_for("address.addresses_page"))
+def _csrf_required() -> Optional[Response]:
+    if request.method in {"POST", "PUT", "PATCH", "DELETE"} and not _check_csrf():
+        if _wants_json():
+            return _json({"ok": False, "error": "csrf_invalid"}, 400)
+        _flash_warn("Token inválido. Recargá la página e intentá de nuevo.")
+        return _safe_redirect("address.addresses_page")
     return None
 
 
-# ============================================================
-# Rate-limit + Soft Idempotency
-# ============================================================
+def _rl_store() -> Dict[str, Dict[str, int]]:
+    store = session.get(_SESSION_RL_KEY)
+    if not isinstance(store, dict):
+        store = {}
+    if len(store) > _RL_KEYS_CAP:
+        items: List[Tuple[int, str]] = []
+        for k, v in list(store.items()):
+            if isinstance(v, dict):
+                try:
+                    items.append((int(v.get("t") or 0), str(k)))
+                except Exception:
+                    items.append((0, str(k)))
+            else:
+                items.append((0, str(k)))
+        items.sort()
+        for _, k in items[: max(0, len(store) - _RL_KEYS_CAP)]:
+            store.pop(k, None)
+    session[_SESSION_RL_KEY] = store
+    session.modified = True
+    return store  # type: ignore[return-value]
 
 
-def _rate_limit(key: str, seconds: int = 2) -> bool:
-    """
-    Rate limit mínimo por sesión.
-    Devuelve True si está permitido, False si bloquea.
-    """
-    now = time.time()
-    last = session.get(key)
-    if isinstance(last, (int, float)) and (now - float(last)) < seconds:
-        return False
-    session[key] = now
-    return True
+def _rate_limit(bucket: str, limit: int, window: int) -> Tuple[bool, int]:
+    now = _now()
+    uid = _s(session.get("user_id"), 40, default="anon")
+    ip = _s((request.headers.get("X-Forwarded-For") or "").split(",")[0].strip(), 80, default="")
+    if not ip:
+        ip = _s(request.remote_addr, 80, default="unknown")
+
+    key = f"{bucket}:{uid}:{ip}"
+    store = _rl_store()
+
+    b = store.get(key)
+    if not isinstance(b, dict):
+        store[key] = {"t": now, "n": 1}
+        session[_SESSION_RL_KEY] = store
+        session.modified = True
+        return True, 0
+
+    try:
+        t0 = int(b.get("t") or now)
+    except Exception:
+        t0 = now
+    try:
+        n = int(b.get("n") or 0)
+    except Exception:
+        n = 0
+
+    elapsed = now - t0
+    if elapsed >= int(window) or elapsed < 0:
+        store[key] = {"t": now, "n": 1}
+        session[_SESSION_RL_KEY] = store
+        session.modified = True
+        return True, 0
+
+    if n >= int(limit):
+        return False, int(max(1, int(window) - elapsed))
+
+    b["n"] = n + 1
+    store[key] = b
+    session[_SESSION_RL_KEY] = store
+    session.modified = True
+    return True, 0
 
 
-def _dedupe_guard(user_id: int, signature: str, ttl: int = 10) -> bool:
-    """
-    ✅ Mejora extra #5: evita duplicados obvios (misma dirección enviada 2 veces)
-    Guarda firma en session por 10s.
-    """
-    k = f"addr:dedupe:{user_id}"
-    now = int(time.time())
-    raw = session.get(k) or {}
-    if not isinstance(raw, dict):
-        raw = {}
-    # purge
-    for s, ts in list(raw.items()):
+def _dedupe_store() -> Dict[str, Dict[str, int]]:
+    store = session.get(_SESSION_DEDUPE_KEY)
+    if not isinstance(store, dict):
+        store = {}
+    if len(store) > _DEDUPE_CAP:
+        items: List[Tuple[int, str]] = []
+        for k, v in list(store.items()):
+            if isinstance(v, dict):
+                try:
+                    items.append((int(v.get("t") or 0), str(k)))
+                except Exception:
+                    items.append((0, str(k)))
+            else:
+                items.append((0, str(k)))
+        items.sort()
+        for _, k in items[: max(0, len(store) - _DEDUPE_CAP)]:
+            store.pop(k, None)
+    session[_SESSION_DEDUPE_KEY] = store
+    session.modified = True
+    return store  # type: ignore[return-value]
+
+
+def _dedupe_guard(user_id: int, signature: str, *, ttl: int = 12) -> bool:
+    now = _now()
+    store = _dedupe_store()
+    bucket = store.get(str(user_id))
+    if not isinstance(bucket, dict):
+        bucket = {}
+
+    for sig, ts in list(bucket.items()):
         try:
-            if now - int(ts) > ttl:
-                raw.pop(s, None)
+            if now - int(ts or 0) > int(ttl):
+                bucket.pop(sig, None)
         except Exception:
-            raw.pop(s, None)
-    # check
-    if signature in raw:
+            bucket.pop(sig, None)
+
+    if signature in bucket:
         return False
-    raw[signature] = now
-    session[k] = raw
+
+    bucket[signature] = now
+    store[str(user_id)] = bucket
+    session[_SESSION_DEDUPE_KEY] = store
+    session.modified = True
     return True
 
 
-# ============================================================
-# Sanitizers / Validation (checkout-ready)
-# ============================================================
+def _clean_str(v: Any, max_len: int) -> Optional[str]:
+    s = _s(v, max_len, default="")
+    return s if s else None
 
 
-def _clean_str(v: Optional[str], max_len: int) -> Optional[str]:
-    if v is None:
+def _clean_country(v: Any) -> Optional[str]:
+    s = _s(v, 8, default="")
+    if not s:
         return None
-    v = str(v).strip()
-    if not v:
+    s = s.upper()
+    if len(s) < 2 or not s[:2].isalpha():
         return None
-    return v[:max_len]
+    return s[:2]
 
 
-def _clean_country(v: Optional[str]) -> Optional[str]:
-    if not v:
+def _clean_phone(v: Any) -> Optional[str]:
+    s = _clean_str(v, 80)
+    if not s:
         return None
-    v = str(v).strip().upper()
-    return v[:2] if len(v) >= 2 else None
-
-
-def _validate_phone(v: Optional[str]) -> Optional[str]:
-    if not v:
-        return None
-    v = str(v).strip()
-    if not v:
-        return None
-    # no bloquea: solo limpia
-    if not PHONE_RE.match(v):
-        return v[:40]
-    return v[:40]
+    s2 = s[:40]
+    if PHONE_RE.match(s2):
+        return s2
+    return s2  # suave (no rompe UX)
 
 
 def _payload_from_request() -> Dict[str, Any]:
-    """
-    Soporta FORM o JSON para create/update.
-    """
-    payload = request.get_json(silent=True) or {}
-    form = request.form
+    payload: Dict[str, Any] = {}
+    try:
+        if request.is_json:
+            j = request.get_json(silent=True) or {}
+            if isinstance(j, dict):
+                payload = j
+    except Exception:
+        payload = {}
 
-    def g(name: str) -> Optional[str]:
+    def g(name: str) -> Any:
         if payload:
-            v = payload.get(name)
-            return None if v is None else str(v)
-        return form.get(name)
+            return payload.get(name)
+        return request.form.get(name)
 
-    is_default_raw = (g("is_default") or "").strip().lower()
+    is_default = _bool(g("is_default"))
 
-    return {
-        "label": _clean_str(g("label"), 50),
-        "full_name": _clean_str(g("full_name"), 120),
-        "phone": _validate_phone(g("phone")),
-        "line1": (g("line1") or "").strip()[:200],
-        "line2": _clean_str(g("line2"), 200),
-        "city": _clean_str(g("city"), 120),
-        "state": _clean_str(g("state"), 120),
-        "postal_code": _clean_str(g("postal_code"), 40),
+    line1_raw = _s(g("line1"), _MAX_STR_200, default="")
+    data = {
+        "label": _clean_str(g("label"), _MAX_STR_50),
+        "full_name": _clean_str(g("full_name"), _MAX_STR_120),
+        "phone": _clean_phone(g("phone")),
+        "line1": line1_raw,
+        "line2": _clean_str(g("line2"), _MAX_STR_200),
+        "city": _clean_str(g("city"), _MAX_STR_120),
+        "state": _clean_str(g("state"), _MAX_STR_120),
+        "postal_code": _clean_str(g("postal_code"), _MAX_STR_80),
         "country": _clean_country(g("country")),
-        "is_default": is_default_raw in _TRUE,
+        "is_default": bool(is_default),
     }
+    return data
 
 
 def _validate_payload(data: Dict[str, Any]) -> List[Dict[str, str]]:
-    """
-    ✅ Mejora extra #3: lista de errores por campo (API/UI friendly)
-    """
     errors: List[Dict[str, str]] = []
-    if not (data.get("line1") or "").strip():
+    if not _s(data.get("line1"), 220, default="").strip():
         errors.append({"field": "line1", "error": "required"})
-    # Si hay phone, validar mínimo real
-    ph = (data.get("phone") or "").strip() if data.get("phone") else ""
+    ph = _s(data.get("phone"), 60, default="").strip()
     if ph and (len(ph) < 6 or len(ph) > 40):
         errors.append({"field": "phone", "error": "invalid"})
-    # country si viene debe ser 2 chars
     cc = data.get("country")
-    if cc and len(cc) != 2:
+    if cc and (not isinstance(cc, str) or len(cc) != 2):
         errors.append({"field": "country", "error": "invalid"})
     return errors
 
 
-def _address_to_dict(a: UserAddress) -> Dict[str, Any]:
+def _addr_to_dict(a: UserAddress) -> Dict[str, Any]:
+    created = getattr(a, "created_at", None)
     return {
-        "id": a.id,
+        "id": int(getattr(a, "id", 0) or 0),
         "label": getattr(a, "label", None),
         "full_name": getattr(a, "full_name", None),
         "phone": getattr(a, "phone", None),
@@ -286,34 +490,19 @@ def _address_to_dict(a: UserAddress) -> Dict[str, Any]:
         "postal_code": getattr(a, "postal_code", None),
         "country": getattr(a, "country", None),
         "is_default": bool(getattr(a, "is_default", False)),
-        "created_at": (
-            getattr(a, "created_at", None).isoformat()
-            if getattr(a, "created_at", None)
-            else None
-        ),
+        "created_at": created.isoformat() if isinstance(created, datetime) else None,
     }
 
 
-# ============================================================
-# Default logic (1 sola default) — centralizado
-# ============================================================
-
-
 def _set_default_address(user_id: int, addr_id: int) -> None:
-    db.session.query(UserAddress).filter_by(user_id=user_id).update(
-        {"is_default": False}
-    )
-    a = db.session.get(UserAddress, addr_id)
-    if a and a.user_id == user_id:
+    db.session.query(UserAddress).filter_by(user_id=user_id).update({"is_default": False})
+    a = db.session.get(UserAddress, int(addr_id))
+    if a and int(getattr(a, "user_id", 0) or 0) == int(user_id):
         a.is_default = True
 
 
 def _ensure_default_exists(user_id: int) -> None:
-    has_def = (
-        db.session.query(UserAddress)
-        .filter_by(user_id=user_id, is_default=True)
-        .first()
-    )
+    has_def = db.session.query(UserAddress).filter_by(user_id=user_id, is_default=True).first()
     if has_def:
         return
     last = (
@@ -327,26 +516,20 @@ def _ensure_default_exists(user_id: int) -> None:
 
 
 def _normalize_default(user_id: int, preferred_id: Optional[int] = None) -> None:
-    """
-    ✅ Mejora extra #7: una sola función para mantener default consistente
-    - si preferred_id existe => set default
-    - si no => ensure default
-    """
     if preferred_id:
-        _set_default_address(user_id, int(preferred_id))
-    _ensure_default_exists(user_id)
+        _set_default_address(int(user_id), int(preferred_id))
+    _ensure_default_exists(int(user_id))
 
 
-def _get_user_address_or_none(user_id: int, addr_id: int) -> Optional[UserAddress]:
-    addr = db.session.get(UserAddress, addr_id)
-    if not addr or addr.user_id != user_id:
-        return None
-    return addr
+@address_bp.before_request
+def _before_addr():
+    _ensure_csrf()
+    return None
 
 
-# ============================================================
-# Routes
-# ============================================================
+@address_bp.after_request
+def _after_addr(resp: Response):
+    return _no_store(resp)
 
 
 @address_bp.get("/addresses")
@@ -358,22 +541,30 @@ def addresses_page():
     user = _current_user()
     if not user:
         session.clear()
-        return redirect(url_for("auth.login", next=request.path))
+        return _redirect_login(next_url=request.path or "/account/addresses")
 
     csrf = _ensure_csrf()
 
-    items = (
-        db.session.query(UserAddress)
-        .filter_by(user_id=user.id)
-        .order_by(UserAddress.is_default.desc(), UserAddress.id.desc())
-        .all()
-    )
+    try:
+        items = (
+            db.session.query(UserAddress)
+            .filter_by(user_id=int(user.id))
+            .order_by(UserAddress.is_default.desc(), UserAddress.id.desc())
+            .all()
+        )
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        items = []
 
     return render_template(
         "account/addresses.html",
         user=user,
         addresses=items,
         csrf_token=csrf,
+        next=_safe_next(request.args.get("next"), default="/account/addresses"),
     )
 
 
@@ -387,13 +578,21 @@ def addresses_json():
     if not user:
         return _json({"ok": False, "error": "session_invalid"}, 401)
 
-    items = (
-        db.session.query(UserAddress)
-        .filter_by(user_id=user.id)
-        .order_by(UserAddress.is_default.desc(), UserAddress.id.desc())
-        .all()
-    )
-    return _json({"ok": True, "addresses": [_address_to_dict(a) for a in items]}, 200)
+    try:
+        items = (
+            db.session.query(UserAddress)
+            .filter_by(user_id=int(user.id))
+            .order_by(UserAddress.is_default.desc(), UserAddress.id.desc())
+            .all()
+        )
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        items = []
+
+    return _json({"ok": True, "addresses": [_addr_to_dict(a) for a in items]}, 200)
 
 
 @address_bp.post("/addresses/new")
@@ -406,65 +605,75 @@ def address_create():
     if gate:
         return gate
 
-    if not _rate_limit("rl:addr_new", 2):
-        return _json_or_redirect(
-            {"ok": False, "error": "rate_limited", "status": 429},
-            "address.addresses_page",
-        )
+    ok, retry = _rate_limit("new", RL_NEW_LIMIT, RL_NEW_WINDOW)
+    if not ok:
+        if _wants_json():
+            return _json({"ok": False, "error": "rate_limited", "retry_after": retry}, 429)
+        _flash_warn("Muy rápido 😅 Esperá un momento y reintentá.")
+        r = _safe_redirect("address.addresses_page")
+        try:
+            r.headers["Retry-After"] = str(int(retry))
+        except Exception:
+            pass
+        return r
 
     user = _current_user()
     if not user:
-        return _json_or_redirect(
-            {"ok": False, "error": "session_invalid", "status": 401}, "auth.login"
-        )
+        return _redirect_login(next_url="/account/addresses")
 
     data = _payload_from_request()
     errors = _validate_payload(data)
     if errors:
         if _wants_json():
-            return _json(
-                {"ok": False, "error": "validation_failed", "fields": errors}, 400
-            )
-        flash("Revisá los datos de la dirección (faltan campos).", "warning")
-        return redirect(url_for("address.addresses_page"))
+            return _json({"ok": False, "error": "validation_failed", "fields": errors}, 400)
+        _flash_warn("Revisá los datos de la dirección (faltan campos).")
+        return _safe_redirect("address.addresses_page")
 
-    # ✅ Mejora extra #5: dedupe (firma simple)
-    sig = f"{(data.get('line1') or '').lower()}|{(data.get('city') or '').lower()}|{(data.get('postal_code') or '').lower()}"
-    if not _dedupe_guard(int(user.id), sig, ttl=10):
-        return _json_or_redirect(
-            {"ok": False, "error": "duplicate_request", "status": 409},
-            "address.addresses_page",
-        )
+    sig = f"{_s(data.get('line1'), 220).lower()}|{_s(data.get('city'), 140).lower()}|{_s(data.get('postal_code'), 60).lower()}|{_s(data.get('country'), 8).lower()}"
+    if not _dedupe_guard(int(user.id), sig, ttl=12):
+        if _wants_json():
+            return _json({"ok": False, "error": "duplicate_request"}, 409)
+        _flash_warn("Parece que ya enviaste esa dirección recién. Revisá y reintentá.")
+        return _safe_redirect("address.addresses_page")
 
+    addr: Optional[UserAddress] = None
     try:
-        # ✅ Mejora extra #4: transacción segura
         with db.session.begin():
-            addr = UserAddress(user_id=user.id, **data)
+            addr = UserAddress(user_id=int(user.id), **data)
             db.session.add(addr)
             db.session.flush()
 
-            _normalize_default(
-                user.id, preferred_id=addr.id if data.get("is_default") else None
-            )
+            _normalize_default(int(user.id), preferred_id=int(addr.id) if data.get("is_default") else None)
 
-        # audit session (✅ mejora extra #6)
         session["addr_last_action"] = "create"
-        session["addr_last_id"] = int(addr.id)
-
+        session["addr_last_id"] = int(getattr(addr, "id", 0) or 0)
+        session.modified = True
+    except SQLAlchemyError as exc:
+        current_app.logger.exception("address_create SQLAlchemyError: %s", exc)
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        if _wants_json():
+            return _json({"ok": False, "error": "save_failed"}, 500)
+        _flash_err("No se pudo guardar la dirección.")
+        return _safe_redirect("address.addresses_page")
     except Exception as exc:
-        current_app.logger.exception("Address create error: %s", exc)
-        return _json_or_redirect(
-            {"ok": False, "error": "save_failed", "status": 500},
-            "address.addresses_page",
-        )
+        current_app.logger.exception("address_create error: %s", exc)
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        if _wants_json():
+            return _json({"ok": False, "error": "save_failed"}, 500)
+        _flash_err("No se pudo guardar la dirección.")
+        return _safe_redirect("address.addresses_page")
 
     if _wants_json():
-        return _json(
-            {"ok": True, "created": True, "address": _address_to_dict(addr)}, 201
-        )
+        return _json({"ok": True, "created": True, "address": _addr_to_dict(addr)}, 201)  # type: ignore[arg-type]
 
-    flash("Dirección guardada ✅", "success")
-    return redirect(url_for("address.addresses_page"))
+    _flash_ok("Dirección guardada ✅")
+    return _safe_redirect("address.addresses_page")
 
 
 @address_bp.post("/addresses/<int:addr_id>/update")
@@ -477,60 +686,80 @@ def address_update(addr_id: int):
     if gate:
         return gate
 
-    if not _rate_limit("rl:addr_upd", 1):
-        return _json_or_redirect(
-            {"ok": False, "error": "rate_limited", "status": 429},
-            "address.addresses_page",
-        )
+    ok, retry = _rate_limit("update", RL_UPDATE_LIMIT, RL_UPDATE_WINDOW)
+    if not ok:
+        if _wants_json():
+            return _json({"ok": False, "error": "rate_limited", "retry_after": retry}, 429)
+        _flash_warn("Muy rápido 😅 Esperá un momento y reintentá.")
+        r = _safe_redirect("address.addresses_page")
+        try:
+            r.headers["Retry-After"] = str(int(retry))
+        except Exception:
+            pass
+        return r
 
     user = _current_user()
     if not user:
-        return _json_or_redirect(
-            {"ok": False, "error": "session_invalid", "status": 401}, "auth.login"
-        )
+        return _redirect_login(next_url="/account/addresses")
 
-    addr = _get_user_address_or_none(user.id, addr_id)
-    if not addr:
-        return _json_or_redirect(
-            {"ok": False, "error": "not_found", "status": 404}, "address.addresses_page"
-        )
+    addr = db.session.get(UserAddress, int(addr_id))
+    if not addr or int(getattr(addr, "user_id", 0) or 0) != int(user.id):
+        if _wants_json():
+            return _json({"ok": False, "error": "not_found"}, 404)
+        _flash_warn("Dirección no encontrada.")
+        return _safe_redirect("address.addresses_page")
 
     data = _payload_from_request()
     errors = _validate_payload(data)
     if errors:
         if _wants_json():
-            return _json(
-                {"ok": False, "error": "validation_failed", "fields": errors}, 400
-            )
-        flash("Revisá los datos de la dirección (faltan campos).", "warning")
-        return redirect(url_for("address.addresses_page"))
+            return _json({"ok": False, "error": "validation_failed", "fields": errors}, 400)
+        _flash_warn("Revisá los datos de la dirección (faltan campos).")
+        return _safe_redirect("address.addresses_page")
+
+    sig = f"upd:{addr_id}:{_s(data.get('line1'), 220).lower()}|{_s(data.get('city'), 140).lower()}|{_s(data.get('postal_code'), 60).lower()}|{_s(data.get('country'), 8).lower()}"
+    if not _dedupe_guard(int(user.id), sig, ttl=10):
+        if _wants_json():
+            return _json({"ok": False, "error": "duplicate_request"}, 409)
+        _flash_warn("Parece que ya enviaste esa actualización recién.")
+        return _safe_redirect("address.addresses_page")
 
     try:
         with db.session.begin():
             for k, v in data.items():
                 setattr(addr, k, v)
 
-            _normalize_default(
-                user.id, preferred_id=addr.id if data.get("is_default") else None
-            )
+            _normalize_default(int(user.id), preferred_id=int(addr.id) if data.get("is_default") else None)
 
         session["addr_last_action"] = "update"
-        session["addr_last_id"] = int(addr.id)
-
+        session["addr_last_id"] = int(addr_id)
+        session.modified = True
+    except SQLAlchemyError as exc:
+        current_app.logger.exception("address_update SQLAlchemyError: %s", exc)
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        if _wants_json():
+            return _json({"ok": False, "error": "save_failed"}, 500)
+        _flash_err("No se pudo actualizar la dirección.")
+        return _safe_redirect("address.addresses_page")
     except Exception as exc:
-        current_app.logger.exception("Address update error: %s", exc)
-        return _json_or_redirect(
-            {"ok": False, "error": "save_failed", "status": 500},
-            "address.addresses_page",
-        )
+        current_app.logger.exception("address_update error: %s", exc)
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        if _wants_json():
+            return _json({"ok": False, "error": "save_failed"}, 500)
+        _flash_err("No se pudo actualizar la dirección.")
+        return _safe_redirect("address.addresses_page")
 
     if _wants_json():
-        return _json(
-            {"ok": True, "updated": True, "address": _address_to_dict(addr)}, 200
-        )
+        return _json({"ok": True, "updated": True, "address": _addr_to_dict(addr)}, 200)
 
-    flash("Dirección actualizada ✅", "success")
-    return redirect(url_for("address.addresses_page"))
+    _flash_ok("Dirección actualizada ✅")
+    return _safe_redirect("address.addresses_page")
 
 
 @address_bp.post("/addresses/<int:addr_id>/delete")
@@ -543,23 +772,28 @@ def address_delete(addr_id: int):
     if gate:
         return gate
 
-    if not _rate_limit("rl:addr_del", 1):
-        return _json_or_redirect(
-            {"ok": False, "error": "rate_limited", "status": 429},
-            "address.addresses_page",
-        )
+    ok, retry = _rate_limit("delete", RL_DELETE_LIMIT, RL_DELETE_WINDOW)
+    if not ok:
+        if _wants_json():
+            return _json({"ok": False, "error": "rate_limited", "retry_after": retry}, 429)
+        _flash_warn("Muy rápido 😅 Esperá un momento y reintentá.")
+        r = _safe_redirect("address.addresses_page")
+        try:
+            r.headers["Retry-After"] = str(int(retry))
+        except Exception:
+            pass
+        return r
 
     user = _current_user()
     if not user:
-        return _json_or_redirect(
-            {"ok": False, "error": "session_invalid", "status": 401}, "auth.login"
-        )
+        return _redirect_login(next_url="/account/addresses")
 
-    addr = _get_user_address_or_none(user.id, addr_id)
-    if not addr:
-        return _json_or_redirect(
-            {"ok": False, "error": "not_found", "status": 404}, "address.addresses_page"
-        )
+    addr = db.session.get(UserAddress, int(addr_id))
+    if not addr or int(getattr(addr, "user_id", 0) or 0) != int(user.id):
+        if _wants_json():
+            return _json({"ok": False, "error": "not_found"}, 404)
+        _flash_warn("Dirección no encontrada.")
+        return _safe_redirect("address.addresses_page")
 
     was_default = bool(getattr(addr, "is_default", False))
 
@@ -567,26 +801,38 @@ def address_delete(addr_id: int):
         with db.session.begin():
             db.session.delete(addr)
             db.session.flush()
-
-            # si borró default, reasignar
             if was_default:
-                _normalize_default(user.id)
+                _normalize_default(int(user.id))
 
         session["addr_last_action"] = "delete"
         session["addr_last_id"] = int(addr_id)
-
+        session.modified = True
+    except SQLAlchemyError as exc:
+        current_app.logger.exception("address_delete SQLAlchemyError: %s", exc)
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        if _wants_json():
+            return _json({"ok": False, "error": "delete_failed"}, 500)
+        _flash_err("No se pudo eliminar la dirección.")
+        return _safe_redirect("address.addresses_page")
     except Exception as exc:
-        current_app.logger.exception("Address delete error: %s", exc)
-        return _json_or_redirect(
-            {"ok": False, "error": "delete_failed", "status": 500},
-            "address.addresses_page",
-        )
+        current_app.logger.exception("address_delete error: %s", exc)
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        if _wants_json():
+            return _json({"ok": False, "error": "delete_failed"}, 500)
+        _flash_err("No se pudo eliminar la dirección.")
+        return _safe_redirect("address.addresses_page")
 
     if _wants_json():
-        return _json({"ok": True, "deleted": True, "id": addr_id}, 200)
+        return _json({"ok": True, "deleted": True, "id": int(addr_id)}, 200)
 
-    flash("Dirección eliminada 🗑️", "success")
-    return redirect(url_for("address.addresses_page"))
+    _flash_ok("Dirección eliminada 🗑️")
+    return _safe_redirect("address.addresses_page")
 
 
 @address_bp.post("/addresses/<int:addr_id>/default")
@@ -599,43 +845,62 @@ def address_set_default(addr_id: int):
     if gate:
         return gate
 
-    if not _rate_limit("rl:addr_def", 1):
-        return _json_or_redirect(
-            {"ok": False, "error": "rate_limited", "status": 429},
-            "address.addresses_page",
-        )
+    ok, retry = _rate_limit("default", RL_DEFAULT_LIMIT, RL_DEFAULT_WINDOW)
+    if not ok:
+        if _wants_json():
+            return _json({"ok": False, "error": "rate_limited", "retry_after": retry}, 429)
+        _flash_warn("Muy rápido 😅 Esperá un momento y reintentá.")
+        r = _safe_redirect("address.addresses_page")
+        try:
+            r.headers["Retry-After"] = str(int(retry))
+        except Exception:
+            pass
+        return r
 
     user = _current_user()
     if not user:
-        return _json_or_redirect(
-            {"ok": False, "error": "session_invalid", "status": 401}, "auth.login"
-        )
+        return _redirect_login(next_url="/account/addresses")
 
-    addr = _get_user_address_or_none(user.id, addr_id)
-    if not addr:
-        return _json_or_redirect(
-            {"ok": False, "error": "not_found", "status": 404}, "address.addresses_page"
-        )
+    addr = db.session.get(UserAddress, int(addr_id))
+    if not addr or int(getattr(addr, "user_id", 0) or 0) != int(user.id):
+        if _wants_json():
+            return _json({"ok": False, "error": "not_found"}, 404)
+        _flash_warn("Dirección no encontrada.")
+        return _safe_redirect("address.addresses_page")
 
     try:
         with db.session.begin():
-            _normalize_default(user.id, preferred_id=addr.id)
+            _normalize_default(int(user.id), preferred_id=int(addr_id))
 
         session["addr_last_action"] = "default"
-        session["addr_last_id"] = int(addr.id)
-
+        session["addr_last_id"] = int(addr_id)
+        session.modified = True
+    except SQLAlchemyError as exc:
+        current_app.logger.exception("address_set_default SQLAlchemyError: %s", exc)
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        if _wants_json():
+            return _json({"ok": False, "error": "save_failed"}, 500)
+        _flash_err("No se pudo actualizar la dirección predeterminada.")
+        return _safe_redirect("address.addresses_page")
     except Exception as exc:
-        current_app.logger.exception("Set default error: %s", exc)
-        return _json_or_redirect(
-            {"ok": False, "error": "save_failed", "status": 500},
-            "address.addresses_page",
-        )
+        current_app.logger.exception("address_set_default error: %s", exc)
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        if _wants_json():
+            return _json({"ok": False, "error": "save_failed"}, 500)
+        _flash_err("No se pudo actualizar la dirección predeterminada.")
+        return _safe_redirect("address.addresses_page")
 
     if _wants_json():
-        return _json({"ok": True, "default_set": True, "id": addr_id}, 200)
+        return _json({"ok": True, "default_set": True, "id": int(addr_id)}, 200)
 
-    flash("Dirección predeterminada ✅", "success")
-    return redirect(url_for("address.addresses_page"))
+    _flash_ok("Dirección predeterminada ✅")
+    return _safe_redirect("address.addresses_page")
 
 
 @address_bp.get("/addresses/csrf")
