@@ -30,48 +30,13 @@ except Exception:
 
 log = logging.getLogger("main_routes")
 main_bp = Blueprint("main", __name__, template_folder="../templates")
+main_bp.strict_slashes = False
 
 _TRUE = {"1", "true", "yes", "y", "on", "checked"}
 _FALSE = {"0", "false", "no", "n", "off", "unchecked"}
 
-HOME_CANONICAL_PATH = (os.getenv("HOME_CANONICAL_PATH") or "/").strip() or "/"
-HOME_REDIRECT_TO_SHOP = (os.getenv("HOME_REDIRECT_TO_SHOP") or "").strip().lower() in _TRUE
-
-try:
-    HOME_CACHE_TTL = int((os.getenv("HOME_CACHE_TTL") or "120").strip() or "120")
-except Exception:
-    HOME_CACHE_TTL = 120
-HOME_CACHE_TTL = max(0, min(HOME_CACHE_TTL, 3600))
-
-ENABLE_HOME_CACHE = (os.getenv("ENABLE_HOME_CACHE") or "").strip().lower()
-ENABLE_HOME_CACHE = True if not ENABLE_HOME_CACHE else (ENABLE_HOME_CACHE in _TRUE)
-
-HOME_ASSET_VER = (os.getenv("HOME_CSS_VER") or os.getenv("HOME_ASSET_VER") or "162").strip() or "162"
-
-_HOME_CACHE: Dict[str, Tuple[float, Dict[str, Any]]] = {}
-try:
-    _HOME_CACHE_MAX_KEYS = int((os.getenv("HOME_CACHE_MAX_KEYS") or "32").strip() or "32")
-except Exception:
-    _HOME_CACHE_MAX_KEYS = 32
-_HOME_CACHE_MAX_KEYS = max(8, min(_HOME_CACHE_MAX_KEYS, 256))
-
-
-@dataclass(frozen=True)
-class SeoDefaults:
-    title: str
-    description: str
-    og_image: str
-
-
-SEO_DEFAULTS = SeoDefaults(
-    title=(os.getenv("SEO_TITLE") or "Skyline Store · Tech + Streetwear premium").strip(),
-    description=(
-        os.getenv("SEO_DESCRIPTION")
-        or "Comprá moda urbana, accesorios y tecnología en un solo lugar. Envíos rápidos y pagos seguros."
-    ).strip(),
-    og_image=(os.getenv("OG_IMAGE") or "img/og/og-home.png").strip(),
-)
-
+def _env_str(k: str, d: str = "") -> str:
+    return (os.getenv(k) or d).strip()
 
 def _env_bool(key: str, default: bool = False) -> bool:
     v = os.getenv(key)
@@ -84,6 +49,52 @@ def _env_bool(key: str, default: bool = False) -> bool:
         return False
     return s in _TRUE
 
+def _clamp_int(v: Any, default: int, *, min_v: int, max_v: int) -> int:
+    try:
+        n = int(v)
+    except Exception:
+        n = default
+    if n < min_v:
+        return min_v
+    if n > max_v:
+        return max_v
+    return n
+
+HOME_CANONICAL_PATH = (_env_str("HOME_CANONICAL_PATH", "/") or "/").strip() or "/"
+HOME_REDIRECT_TO_SHOP = _env_str("HOME_REDIRECT_TO_SHOP", "").lower() in _TRUE
+
+HOME_CACHE_TTL = _clamp_int(_env_str("HOME_CACHE_TTL", "120") or "120", 120, min_v=0, max_v=3600)
+
+ENABLE_HOME_CACHE_RAW = _env_str("ENABLE_HOME_CACHE", "")
+ENABLE_HOME_CACHE = True if not ENABLE_HOME_CACHE_RAW else (ENABLE_HOME_CACHE_RAW.lower() in _TRUE)
+
+HOME_ASSET_VER = (_env_str("HOME_CSS_VER") or _env_str("HOME_ASSET_VER", "162") or "162").strip() or "162"
+
+# Cache in-memory (home): key -> (expires_at, payload)
+_HOME_CACHE: Dict[str, Tuple[float, Dict[str, Any]]] = {}
+_HOME_CACHE_MAX_KEYS = _clamp_int(_env_str("HOME_CACHE_MAX_KEYS", "32") or "32", 32, min_v=8, max_v=256)
+
+# Sitemap limits
+_SITEMAP_MAX_CATEGORIES = _clamp_int(_env_str("SITEMAP_MAX_CATEGORIES", "2000") or "2000", 2000, min_v=100, max_v=5000)
+_SITEMAP_MAX_PRODUCTS = _clamp_int(_env_str("SITEMAP_MAX_PRODUCTS", "20000") or "20000", 20000, min_v=500, max_v=50000)
+
+
+@dataclass(frozen=True)
+class SeoDefaults:
+    title: str
+    description: str
+    og_image: str
+
+
+SEO_DEFAULTS = SeoDefaults(
+    title=(_env_str("SEO_TITLE", "Skyline Store · Tech + Streetwear premium") or "Skyline Store").strip(),
+    description=(
+        _env_str("SEO_DESCRIPTION")
+        or "Comprá moda urbana, accesorios y tecnología en un solo lugar. Envíos rápidos y pagos seguros."
+    ).strip(),
+    og_image=(_env_str("OG_IMAGE", "img/og/og-home.png") or "img/og/og-home.png").strip(),
+)
+
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
@@ -94,7 +105,7 @@ def _now_year() -> int:
 
 
 def _best_scheme() -> str:
-    preferred = (os.getenv("PREFERRED_URL_SCHEME") or "").strip().lower()
+    preferred = _env_str("PREFERRED_URL_SCHEME", "").lower()
     if preferred in {"http", "https"}:
         return preferred
     if _env_bool("FORCE_HTTPS", False):
@@ -118,13 +129,22 @@ def _absolute_url(endpoint: str, **values: Any) -> str:
 
 
 def _site_base_url() -> str:
-    site = (current_app.config.get("SITE_URL") or os.getenv("SITE_URL") or "").strip().rstrip("/")
+    # Prefer config/env
+    site = (current_app.config.get("SITE_URL") or _env_str("SITE_URL", "")).strip().rstrip("/")
     if site:
         return site
+
+    # Fallback: derive from current request
     try:
-        return _absolute_url("main.home").rstrip("/")
+        scheme = _best_scheme()
+        host = (request.headers.get("X-Forwarded-Host") or request.host or "").strip()
+        if host:
+            return f"{scheme}://{host}".rstrip("/")
     except Exception:
-        return "https://skyline-style.onrender.com"
+        pass
+
+    # Last resort stable fallback
+    return "https://skyline-style.onrender.com"
 
 
 def _etag_for(text: str) -> str:
@@ -145,51 +165,62 @@ def _maybe_304(req_etag: Optional[str], etag: str):
 
 
 def _resp_no_store(resp, *, vary_cookie: bool = True):
-    resp.headers["Cache-Control"] = "no-store"
+    resp.headers["Cache-Control"] = "no-store, max-age=0, must-revalidate"
     resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
     if vary_cookie:
         resp.headers.setdefault("Vary", "Cookie")
     return resp
 
 
 def _resp_cache_public(resp, seconds: int):
-    s = max(0, int(seconds))
+    s = _clamp_int(seconds, 0, min_v=0, max_v=86400)
     if s <= 0:
         return _resp_no_store(resp)
-    resp.headers["Cache-Control"] = f"public, max-age={s}, stale-while-revalidate=30"
+    resp.headers["Cache-Control"] = f"public, max-age={s}, stale-while-revalidate=60"
     return resp
 
 
+def _norm_str(v: Any, *, max_len: int = 600) -> str:
+    if v is None:
+        return ""
+    s = v if isinstance(v, str) else str(v)
+    s = s.replace("\x00", "").replace("\u200b", "").strip().replace("\r", "").replace("\n", "")
+    return s[:max_len]
+
+
 def _is_safe_next(url: str) -> bool:
-    if not url:
-        return False
-    u = url.strip()
+    u = (url or "").strip()
     if not u or len(u) > 512:
         return False
-    if any(ch in u for ch in ("\x00", "\r", "\n", "\t")):
+    if any(ch in u for ch in ("\x00", "\r", "\n", "\t", " ")):
         return False
-    if " " in u or "\\" in u or u.startswith("//") or "://" in u:
+    if u.startswith("//") or "://" in u or "\\" in u:
         return False
     if ".." in u:
         return False
-    parsed = urlparse(u)
-    if parsed.scheme or parsed.netloc:
+    try:
+        parsed = urlparse(u)
+        if parsed.scheme or parsed.netloc:
+            return False
+    except Exception:
         return False
     if not u.startswith("/"):
         return False
-    if u.startswith("/auth/") or u == "/auth":
+    # Evitar loops / zonas sensibles
+    if u.startswith(("/auth/", "/admin/")) or u in ("/auth", "/admin"):
         return False
     return True
 
 
 def _safe_next_from_args() -> str:
-    nxt = (request.args.get("next") or "").strip()
+    nxt = _norm_str(request.args.get("next") or "", max_len=512)
     return nxt if _is_safe_next(nxt) else ""
 
 
 def _accept_language() -> str:
-    raw = (request.headers.get("Accept-Language") or "es").strip()
-    lang = raw.split(",")[0].strip().lower()
+    raw = _norm_str(request.headers.get("Accept-Language") or "es", max_len=120).strip()
+    lang = (raw.split(",")[0] if raw else "es").strip().lower()
     lang = "".join(ch for ch in lang if ch.isalnum() or ch in {"-", "_"})
     return (lang or "es")[:12]
 
@@ -203,6 +234,12 @@ def _vary_add(resp, token: str) -> None:
     if token not in parts:
         parts.append(token)
         resp.headers["Vary"] = ", ".join(parts)
+
+
+def _cache_key_home(lang: str) -> str:
+    # Aislamos por idioma + asset version (y un “salt” por si querés rotar sin deploy)
+    salt = _env_str("HOME_CACHE_SALT", "")
+    return f"home:v4:lang={lang}:ver={HOME_ASSET_VER}:salt={salt}"
 
 
 def _cache_get(key: str) -> Optional[Dict[str, Any]]:
@@ -224,6 +261,7 @@ def _cache_set(key: str, payload: Dict[str, Any]) -> None:
 
     now = time.time()
 
+    # Purga expirados
     for k in list(_HOME_CACHE.keys()):
         try:
             exp, _ = _HOME_CACHE[k]
@@ -232,6 +270,7 @@ def _cache_set(key: str, payload: Dict[str, Any]) -> None:
         except Exception:
             _HOME_CACHE.pop(k, None)
 
+    # Evita crecimiento infinito
     while len(_HOME_CACHE) >= _HOME_CACHE_MAX_KEYS:
         try:
             _HOME_CACHE.pop(next(iter(_HOME_CACHE)))
@@ -260,11 +299,12 @@ def _render(template: str, *, status: int = 200, **ctx: Any):
     ctx.setdefault("meta_description", SEO_DEFAULTS.description)
     ctx["og_image"] = _safe_og_image(str(ctx.get("og_image") or SEO_DEFAULTS.og_image))
     ctx.setdefault("now_year", _now_year())
+    ctx.setdefault("SITE_URL", _site_base_url())
+    ctx.setdefault("HOME_CSS_VER", HOME_ASSET_VER)
 
-    env = (os.getenv("ENV") or os.getenv("FLASK_ENV") or "").strip().lower() or "production"
+    env = (_env_str("ENV") or _env_str("FLASK_ENV") or "production").lower()
     ctx.setdefault("ENV", env)
     ctx.setdefault("config", getattr(current_app, "config", {}) or {})
-    ctx.setdefault("HOME_CSS_VER", HOME_ASSET_VER)
 
     try:
         return make_response(render_template(template, **ctx), status)
@@ -276,8 +316,13 @@ def _render(template: str, *, status: int = 200, **ctx: Any):
                     "error.html",
                     error_code=500,
                     error_title="Error",
-                    error_message="Ocurrió un error.",
+                    error_message="Ocurrió un error al cargar la página.",
                     meta_title=f"Error | {SEO_DEFAULTS.title}",
+                    meta_description=SEO_DEFAULTS.description,
+                    og_image=_safe_og_image(SEO_DEFAULTS.og_image),
+                    now_year=_now_year(),
+                    SITE_URL=_site_base_url(),
+                    HOME_CSS_VER=HOME_ASSET_VER,
                 ),
                 500,
             )
@@ -291,6 +336,7 @@ def _security_headers(resp):
     resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
     resp.headers.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+    resp.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
     resp.headers.setdefault("X-Served-By", "skyline")
     resp.headers.setdefault("X-Home-Asset-Ver", str(HOME_ASSET_VER))
 
@@ -300,10 +346,11 @@ def _security_headers(resp):
     except Exception:
         pass
 
+    # Cache safety on sensitive paths
     try:
         p = request.path or ""
-        if p.startswith(("/auth", "/admin", "/account", "/checkout", "/cart")):
-            resp.headers.setdefault("Cache-Control", "no-store")
+        if p.startswith(("/auth", "/admin", "/account", "/checkout", "/cart", "/webhooks")):
+            resp.headers.setdefault("Cache-Control", "no-store, max-age=0, must-revalidate")
             resp.headers.setdefault("Pragma", "no-cache")
             _vary_add(resp, "Cookie")
     except Exception:
@@ -331,7 +378,7 @@ def home():
     lang = _accept_language()
     cache_enabled = bool(ENABLE_HOME_CACHE and HOME_CACHE_TTL > 0)
 
-    key = f"home:v3.11.0:lang={lang}:ver={HOME_ASSET_VER}"
+    key = _cache_key_home(lang)
     cached = _cache_get(key) if cache_enabled else None
 
     if cached:
@@ -350,6 +397,7 @@ def home():
     payload: Dict[str, Any] = {
         "meta_title": SEO_DEFAULTS.title,
         "meta_description": SEO_DEFAULTS.description,
+        "og_image": SEO_DEFAULTS.og_image,
         "HOME_CSS_VER": HOME_ASSET_VER,
     }
 
@@ -372,8 +420,10 @@ def home():
 @main_bp.get("/account")
 def account_alias():
     nxt = _safe_next_from_args()
-    raw = (request.args.get("tab") or request.args.get("mode") or "").strip().lower()
+    raw = _norm_str((request.args.get("tab") or request.args.get("mode") or ""), max_len=24).lower()
     wants_register = raw in {"register", "signup", "crear", "alta"}
+
+    # Redirect a las rutas del auth_bp (compat)
     try:
         if wants_register:
             return redirect(url_for("auth.register_get", next=nxt) if nxt else url_for("auth.register_get"), code=302)
@@ -418,15 +468,15 @@ def health():
                 db.session.rollback()  # type: ignore[attr-defined]
             except Exception:
                 pass
-    else:
-        db_ok = None
 
     data = {
         "status": "ok" if ok else "degraded",
         "time_utc": _utcnow().isoformat(),
         "db_ok": db_ok,
         "db_error": db_err,
+        "site_url": _site_base_url(),
         "home_cache_enabled": bool(ENABLE_HOME_CACHE and HOME_CACHE_TTL > 0),
+        "home_cache_ttl": int(HOME_CACHE_TTL),
         "home_asset_ver": str(HOME_ASSET_VER),
     }
 
@@ -439,6 +489,7 @@ def health():
 @main_bp.get("/robots.txt")
 def robots_txt():
     base = _site_base_url()
+    # Si existe static/robots.txt, usamos ese (mejor para cache/CDN)
     try:
         return redirect(url_for("static", filename="robots.txt"), code=302)
     except Exception:
@@ -463,6 +514,7 @@ def sitemap_xml():
     base = _site_base_url()
     now = _iso_utc(_utcnow())
 
+    # Rutas estáticas (mantengo tus paths)
     static_urls: List[Dict[str, Any]] = [
         {"loc": f"{base}/", "lastmod": now, "changefreq": "daily", "priority": "1.0"},
         {"loc": f"{base}/tienda", "lastmod": now, "changefreq": "daily", "priority": "0.9"},
@@ -474,18 +526,6 @@ def sitemap_xml():
     products: List[Dict[str, Any]] = []
     seen: Set[str] = {u["loc"] for u in static_urls}
 
-    try:
-        max_categories = int(os.getenv("SITEMAP_MAX_CATEGORIES", "2000") or "2000")
-    except Exception:
-        max_categories = 2000
-    try:
-        max_products = int(os.getenv("SITEMAP_MAX_PRODUCTS", "20000") or "20000")
-    except Exception:
-        max_products = 20000
-
-    max_categories = max(100, min(max_categories, 5000))
-    max_products = max(500, min(max_products, 50000))
-
     if db is not None and Category is not None and Product is not None:
         try:
             q_cat = db.session.query(Category)  # type: ignore
@@ -496,11 +536,14 @@ def sitemap_xml():
             elif hasattr(Category, "created_at"):
                 q_cat = q_cat.order_by(getattr(Category, "created_at").desc())
 
-            for c in q_cat.limit(max_categories).all():
+            for c in q_cat.limit(_SITEMAP_MAX_CATEGORIES).all():
                 slug = getattr(c, "slug", None) or getattr(c, "id", None)
                 if not slug:
                     continue
-                loc = f"{base}/tienda?cat={slug}"
+                slug_s = str(slug).strip()
+                if not slug_s:
+                    continue
+                loc = f"{base}/tienda?cat={slug_s}"
                 if loc in seen:
                     continue
                 seen.add(loc)
@@ -515,11 +558,14 @@ def sitemap_xml():
             elif hasattr(Product, "created_at"):
                 q_prod = q_prod.order_by(getattr(Product, "created_at").desc())
 
-            for p in q_prod.limit(max_products).all():
+            for p in q_prod.limit(_SITEMAP_MAX_PRODUCTS).all():
                 slug = getattr(p, "slug", None) or getattr(p, "id", None)
                 if not slug:
                     continue
-                loc = f"{base}/producto/{slug}"
+                slug_s = str(slug).strip()
+                if not slug_s:
+                    continue
+                loc = f"{base}/producto/{slug_s}"
                 if loc in seen:
                     continue
                 seen.add(loc)
@@ -527,7 +573,7 @@ def sitemap_xml():
                 products.append({"loc": loc, "lastmod": lastmod, "changefreq": "weekly", "priority": "0.7"})
         except Exception as e:
             try:
-                current_app.logger.warning("sitemap: fallback static only (%s)", e)
+                current_app.logger.warning("sitemap: fallback static only (%s)", str(e)[:200])
             except Exception:
                 pass
 
@@ -548,7 +594,7 @@ def sitemap_xml():
 
 @main_bp.get("/go")
 def go():
-    nxt = (request.args.get("next", "") or "").strip()
+    nxt = _norm_str(request.args.get("next", "") or "", max_len=512)
     if _is_safe_next(nxt):
         return redirect(nxt, code=302)
     return redirect(url_for("main.home"), code=302)

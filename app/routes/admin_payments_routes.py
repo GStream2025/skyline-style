@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import secrets
 import time
 from typing import Any, Dict, List, Mapping, Optional, Tuple
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 from flask import (
     Blueprint,
     Response,
+    abort,
     current_app,
     flash,
     jsonify,
@@ -27,27 +29,71 @@ except Exception:
 
 
 admin_payments_bp = Blueprint("admin_payments", __name__, url_prefix="/admin")
+admin_payments_bp.strict_slashes = False
 
 _TRUE = {"1", "true", "yes", "y", "on", "checked"}
+_FALSE = {"0", "false", "no", "n", "off", "unchecked"}
+
 _MAX_CODE = 64
 _MAX_EMAIL = 160
 _MAX_IP = 64
 _MAX_STR = 500
 _MAX_CFG_STR = 800
-_RL_DEFAULT_SEC = 0.6
+_MAX_FLASH = 240
+
+_RL_DEFAULT_SEC = 0.75
+_RL_BUCKET = "_rl_admin_payments_v1"
+_RL_CAP = 220
+_RL_TTL_SEC = 60 * 45
+
+_SESSION_CSRF_KEY = "csrf_token"
+
+_NO_STORE_HEADERS = {
+    "Cache-Control": "no-store, max-age=0, must-revalidate",
+    "Pragma": "no-cache",
+    "Expires": "0",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "X-Frame-Options": "SAMEORIGIN",
+    "Cross-Origin-Opener-Policy": "same-origin",
+}
+
+
+def _now() -> int:
+    return int(time.time())
+
+
+def _clean_str(v: Any, max_len: int, *, default: str = "") -> str:
+    if max_len <= 0:
+        return default
+    if v is None:
+        return default
+    s = str(v).replace("\x00", "").replace("\u200b", "").strip()
+    if not s:
+        return default
+    s = " ".join(s.split())
+    return s[:max_len] if len(s) > max_len else s
+
+
+def _bool(v: Any) -> bool:
+    if v is None:
+        return False
+    if isinstance(v, bool):
+        return v
+    s = str(v).strip().lower()
+    if not s or s in _FALSE:
+        return False
+    return s in _TRUE or s == "1"
 
 
 def _wants_json() -> bool:
     try:
         if request.is_json:
             return True
-        if (request.args.get("format") or "").strip().lower() == "json":
-            return True
-        p = (request.path or "").lower()
-        if p.startswith("/api/"):
+        if _clean_str(request.args.get("format"), 12).lower() == "json":
             return True
         accept = (request.headers.get("Accept") or "").lower()
-        if "application/json" in accept:
+        if "application/json" in accept or "text/json" in accept:
             return True
         if (request.headers.get("X-Requested-With") or "").lower() == "xmlhttprequest":
             return True
@@ -63,6 +109,52 @@ def _json(payload: Dict[str, Any], status: int = 200) -> Tuple[Response, int]:
     return jsonify(payload), int(status)
 
 
+def _no_store(resp: Response) -> Response:
+    try:
+        for k, v in _NO_STORE_HEADERS.items():
+            resp.headers.setdefault(k, v)
+        vary = resp.headers.get("Vary", "")
+        parts = [p.strip() for p in vary.split(",") if p.strip()]
+        if "Accept" not in parts:
+            parts.append("Accept")
+        if "Cookie" not in parts:
+            parts.append("Cookie")
+        resp.headers["Vary"] = ", ".join(parts)
+    except Exception:
+        pass
+    return resp
+
+
+def _template_exists(name: str) -> bool:
+    try:
+        current_app.jinja_env.get_template(name)
+        return True
+    except Exception:
+        return False
+
+
+def _render_safe(template: str, **ctx: Any):
+    if _template_exists(template):
+        try:
+            return render_template(template, **ctx)
+        except Exception:
+            try:
+                current_app.logger.exception("Template render failed: %s", template)
+            except Exception:
+                pass
+    title = _clean_str(ctx.get("title") or "Admin Payments", 100, default="Admin Payments")
+    body = (
+        "<!doctype html><html lang='es'><head><meta charset='utf-8'>"
+        "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+        f"<title>{title}</title></head>"
+        "<body style='font-family:system-ui;padding:24px;max-width:980px;margin:0 auto'>"
+        f"<h1 style='margin:0 0 10px'>{title}</h1>"
+        "<p style='opacity:.75;margin:0'>Falta template o hubo un error al renderizar.</p>"
+        "</body></html>"
+    )
+    return body, 200, {"Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store"}
+
+
 def _client_ip() -> str:
     try:
         xf = (request.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
@@ -70,7 +162,7 @@ def _client_ip() -> str:
             return xf[:_MAX_IP]
     except Exception:
         pass
-    return (request.remote_addr or "")[:_MAX_IP]
+    return _clean_str(request.remote_addr, _MAX_IP, default="")[:_MAX_IP]
 
 
 def _commit_safe() -> bool:
@@ -85,106 +177,94 @@ def _commit_safe() -> bool:
         return False
 
 
-def _read_form(name: str) -> str:
+def _ensure_csrf() -> str:
+    tok = session.get(_SESSION_CSRF_KEY)
+    if not isinstance(tok, str) or len(tok) < 24:
+        tok = secrets.token_urlsafe(32)
+        session[_SESSION_CSRF_KEY] = tok
+    session.permanent = True
+    session.modified = True
+    return str(session[_SESSION_CSRF_KEY])
+
+
+def _csrf_ok() -> bool:
+    if request.method in {"GET", "HEAD", "OPTIONS"}:
+        return True
+    sess = _clean_str(session.get(_SESSION_CSRF_KEY), 256, default="")
+    if not sess:
+        return False
+
+    header_name = _clean_str(current_app.config.get("CSRF_HEADER"), 64, default="X-CSRF-Token")
+    sent = _clean_str(request.headers.get(header_name), 256, default="")
+    if not sent:
+        sent = _clean_str(request.form.get("csrf_token"), 256, default="")
+    if not sent and request.is_json:
+        try:
+            data = request.get_json(silent=True) or {}
+            if isinstance(data, dict):
+                sent = _clean_str(data.get("csrf_token"), 256, default="")
+        except Exception:
+            sent = ""
+
+    if not sent:
+        return False
     try:
-        return (request.form.get(name) or "").strip()
+        return secrets.compare_digest(sess, sent)
     except Exception:
-        return ""
+        return False
 
 
-def _read_bool(name: str) -> bool:
-    return _read_form(name).lower() in _TRUE
-
-
-def _read_int(name: str, default: int = 0) -> int:
-    v = _read_form(name)
-    if not v:
-        return default
+def _sanitize_next(path: str, *, fallback: str = "/admin") -> str:
+    p = _clean_str(path, 700, default="")
+    if not p:
+        return fallback
+    if not p.startswith("/") or p.startswith("//") or "://" in p:
+        return fallback
+    if any(c in p for c in ("\x00", "\r", "\n", "\t", "\\", " ")):
+        return fallback
+    if ".." in p:
+        return fallback
     try:
-        return int(v)
+        u = urlparse(p)
+        if u.scheme or u.netloc:
+            return fallback
     except Exception:
-        return default
-
-
-def _read_str(name: str, max_len: int = _MAX_STR) -> str:
-    s = _read_form(name)
-    if not s:
-        return ""
-    return s[: max(0, int(max_len))]
-
-
-def _clamp_int(v: int, lo: int, hi: int) -> int:
-    if v < lo:
-        return lo
-    if v > hi:
-        return hi
-    return v
-
-
-def _normalize_code(code: str) -> str:
-    c = (code or "").strip().lower().replace(" ", "_").replace("-", "_")
-    c = "".join(ch for ch in c if ch.isalnum() or ch == "_")
-    return c[:_MAX_CODE]
+        return fallback
+    if "?" in p:
+        p = p.split("?", 1)[0]
+    if "#" in p:
+        p = p.split("#", 1)[0]
+    return p or fallback
 
 
 def _safe_redirect(endpoint: str, **values):
     try:
-        return redirect(url_for(endpoint, **values))
+        return redirect(url_for(endpoint, **values), code=302)
     except Exception:
         try:
-            return redirect(url_for("main.home"))
+            return redirect(url_for("main.home"), code=302)
         except Exception:
-            return redirect("/")
+            return redirect("/", code=302)
 
 
 def _safe_redirect_path(path: str):
-    p = (path or "").strip()
-    if not p.startswith("/") or p.startswith("//") or any(c in p for c in ("\x00", "\r", "\n", "\\")):
-        p = "/"
-    return redirect(p)
+    p = _sanitize_next(path, fallback="/")
+    return redirect(p, code=302)
 
 
 def _audit_user_email() -> str:
     try:
         uid = int(session.get("user_id") or 0)
         if uid:
-            from app.models import User  # local import
+            from app.models import User  # type: ignore
 
             u = db.session.get(User, uid)
             if u:
-                em = (getattr(u, "email", "") or "").strip().lower()
+                em = _clean_str(getattr(u, "email", ""), _MAX_EMAIL, default="").lower()
                 return em[:_MAX_EMAIL]
     except Exception:
         pass
-    em2 = (session.get("user_email") or "").strip().lower()
-    return em2[:_MAX_EMAIL]
-
-
-def _csrf_ok() -> bool:
-    if request.method in {"GET", "HEAD", "OPTIONS"}:
-        return True
-
-    try:
-        header_name = (current_app.config.get("CSRF_HEADER") or "X-CSRF-Token").strip()
-    except Exception:
-        header_name = "X-CSRF-Token"
-
-    sent = ""
-    try:
-        sent = (request.headers.get(header_name) or request.form.get("csrf_token") or "").strip()
-    except Exception:
-        sent = ""
-
-    tok = (session.get("csrf_token") or "").strip()
-    if not tok or not sent:
-        return False
-
-    try:
-        import secrets as _secrets
-
-        return _secrets.compare_digest(tok, sent)
-    except Exception:
-        return False
+    return _clean_str(session.get("user_email"), _MAX_EMAIL, default="").lower()[:_MAX_EMAIL]
 
 
 def _admin_required():
@@ -193,21 +273,23 @@ def _admin_required():
         if _wants_json():
             return _json({"ok": False, "error": "auth_required"}, 401)
         flash("Iniciá sesión para entrar al admin.", "warning")
+        nxt = _sanitize_next(request.path, fallback="/admin")
         try:
-            return _safe_redirect("auth.login", next=request.path)
+            return _safe_redirect("auth.login", next=nxt)
         except Exception:
-            return _safe_redirect_path("/auth/login?" + urlencode({"next": request.path}))
+            return _safe_redirect_path("/auth/login?" + urlencode({"next": nxt}))
 
-    if bool(session.get("is_admin")):
+    if _bool(session.get("is_admin")):
         return None
 
     try:
-        from app.models import User  # local import
+        from app.models import User  # type: ignore
 
         u = db.session.get(User, int(uid))
-        if u and (bool(getattr(u, "is_admin", False)) or bool(getattr(u, "is_owner", False))):
+        if u and (_bool(getattr(u, "is_admin", False)) or _bool(getattr(u, "is_owner", False))):
             session["is_admin"] = True
-            session["user_email"] = (getattr(u, "email", "") or "").lower()[:_MAX_EMAIL]
+            session["user_email"] = _clean_str(getattr(u, "email", ""), _MAX_EMAIL, default="").lower()
+            session.modified = True
             return None
     except Exception:
         pass
@@ -219,15 +301,63 @@ def _admin_required():
     return _safe_redirect("main.home")
 
 
+def _rl_get_store() -> Dict[str, Dict[str, Any]]:
+    store = session.get(_RL_BUCKET)
+    if isinstance(store, dict):
+        out: Dict[str, Dict[str, Any]] = {}
+        for k, v in store.items():
+            if isinstance(k, str) and isinstance(v, dict):
+                out[k] = dict(v)
+        return out
+    return {}
+
+
+def _rl_put_store(store: Dict[str, Dict[str, Any]]) -> None:
+    session[_RL_BUCKET] = store
+    session.modified = True
+
+
 def _rate_limit(key: str, seconds: float = _RL_DEFAULT_SEC) -> bool:
-    now = time.time()
+    now = _now()
+    store = _rl_get_store()
+
+    cutoff = now - _RL_TTL_SEC
+    if store:
+        for k in list(store.keys()):
+            try:
+                t0 = int(store.get(k, {}).get("t", 0) or 0)
+            except Exception:
+                t0 = 0
+            if t0 and t0 < cutoff:
+                store.pop(k, None)
+
+    if len(store) > _RL_CAP:
+        items: List[Tuple[int, str]] = []
+        for k, v in store.items():
+            try:
+                items.append((int(v.get("t", 0) or 0), k))
+            except Exception:
+                items.append((0, k))
+        items.sort()
+        for _, k in items[: max(0, len(store) - _RL_CAP)]:
+            store.pop(k, None)
+
+    b = store.get(key)
+    if not isinstance(b, dict):
+        store[key] = {"t": now}
+        _rl_put_store(store)
+        return True
+
     try:
-        last = float(session.get(key, 0) or 0)
+        last = int(b.get("t", 0) or 0)
     except Exception:
-        last = 0.0
-    if (now - last) < float(seconds):
+        last = 0
+
+    if (now - last) < int(max(1, seconds * 1000)) // 1000 and (time.time() - float(last)) < float(seconds):
         return False
-    session[key] = now
+
+    store[key] = {"t": now}
+    _rl_put_store(store)
     return True
 
 
@@ -241,16 +371,31 @@ def _bootstrap_defaults_if_needed() -> None:
     try:
         PaymentProviderService.bootstrap_defaults()  # type: ignore[attr-defined]
     except Exception:
-        pass
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
+
+def _normalize_code(code: str) -> str:
+    c = _clean_str(code, _MAX_CODE, default="").lower().replace(" ", "_").replace("-", "_")
+    c = "".join(ch for ch in c if ch.isalnum() or ch == "_")
+    return c[:_MAX_CODE]
 
 
 def _get_provider_by_code(code: str):
     if PaymentProvider is None:
         return None
     c = _normalize_code(code)
+    if not c:
+        return None
     try:
         return PaymentProvider.query.filter_by(code=c).first()  # type: ignore[attr-defined]
     except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         return None
 
 
@@ -279,10 +424,7 @@ def _provider_to_ui_dict(p) -> Dict[str, Any]:
         try:
             prev = _as_mapping(p.as_dict(masked=True))
         except Exception:
-            prev = {
-                "code": getattr(p, "code", "") or "",
-                "name": getattr(p, "name", "Provider") or "Provider",
-            }
+            prev = {"code": getattr(p, "code", "") or "", "name": getattr(p, "name", "Provider") or "Provider"}
 
     try:
         prev.setdefault("schema", p.config_schema_for(getattr(p, "code", "")))
@@ -291,14 +433,14 @@ def _provider_to_ui_dict(p) -> Dict[str, Any]:
 
     prev.setdefault("code", getattr(p, "code", "") or "")
     prev.setdefault("name", getattr(p, "name", "") or prev.get("code") or "Provider")
-    prev.setdefault("enabled", bool(getattr(p, "enabled", False)))
-    prev.setdefault("recommended", bool(getattr(p, "recommended", False)))
+    prev.setdefault("enabled", _bool(getattr(p, "enabled", False)))
+    prev.setdefault("recommended", _bool(getattr(p, "recommended", False)))
     prev.setdefault("sort_order", int(getattr(p, "sort_order", 100) or 100))
     prev.setdefault("kind", getattr(p, "kind", "other") or "other")
     prev.setdefault("country", getattr(p, "country", "UY") or "UY")
     prev.setdefault("notes", getattr(p, "notes", "") or "")
     prev.setdefault("config", _as_mapping(prev.get("config") or getattr(p, "config", {}) or {}))
-    prev.setdefault("ready", bool(prev.get("ready", False)))
+    prev.setdefault("ready", _bool(prev.get("ready", False)))
     prev.setdefault("errors", list(prev.get("errors") or []))
     return prev
 
@@ -306,7 +448,7 @@ def _provider_to_ui_dict(p) -> Dict[str, Any]:
 def _sanitize_cfg(cfg: Dict[str, Any]) -> Dict[str, Any]:
     out: Dict[str, Any] = {}
     for k, v in (cfg or {}).items():
-        kk = (str(k) if k is not None else "").strip()
+        kk = _clean_str(k, 80, default="")
         if not kk:
             continue
         if v is None:
@@ -343,6 +485,24 @@ def _get_schema(p) -> List[Dict[str, Any]]:
     return []
 
 
+@admin_payments_bp.before_request
+def _before():
+    _ensure_csrf()
+
+
+@admin_payments_bp.after_request
+def _after(resp: Response):
+    return _no_store(resp)
+
+
+@admin_payments_bp.context_processor
+def _inject():
+    return {
+        "csrf_token_value": session.get(_SESSION_CSRF_KEY, ""),
+        "checkout_url_value": _safe_checkout_url(),
+    }
+
+
 @admin_payments_bp.get("/payments")
 def admin_payments_page():
     guard = _admin_required()
@@ -362,26 +522,29 @@ def admin_payments_page():
             PaymentProvider.sort_order.asc(),  # type: ignore[attr-defined]
             PaymentProvider.name.asc(),  # type: ignore[attr-defined]
         ).all()
-    except Exception as e:
-        current_app.logger.exception("Error listando providers: %s", e)
+    except Exception:
+        try:
+            current_app.logger.exception("Error listando providers")
+        except Exception:
+            pass
         flash("No se pudieron cargar los métodos de pago.", "error")
         return _safe_redirect("admin.dashboard")
 
     items: List[Dict[str, Any]] = [_provider_to_ui_dict(p) for p in (providers or [])]
-
     stats = {
         "total": len(items),
-        "enabled": sum(1 for x in items if x.get("enabled")),
-        "ready": sum(1 for x in items if x.get("ready")),
-        "recommended": sum(1 for x in items if x.get("recommended")),
+        "enabled": sum(1 for x in items if _bool(x.get("enabled"))),
+        "ready": sum(1 for x in items if _bool(x.get("ready"))),
+        "recommended": sum(1 for x in items if _bool(x.get("recommended"))),
     }
 
-    return render_template(
+    return _render_safe(
         "admin/payments.html",
         providers=items,
         checkout_url=_safe_checkout_url(),
-        csrf_token=(session.get("csrf_token") or ""),
+        csrf_token_value=session.get(_SESSION_CSRF_KEY, ""),
         stats=stats,
+        title="Métodos de pago",
     )
 
 
@@ -392,6 +555,11 @@ def admin_payments_save(code: str):
         return guard
 
     norm_code = _normalize_code(code)
+    if not norm_code:
+        if _wants_json():
+            return _json({"ok": False, "error": "bad_code"}, 400)
+        flash("Código inválido.", "error")
+        return _safe_redirect("admin_payments.admin_payments_page")
 
     if not _csrf_ok():
         if _wants_json():
@@ -399,7 +567,7 @@ def admin_payments_save(code: str):
         flash("CSRF inválido. Recargá la página e intentá de nuevo.", "warning")
         return _safe_redirect("admin_payments.admin_payments_page")
 
-    if not _rate_limit(f"rl:admin_payments_save:{norm_code}", seconds=_RL_DEFAULT_SEC):
+    if not _rate_limit(f"save:{norm_code}", seconds=_RL_DEFAULT_SEC):
         if _wants_json():
             return _json({"ok": False, "error": "rate_limited"}, 429)
         flash("Muy rápido 😅 Esperá un segundo y reintentá.", "warning")
@@ -418,16 +586,28 @@ def admin_payments_save(code: str):
         flash("Método no encontrado.", "error")
         return _safe_redirect("admin_payments.admin_payments_page")
 
-    enabled = _read_bool("enabled")
-    recommended = _read_bool("recommended")
+    enabled = _bool(request.form.get("enabled"))
+    recommended = _bool(request.form.get("recommended"))
     if not enabled and recommended:
         recommended = False
 
-    sort_order = _clamp_int(_read_int("sort_order", int(getattr(p, "sort_order", 100) or 100)), 0, 9999)
-    kind_in = (_read_str("kind", 20) or (getattr(p, "kind", "other") or "other")).lower().strip()
-    kind = (kind_in[:20] if kind_in else "other") or "other"
+    def _read_int(name: str, default: int = 0) -> int:
+        v = _clean_str(request.form.get(name), 32, default="")
+        if not v:
+            return default
+        try:
+            return int(v)
+        except Exception:
+            return default
 
-    country_in = (_read_str("country", 2) or (getattr(p, "country", "UY") or "UY")).upper().strip()
+    def _clamp_int(v: int, lo: int, hi: int) -> int:
+        return lo if v < lo else (hi if v > hi else v)
+
+    sort_order = _clamp_int(_read_int("sort_order", int(getattr(p, "sort_order", 100) or 100)), 0, 9999)
+    kind_in = _clean_str(request.form.get("kind"), 20, default=str(getattr(p, "kind", "other") or "other")).lower()
+    kind = kind_in[:20] or "other"
+
+    country_in = _clean_str(request.form.get("country"), 2, default=str(getattr(p, "country", "UY") or "UY")).upper()
     country = country_in if len(country_in) == 2 and country_in.isalpha() else "UY"
 
     fee_percent = _clamp_int(_read_int("fee_percent", int(getattr(p, "fee_percent", 0) or 0)), 0, 100)
@@ -438,7 +618,7 @@ def admin_payments_save(code: str):
     if max_amount != 0 and max_amount < min_amount:
         max_amount = min_amount
 
-    notes = _read_str("notes", _MAX_STR)
+    notes = _clean_str(request.form.get("notes"), _MAX_STR, default="")
 
     _set_if_exists(p, "enabled", bool(enabled))
     _set_if_exists(p, "recommended", bool(recommended))
@@ -462,17 +642,15 @@ def admin_payments_save(code: str):
 
     schema = _get_schema(p)
     for f in schema:
-        k = (f.get("key") or "").strip()
-        typ = (f.get("type") or "text").strip().lower()
+        k = _clean_str(f.get("key"), 80, default="")
+        typ = _clean_str(f.get("type"), 20, default="text").lower()
         if not k:
             continue
-
         field_name = f"cfg__{k}"
         if typ == "bool":
-            cfg[k] = _read_bool(field_name)
+            cfg[k] = _bool(request.form.get(field_name))
             continue
-
-        val = _read_str(field_name, _MAX_CFG_STR)
+        val = _clean_str(request.form.get(field_name), _MAX_CFG_STR, default="")
         if val == "":
             cfg.pop(k, None)
         else:
@@ -487,7 +665,7 @@ def admin_payments_save(code: str):
         vres = p.validate_config()
         if isinstance(vres, tuple) and len(vres) == 2:
             ok = bool(vres[0])
-            errs = list(vres[1] or [])
+            errs = [str(x) for x in (vres[1] or [])]
         elif isinstance(vres, bool):
             ok = bool(vres)
             errs = []
@@ -500,8 +678,8 @@ def admin_payments_save(code: str):
         except Exception:
             pass
         if _wants_json():
-            return _json({"ok": False, "error": "config_invalid", "message": str(e)}, 400)
-        flash(f"Config inválida: {e}", "error")
+            return _json({"ok": False, "error": "config_invalid", "message": _clean_str(e, 500, default="invalid")}, 400)
+        flash(_clean_str(f"Config inválida: {e}", _MAX_FLASH, default="Config inválida"), "error")
         return _safe_redirect("admin_payments.admin_payments_page")
 
     _set_if_exists(p, "updated_by", _audit_user_email())
@@ -545,8 +723,8 @@ def admin_payments_save(code: str):
     elif ok:
         flash("Guardado ✅", "success")
     else:
-        msg = "Guardado ✅ pero falta completar: " + " | ".join(str(x) for x in (errs or ["config incompleta"]))
-        flash(msg[:240], "warning")
+        msg = "Guardado ✅ pero falta completar: " + " | ".join(_clean_str(x, 120, default="") for x in (errs or ["config incompleta"]))
+        flash(_clean_str(msg, _MAX_FLASH, default="Guardado"), "warning")
 
     return _safe_redirect("admin_payments.admin_payments_page")
 

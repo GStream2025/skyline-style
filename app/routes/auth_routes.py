@@ -51,12 +51,14 @@ _TRUE: Set[str] = {"1", "true", "yes", "y", "on", "checked"}
 _FALSE: Set[str] = {"0", "false", "no", "n", "off", "unchecked"}
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
 _ALLOWED_PUBLIC_ROLES: Set[str] = {"customer", "affiliate"}
 
 _RL_WINDOW_SEC = 60
 _RL_MAX = 8
 _RL_STORE_CAP = 250
-_RL_STORE_SESSION_KEY = "rl_store_v5"
+_RL_STORE_TTL_SEC = 60 * 25
+_RL_STORE_SESSION_KEY = "rl_store_v6"
 
 _RL_LOGIN_KEY = "login"
 _RL_REG_KEY = "register"
@@ -147,25 +149,35 @@ def _parse_bool(v: Any) -> bool:
 
 
 def _safe_next(nxt: Any) -> str:
+    """
+    Devuelve SOLO un path local seguro (sin host, sin scheme),
+    limpiando query/fragment y bloqueando /auth y /admin.
+    """
     s = _norm(nxt, max_len=_MAX_NEXT_LEN)
     if not s:
         return ""
-    if any(c in s for c in ("\x00", "\\", "\r", "\n", "\t", " ")):
+
+    if any(c in s for c in ("\x00", "\\", "\r", "\n", "\t")):
         return ""
+
     if "://" in s:
         return ""
+
+    # Permitimos que venga con query (ej: "/shop?x=1") pero devolvemos solo path.
     if not s.startswith("/") or s.startswith("//"):
         return ""
+
     if ".." in s:
         return ""
+
     try:
         p = urlparse(s)
         if p.scheme or p.netloc:
             return ""
-        clean = s.split("?", 1)[0].split("#", 1)[0]
-        clean = clean[:_MAX_NEXT_LEN]
+        clean = (p.path or "").strip()
         if not clean.startswith("/") or clean.startswith("//"):
             return ""
+        clean = clean[:_MAX_NEXT_LEN]
         if clean in ("/auth/account", "/auth/login", "/auth/register"):
             return ""
         if any(clean.startswith(pref) for pref in _BLOCKED_NEXT_PREFIXES):
@@ -233,9 +245,11 @@ def _auth_account_url(*, tab: str, nxt: str = "", email: str = "", name: str = "
         params["email"] = email
     if name:
         params["name"] = name
+
     u = _url_for_safe("auth.account", **params)
     if u:
         return u
+
     qs = []
     for k in ("tab", "next", "email", "name"):
         if k in params and str(params[k]):
@@ -265,6 +279,22 @@ def _rate_limit(bucket: str) -> Tuple[bool, int]:
     if not isinstance(store, dict):
         store = {}
 
+    # Limpieza por TTL
+    if store:
+        cutoff = now - _RL_STORE_TTL_SEC
+        for k in list(store.keys()):
+            v = store.get(k)
+            if not isinstance(v, dict):
+                store.pop(k, None)
+                continue
+            try:
+                t0 = int(v.get("t", 0) or 0)
+            except Exception:
+                t0 = 0
+            if t0 and t0 < cutoff:
+                store.pop(k, None)
+
+    # Cap duro: recorta por timestamp más viejo
     if len(store) > _RL_STORE_CAP:
         items: list[tuple[int, str]] = []
         for k, v in list(store.items()):
@@ -295,7 +325,7 @@ def _rate_limit(bucket: str) -> Tuple[bool, int]:
         n = 0
 
     elapsed = now - t0
-    if elapsed >= _RL_WINDOW_SEC:
+    if elapsed >= _RL_WINDOW_SEC or elapsed < 0:
         store[bucket_key] = {"t": now, "n": 1}
         session[_RL_STORE_SESSION_KEY] = store
         session.modified = True
@@ -465,6 +495,7 @@ def _user_password_check(user: Any, password: str) -> bool:
     except Exception:
         ok = False
 
+    # Pequeño “equalize” de timing
     try:
         secrets.compare_digest("a", "a" if ok else "b")
     except Exception:
@@ -502,6 +533,7 @@ def _user_password_set(user: Any, password: str) -> bool:
 
 def _set_user_session(user: User) -> None:
     _clear_auth_session()
+
     session["user_id"] = int(getattr(user, "id", 0) or 0)
     session["user_email"] = (getattr(user, "email", "") or "").lower()
     session["is_admin"] = bool(getattr(user, "is_admin", False))
@@ -599,6 +631,22 @@ def _save_verify_token_db(user: User, token: str) -> bool:
     except Exception:
         _db_rollback_quiet()
         return False
+
+
+def _site_base_url() -> str:
+    # Prefer SITE_URL si está, para que _external sea consistente en proxies
+    raw = _norm(current_app.config.get("SITE_URL") or "", max_len=300).rstrip("/")
+    if raw.startswith("http://") or raw.startswith("https://"):
+        return raw
+    return ""
+
+
+def _absolute_url(path: str) -> str:
+    base = _site_base_url()
+    if not base:
+        return ""
+    p = "/" + (path.lstrip("/"))
+    return base + p
 
 
 def _send_verify_email(email: str, verify_url: str) -> None:
@@ -889,6 +937,7 @@ def logout():
             return csrf_fail
 
     _clear_auth_session()
+    _rotate_csrf()
 
     if _logout_user:
         try:
@@ -934,7 +983,10 @@ def verify_send():
         session[_VERIFY_TOKEN_TS_SESSION_KEY] = _now()
         session.modified = True
 
-    verify_url = url_for("auth.verify", token=token, _external=True, next=nxt)
+    # URL absoluta consistente si tenés SITE_URL
+    rel = _url_for_safe("auth.verify", token=token, next=nxt) or f"/auth/verify/{token}?next={nxt}"
+    verify_url = _absolute_url(rel) or url_for("auth.verify", token=token, _external=True, next=nxt)
+
     _send_verify_email(email, verify_url)
 
     _flash("success", "Email de verificación enviado ✅")
@@ -989,7 +1041,9 @@ def resend_verification():
         session[_VERIFY_TOKEN_TS_SESSION_KEY] = _now()
         session.modified = True
 
-    verify_url = url_for("auth.verify", token=token, _external=True, next=nxt)
+    rel = _url_for_safe("auth.verify", token=token, next=nxt) or f"/auth/verify/{token}?next={nxt}"
+    verify_url = _absolute_url(rel) or url_for("auth.verify", token=token, _external=True, next=nxt)
+
     _send_verify_email(email, verify_url)
     _flash("success", "Correo reenviado ✅ Revisá tu email.")
     return redirect(_auth_account_url(tab=TAB_LOGIN, nxt=nxt), code=302)
@@ -1073,6 +1127,7 @@ def verify(token: str):
     session.pop(_VERIFY_TOKEN_SESSION_KEY, None)
     session.pop(_VERIFY_TOKEN_TS_SESSION_KEY, None)
     session.modified = True
+    _rotate_csrf()
 
     _flash("success", "Cuenta verificada ✅")
     return redirect(nxt, code=302)

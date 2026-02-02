@@ -1,16 +1,24 @@
 from __future__ import annotations
 
+import time
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import urlencode
 
 from flask import Blueprint, current_app, make_response, redirect, render_template, request, session, url_for
 from sqlalchemy import asc, desc, or_
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
 from app.models import Category, Product, db
 
 shop_bp = Blueprint("shop", __name__, url_prefix="/shop")
+shop_bp.strict_slashes = False
+
+# Legacy/compat (URLs viejas sin /shop prefix)
+shop_compat_bp = Blueprint("shop_compat", __name__)
+shop_compat_bp.strict_slashes = False
 
 AFF_COOKIE_NAME = "sk_aff"
 AFF_COOKIE_SUB_NAME = "sk_sub"
@@ -23,16 +31,22 @@ def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _safe_str(v: Any, *, max_len: int = 500) -> str:
+def _norm(v: Any, *, max_len: int = 500) -> str:
     if v is None:
         return ""
     s = v.strip() if isinstance(v, str) else str(v).strip()
+    s = s.replace("\x00", "").replace("\u200b", "").replace("\r", "").replace("\n", "")
     return s[:max_len]
+
+
+def _safe_str(v: Any, *, max_len: int = 500) -> str:
+    return _norm(v, max_len=max_len)
 
 
 def _safe_slug(v: Any, *, max_len: int = 80) -> str:
     raw = _safe_str(v, max_len=max_len).lower().replace(" ", "-")
-    out = "".join(ch for ch in raw if ch.isalnum() or ch in {"-", "_", "."})
+    out = "".join(ch for ch in raw if ch.isalnum() or ch in {"-", "_"})
+    out = out.strip("-_")
     return out[:max_len]
 
 
@@ -65,8 +79,17 @@ def _get_client_ip() -> str:
     return ip[:80]
 
 
+def _escape_like(value: str) -> str:
+    # Escapa caracteres especiales para LIKE y evita wildcard injection
+    v = _safe_str(value, max_len=80).strip()
+    if not v:
+        return ""
+    v = v.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return v
+
+
 def _safe_like(value: str) -> str:
-    v = _safe_str(value, max_len=80).replace("%", "").replace("_", "").strip()
+    v = _escape_like(value)
     return f"%{v}%" if v else ""
 
 
@@ -80,6 +103,16 @@ def _safe_per(default: int = 48) -> int:
     per = _int_arg("per", default, min_v=12, max_v=120)
     presets = (12, 18, 24, 36, 48, 60, 72, 96, 120)
     return int(min(presets, key=lambda p: abs(p - per)))
+
+
+def _qs(override: Dict[str, Any]) -> str:
+    base = request.args.to_dict(flat=True)
+    for k, v in override.items():
+        if v is None or v == "":
+            base.pop(k, None)
+        else:
+            base[k] = str(v)
+    return urlencode(base)
 
 
 def _get_aff_params_from_request() -> Tuple[Optional[str], Optional[str]]:
@@ -208,14 +241,17 @@ def _product_cat_slug(p: Product) -> str:
 
 
 def _apply_active_filter(query):
+    # Compatible con distintos modelos
     try:
         if hasattr(Product, "status"):
-            return query.filter(Product.status == "active")
+            query = query.filter(Product.status == "active")
+            return query
     except Exception:
         pass
     try:
         if hasattr(Product, "is_active"):
-            return query.filter(getattr(Product, "is_active").is_(True))
+            query = query.filter(getattr(Product, "is_active").is_(True))
+            return query
     except Exception:
         pass
     return query
@@ -260,6 +296,8 @@ def _resp_no_store(resp):
     resp.headers.setdefault("Cache-Control", "no-store")
     resp.headers.setdefault("Pragma", "no-cache")
     resp.headers.setdefault("Vary", "Cookie")
+    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+    resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     return resp
 
 
@@ -268,8 +306,18 @@ def _resp_public_cache(resp, seconds: int = 30):
     if sec <= 0:
         return _resp_no_store(resp)
     resp.headers["Cache-Control"] = f"public, max-age={sec}, stale-while-revalidate=30"
-    resp.headers.setdefault("Vary", "Cookie")
     return resp
+
+
+def _is_personalized() -> bool:
+    # Si hay afiliado en query/cookie/session, evitamos cache público
+    aff_q, _ = _get_aff_params_from_request()
+    if aff_q:
+        return True
+    aff_s, _ = _get_aff_attribution()
+    if aff_s:
+        return True
+    return False
 
 
 def _render_404():
@@ -289,16 +337,25 @@ def _render_404():
             return ("Not Found", 404)
 
 
-@shop_bp.get("/shop")
-def _compat_shop_redirect():
-    return redirect(url_for("shop.shop", **request.args.to_dict(flat=True)), code=301)
+# -----------------------
+# Compat URLs (legacy)
+# -----------------------
+@shop_compat_bp.get("/shop")
+def compat_shop_redirect():
+    # /shop -> /shop/ (home)
+    qs = request.args.to_dict(flat=True)
+    return redirect(url_for("shop.shop", **qs), code=301)
 
 
-@shop_bp.get("/shop/product/<path:slug>")
-def _compat_product_redirect(slug: str):
-    return redirect(url_for("shop.product_detail", slug=slug, **request.args.to_dict(flat=True)), code=301)
+@shop_compat_bp.get("/shop/product/<path:slug>")
+def compat_product_redirect(slug: str):
+    qs = request.args.to_dict(flat=True)
+    return redirect(url_for("shop.product_detail", slug=slug, **qs), code=301)
 
 
+# -----------------------
+# Routes oficiales
+# -----------------------
 @shop_bp.get("/")
 def shop():
     q = _safe_str(request.args.get("q"), max_len=120)
@@ -336,10 +393,11 @@ def shop():
     if cat:
         try:
             slug_path_attr = getattr(Category, "slug_path", None)
+            query = query.join(Category, isouter=True)
             if slug_path_attr is not None:
-                query = query.join(Category, isouter=True).filter(or_(Category.slug == cat, slug_path_attr == cat))
+                query = query.filter(or_(Category.slug == cat, slug_path_attr == cat))
             else:
-                query = query.join(Category, isouter=True).filter(Category.slug == cat)
+                query = query.filter(Category.slug == cat)
         except Exception:
             for attr in ("category_slug", "category", "categoria", "cat"):
                 if hasattr(Product, attr):
@@ -356,9 +414,13 @@ def shop():
             for field in ("title", "slug", "short_description", "description_html", "description"):
                 if hasattr(Product, field):
                     try:
-                        conds.append(getattr(Product, field).ilike(like))
+                        # escape LIKE si el dialecto lo soporta
+                        conds.append(getattr(Product, field).ilike(like, escape="\\"))
                     except Exception:
-                        pass
+                        try:
+                            conds.append(getattr(Product, field).ilike(like))
+                        except Exception:
+                            pass
             if conds:
                 query = query.filter(or_(*conds))
 
@@ -403,6 +465,12 @@ def shop():
 
     try:
         products: List[Product] = query.offset(offset).limit(per).all()
+    except SQLAlchemyError:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        products = []
     except Exception:
         products = []
 
@@ -435,13 +503,20 @@ def shop():
         has_prev=page > 1,
         next_page=(page + 1) if (offset + per) < total else None,
         prev_page=(page - 1) if page > 1 else None,
+        next_url=(f"/shop/?{_qs({'page': page + 1})}" if (offset + per) < total else None),
+        prev_url=(f"/shop/?{_qs({'page': page - 1})}" if page > 1 else None),
         aff_code=aff_code,
         aff_sub=aff_sub,
     )
 
     resp = make_response(html)
     resp = _capture_affiliation_for_response(resp)
-    return _resp_public_cache(resp, seconds=int(current_app.config.get("SHOP_CACHE_TTL", 30) or 30))
+
+    # Cache: solo si NO hay afiliación/personalización
+    ttl = int(current_app.config.get("SHOP_CACHE_TTL", 30) or 30)
+    if _is_personalized() or q or cat or minp is not None or maxp is not None:
+        return _resp_no_store(resp)
+    return _resp_public_cache(resp, seconds=ttl)
 
 
 @shop_bp.get("/product/<path:slug>")
@@ -453,6 +528,7 @@ def product_detail(slug: str):
     p: Optional[Product] = None
     try:
         q = db.session.query(Product)
+
         if hasattr(Product, "category"):
             try:
                 q = q.options(selectinload(Product.category))
@@ -464,11 +540,18 @@ def product_detail(slug: str):
             except Exception:
                 pass
 
+        q = _apply_active_filter(q)
         p = q.filter(Product.slug == slug).first()
+    except SQLAlchemyError:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        p = None
     except Exception:
         p = None
 
-    if not p or (getattr(p, "status", "") or "").lower() != "active":
+    if not p:
         return _render_404()
 
     _track_aff_click_if_any(int(getattr(p, "id", 0) or 0))
@@ -481,4 +564,4 @@ def product_detail(slug: str):
     return _resp_no_store(resp)
 
 
-__all__ = ["shop_bp"]
+__all__ = ["shop_bp", "shop_compat_bp"]

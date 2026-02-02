@@ -1,175 +1,252 @@
 <!doctype html>
 <html lang="es">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="robots" content="noindex,nofollow">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex,nofollow" />
   <title>Admin · Login</title>
   <style>
     :root{
-      --bg0:#070a12; --bg1:#0b1222;
+      --bg0:#070a12;
+      --bg1:#0b1220;
       --card: rgba(255,255,255,.06);
+      --card2: rgba(255,255,255,.08);
       --stroke: rgba(148,163,184,.18);
-      --txt:#e5e7eb; --muted:#a7b0c0;
-      --pri:#38bdf8; --pri2:#2563eb;
-      --danger:#fb7185; --ok:#34d399;
-      --r:18px; --r2:24px;
-      --shadow: 0 22px 70px rgba(0,0,0,.55);
-      --ring: 0 0 0 4px rgba(56,189,248,.22);
+      --stroke2: rgba(148,163,184,.26);
+      --text:#e5e7eb;
+      --muted:#9ca3af;
+      --ok:#22c55e;
+      --warn:#f59e0b;
+      --bad:#ef4444;
+      --a:#38bdf8;
+      --b:#2563eb;
+      --ring: 0 0 0 4px rgba(56,189,248,.18);
+      --shadow: 0 26px 70px rgba(0,0,0,.55);
+      --r: 18px;
+      --r2: 22px;
     }
     *{box-sizing:border-box}
     body{
-      margin:0; min-height:100vh;
-      font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial;
-      color:var(--txt);
+      margin:0; min-height:100vh; display:grid; place-items:center;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial;
+      color:var(--text);
       background:
-        radial-gradient(900px 520px at 10% 0%, rgba(56,189,248,.16), transparent 60%),
-        radial-gradient(780px 520px at 90% 10%, rgba(37,99,235,.18), transparent 55%),
+        radial-gradient(900px 600px at 0% 0%, rgba(56,189,248,.18), transparent 55%),
+        radial-gradient(900px 600px at 100% 20%, rgba(37,99,235,.18), transparent 55%),
         linear-gradient(180deg, var(--bg0), var(--bg1));
-      display:grid; place-items:center;
-      padding: 24px;
     }
-    .wrap{width:min(980px,100%); display:grid; gap:18px; grid-template-columns: 1.05fr .95fr; align-items:stretch}
-    @media (max-width: 880px){ .wrap{grid-template-columns:1fr} }
-    .brand{
+    .wrap{width:min(980px, 92vw); display:grid; grid-template-columns: 1.1fr .9fr; gap:18px; align-items:stretch}
+    @media (max-width: 900px){ .wrap{grid-template-columns:1fr; } }
+
+    .hero{
+      padding:26px 24px;
       border:1px solid var(--stroke);
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.04));
       border-radius: var(--r2);
-      background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.03));
       box-shadow: var(--shadow);
-      padding: 22px;
       position:relative;
       overflow:hidden;
     }
-    .brand:before{
+    .hero:before{
       content:"";
       position:absolute; inset:-2px;
-      background: radial-gradient(520px 220px at 20% 0%, rgba(56,189,248,.18), transparent 60%);
+      background:
+        radial-gradient(700px 320px at 20% 20%, rgba(56,189,248,.20), transparent 60%),
+        radial-gradient(700px 320px at 80% 40%, rgba(37,99,235,.18), transparent 60%);
+      filter: blur(8px);
+      opacity:.9;
       pointer-events:none;
     }
-    .title{display:flex; gap:12px; align-items:center; position:relative}
-    .logo{
-      width:44px; height:44px; border-radius: 14px;
-      background: linear-gradient(135deg, rgba(56,189,248,.9), rgba(37,99,235,.9));
-      box-shadow: 0 18px 50px rgba(37,99,235,.25);
+    .hero > *{ position:relative; z-index:1; }
+    .brand{
+      display:flex; align-items:center; gap:12px; margin-bottom:14px;
     }
-    h1{margin:0; font-size: 22px; letter-spacing:.2px}
-    .sub{margin:6px 0 0; color:var(--muted); line-height:1.45}
-    .chips{display:flex; flex-wrap:wrap; gap:10px; margin-top:14px}
-    .chip{
+    .logo{
+      width:42px; height:42px; border-radius:14px;
+      background: linear-gradient(135deg, rgba(56,189,248,.9), rgba(37,99,235,.9));
+      box-shadow: 0 18px 50px rgba(37,99,235,.28);
+    }
+    .brand h1{font-size:18px; margin:0}
+    .brand p{margin:2px 0 0; color:var(--muted); font-size:13px}
+    .hero h2{margin:14px 0 8px; font-size:28px; letter-spacing:-.02em}
+    .hero .sub{color:var(--muted); margin:0 0 14px; line-height:1.5}
+    .badge{
+      display:inline-flex; gap:8px; align-items:center;
+      padding:8px 10px;
+      border-radius:999px;
       border:1px solid var(--stroke);
       background: rgba(255,255,255,.04);
-      padding:10px 12px;
-      border-radius: 999px;
       color: var(--muted);
-      font-size: 13px;
+      font-size:13px;
     }
+    .dot{width:8px; height:8px; border-radius:99px; background: var(--ok); box-shadow:0 0 0 4px rgba(34,197,94,.18)}
+    .grid{
+      margin-top:16px;
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:10px;
+    }
+    .kpi{
+      border:1px solid var(--stroke);
+      background: rgba(255,255,255,.04);
+      border-radius:16px;
+      padding:12px;
+    }
+    .kpi b{display:block; font-size:14px}
+    .kpi span{color:var(--muted); font-size:12px}
 
     .card{
+      padding:22px;
       border:1px solid var(--stroke);
+      background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.04));
       border-radius: var(--r2);
-      background: rgba(255,255,255,.06);
       box-shadow: var(--shadow);
-      padding: 22px;
     }
-    .kicker{font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.18em}
-    .card h2{margin:8px 0 0; font-size:18px}
-    form{margin-top:14px; display:grid; gap:12px}
-    label{font-size:13px; color:var(--muted)}
-    .field{display:grid; gap:6px}
-    input{
+    .card h3{margin:0 0 6px; font-size:18px}
+    .card .muted{margin:0 0 14px; color:var(--muted); font-size:13px; line-height:1.5}
+
+    .flash{
+      margin:0 0 12px;
+      padding:10px 12px;
+      border-radius:14px;
+      border:1px solid var(--stroke2);
+      background: rgba(255,255,255,.05);
+      color: var(--text);
+      font-size:13px;
+    }
+    .flash.success{border-color: rgba(34,197,94,.35); background: rgba(34,197,94,.08)}
+    .flash.warning{border-color: rgba(245,158,11,.35); background: rgba(245,158,11,.08)}
+    .flash.danger{border-color: rgba(239,68,68,.35); background: rgba(239,68,68,.08)}
+    .flash.info{border-color: rgba(56,189,248,.35); background: rgba(56,189,248,.08)}
+
+    .field{margin-bottom:12px}
+    .label{display:flex; justify-content:space-between; align-items:center; margin-bottom:6px}
+    .label span{font-size:12px; color:var(--muted)}
+    .input{
       width:100%;
-      padding: 12px 12px;
-      border-radius: 14px;
-      border: 1px solid rgba(148,163,184,.22);
-      background: rgba(0,0,0,.25);
-      color: var(--txt);
+      padding:12px 12px;
+      border-radius:14px;
+      border:1px solid var(--stroke);
+      background: rgba(10,14,26,.55);
+      color: var(--text);
       outline:none;
-      transition: .15s ease;
     }
-    input:focus{box-shadow: var(--ring); border-color: rgba(56,189,248,.45)}
-    .row{display:grid; grid-template-columns: 1fr; gap:10px}
+    .input:focus{box-shadow: var(--ring); border-color: rgba(56,189,248,.55)}
+    .row{display:flex; gap:10px; align-items:center}
     .btn{
-      display:inline-flex; justify-content:center; align-items:center;
-      gap:10px;
-      padding: 12px 14px;
-      border-radius: 14px;
-      border: 0;
-      color:#06101a;
-      background: linear-gradient(135deg, var(--pri), var(--pri2));
-      font-weight: 700;
+      width:100%;
+      padding:12px 14px;
+      border-radius:14px;
+      border:1px solid rgba(56,189,248,.22);
+      background: linear-gradient(135deg, rgba(56,189,248,.95), rgba(37,99,235,.95));
+      color:#06111f;
+      font-weight:800;
       cursor:pointer;
-      transition: transform .12s ease, filter .12s ease;
+      transition: transform .06s ease, filter .2s ease;
     }
     .btn:active{transform: translateY(1px)}
-    .btn:hover{filter: brightness(1.05)}
-    .btn:disabled{opacity:.6; cursor:not-allowed}
-    .meta{display:flex; justify-content:space-between; gap:10px; align-items:center; margin-top:4px}
-    .link{color: var(--pri); text-decoration:none; font-weight:600; font-size:13px}
-    .small{font-size:13px; color:var(--muted); line-height:1.35}
-    .alert{
-      border:1px solid rgba(251,113,133,.35);
-      background: rgba(251,113,133,.10);
-      padding: 10px 12px;
-      border-radius: 14px;
-      color: #fecdd3;
-      font-size: 13px;
+    .btn:hover{filter: brightness(1.03)}
+    .btn.secondary{
+      background: rgba(255,255,255,.06);
+      color: var(--text);
+      border-color: var(--stroke);
+      font-weight:700;
     }
-    .footer{margin-top:14px; color:var(--muted); font-size:12px}
+    .small{
+      margin-top:12px;
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      color: var(--muted);
+      font-size:12px;
+    }
+    a{color: rgba(56,189,248,.95); text-decoration:none}
+    a:hover{text-decoration:underline}
+    .pw-toggle{
+      border:1px solid var(--stroke);
+      background: rgba(255,255,255,.06);
+      color: var(--text);
+      border-radius:12px;
+      padding:10px 12px;
+      cursor:pointer;
+      white-space:nowrap;
+    }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <section class="brand" aria-label="Información">
-      <div class="title">
+    <section class="hero">
+      <div class="brand">
         <div class="logo" aria-hidden="true"></div>
         <div>
-          <h1>Skyline Store · Admin</h1>
-          <p class="sub">Acceso seguro al panel. Sesiones con protección y redirección segura.</p>
+          <h1>Skyline Store</h1>
+          <p>Panel administrativo</p>
         </div>
       </div>
-      <div class="chips">
-        <div class="chip">🔒 No-store + headers</div>
-        <div class="chip">🧠 Anti-loop next</div>
-        <div class="chip">🛡️ CSRF</div>
-        <div class="chip">⚡ UX rápida</div>
+
+      <div class="badge"><span class="dot"></span> Acceso seguro · sesiones protegidas</div>
+
+      <h2>Ingresá al Dashboard</h2>
+      <p class="sub">Controlá pedidos, catálogo, pagos y métricas desde un panel premium. Este acceso está protegido por CSRF + rate limit.</p>
+
+      <div class="grid">
+        <div class="kpi"><b>Seguridad</b><span>Protección anti-fuerza bruta</span></div>
+        <div class="kpi"><b>Estabilidad</b><span>Diseño compatible Render/Proxy</span></div>
       </div>
-      <p class="footer">Tip: si ves “sin permisos”, revisá roles y variables ADMIN_EMAILS / ADMIN_PASSWORD_HASH.</p>
     </section>
 
-    <section class="card" aria-label="Login admin">
-      <div class="kicker">Panel de administración</div>
-      <h2>Iniciar sesión</h2>
+    <main class="card">
+      <h3>Admin · Login</h3>
+      <p class="muted">Ingresá con tu email y contraseña de administrador.</p>
 
-      {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-          {% for cat, msg in messages %}
-            <div class="alert" role="alert">{{ msg }}</div>
+      {% with msgs = get_flashed_messages(with_categories=true) %}
+        {% if msgs %}
+          {% for cat, msg in msgs %}
+            <div class="flash {{ cat|e }}">{{ msg }}</div>
           {% endfor %}
         {% endif %}
       {% endwith %}
 
-      <form method="post" action="{{ url_for('admin.login_post') if url_for is defined else '/admin/login' }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <input type="hidden" name="next" value="{{ next }}">
+      <form method="post" action="/admin/login" autocomplete="on">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token|e }}">
+        <input type="hidden" name="next" value="{{ next|e }}">
 
         <div class="field">
-          <label for="email">Email</label>
-          <input id="email" name="email" type="email" autocomplete="username" required placeholder="admin@tu-dominio.com">
+          <div class="label"><span>Email</span></div>
+          <input class="input" type="email" name="email" placeholder="admin@tudominio.com" required autocomplete="email">
         </div>
 
         <div class="field">
-          <label for="password">Contraseña</label>
-          <input id="password" name="password" type="password" autocomplete="current-password" required placeholder="••••••••">
+          <div class="label"><span>Contraseña</span></div>
+          <div class="row">
+            <input class="input" id="pw" type="password" name="password" placeholder="••••••••••" required autocomplete="current-password">
+            <button class="pw-toggle" type="button" onclick="togglePw()">Mostrar</button>
+          </div>
         </div>
 
         <button class="btn" type="submit">Entrar</button>
 
-        <div class="meta">
-          <span class="small">¿Necesitás alta?</span>
-          <a class="link" href="{{ register_url }}">Ir a registro</a>
+        <div class="small">
+          <span>¿No podés entrar? Revisá verificación del email.</span>
+          {% if allow_register %}
+            <a href="{{ register_url|e }}">Crear admin</a>
+          {% endif %}
         </div>
+
+        <button class="btn secondary" type="button" onclick="window.location.href='/'">Volver a la tienda</button>
       </form>
-    </section>
+    </main>
   </div>
+
+  <script>
+    function togglePw(){
+      const el = document.getElementById('pw');
+      const btn = event.currentTarget;
+      if(!el) return;
+      const isPw = el.type === 'password';
+      el.type = isPw ? 'text' : 'password';
+      btn.textContent = isPw ? 'Ocultar' : 'Mostrar';
+    }
+  </script>
 </body>
 </html>

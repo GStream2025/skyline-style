@@ -19,6 +19,7 @@ from flask import (
     url_for,
 )
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.models import User, db
 
@@ -30,9 +31,11 @@ account_bp = Blueprint(
     url_prefix="/account",
     template_folder="../templates",
 )
+account_bp.strict_slashes = False
 
-# Alias simple (si querés /cuenta como “short URL”)
-cuenta_bp = Blueprint("cuenta", __name__)
+# Alias simple: /cuenta -> /account
+cuenta_bp = Blueprint("cuenta", __name__, url_prefix="/cuenta")
+cuenta_bp.strict_slashes = False
 
 _TRUE = {"1", "true", "yes", "y", "on", "checked"}
 _FALSE = {"0", "false", "no", "n", "off", "unchecked"}
@@ -81,8 +84,9 @@ MAX_BODY_BYTES = _env_int("ACCOUNT_MAX_BODY_BYTES", 120_000, min_v=20_000, max_v
 RL_COOLDOWN_SEC = _env_float("ACCOUNT_RATE_LIMIT_SECONDS", 1.0, min_v=0.10, max_v=10.0)
 RL_BURST = _env_int("ACCOUNT_RATE_LIMIT_BURST", 12, min_v=3, max_v=80)
 RL_WINDOW = _env_int("ACCOUNT_RATE_LIMIT_WINDOW", 60, min_v=10, max_v=900)
+_RL_PREFIX = "_acc_rl:"
 
-# Bloquea next a auth para evitar loops
+# Bloquea next a auth/account para evitar loops
 _BLOCK_NEXT_PREFIXES = (
     "/auth/login",
     "/auth/register",
@@ -92,13 +96,24 @@ _BLOCK_NEXT_PREFIXES = (
 )
 
 _CACHE_HEADERS = {
-    "Cache-Control": "no-store",
+    "Cache-Control": "no-store, max-age=0, must-revalidate",
     "Pragma": "no-cache",
+    "Expires": "0",
     "Vary": "Cookie",
     "X-Frame-Options": "DENY",
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Cross-Origin-Opener-Policy": "same-origin",
 }
+
+
+def _norm(v: Any, *, max_len: int = 600) -> str:
+    if v is None:
+        return ""
+    s = v if isinstance(v, str) else str(v)
+    s = s.replace("\x00", "").replace("\u200b", "").strip()
+    s = s.replace("\r", "").replace("\n", "")
+    return s[:max_len]
 
 
 def _template_exists(name: str) -> bool:
@@ -109,13 +124,11 @@ def _template_exists(name: str) -> bool:
         return False
 
 
-def _safe_url_for(endpoint: str, **kwargs) -> str:
+def _url_for_safe(endpoint: str, **kwargs: Any) -> str:
     try:
         return url_for(endpoint, **kwargs)
     except Exception:
-        qs = urlencode({k: v for k, v in kwargs.items() if v is not None})
-        base = f"/{endpoint.replace('.', '/')}"
-        return base + (f"?{qs}" if qs else "")
+        return ""
 
 
 def _wants_json() -> bool:
@@ -126,11 +139,11 @@ def _wants_json() -> bool:
             return True
     except Exception:
         pass
-    fmt = (request.args.get("format") or "").strip().lower()
+    fmt = _norm(request.args.get("format") or "", max_len=24).lower()
     if fmt == "json":
         return True
-    accept = (request.headers.get("Accept") or "").lower()
-    if "application/json" in accept:
+    accept = _norm(request.headers.get("Accept") or "", max_len=200).lower()
+    if "application/json" in accept or "text/json" in accept:
         return True
     try:
         best = request.accept_mimetypes.best_match(["application/json", "text/html"])
@@ -154,14 +167,21 @@ def _no_store(resp):
     try:
         for k, v in _CACHE_HEADERS.items():
             resp.headers.setdefault(k, v)
+        resp.headers.setdefault("X-Served-By", "skyline")
     except Exception:
         pass
     return resp
 
 
-def _json_or_html(payload: Dict[str, Any], html_fn: Callable[[], Any]):
+def _json(payload: Dict[str, Any], status: int = 200):
+    r = jsonify(payload)
+    r.status_code = int(status)
+    return r
+
+
+def _json_or_html(payload: Dict[str, Any], html_fn: Callable[[], Any], *, status_json: int = 200):
     if _wants_json():
-        return jsonify(payload)
+        return _json(payload, status_json)
     return html_fn()
 
 
@@ -200,44 +220,43 @@ def _csrf_ok_fallback() -> bool:
 def _is_safe_next(target: Optional[str]) -> bool:
     if not target:
         return False
-
     t = str(target).strip()
+    if not t or len(t) > 512:
+        return False
     if not t.startswith("/") or t.startswith("//"):
         return False
-
-    # bloqueos básicos
-    if any(x in t for x in ("\x00", "\\", "\r", "\n", "\t")):
+    if any(x in t for x in ("\x00", "\\", "\r", "\n", "\t", " ")):
         return False
-
-    # solo path (sin scheme/netloc)
-    p = urlparse(t)
-    if p.scheme or p.netloc:
+    if "://" in t:
         return False
-
-    path = p.path or ""
+    try:
+        p = urlparse(t)
+        if p.scheme or p.netloc:
+            return False
+        path = p.path or ""
+    except Exception:
+        return False
     if not path.startswith("/") or path.startswith("//"):
         return False
-
-    # evita traversal
     if ".." in path:
         return False
-
     return True
 
 
 def _safe_next(default: str = "/") -> str:
-    raw = (request.values.get("next") or "").strip()
+    raw = _norm(request.values.get("next") or "", max_len=512)
     if not _is_safe_next(raw):
         return default
 
-    p = urlparse(raw)
-    path = p.path or default
+    try:
+        p = urlparse(raw)
+        path = p.path or default
+    except Exception:
+        return default
 
-    # evita loops a auth/account
     for pref in _BLOCK_NEXT_PREFIXES:
         if path == pref or path.startswith(pref + "/"):
             return default
-
     return path if path.startswith("/") else default
 
 
@@ -250,25 +269,17 @@ def _current_path() -> str:
 
 def _redirect_login(*, next_url: str) -> Any:
     nxt = next_url if _is_safe_next(next_url) else "/"
-    try:
-        return redirect(url_for("auth.login_get", next=nxt), code=302)
-    except Exception:
-        return redirect(f"/auth/login?{urlencode({'next': nxt})}", code=302)
+    u = _url_for_safe("auth.login_get", next=nxt)
+    if u:
+        return redirect(u, code=302)
+    return redirect(f"/auth/login?{urlencode({'next': nxt})}", code=302)
 
 
-def _redirect_register(*, next_url: str) -> Any:
-    nxt = next_url if _is_safe_next(next_url) else "/"
-    try:
-        return redirect(url_for("auth.register_get", next=nxt), code=302)
-    except Exception:
-        return redirect(f"/auth/register?{urlencode({'next': nxt})}", code=302)
-
-
-def _rate_limit_ok(key: str) -> bool:
+def _rate_limit_ok(bucket: str) -> bool:
     now = time.time()
-    skey = f"rl:{key}"
-    state = session.get(skey)
+    key = f"{_RL_PREFIX}{bucket}"
 
+    state = session.get(key)
     if not isinstance(state, dict):
         state = {"t": now, "n": 0, "last": 0.0}
 
@@ -285,22 +296,18 @@ def _rate_limit_ok(key: str) -> bool:
     except Exception:
         last = 0.0
 
-    # ventana
     if (now - t0) >= float(RL_WINDOW):
         t0 = now
         n = 0
         last = 0.0
 
-    # burst
     if n >= int(RL_BURST):
         return False
 
-    # cooldown
     if (now - last) < float(RL_COOLDOWN_SEC):
         return False
 
-    state = {"t": t0, "n": n + 1, "last": now}
-    session[skey] = state
+    session[key] = {"t": t0, "n": n + 1, "last": now}
     session.modified = True
     return True
 
@@ -314,7 +321,6 @@ def _get_current_user() -> Optional[User]:
             u = current_user  # type: ignore
             if isinstance(u, User):
                 return u
-            # si tu current_user no es instancia exacta, igual intentamos por id:
             uid = int(getattr(u, "id", 0) or 0)
             if uid > 0:
                 return db.session.execute(select(User).where(User.id == uid)).scalar_one_or_none()
@@ -331,20 +337,21 @@ def _get_current_user() -> Optional[User]:
 
     try:
         return db.session.execute(select(User).where(User.id == uid)).scalar_one_or_none()
-    except Exception:
+    except SQLAlchemyError:
         try:
             db.session.rollback()
         except Exception:
             pass
+        return None
+    except Exception:
         return None
 
 
 def _clear_bad_session() -> None:
     for k in ("user_id", "user_email", "is_admin", "role", "email_verified", "login_at", "login_nonce"):
         session.pop(k, None)
-    # también limpiamos rate limit viejo si existiera
     for k in list(session.keys()):
-        if isinstance(k, str) and k.startswith("rl:"):
+        if isinstance(k, str) and k.startswith(_RL_PREFIX):
             session.pop(k, None)
     session.modified = True
 
@@ -354,28 +361,26 @@ def _require_login() -> Optional[Any]:
     if u:
         return None
     _clear_bad_session()
-    # next = página que querías visitar (account u otra)
     return _redirect_login(next_url=_safe_next(default=_current_path()))
 
 
 @account_bp.before_request
 def _before_account():
-    # CSRF solo se asegura cuando sea necesario o para mostrar forms (GET)
-    if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
-        if not _rate_limit_ok("account_write"):
-            if _wants_json():
-                return jsonify({"ok": False, "error": "rate_limited"}), 429
-            return _redirect_login(next_url=_safe_next(default="/"))
+    # Token disponible siempre (forms)
+    _ensure_csrf_token()
 
-        _ensure_csrf_token()
-        if not _csrf_ok_fallback():
+    # Solo limitamos y validamos CSRF en writes
+    if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+        if not _rate_limit_ok("write"):
             if _wants_json():
-                return jsonify({"ok": False, "error": "csrf_failed"}), 400
+                return _json({"ok": False, "error": "rate_limited"}, 429)
+            # en HTML, NO mandamos a login (no es auth fail), redirigimos a next seguro
             return redirect(_safe_next(default="/"), code=302)
 
-    else:
-        # en GET, generamos token una vez para forms/páginas
-        _ensure_csrf_token()
+        if not _csrf_ok_fallback():
+            if _wants_json():
+                return _json({"ok": False, "error": "csrf_failed"}, 400)
+            return redirect(_safe_next(default="/"), code=302)
 
     return None
 
@@ -401,6 +406,8 @@ def account_home():
         "ok": True,
         "user_id": int(getattr(u, "id", 0) or 0),
         "email": (getattr(u, "email", "") or ""),
+        "role": str(getattr(u, "role", "") or getattr(u, "user_role", "") or ""),
+        "email_verified": bool(getattr(u, "email_verified", False) or getattr(u, "is_verified", False)),
     }
 
     return _json_or_html(
@@ -411,13 +418,16 @@ def account_home():
             csrf_token_value=session.get("csrf_token"),
             next=_safe_next(default="/"),
         ),
+        status_json=200,
     )
 
 
-# Alias /cuenta -> /account (sin romper SEO ni loops)
-@cuenta_bp.get("/cuenta")
+# Alias /cuenta -> /account
+@cuenta_bp.get("/")
 def cuenta_alias():
-    return redirect("/account", code=302)
+    # Mantener next si viene (sin loops)
+    nxt = _safe_next(default="/")
+    return redirect(f"/account{('?' + urlencode({'next': nxt})) if nxt and nxt != '/' else ''}", code=302)
 
 
 __all__ = ["account_bp", "cuenta_bp"]
