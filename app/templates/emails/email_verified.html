@@ -7,47 +7,58 @@
   <meta name="format-detection" content="telephone=no,address=no,email=no,date=no,url=no">
   <meta name="color-scheme" content="light">
   <meta name="supported-color-schemes" content="light">
+  <meta name="referrer" content="no-referrer">
   <title>Cuenta verificada · Skyline Store</title>
+
+  <style>
+    @media (max-width: 520px){
+      .container{width:100% !important}
+      .px{padding-left:16px !important;padding-right:16px !important}
+      .h1{font-size:22px !important}
+      .btn{display:block !important;width:100% !important;text-align:center !important}
+      .right{float:none !important;text-align:left !important}
+      .badge{display:inline-block !important;margin-top:10px !important}
+    }
+    a[x-apple-data-detectors]{color:inherit !important;text-decoration:none !important}
+  </style>
 
   <!--[if mso]>
   <style type="text/css">
     body, table, td, a { font-family: Arial, sans-serif !important; }
     table { border-collapse: collapse !important; }
     .mso-hide { display:none !important; }
-    .mso-button { padding:0 !important; }
   </style>
   <![endif]-->
 </head>
 
 <body style="margin:0;padding:0;background:#f2f5fb;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#0b1220;">
-  <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;line-height:1px;">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;line-height:1px;mso-hide:all;">
     Tu cuenta ya está activa. Entrá al panel y empezá a comprar en Skyline Store.
   </div>
 
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f2f5fb;">
     <tr>
       <td align="center" style="padding:28px 12px;">
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:720px;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" class="container" style="max-width:720px;width:100%;">
           <tr>
             <td style="padding:0 8px;">
 
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"
                      style="background:#ffffff;border:1px solid #e7eaf3;border-radius:24px;overflow:hidden;box-shadow:0 24px 70px rgba(2,6,23,.12);">
-
                 <tr>
-                  <td style="padding:22px;background:linear-gradient(90deg,#2f7bff,#ffb547);">
-                    <table width="100%">
+                  <td style="padding:22px;background:#2f7bff;">
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
                       <tr>
-                        <td>
-                          <div style="font-weight:950;color:#fff;font-size:18px;letter-spacing:-.2px;">
+                        <td style="padding:0;">
+                          <div style="font-weight:900;color:#fff;font-size:18px;letter-spacing:-.2px;">
                             Skyline Store
                           </div>
-                          <div style="color:rgba(255,255,255,.92);font-weight:760;font-size:13px;margin-top:4px;">
+                          <div style="color:rgba(255,255,255,.92);font-weight:700;font-size:13px;margin-top:4px;">
                             Marketplace premium · Ropa & Tech
                           </div>
                         </td>
-                        <td align="right">
-                          <span style="display:inline-block;padding:8px 12px;border-radius:999px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.28);color:#fff;font-weight:900;font-size:12px;">
+                        <td align="right" class="right" style="padding:0;">
+                          <span class="badge" style="display:inline-block;padding:8px 12px;border-radius:999px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.28);color:#fff;font-weight:800;font-size:12px;">
                             ✅ Cuenta activa
                           </span>
                         </td>
@@ -56,43 +67,49 @@
                   </td>
                 </tr>
 
-                <tr><td style="height:6px;background:linear-gradient(180deg, rgba(2,6,23,.12), rgba(2,6,23,0));"></td></tr>
+                <tr>
+                  <td style="height:8px;line-height:8px;background:linear-gradient(90deg,#2f7bff,#ffb547);font-size:0;">&nbsp;</td>
+                </tr>
 
                 <tr>
-                  <td style="padding:28px 24px 14px;">
-                    <div style="font-size:12px;font-weight:900;color:#6b7280;text-transform:uppercase;letter-spacing:.3px;">
+                  <td class="px" style="padding:28px 24px 14px;">
+                    <div style="font-size:12px;font-weight:800;color:#6b7280;text-transform:uppercase;letter-spacing:.3px;">
                       Paso 2 de 2 · Activación completa
                     </div>
 
-                    <h1 style="margin:10px 0 0;font-size:24px;line-height:1.25;letter-spacing:-.4px;font-weight:980;">
+                    <h1 class="h1" style="margin:10px 0 0;font-size:24px;line-height:1.25;letter-spacing:-.4px;font-weight:900;">
                       Tu cuenta ya está verificada{% if name %}, {{ name|e }}{% endif %} 🎉
                     </h1>
 
-                    <p style="margin:12px 0 0;color:#4b5563;font-weight:660;line-height:1.75;font-size:15px;">
+                    <p style="margin:12px 0 0;color:#4b5563;font-weight:600;line-height:1.75;font-size:15px;">
                       Listo. Ya podés entrar a tu panel, guardar direcciones, ver pedidos y comprar más rápido.
                     </p>
 
-                    <div style="margin-top:18px;padding:14px;border:1px solid #e7eaf3;border-radius:16px;background:#fafbff;">
-                      <div style="font-size:12px;color:#6b7280;font-weight:900;text-transform:uppercase;">
-                        Cuenta
-                      </div>
-                      <div style="margin-top:6px;font-size:14px;font-weight:950;word-break:break-word;">
-                        {{ email|e }}
-                      </div>
-                      <div style="margin-top:10px;">
-                        <span style="display:inline-block;padding:7px 10px;border-radius:999px;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.22);color:#166534;font-weight:900;font-size:12px;">
-                          Verificación completada
-                        </span>
-                      </div>
-                    </div>
-
-                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:20px 0 0;">
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:18px;">
                       <tr>
-                        <td class="mso-button">
+                        <td style="padding:14px;border:1px solid #e7eaf3;border-radius:16px;background:#fafbff;">
+                          <div style="font-size:12px;color:#6b7280;font-weight:800;text-transform:uppercase;letter-spacing:.2px;">
+                            Cuenta
+                          </div>
+                          <div style="margin-top:6px;font-size:14px;font-weight:800;word-break:break-word;">
+                            {{ email|e }}
+                          </div>
+                          <div style="margin-top:10px;">
+                            <span style="display:inline-block;padding:7px 10px;border-radius:999px;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.22);color:#166534;font-weight:800;font-size:12px;">
+                              Verificación completada
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:20px 0 0;width:100%;">
+                      <tr>
+                        <td align="left">
                           <!--[if mso]>
                           <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word"
                             href="{{ dashboard_url }}"
-                            style="height:50px;v-text-anchor:middle;width:340px;" arcsize="20%" stroke="f" fillcolor="#2f7bff">
+                            style="height:52px;v-text-anchor:middle;width:340px;" arcsize="18%" stroke="f" fillcolor="#2f7bff">
                             <w:anchorlock/>
                             <center style="color:#ffffff;font-family:Arial,sans-serif;font-size:14px;font-weight:bold;">
                               Ir a mi panel
@@ -100,10 +117,10 @@
                           </v:roundrect>
                           <![endif]-->
                           <!--[if !mso]><!-- -->
-                          <a href="{{ dashboard_url }}"
+                          <a class="btn" href="{{ dashboard_url }}"
                              style="display:inline-block;text-decoration:none;background:linear-gradient(90deg,#2f7bff,#ffb547);
-                                    color:#fff;font-weight:950;font-size:15px;padding:14px 20px;border-radius:16px;
-                                    box-shadow:0 16px 34px rgba(2,6,23,.18);border:1px solid rgba(15,23,42,.06);">
+                                    color:#fff;font-weight:900;font-size:15px;padding:14px 20px;border-radius:16px;
+                                    box-shadow:0 16px 34px rgba(2,6,23,.18);border:1px solid rgba(15,23,42,.08);">
                             Ir a mi panel
                           </a>
                           <!--<![endif]-->
@@ -114,8 +131,8 @@
                     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:18px 0 0;">
                       <tr>
                         <td style="padding:12px;border-radius:16px;border:1px solid #eef0f6;background:#ffffff;">
-                          <div style="font-weight:950;font-size:13px;color:#111827;">Siguiente recomendación</div>
-                          <div style="margin-top:6px;font-size:12.7px;color:#6b7280;line-height:1.7;font-weight:650;">
+                          <div style="font-weight:800;font-size:13px;color:#111827;">Siguiente recomendación</div>
+                          <div style="margin-top:6px;font-size:12.7px;color:#6b7280;line-height:1.7;font-weight:600;">
                             Completá tu perfil y agregá una dirección para acelerar el checkout.
                           </div>
                         </td>
@@ -128,6 +145,10 @@
                       </div>
                     </div>
 
+                    <div style="margin-top:14px;font-size:12px;color:#6b7280;line-height:1.6;">
+                      Si el botón no funciona, copiá y pegá este enlace en tu navegador:<br>
+                      <span style="word-break:break-all;color:#2f7bff;">{{ dashboard_url }}</span>
+                    </div>
                   </td>
                 </tr>
 

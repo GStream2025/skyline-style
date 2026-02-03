@@ -8,7 +8,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from functools import partial
 from typing import Any, Optional, Type, cast
-from urllib.parse import urlencode, urlparse
+from urllib.parse import urlencode, urlparse, urlunparse
 
 from flask import Flask, Response, g, jsonify, redirect, render_template, request, url_for
 from flask_wtf import CSRFProtect
@@ -23,18 +23,17 @@ try:
 except Exception:  # pragma: no cover
     sql_text = None  # type: ignore
 
-try:
-    from werkzeug.security import safe_join  # type: ignore
-except Exception:  # pragma: no cover
-    safe_join = None  # type: ignore
+
+_TRUE = {"1", "true", "yes", "y", "on", "checked", "enable", "enabled"}
+_FALSE = {"0", "false", "no", "n", "off", "disable", "disabled"}
 
 
-_TRUE = {"1", "true", "yes", "y", "on", "checked"}
-_FALSE = {"0", "false", "no", "n", "off"}
-
-
-def _env_str(name: str, default: str = "") -> str:
-    return (os.getenv(name) or default).strip()
+def _env_str(name: str, default: str = "", *, max_len: int = 4096) -> str:
+    v = os.getenv(name)
+    s = (default if v is None else str(v)).strip()
+    if max_len > 0 and len(s) > max_len:
+        s = s[:max_len]
+    return s
 
 
 def _env_bool(name: str, default: bool = False) -> bool:
@@ -53,8 +52,12 @@ def _env_int(name: str, default: int, *, min_v: int = 0, max_v: int = 10**9) -> 
     try:
         v = int(_env_str(name, str(default)))
     except Exception:
-        v = default
-    return max(min_v, min(max_v, v))
+        v = int(default)
+    if v < min_v:
+        return int(min_v)
+    if v > max_v:
+        return int(max_v)
+    return int(v)
 
 
 def utcnow() -> datetime:
@@ -130,7 +133,12 @@ def resp_error(status: int, code: str, message: str):
 
 
 def setup_logging(app: Flask) -> None:
-    level = logging.DEBUG if bool(app.debug) else logging.INFO
+    env_level = (_env_str("LOG_LEVEL", "") or "").upper().strip()
+    if env_level in {"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"}:
+        level = getattr(logging, env_level, logging.INFO)
+    else:
+        level = logging.DEBUG if bool(app.debug) else logging.INFO
+
     root = logging.getLogger()
     if not root.handlers:
         logging.basicConfig(
@@ -139,6 +147,7 @@ def setup_logging(app: Flask) -> None:
         )
     root.setLevel(level)
     app.logger.setLevel(level)
+
     if _is_prod(app):
         logging.getLogger("werkzeug").setLevel(logging.WARNING)
 
@@ -191,14 +200,21 @@ def _import_bp(module_name: str, attr: str):
 
 
 def _register_blueprints(app: Flask) -> dict[str, Any]:
-    stats: dict[str, Any] = {"registered": 0, "failed": 0, "skipped": 0, "errors": {}, "failed_names": []}
+    stats: dict[str, Any] = {
+        "registered": 0,
+        "failed": 0,
+        "skipped": 0,
+        "errors": {},
+        "failed_names": [],
+        "routes_report": {},
+    }
 
     try:
         from app.routes import register_blueprints as reg  # type: ignore
 
         rep = reg(app)
         if isinstance(rep, dict):
-            stats.update({"routes_report": rep})
+            stats["routes_report"] = rep
         stats["registered"] = len(app.blueprints or {})
         return stats
     except Exception as e:
@@ -246,35 +262,39 @@ def _register_blueprints(app: Flask) -> dict[str, Any]:
 
 
 def _apply_runtime_defaults(app: Flask) -> None:
+    is_prod = _is_prod(app)
+
     app.config.setdefault(
         "MAX_CONTENT_LENGTH",
         _env_int("MAX_CONTENT_LENGTH", 2_000_000, min_v=200_000, max_v=25_000_000),
     )
     app.config.setdefault("JSON_SORT_KEYS", False)
-    app.config.setdefault("TEMPLATES_AUTO_RELOAD", not _is_prod(app))
-    app.config.setdefault("SEND_FILE_MAX_AGE_DEFAULT", 31536000 if _is_prod(app) else 0)
+    app.config.setdefault("TEMPLATES_AUTO_RELOAD", not is_prod)
+    app.config.setdefault("SEND_FILE_MAX_AGE_DEFAULT", 31536000 if is_prod else 0)
 
     app.config.setdefault("SESSION_COOKIE_HTTPONLY", True)
     app.config.setdefault("SESSION_COOKIE_SAMESITE", "Lax")
     app.config.setdefault(
         "PERMANENT_SESSION_LIFETIME",
-        timedelta(days=_env_int("SESSION_DAYS", 14, min_v=1, max_v=90)),
+        timedelta(days=_env_int("SESSION_DAYS", 14, min_v=1, max_v=365)),
     )
     app.config.setdefault("SESSION_REFRESH_EACH_REQUEST", False)
-    app.config.setdefault("PREFERRED_URL_SCHEME", "https" if _is_prod(app) else "http")
-    app.config.setdefault("SESSION_COOKIE_SECURE", _is_prod(app))
+    app.config.setdefault("PREFERRED_URL_SCHEME", "https" if is_prod else "http")
+    app.config.setdefault("SESSION_COOKIE_SECURE", is_prod)
 
     app.config.setdefault("PROXYFIX_X_FOR", _env_int("PROXYFIX_X_FOR", 1, min_v=0, max_v=5))
     app.config.setdefault("PROXYFIX_X_PROTO", _env_int("PROXYFIX_X_PROTO", 1, min_v=0, max_v=5))
     app.config.setdefault("PROXYFIX_X_HOST", _env_int("PROXYFIX_X_HOST", 1, min_v=0, max_v=5))
 
     app.config.setdefault("SEC_HEADERS_ENABLED", True)
-    app.config.setdefault("HSTS_ENABLED", _is_prod(app))
+    app.config.setdefault("HSTS_ENABLED", is_prod)
     app.config.setdefault("HSTS_MAX_AGE", 31536000)
     app.config.setdefault("NO_STORE_ERROR_PAGES", True)
 
-    app.config.setdefault("CSRF_ENABLED", True)
-    app.config.setdefault("CSRF_TIME_LIMIT", _env_int("CSRF_TIME_LIMIT", 3600, min_v=300, max_v=86400))
+    # Map to flask-wtf names (your config module uses WTF_* keys)
+    app.config.setdefault("WTF_CSRF_ENABLED", _env_bool("WTF_CSRF_ENABLED", True))
+    app.config.setdefault("WTF_CSRF_TIME_LIMIT", _env_int("WTF_CSRF_TIME_LIMIT", 3600, min_v=300, max_v=86400))
+    app.config.setdefault("WTF_CSRF_SSL_STRICT", _env_bool("WTF_CSRF_SSL_STRICT", is_prod))
 
     app.config.setdefault("MAIL_ENABLED", _env_bool("MAIL_ENABLED", False))
     app.config.setdefault("MAIL_FROM", _env_str("MAIL_FROM", "no-reply@localhost"))
@@ -283,11 +303,11 @@ def _apply_runtime_defaults(app: Flask) -> None:
     app.config.setdefault("VERIFY_EMAIL_ENABLED", _env_bool("VERIFY_EMAIL_ENABLED", True))
     app.config.setdefault("VERIFY_EMAIL_TTL_HOURS", _env_int("VERIFY_EMAIL_TTL_HOURS", 24, min_v=1, max_v=168))
 
-    app.config.setdefault("CSP_ENABLED", _env_bool("CSP_ENABLED", _is_prod(app)))
+    app.config.setdefault("CSP_ENABLED", _env_bool("CSP_ENABLED", is_prod))
     app.config.setdefault("CSP_POLICY", _env_str("CSP_POLICY", ""))
 
-    app.config.setdefault("STRICT_STARTUP", _env_bool("STRICT_STARTUP", _is_prod(app)))
-    app.config.setdefault("HEALTH_REVEAL_ERRORS", _env_bool("HEALTH_REVEAL_ERRORS", not _is_prod(app)))
+    app.config.setdefault("STRICT_STARTUP", _env_bool("STRICT_STARTUP", is_prod))
+    app.config.setdefault("HEALTH_REVEAL_ERRORS", _env_bool("HEALTH_REVEAL_ERRORS", not is_prod))
 
     app.config.setdefault("ADMIN_LOGIN_ENDPOINT", _env_str("ADMIN_LOGIN_ENDPOINT", "admin.login"))
     app.config.setdefault("AUTH_ACCOUNT_ENDPOINT", _env_str("AUTH_ACCOUNT_ENDPOINT", "auth.account"))
@@ -302,6 +322,8 @@ def _ensure_secret_key(app: Flask) -> None:
 
 
 def _ensure_proxyfix_once(app: Flask) -> None:
+    if not bool(app.config.get("TRUST_PROXY_HEADERS", _is_prod(app))):
+        return
     if getattr(app, "_proxyfix_applied", False):
         return
     app.wsgi_app = ProxyFix(
@@ -346,46 +368,73 @@ def _apply_security_headers(app: Flask, resp: Response) -> Response:
     return resp
 
 
-def _normalize_db_uri(uri: str) -> str:
+def _normalize_db_uri(uri: str, *, is_prod: bool) -> str:
     u = (uri or "").strip()
     if not u:
         return ""
     if u.startswith("postgres://"):
         u = "postgresql://" + u[len("postgres://") :]
-    if "sslmode=" not in u and u.startswith("postgresql://"):
-        sep = "&" if "?" in u else "?"
-        u = u + f"{sep}sslmode=require"
+    if is_prod and u.startswith("postgresql://"):
+        # ensure sslmode in query if not already present
+        if "sslmode=" not in u.lower():
+            try:
+                p = urlparse(u)
+                q = p.query or ""
+                q2 = (q + "&" if q else "") + "sslmode=require"
+                u = urlunparse(p._replace(query=q2))
+            except Exception:
+                sep = "&" if "?" in u else "?"
+                u = u + f"{sep}sslmode=require"
     return u
 
 
 def _configure_sqlalchemy(app: Flask) -> None:
-    uri = app.config.get("SQLALCHEMY_DATABASE_URI") or _env_str("DATABASE_URL", "")
-    uri = _normalize_db_uri(str(uri or ""))
+    """
+    ✅ SINGLE SOURCE OF TRUTH (production-safe):
+    - Production: prefer DATABASE_URL, ignore SQLALCHEMY_DATABASE_URI if it differs (prevents env overwrite bugs).
+    - Development: allow config-provided SQLALCHEMY_DATABASE_URI or DATABASE_URL.
+    """
+    is_prod = _is_prod(app)
+
+    db_url = _env_str("DATABASE_URL", "")
+    cfg_uri = str(app.config.get("SQLALCHEMY_DATABASE_URI") or "").strip()
+
+    # Resolve final URI:
+    if is_prod:
+        uri = db_url or cfg_uri
+        if not uri:
+            raise RuntimeError("DATABASE_URL requerido en producción")
+    else:
+        uri = cfg_uri or db_url
+
+    uri = _normalize_db_uri(uri, is_prod=is_prod)
     if uri:
         app.config["SQLALCHEMY_DATABASE_URI"] = uri
 
     app.config.setdefault("SQLALCHEMY_TRACK_MODIFICATIONS", False)
 
-    pool_size = _env_int("DB_POOL_SIZE", 5, min_v=1, max_v=50)
-    max_overflow = _env_int("DB_MAX_OVERFLOW", 10, min_v=0, max_v=100)
-    pool_timeout = _env_int("DB_POOL_TIMEOUT", 30, min_v=5, max_v=120)
-    recycle = _env_int("DB_POOL_RECYCLE", 1800, min_v=300, max_v=7200)
+    engine_opts = dict(app.config.get("SQLALCHEMY_ENGINE_OPTIONS") or {})
 
-    engine_opts: dict[str, Any] = {
-        "pool_pre_ping": True,
-        "pool_recycle": recycle,
-        "pool_size": pool_size,
-        "max_overflow": max_overflow,
-        "pool_timeout": pool_timeout,
-    }
+    # If config didn't provide engine options, build sane defaults:
+    if not engine_opts:
+        pool_size = _env_int("DB_POOL_SIZE", 5, min_v=1, max_v=50)
+        max_overflow = _env_int("DB_MAX_OVERFLOW", 10, min_v=0, max_v=100)
+        pool_timeout = _env_int("DB_POOL_TIMEOUT", 30, min_v=5, max_v=120)
+        recycle = _env_int("DB_POOL_RECYCLE", 280, min_v=30, max_v=7200)
+        engine_opts = {
+            "pool_pre_ping": True,
+            "pool_recycle": recycle,
+            "pool_size": pool_size,
+            "max_overflow": max_overflow,
+            "pool_timeout": pool_timeout,
+        }
 
     if str(app.config.get("SQLALCHEMY_DATABASE_URI") or "").startswith("sqlite"):
         engine_opts.pop("pool_size", None)
         engine_opts.pop("max_overflow", None)
         engine_opts.pop("pool_timeout", None)
 
-    app.config.setdefault("SQLALCHEMY_ENGINE_OPTIONS", engine_opts)
-
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = engine_opts
     db.init_app(app)
 
 
@@ -407,7 +456,9 @@ def create_app() -> Flask:
         instance_relative_config=True,
     )
 
+    # Load config from your config class
     app.config.from_mapping(cfg.as_flask_config())
+
     _apply_runtime_defaults(app)
     _ensure_secret_key(app)
     setup_logging(app)
@@ -418,7 +469,7 @@ def create_app() -> Flask:
     strict_startup = bool(app.config.get("STRICT_STARTUP", _is_prod(app)))
 
     csrf = CSRFProtect()
-    if bool(app.config.get("CSRF_ENABLED", True)):
+    if bool(app.config.get("WTF_CSRF_ENABLED", True)):
         csrf.init_app(app)
 
     @app.context_processor
@@ -453,7 +504,7 @@ def create_app() -> Flask:
         g.request_id = rid[:128] if rid else secrets.token_urlsafe(10)
         g._t0 = time.time()
 
-        # ✅ FIX CRÍTICO: redirigir /login y /register SOLO en GET/HEAD (no romper POST)
+        # Redirect /login & /register only on safe methods (never break POST)
         if request.method in {"GET", "HEAD"}:
             p = request.path.rstrip("/") or "/"
             if p in {"/login", "/auth/login"}:
@@ -505,7 +556,7 @@ def create_app() -> Flask:
 
     stats = _register_blueprints(app)
 
-    # Fallbacks de GET/HEAD para /auth/login y /auth/register (solo si no existen endpoints reales)
+    # Fallbacks for /auth/login and /auth/register (GET/HEAD) if not provided by real routes
     if not _endpoint_exists(app, "_fallback_auth_login"):
         app.add_url_rule(
             "/auth/login",
@@ -522,7 +573,7 @@ def create_app() -> Flask:
             methods=["GET", "HEAD"],
         )
 
-    # Alias /login y /register (solo GET/HEAD), sin pisar reglas existentes
+    # Alias /login and /register (GET/HEAD only), do not override existing rules
     for rule, endpoint, tab in (
         ("/login", "_fallback_login", "login"),
         ("/register", "_fallback_register", "register"),
@@ -530,7 +581,9 @@ def create_app() -> Flask:
         if not _endpoint_exists(app, endpoint) and not _rule_exists(app, rule):
             app.add_url_rule(rule, endpoint, partial(_best_redirect_to_account, app, tab), methods=["GET", "HEAD"])
 
-    if not _endpoint_exists(app, str(app.config.get("AUTH_ACCOUNT_ENDPOINT", "auth.account"))) and not _rule_exists(app, "/auth/account"):
+    # Emergency account page if auth.account route is missing
+    account_ep = str(app.config.get("AUTH_ACCOUNT_ENDPOINT", "auth.account") or "auth.account")
+    if not _endpoint_exists(app, account_ep) and not _rule_exists(app, "/auth/account"):
 
         @app.get("/auth/account")
         def _emergency_account():
@@ -545,6 +598,7 @@ def create_app() -> Flask:
                 headers["Expires"] = "0"
             return render_template("auth/account.html", active_tab=tab, next=nxt, prefill_email=""), 200, headers
 
+    # Root fallback
     if not _rule_exists(app, "/"):
 
         @app.get("/")
@@ -568,10 +622,7 @@ def create_app() -> Flask:
             "bp_registered": int(stats.get("registered", 0)),
             "bp_failed": int(stats.get("failed", 0)),
             "bp_skipped": int(stats.get("skipped", 0)),
-            "auth_account": bool(
-                _endpoint_exists(app, str(app.config.get("AUTH_ACCOUNT_ENDPOINT", "auth.account")))
-                or _rule_exists(app, "/auth/account")
-            ),
+            "auth_account": bool(_endpoint_exists(app, account_ep) or _rule_exists(app, "/auth/account")),
             "init_models_ok": bool(init_ok),
             "ts": int(time.time()),
         }
