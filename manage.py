@@ -2,18 +2,18 @@ from __future__ import annotations
 
 import os
 import sys
-from typing import Optional
+from typing import Iterable, Tuple
 
 from flask import Flask
 
 try:
     from flask_migrate import Migrate
-except Exception:
+except Exception:  # pragma: no cover
     Migrate = None  # type: ignore
 
 try:
     from dotenv import load_dotenv  # type: ignore
-except Exception:
+except Exception:  # pragma: no cover
     load_dotenv = None  # type: ignore
 
 from app import create_app
@@ -50,6 +50,20 @@ def _env_int(key: str, default: int, *, lo: int = 1, hi: int = 65535) -> int:
     return max(lo, min(hi, n))
 
 
+def _normalize_db_uri(uri: str) -> str:
+    """
+    Render suele dar DATABASE_URL como postgres://...
+    SQLAlchemy prefiere postgresql://...
+    Además evita caer en psycopg2 si tu app usa psycopg v3.
+    """
+    u = (uri or "").strip()
+    if u.startswith("postgres://"):
+        u = "postgresql://" + u[len("postgres://") :]
+    if u.startswith("postgresql+psycopg2://"):
+        u = u.replace("postgresql+psycopg2://", "postgresql+psycopg://", 1)
+    return u
+
+
 def _is_sqlite(uri: str) -> bool:
     return (uri or "").strip().lower().startswith("sqlite:")
 
@@ -58,13 +72,18 @@ def _ensure_instance_dir(app: Flask) -> None:
     try:
         os.makedirs(app.instance_path, exist_ok=True)
     except Exception:
-        pass
+        app.logger.debug("instance_path could not be created", exc_info=True)
 
 
 def _maybe_load_dotenv() -> None:
     if load_dotenv is None:
         return
-    env_files = (".env", ".env.local", ".env.development", ".env.production")
+
+    # Si ya estás en producción, evitá “pisar” variables del provider
+    if _env_str("ENV", "").lower() == "production":
+        return
+
+    env_files: Tuple[str, ...] = (".env", ".env.local", ".env.development", ".env.production")
     for name in env_files:
         try:
             if os.path.isfile(name):
@@ -77,22 +96,19 @@ def _maybe_load_dotenv() -> None:
 def _show_banner(app: Flask) -> None:
     try:
         uri = str(app.config.get("SQLALCHEMY_DATABASE_URI") or "")
-        env = str(app.config.get("ENV") or _env_str("ENV", "production"))
+        env = str(app.config.get("ENV") or _env_str("ENV", "production")).lower()
         debug = bool(app.debug)
-        app.logger.info(
-            "manage.py ready | env=%s debug=%s db=%s",
-            env,
-            debug,
-            "sqlite" if _is_sqlite(uri) else "sql",
-        )
+        db_kind = "sqlite" if _is_sqlite(uri) else "sql"
+        app.logger.info("wsgi ready | env=%s debug=%s db=%s", env, debug, db_kind)
     except Exception:
         pass
 
 
 def _init_migrate(app: Flask) -> None:
     if Migrate is None:
-        app.logger.warning("flask_migrate not installed; migrations disabled")
+        app.logger.info("flask_migrate not installed; migrations disabled")
         return
+
     uri = str(app.config.get("SQLALCHEMY_DATABASE_URI") or "")
     migrate_opts = {
         "compare_type": True,
@@ -105,9 +121,21 @@ def _init_migrate(app: Flask) -> None:
         Migrate(app, db)  # type: ignore[misc]
 
 
+def _apply_runtime_config(app: Flask) -> None:
+    """
+    Mejora de robustez:
+    - Normaliza DATABASE_URL/SQLALCHEMY_DATABASE_URI (postgres:// -> postgresql://)
+    - Evita driver psycopg2 si se coló en el URI
+    """
+    env_db = _env_str("SQLALCHEMY_DATABASE_URI", "") or _env_str("DATABASE_URL", "")
+    if env_db:
+        app.config["SQLALCHEMY_DATABASE_URI"] = _normalize_db_uri(env_db)
+
+
 def create_cli_app() -> Flask:
     _maybe_load_dotenv()
     app = create_app()
+    _apply_runtime_config(app)
     _ensure_instance_dir(app)
     _init_migrate(app)
     _show_banner(app)
@@ -119,13 +147,14 @@ app: Flask = create_cli_app()
 
 def _print_check(app: Flask, debug: bool) -> None:
     uri = str(app.config.get("SQLALCHEMY_DATABASE_URI") or "")
-    env = str(app.config.get("ENV") or _env_str("ENV", "production"))
+    env = str(app.config.get("ENV") or _env_str("ENV", "production")).lower()
     db_kind = "sqlite" if _is_sqlite(uri) else "sql"
-    print(f"OK env={env} debug={debug} db={db_kind}")
+    print(f"OK env={env} debug={int(debug)} db={db_kind}")
 
 
-def _should_run_check(argv: list[str]) -> bool:
-    return "--check" in argv or "check" in argv
+def _should_run_check(argv: Iterable[str]) -> bool:
+    a = {str(x).strip().lower() for x in argv}
+    return "--check" in a or "check" in a
 
 
 def _parse_host_port() -> tuple[str, int]:
@@ -134,12 +163,18 @@ def _parse_host_port() -> tuple[str, int]:
     return host, port
 
 
+def _debug_flag(app: Flask) -> bool:
+    # Prioridad: DEBUG -> FLASK_DEBUG -> app.debug
+    return _env_bool("DEBUG", _env_bool("FLASK_DEBUG", bool(app.debug)))
+
+
 if __name__ == "__main__":
     host, port = _parse_host_port()
-    debug = _env_bool("DEBUG", _env_bool("FLASK_DEBUG", False)) or bool(app.debug)
+    debug = _debug_flag(app)
 
     if _should_run_check(sys.argv):
         _print_check(app, debug)
         raise SystemExit(0)
 
+    # Nota: en producción (Render) se usa gunicorn; esto es para local.
     app.run(host=host, port=port, debug=debug)
