@@ -1,11 +1,14 @@
-﻿# ==========================================================
-# Skyline Store — requirements.txt (PRO / CLEAN / WIN+LINUX)
-# Python: 3.11.x / 3.12.x  (Render suele usar 3.11.x si no lo forzás)
-# ==========================================================
+﻿# =========================
+# Skyline Store — Runtime
+# =========================
+# Compatible con:
+# - Windows (dev local, sin MSVC)
+# - Linux / Render (producción)
+# Python recomendado: 3.11 / 3.12
 
-# -------------------------
-# Core Flask
-# -------------------------
+# -------------------------------------------------
+# Flask core
+# -------------------------------------------------
 Flask==3.0.3
 Werkzeug==3.0.3
 Jinja2==3.1.6
@@ -13,82 +16,82 @@ itsdangerous==2.2.0
 click==8.1.7
 blinker==1.9.0
 
-# -------------------------
-# Database / ORM / Migrations
-# -------------------------
+# -------------------------------------------------
+# Database
+# -------------------------------------------------
 SQLAlchemy==2.0.36
 Flask-SQLAlchemy==3.1.1
 alembic==1.14.0
 Flask-Migrate==4.0.7
+psycopg2-binary==2.9.11
 
-# PostgreSQL driver (PSYCOPG v3) + SSL stack
-# IMPORTANTE: si tu URI usa "postgresql+psycopg2://", cambiá a "postgresql+psycopg://"
-psycopg[binary]==3.2.13
-
-# -------------------------
-# Auth / Forms / Validation / Security
-# -------------------------
+# -------------------------------------------------
+# Auth / Forms
+# -------------------------------------------------
 Flask-Login==0.6.3
 Flask-WTF==1.2.2
 email-validator==2.2.0
 bcrypt==4.2.0
 
-# -------------------------
-# Performance / Security headers / Rate limit
-# -------------------------
-Flask-Compress==1.17
+# -------------------------------------------------
+# Security / Performance
+# -------------------------------------------------
+Flask-Compress==1.17.0
 flask-talisman==1.1.0
 Flask-Limiter==4.1.1
 limits==5.6.0
 
-# -------------------------
-# Caching
-# -------------------------
+# -------------------------------------------------
+# Cache
+# -------------------------------------------------
 Flask-Caching==2.3.0
 cachelib==0.9.0
 
-# -------------------------
-# Static files (prod)
-# -------------------------
+# -------------------------------------------------
+# Static / Assets
+# -------------------------------------------------
 whitenoise==6.8.2
 
-# -------------------------
-# Env + HTTP client
-# -------------------------
+# -------------------------------------------------
+# HTTP / Env
+# -------------------------------------------------
 python-dotenv==1.0.1
 requests==2.32.3
-
-# Requests deps (pin explícito = builds reproducibles)
 urllib3==2.2.3
 certifi==2025.1.31
 charset-normalizer==3.4.1
 idna==3.10
 
-# -------------------------
-# Time / typing
-# -------------------------
+# -------------------------------------------------
+# Time / Typing
+# -------------------------------------------------
 tzdata==2025.1
 typing_extensions==4.12.2
 
-# -------------------------
-# Utils
-# -------------------------
+# -------------------------------------------------
+# Media / Slugs
+# -------------------------------------------------
 pillow==10.4.0
 python-slugify==8.0.4
 text-unidecode==1.3
 
-# -------------------------
-# Runtime helpers
-# -------------------------
+# -------------------------------------------------
+# Misc
+# -------------------------------------------------
 dnspython==2.7.0
 Deprecated==1.2.15
 wrapt==1.16.0
 greenlet==3.1.1
-packaging==24.2
 
-# -------------------------
-# Server / compression
-# -------------------------
+# IMPORTANTE:
+# "packaging==24.2" te rompe tooling (pyproject-api requiere >=25).
+# En runtime no conviene pinnear bajo. Lo dejamos seguro:
+packaging>=25
+
+# -------------------------------------------------
+# Server / Compression
+# (evita compilación C en Windows)
+# -------------------------------------------------
 gunicorn==22.0.0
-brotli==1.1.0
-zstandard==0.22.0
+brotli==1.1.0; platform_system != "Windows"
+zstandard==0.22.0; platform_system != "Windows"

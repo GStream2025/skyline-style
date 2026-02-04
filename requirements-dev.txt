@@ -1,11 +1,7 @@
-# ==========================================================
-# Skyline Store — requirements-dev.txt (PRO / CLEAN / WIN+LINUX)
-# Python: 3.11.x / 3.12.x
-# ==========================================================
+# =========================
+# Skyline Store — Dev / QA
+# =========================
 
-# -----------------------------
-# Testing
-# -----------------------------
 pytest==8.3.4
 pytest-cov==6.0.0
 pytest-mock==3.14.0
@@ -14,12 +10,12 @@ pytest-xdist==3.6.1
 pytest-randomly==3.16.0
 pytest-timeout==2.3.1
 pytest-html==4.1.1
+pytest-sugar==1.0.0
+pytest-asyncio==0.25.3
 freezegun==1.5.1
 coverage[toml]==7.6.9
+hypothesis==6.122.1
 
-# -----------------------------
-# Lint / Format / Types
-# -----------------------------
 ruff==0.8.4
 black==24.10.0
 mypy==1.13.0
@@ -27,31 +23,41 @@ mypy==1.13.0
 types-requests==2.32.0.20241016
 types-python-dateutil==2.9.0.20241206
 types-six==1.17.0.20241205
+types-PyYAML==6.0.12.20241230
 
-# -----------------------------
-# DX (Dev Experience)
-# -----------------------------
+# Stubs (opcionales, útiles para mypy)
+types-Flask==1.1.6
+types-Werkzeug==1.0.9
+
+# NOTA:
+# No existe "types-Flask-Caching" en PyPI => se elimina.
+# Si querés typing para Flask-Caching, se hace con Protocols/typing local, no con stubs externos.
+
 ipython==8.31.0
 rich==13.9.4
 debugpy==1.8.11
 watchdog==6.0.0; platform_system != "Windows"
 
-# -----------------------------
-# Security / Auditing
-# -----------------------------
 bandit==1.7.10
 pip-audit==2.7.3
 pipdeptree==2.23.4
 
-# -----------------------------
-# DB / Factories
-# -----------------------------
 sqlalchemy-utils==0.41.2
 faker==33.1.0
 factory-boy==3.3.1
 
-# -----------------------------
-# Tooling
-# -----------------------------
 tox==4.23.2
 pip-tools==7.4.1
+pre-commit==4.0.1
+
+python-dotenv==1.0.1
+httpx==0.27.2
+responses==0.25.3
+requests-mock==1.12.1
+
+pip-check-reqs==2.5.3
+build==1.2.2.post1
+twine==6.0.1
+
+# Tooling compatibility (evita conflictos tipo pyproject-api)
+packaging>=25

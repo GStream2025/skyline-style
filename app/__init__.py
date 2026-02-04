@@ -26,6 +26,7 @@ except Exception:  # pragma: no cover
 
 _TRUE = {"1", "true", "yes", "y", "on", "checked", "enable", "enabled"}
 _FALSE = {"0", "false", "no", "n", "off", "disable", "disabled"}
+_ALLOWED_LOG_LEVELS = {"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"}
 
 
 def _env_str(name: str, default: str = "", *, max_len: int = 4096) -> str:
@@ -77,11 +78,17 @@ def _env_name(app: Flask) -> str:
         return "production"
     if env_s in {"dev", "development"}:
         return "development"
+    if env_s in {"test", "testing"}:
+        return "testing"
     return "development" if bool(app.debug) else "production"
 
 
 def _is_prod(app: Flask) -> bool:
     return _env_name(app) == "production" and not bool(app.debug)
+
+
+def _is_testing(app: Flask) -> bool:
+    return bool(app.config.get("TESTING")) or _env_name(app) == "testing"
 
 
 def wants_json() -> bool:
@@ -134,7 +141,7 @@ def resp_error(status: int, code: str, message: str):
 
 def setup_logging(app: Flask) -> None:
     env_level = (_env_str("LOG_LEVEL", "") or "").upper().strip()
-    if env_level in {"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"}:
+    if env_level in _ALLOWED_LOG_LEVELS:
         level = getattr(logging, env_level, logging.INFO)
     else:
         level = logging.DEBUG if bool(app.debug) else logging.INFO
@@ -148,6 +155,7 @@ def setup_logging(app: Flask) -> None:
     root.setLevel(level)
     app.logger.setLevel(level)
 
+    # Menos ruido en prod
     if _is_prod(app):
         logging.getLogger("werkzeug").setLevel(logging.WARNING)
 
@@ -156,22 +164,31 @@ def _safe_next_path(v: str) -> str:
     nxt = (v or "").strip()
     if not nxt:
         return ""
+    if len(nxt) > 2048:
+        nxt = nxt[:2048]
+
+    # hard blocks
     if any(c in nxt for c in ("\x00", "\r", "\n", "\\")):
         return ""
     if "://" in nxt:
         return ""
-    if not nxt.startswith("/") or nxt.startswith("//"):
+
+    if nxt.startswith("//"):
         return ""
+    if not nxt.startswith("/"):
+        return ""
+
     p = urlparse(nxt)
     if p.scheme or p.netloc:
         return ""
-    if "?" in nxt:
-        nxt = nxt.split("?", 1)[0]
-    if "#" in nxt:
-        nxt = nxt.split("#", 1)[0]
-    if ".." in nxt:
+
+    path_only = p.path or ""
+    if not path_only.startswith("/") or path_only.startswith("//"):
         return ""
-    return nxt[:512]
+    if ".." in path_only:
+        return ""
+
+    return path_only[:512]
 
 
 def _endpoint_exists(app: Flask, endpoint: str) -> bool:
@@ -291,7 +308,6 @@ def _apply_runtime_defaults(app: Flask) -> None:
     app.config.setdefault("HSTS_MAX_AGE", 31536000)
     app.config.setdefault("NO_STORE_ERROR_PAGES", True)
 
-    # Map to flask-wtf names (your config module uses WTF_* keys)
     app.config.setdefault("WTF_CSRF_ENABLED", _env_bool("WTF_CSRF_ENABLED", True))
     app.config.setdefault("WTF_CSRF_TIME_LIMIT", _env_int("WTF_CSRF_TIME_LIMIT", 3600, min_v=300, max_v=86400))
     app.config.setdefault("WTF_CSRF_SSL_STRICT", _env_bool("WTF_CSRF_SSL_STRICT", is_prod))
@@ -311,6 +327,11 @@ def _apply_runtime_defaults(app: Flask) -> None:
 
     app.config.setdefault("ADMIN_LOGIN_ENDPOINT", _env_str("ADMIN_LOGIN_ENDPOINT", "admin.login"))
     app.config.setdefault("AUTH_ACCOUNT_ENDPOINT", _env_str("AUTH_ACCOUNT_ENDPOINT", "auth.account"))
+
+    # ✅ Tests: evita que ProxyFix / HSTS molesten
+    if _is_testing(app):
+        app.config.setdefault("TRUST_PROXY_HEADERS", False)
+        app.config.setdefault("HSTS_ENABLED", False)
 
 
 def _ensure_secret_key(app: Flask) -> None:
@@ -346,6 +367,7 @@ def _apply_security_headers(app: Flask, resp: Response) -> Response:
     resp.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
     resp.headers.setdefault("Cross-Origin-Resource-Policy", "same-origin")
 
+    # ✅ En prod real, HSTS; en tests no.
     if bool(app.config.get("HSTS_ENABLED", False)) and _is_prod(app):
         max_age = int(app.config.get("HSTS_MAX_AGE", 31536000) or 31536000)
         resp.headers.setdefault("Strict-Transport-Security", f"max-age={max_age}; includeSubDomains")
@@ -357,7 +379,7 @@ def _apply_security_headers(app: Flask, resp: Response) -> Response:
                 "default-src 'self'; "
                 "img-src 'self' data: https:; "
                 "style-src 'self' 'unsafe-inline' https:; "
-                "script-src 'self' 'unsafe-inline' https:; "
+                "script-src 'self' https:; "
                 "font-src 'self' data: https:; "
                 "connect-src 'self' https:; "
                 "frame-ancestors 'self'; "
@@ -375,7 +397,6 @@ def _normalize_db_uri(uri: str, *, is_prod: bool) -> str:
     if u.startswith("postgres://"):
         u = "postgresql://" + u[len("postgres://") :]
     if is_prod and u.startswith("postgresql://"):
-        # ensure sslmode in query if not already present
         if "sslmode=" not in u.lower():
             try:
                 p = urlparse(u)
@@ -390,16 +411,34 @@ def _normalize_db_uri(uri: str, *, is_prod: bool) -> str:
 
 def _configure_sqlalchemy(app: Flask) -> None:
     """
-    ✅ SINGLE SOURCE OF TRUTH (production-safe):
-    - Production: prefer DATABASE_URL, ignore SQLALCHEMY_DATABASE_URI if it differs (prevents env overwrite bugs).
-    - Development: allow config-provided SQLALCHEMY_DATABASE_URI or DATABASE_URL.
+    ✅ Corrección crítica:
+    - TESTING=True -> usa SIEMPRE SQLALCHEMY_DATABASE_URI y NO toca DATABASE_URL.
+    - Prod -> prioriza DATABASE_URL.
+    - Dev -> cfg_uri o DATABASE_URL.
     """
     is_prod = _is_prod(app)
+
+    # ✅ TESTS: nunca Postgres por env
+    if _is_testing(app):
+        uri = str(app.config.get("SQLALCHEMY_DATABASE_URI") or "sqlite://").strip()
+        uri = _normalize_db_uri(uri, is_prod=False)
+        app.config["SQLALCHEMY_DATABASE_URI"] = uri
+        app.config.setdefault("SQLALCHEMY_TRACK_MODIFICATIONS", False)
+
+        engine_opts = dict(app.config.get("SQLALCHEMY_ENGINE_OPTIONS") or {})
+        # Si usas sqlite en tests, sacá pool opts peligrosos
+        if uri.startswith("sqlite"):
+            engine_opts.pop("pool_size", None)
+            engine_opts.pop("max_overflow", None)
+            engine_opts.pop("pool_timeout", None)
+        app.config["SQLALCHEMY_ENGINE_OPTIONS"] = engine_opts
+
+        db.init_app(app)
+        return
 
     db_url = _env_str("DATABASE_URL", "")
     cfg_uri = str(app.config.get("SQLALCHEMY_DATABASE_URI") or "").strip()
 
-    # Resolve final URI:
     if is_prod:
         uri = db_url or cfg_uri
         if not uri:
@@ -414,8 +453,6 @@ def _configure_sqlalchemy(app: Flask) -> None:
     app.config.setdefault("SQLALCHEMY_TRACK_MODIFICATIONS", False)
 
     engine_opts = dict(app.config.get("SQLALCHEMY_ENGINE_OPTIONS") or {})
-
-    # If config didn't provide engine options, build sane defaults:
     if not engine_opts:
         pool_size = _env_int("DB_POOL_SIZE", 5, min_v=1, max_v=50)
         max_overflow = _env_int("DB_MAX_OVERFLOW", 10, min_v=0, max_v=100)
@@ -446,7 +483,7 @@ def _best_redirect_to_account(app: Flask, tab: str) -> Response:
     return redirect("/auth/account?" + urlencode({"tab": tab, "next": nxt}), code=302)
 
 
-def create_app() -> Flask:
+def create_app(overrides: Optional[dict[str, Any]] = None) -> Flask:
     cfg: Type = get_config()
 
     app = Flask(
@@ -456,8 +493,11 @@ def create_app() -> Flask:
         instance_relative_config=True,
     )
 
-    # Load config from your config class
     app.config.from_mapping(cfg.as_flask_config())
+
+    # ✅ Mejora clave: overrides tempranos (antes de defaults/DB)
+    if overrides:
+        app.config.update(overrides)
 
     _apply_runtime_defaults(app)
     _ensure_secret_key(app)
@@ -502,7 +542,7 @@ def create_app() -> Flask:
 
         rid = (request.headers.get("X-Request-Id") or "").strip()
         g.request_id = rid[:128] if rid else secrets.token_urlsafe(10)
-        g._t0 = time.time()
+        g._t0 = time.perf_counter()
 
         # Redirect /login & /register only on safe methods (never break POST)
         if request.method in {"GET", "HEAD"}:
@@ -523,7 +563,7 @@ def create_app() -> Flask:
         try:
             t0 = getattr(g, "_t0", None)
             if isinstance(t0, (int, float)):
-                ms = int((time.time() - float(t0)) * 1000)
+                ms = int((time.perf_counter() - float(t0)) * 1000)
                 resp.headers.setdefault("X-Response-Time", f"{ms}ms")
         except Exception:
             pass
@@ -538,7 +578,9 @@ def create_app() -> Flask:
     init_ok = True
     init_err: Optional[str] = None
     try:
-        init_models(app, create_admin=True, log_loaded_models=True, ping_db=True)
+        # ✅ Mejora: en TESTING no hagas ping a DB externa
+        ping = bool(app.config.get("PING_DB_ON_STARTUP", True)) and not _is_testing(app)
+        init_models(app, create_admin=True, log_loaded_models=True, ping_db=ping)
     except Exception as e:
         init_ok = False
         init_err = f"{type(e).__name__}: {e}"
@@ -556,7 +598,7 @@ def create_app() -> Flask:
 
     stats = _register_blueprints(app)
 
-    # Fallbacks for /auth/login and /auth/register (GET/HEAD) if not provided by real routes
+    # Fallbacks for /auth/login and /auth/register (GET/HEAD)
     if not _endpoint_exists(app, "_fallback_auth_login"):
         app.add_url_rule(
             "/auth/login",
@@ -573,7 +615,7 @@ def create_app() -> Flask:
             methods=["GET", "HEAD"],
         )
 
-    # Alias /login and /register (GET/HEAD only), do not override existing rules
+    # Alias /login and /register (GET/HEAD only)
     for rule, endpoint, tab in (
         ("/login", "_fallback_login", "login"),
         ("/register", "_fallback_register", "register"),
@@ -613,12 +655,18 @@ def create_app() -> Flask:
         rr = stats.get("routes_report") if isinstance(stats.get("routes_report"), dict) else {}
         imports_failed = rr.get("imports_failed", []) if isinstance(rr, dict) else []
         reveal = bool(app.config.get("HEALTH_REVEAL_ERRORS", not _is_prod(app)))
+
+        try:
+            routes_count = sum(1 for _ in app.url_map.iter_rules())
+        except Exception:
+            routes_count = 0
+
         payload: dict[str, Any] = {
             "status": "ok" if init_ok else "degraded",
             "env": _env_name(app),
             "app": app.config.get("APP_NAME", "Skyline Store"),
             "blueprints": list((app.blueprints or {}).keys()),
-            "routes": len(list(app.url_map.iter_rules())),
+            "routes": int(routes_count),
             "bp_registered": int(stats.get("registered", 0)),
             "bp_failed": int(stats.get("failed", 0)),
             "bp_skipped": int(stats.get("skipped", 0)),
@@ -638,10 +686,10 @@ def create_app() -> Flask:
         ok = True
         db_ok = True
         try:
-            if sql_text is not None:
-                db.session.execute(sql_text("SELECT 1"))
-            else:
-                db.session.execute("SELECT 1")  # type: ignore[arg-type]
+            if sql_text is None:
+                raise RuntimeError("sqlalchemy.text no disponible")
+            with db.engine.connect() as conn:  # type: ignore[attr-defined]
+                conn.execute(sql_text("SELECT 1"))
         except Exception:
             ok = False
             db_ok = False
