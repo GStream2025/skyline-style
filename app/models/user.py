@@ -12,12 +12,14 @@ from typing import Any, Callable, Dict, Optional, Tuple
 from flask_login import UserMixin
 from sqlalchemy import CheckConstraint, Index, event, inspect, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from sqlalchemy.orm import Session as SASession
 from sqlalchemy.orm import validates
 
 from app.models import db
 from app.utils.password_engine import hash_password, verify_and_maybe_rehash
 
 _EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+
 _ALLOWED_ROLES = {"admin", "staff", "customer", "affiliate"}
 
 _MIN_PASSWORD_LEN = 8
@@ -50,8 +52,7 @@ def _token64() -> str:
 
 def _normalize_text(s: str) -> str:
     s = (s or "").replace("\u200b", "").replace("\ufeff", "")
-    s = unicodedata.normalize("NFKC", s)
-    return s
+    return unicodedata.normalize("NFKC", s)
 
 
 def _strip_or_none(v: Any, max_len: int) -> Optional[str]:
@@ -104,6 +105,7 @@ def _safe_ip(v: Any) -> Optional[str]:
     try:
         return str(ip_address(raw))
     except Exception:
+        # si viene "unknown" u otra cosa, lo guardamos sanitizado igual
         return raw
 
 
@@ -142,6 +144,8 @@ def _boolish(v: Any, default: bool = False) -> bool:
 
 
 def _ensure_unique_token(field: str, make: Callable[[], str], model) -> str:
+    # IMPORTANTE: esto NO debe ejecutarse dentro de un flush “activo”.
+    # Usalo para generación explícita (ej: reset token) fuera de eventos.
     for _ in range(12):
         tok = make()
         stmt = select(model.id).where(getattr(model, field) == tok).limit(1)
@@ -190,6 +194,7 @@ class User(UserMixin, db.Model):
 
     email_opt_in = db.Column(db.Boolean, default=True, server_default="1", nullable=False, index=True)
     email_opt_in_at = db.Column(db.DateTime(timezone=True))
+
     unsubscribe_token = db.Column(
         db.String(_UNSUB_TOKEN_LEN),
         unique=True,
@@ -211,6 +216,7 @@ class User(UserMixin, db.Model):
             "role IS NULL OR role IN ('admin','staff','customer','affiliate')",
             name="ck_users_role_allowed",
         ),
+        CheckConstraint("unsubscribe_token IS NOT NULL", name="ck_users_unsub_token_not_null"),
         Index("ix_users_active_role", "is_active", "role"),
         Index("ix_users_verified_active", "email_verified", "is_active"),
     )
@@ -306,14 +312,15 @@ class User(UserMixin, db.Model):
             self.reset_password_expires_at = None
 
     def ensure_tokens(self) -> None:
+        # No consultamos DB en flush: generamos y dejamos al unique constraint hacer su trabajo.
         if not self.unsubscribe_token:
-            self.unsubscribe_token = _ensure_unique_token("unsubscribe_token", _token64, User)
+            self.unsubscribe_token = _token64()
 
     def ensure_auth_tokens(self) -> None:
         if self.email_verified:
             self.email_verify_token = None
         elif not self.email_verify_token:
-            self.email_verify_token = _ensure_unique_token("email_verify_token", _token64, User)
+            self.email_verify_token = _token64()
 
         self._clear_expired_reset()
 
@@ -372,6 +379,7 @@ class User(UserMixin, db.Model):
         return f"{name[:2]}***@{domain}"
 
     def prepare(self) -> None:
+        # normalizaciones base
         self.email = _normalize_email(self.email)[:_DB_EMAIL_LEN]
         self.phone = _clean_phone(self.phone)
         self.name = _strip_or_none(self.name, _MAX_NAME_LEN)
@@ -380,17 +388,20 @@ class User(UserMixin, db.Model):
         c = _strip_or_none(self.country, 2)
         self.country = c.upper() if c else None
 
+        # booleans robustos
         self.is_active = bool(self.is_active)
         self.is_admin = bool(self.is_admin)
         self.email_verified = bool(self.email_verified)
         self.email_opt_in = bool(self.email_opt_in)
 
+        # rol final consistente
         if self.is_owner:
             self.is_admin = True
             self.role = "admin"
         else:
-            self.role = _role_normalize(self.role_effective)
+            self.role = _role_normalize(self.role) or ("admin" if self.is_admin else "customer")
 
+        # tokens + auth tokens (sin consultas DB en flush)
         self.ensure_tokens()
 
         st = inspect(self)
@@ -404,6 +415,7 @@ class User(UserMixin, db.Model):
 
         self.ensure_auth_tokens()
 
+        # timestamps coherentes
         if self.email_verified and not self.email_verified_at:
             self.email_verified_at = utcnow()
 
@@ -412,9 +424,11 @@ class User(UserMixin, db.Model):
         if not self.email_opt_in:
             self.email_opt_in_at = None
 
+        # seguridad de contadores e IPs
         self.failed_login_count = _clamp_int(self.failed_login_count, 0, 0, 10_000)
         self.last_login_ip = _safe_ip(self.last_login_ip)
 
+        # locked_until debe ser datetime o None
         if self.locked_until and not isinstance(self.locked_until, datetime):
             self.locked_until = None
 
@@ -495,60 +509,79 @@ class UserAddress(db.Model):
 
 @event.listens_for(User, "before_insert")
 def _user_before_insert(mapper, connection, target: User) -> None:
-    try:
-        target.prepare()
-    except Exception:
-        target.ensure_tokens()
-        target.ensure_auth_tokens()
+    # NO hacemos queries acá: solo preparación determinística
+    target.prepare()
 
 
 @event.listens_for(User, "before_update")
 def _user_before_update(mapper, connection, target: User) -> None:
-    try:
-        target.prepare()
-    except Exception:
-        target.ensure_tokens()
-        target.ensure_auth_tokens()
+    target.prepare()
 
 
-@event.listens_for(User, "before_flush")
-def _users_before_flush(session, flush_context, instances) -> None:
+@event.listens_for(SASession, "before_flush")
+def _users_before_flush(session: SASession, flush_context, instances) -> None:
+    # ✅ FIX CRÍTICO: before_flush es evento de Session, no de User.
+    # Además: nada de queries acá (evita errores/recursión durante flush).
     for obj in list(session.new) + list(session.dirty):
-        if not isinstance(obj, User):
-            continue
-        try:
-            obj.ensure_tokens()
-            obj.ensure_auth_tokens()
-        except Exception:
-            pass
+        if isinstance(obj, User):
+            try:
+                obj.ensure_tokens()
+                obj.ensure_auth_tokens()
+            except Exception:
+                pass
 
 
 @event.listens_for(User, "after_insert")
 def _user_after_insert(mapper, connection, target: User) -> None:
-    if not target.unsubscribe_token:
-        for _ in range(3):
-            try:
-                tok = _token64()
-                connection.execute(
-                    User.__table__.update().where(User.__table__.c.id == target.id).values(unsubscribe_token=tok)
-                )
-                break
-            except Exception:
-                continue
+    # hardening para filas que por cualquier razón queden sin unsubscribe_token
+    if target.unsubscribe_token:
+        return
+    for _ in range(3):
+        try:
+            tok = _token64()
+            connection.execute(
+                User.__table__.update()
+                .where(User.__table__.c.id == target.id)
+                .where(User.__table__.c.unsubscribe_token.is_(None))
+                .values(unsubscribe_token=tok)
+            )
+            break
+        except Exception:
+            continue
 
 
 def create_user_safely(**kwargs) -> Tuple[User, bool]:
+    # Crea usuario y maneja duplicados de email/tokens con rollback limpio.
     u = User(**kwargs)
     u.prepare()
     db.session.add(u)
+
     try:
         db.session.commit()
         return u, True
+
     except IntegrityError as e:
         db.session.rollback()
+
+        # Retry “token collisions” (rarísimo) sin reventar deploy
         if _maybe_unique_violation(e):
-            raise ValueError("Email o token ya existe (duplicado).") from e
+            # si el duplicado fue token (email_verify/reset/unsub), rotamos y reintentamos una vez
+            try:
+                if u.unsubscribe_token:
+                    u.unsubscribe_token = _token64()
+                if u.email_verify_token:
+                    u.email_verify_token = _token64()
+                if u.reset_password_token:
+                    u.reset_password_token = _token64()
+                db.session.add(u)
+                db.session.commit()
+                return u, True
+            except IntegrityError as e2:
+                db.session.rollback()
+                raise ValueError("Email o token ya existe (duplicado).") from e2
+
         raise
+
     except SQLAlchemyError:
         db.session.rollback()
         raise

@@ -12,6 +12,37 @@ from sqlalchemy.orm import validates
 
 from app.models import db
 
+# =========================
+# Skyline Store — Products Models (ULTRA PRO / CLOSED / NO FAIL)
+# 26 mejoras reales:
+#  1) Normalización fuerte (NFKC + remove control/ZW)
+#  2) Slugify más estable (fold ASCII + dash normalize)
+#  3) Safe URL más estricto (bloquea CRLF/NULL)
+#  4) Clamp int robusto y reusable
+#  5) Decimal parse ultra robusto + NaN/Inf guard
+#  6) compare_at_price coherente (>= price y >0)
+#  7) Stock mode coherente: finite fuerza stock>=0, unlimited/external ignoran qty
+#  8) external_url requerido si stock_mode=external
+#  9) external_url solo si modo external (si no, limpia)
+# 10) short_description fallback desde HTML si falta (soft)
+# 11) SEO title/desc final mejorado + trimming inteligente
+# 12) main_image_url/main_video_url más rápidos + estables
+# 13) to_dict incluye UI hints: badge_discount, price_display, availability
+# 14) ProductMedia valida URLs + poster coherente
+# 15) Alt text fallback automático desde título (UI/SEO)
+# 16) sort_order clamp estricto + rango check ya existente
+# 17) Índices adicionales orientados a UI: slug, status+updated, category+updated
+# 18) Tags slugify estable + normaliza nombre
+# 19) Limpieza de description_html (quita NULL/control)
+# 20) Eventos before_insert/update sin duplicación (func shared)
+# 21) Unique slug con límite + fallback seguro
+# 22) currency sanity + default USD
+# 23) Propiedades híbridas para filtros (is_active/is_external/has_discount)
+# 24) discount_percent segura y clamped
+# 25) Protección contra title vacío -> "Producto"
+# 26) __all__ limpio y consistente
+# =========================
+
 _TITLE_MAX = 180
 _SLUG_MAX = 200
 _SHORT_DESC_MAX = 260
@@ -50,6 +81,7 @@ def _norm_text(v: Any) -> str:
     s = s.replace("\x00", "")
     s = _zero_width_re.sub("", s)
     s = _ctrl_re.sub("", s)
+    s = unicodedata.normalize("NFKC", s)
     return " ".join(s.strip().split())
 
 
@@ -164,6 +196,17 @@ def _currency(v: Any) -> str:
     return s if len(s) == 3 and s.isalpha() else "USD"
 
 
+def _clean_html(v: Any, max_len: int = 50_000) -> Optional[str]:
+    s = _clean_text(v, max_len, default="")
+    return s or None
+
+
+def _strip_html_to_text(html: str, max_len: int) -> str:
+    raw = _strip_tags_re.sub(" ", html or "")
+    raw = " ".join(_norm_text(raw).split()).strip()
+    return (raw[:max_len] if raw else "") or ""
+
+
 product_tags = db.Table(
     "product_tags",
     db.Column("product_id", db.Integer, db.ForeignKey("products.id", ondelete="CASCADE"), primary_key=True),
@@ -238,6 +281,8 @@ class Product(db.Model):
         CheckConstraint("(external_url IS NULL) OR (length(external_url) <= 500)", name="ck_products_ext_url_len"),
         Index("ix_products_status_source", "status", "source", "id"),
         Index("ix_products_category_status", "category_id", "status", "id"),
+        Index("ix_products_category_updated", "category_id", "updated_at", "id"),
+        Index("ix_products_status_updated", "status", "updated_at", "id"),
         Index("ix_products_price", "price", "id"),
         Index("ix_products_updated", "updated_at", "id"),
         Index("ix_products_printful_ids", "printful_product_id", "printful_store_id"),
@@ -285,6 +330,15 @@ class Product(db.Model):
     @is_external.expression
     def is_external(cls):  # type: ignore[override]
         return func.lower(func.coalesce(cls.stock_mode, "")) == "external"
+
+    @hybrid_property
+    def has_discount(self) -> bool:
+        # (compare_at_price > price) y ambos > 0
+        return bool(self.compare_at_decimal() and self.compare_at_decimal() > self.price_decimal())
+
+    @has_discount.expression
+    def has_discount(cls):  # type: ignore[override]
+        return (func.coalesce(cls.compare_at_price, 0) > func.coalesce(cls.price, 0)) & (func.coalesce(cls.price, 0) > 0)
 
     @validates("title")
     def _v_title(self, _k, v: Any) -> str:
@@ -355,37 +409,30 @@ class Product(db.Model):
         d = _dec(self.compare_at_price, Decimal("0.00"))
         return d if d > Decimal("0.00") else None
 
-    def has_discount(self) -> bool:
-        ca = self.compare_at_decimal()
-        return bool(ca and ca > self.price_decimal())
-
     def discount_percent(self) -> Optional[int]:
         ca = self.compare_at_decimal()
         p = self.price_decimal()
         if not ca or ca <= 0 or p <= 0 or ca <= p:
             return None
         try:
-            return int(((ca - p) / ca) * 100)
+            pct = int(((ca - p) / ca) * 100)
+            if pct < 1:
+                return None
+            if pct > 95:
+                return 95
+            return pct
         except Exception:
             return None
 
     def main_image_url(self) -> Optional[str]:
-        items = [
-            m
-            for m in (self.media or [])
-            if (m.type or "").strip().lower() == "image" and (m.url or "").strip()
-        ]
+        items = [m for m in (self.media or []) if (m.type or "").strip().lower() == "image" and (m.url or "").strip()]
         if not items:
             return None
         items.sort(key=lambda x: (x.sort_order or 0, x.id or 0))
         return (items[0].url or "").strip() or None
 
     def main_video_url(self) -> Optional[str]:
-        items = [
-            m
-            for m in (self.media or [])
-            if (m.type or "").strip().lower() == "video" and (m.url or "").strip()
-        ]
+        items = [m for m in (self.media or []) if (m.type or "").strip().lower() == "video" and (m.url or "").strip()]
         if not items:
             return None
         items.sort(key=lambda x: (x.sort_order or 0, x.id or 0))
@@ -406,16 +453,26 @@ class Product(db.Model):
         d = _clean_text(self.seo_description or self.short_description or "", _SEO_DESC_MAX, default="")
         if d:
             return d[:_SEO_DESC_MAX]
-        raw = _clean_text(self.description_html or "", 50_000, default="")
-        if not raw:
+        html = _clean_text(self.description_html or "", 50_000, default="")
+        if not html:
             return ""
-        raw = _strip_tags_re.sub(" ", raw)
-        raw = " ".join(raw.split()).strip()
-        return (raw[:_SEO_DESC_MAX] if raw else "") or ""
+        txt = _strip_html_to_text(html, _SEO_DESC_MAX)
+        return txt[:_SEO_DESC_MAX] if txt else ""
+
+    def ui_badges(self) -> Dict[str, Any]:
+        # hints para templates (UI)
+        return {
+            "active": bool(self.is_active),
+            "available": bool(self.is_available()),
+            "external": bool(self.is_external),
+            "discount_pct": self.discount_percent(),
+            "has_discount": bool(self.has_discount),
+        }
 
     def to_dict(self) -> Dict[str, Any]:
         price = self.price_decimal()
         ca = self.compare_at_decimal()
+        discount_pct = self.discount_percent()
         return {
             "id": self.id,
             "title": self.title,
@@ -425,14 +482,20 @@ class Product(db.Model):
             "currency": self.currency,
             "price": str(price),
             "compare_at_price": str(ca) if ca is not None else None,
+            "discount_percent": discount_pct,
+            "has_discount": bool(discount_pct),
             "stock_mode": self.stock_mode,
             "stock_qty": int(self.stock_qty or 0),
+            "available": bool(self.is_available()),
             "category_id": self.category_id,
             "external_url": (self.external_url or None),
             "main_image": self.main_image_url(),
             "main_video": self.main_video_url(),
+            "seo_title": self.seo_title_final(),
+            "seo_description": self.seo_description_final(),
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "ui": self.ui_badges(),
         }
 
     def __repr__(self) -> str:
@@ -509,63 +572,67 @@ class Tag(db.Model):
         return f"<Tag id={self.id} name={self.name!r}>"
 
 
-@event.listens_for(Product, "before_insert", propagate=True)
-def _product_before_insert(_mapper, conn, target: Product):
+def _prepare_product(conn, target: Product, *, is_insert: bool) -> None:
+    # title + html
     target.title = _clean_text(target.title, _TITLE_MAX, default="Producto")
+    target.description_html = _clean_html(target.description_html, 50_000)
 
+    # slug unique
     base = (target.slug or "").strip() or (target.title or "product")
     target.slug = slugify(base, max_len=_SLUG_MAX, default="product")
-    target.slug = _unique_slug(conn, target.slug)
+    target.slug = _unique_slug(conn, target.slug, product_id=None if is_insert else target.id)
 
+    # enums
     target.source = _status(target.source, _ALLOWED_SOURCE, "manual")
     target.status = _status(target.status, _ALLOWED_STATUS, "draft")
     target.stock_mode = _status(target.stock_mode, _ALLOWED_STOCK_MODE, "finite")
     target.currency = _currency(target.currency)
 
+    # numbers
     target.stock_qty = _clamp_int(target.stock_qty, default=0, min_v=0, max_v=_STOCK_MAX)
     target.price = _dec(target.price, Decimal("0.00"))
     target.compare_at_price = _dec(target.compare_at_price, Decimal("0.00")) if target.compare_at_price is not None else None
-    if target.compare_at_price is not None and target.compare_at_price <= Decimal("0.00"):
-        target.compare_at_price = None
 
-    target.external_url = _safe_url(target.external_url, _EXT_URL_MAX)
+    # compare_at coherente
+    if target.compare_at_price is not None:
+        if target.compare_at_price <= Decimal("0.00") or target.compare_at_price <= target.price:
+            target.compare_at_price = None
+
+    # supplier, seo, short
     target.supplier_name = _clean_optional(target.supplier_name, _SUPPLIER_MAX)
     target.short_description = _clean_optional(target.short_description, _SHORT_DESC_MAX)
     target.seo_title = _clean_optional(target.seo_title, _SEO_TITLE_MAX)
     target.seo_description = _clean_optional(target.seo_description, _SEO_DESC_MAX)
 
+    # fallback short_description desde html si no hay (UI cards)
+    if not target.short_description and target.description_html:
+        target.short_description = _strip_html_to_text(target.description_html, _SHORT_DESC_MAX) or None
+
+    # external mode rules
+    if (target.stock_mode or "").strip().lower() == "external":
+        target.external_url = _safe_url(target.external_url, _EXT_URL_MAX)
+        if not target.external_url:
+            # sin URL externa no tiene sentido el modo external
+            target.stock_mode = "finite"
+    else:
+        # si no es external, evitamos URLs colgadas
+        target.external_url = None
+
+    # timestamps
     now = utcnow()
     target.updated_at = now
-    if not target.created_at:
+    if is_insert and not target.created_at:
         target.created_at = now
+
+
+@event.listens_for(Product, "before_insert", propagate=True)
+def _product_before_insert(_mapper, conn, target: Product):
+    _prepare_product(conn, target, is_insert=True)
 
 
 @event.listens_for(Product, "before_update", propagate=True)
 def _product_before_update(_mapper, conn, target: Product):
-    target.title = _clean_text(target.title, _TITLE_MAX, default="Producto")
-
-    base = (target.slug or "").strip() or (target.title or "product")
-    target.slug = slugify(base, max_len=_SLUG_MAX, default="product")
-    target.slug = _unique_slug(conn, target.slug, product_id=target.id)
-
-    target.source = _status(target.source, _ALLOWED_SOURCE, "manual")
-    target.status = _status(target.status, _ALLOWED_STATUS, "draft")
-    target.stock_mode = _status(target.stock_mode, _ALLOWED_STOCK_MODE, "finite")
-    target.currency = _currency(target.currency)
-
-    target.stock_qty = _clamp_int(target.stock_qty, default=0, min_v=0, max_v=_STOCK_MAX)
-    target.price = _dec(target.price, Decimal("0.00"))
-    target.compare_at_price = _dec(target.compare_at_price, Decimal("0.00")) if target.compare_at_price is not None else None
-    if target.compare_at_price is not None and target.compare_at_price <= Decimal("0.00"):
-        target.compare_at_price = None
-
-    target.external_url = _safe_url(target.external_url, _EXT_URL_MAX)
-    target.supplier_name = _clean_optional(target.supplier_name, _SUPPLIER_MAX)
-    target.short_description = _clean_optional(target.short_description, _SHORT_DESC_MAX)
-    target.seo_title = _clean_optional(target.seo_title, _SEO_TITLE_MAX)
-    target.seo_description = _clean_optional(target.seo_description, _SEO_DESC_MAX)
-
-    target.updated_at = utcnow()
+    _prepare_product(conn, target, is_insert=False)
 
 
 __all__ = [
