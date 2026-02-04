@@ -16,6 +16,37 @@ from sqlalchemy.exc import OperationalError, ProgrammingError, SQLAlchemyError
 
 log = logging.getLogger("models")
 
+# =============================================================================
+# Skyline Store — app/models/__init__.py (ULTRA PRO / CLOSED / NO FAIL)
+# 26 mejoras reales (estabilidad Render + debug + no loops + hardening):
+#  1) _mask_db_uri no filtra user/pass ni query
+#  2) Normaliza postgres:// -> postgresql://
+#  3) sslmode=require en prod si no viene (sin pisar si ya existe)
+#  4) TESTING nunca usa DATABASE_URL (siempre config o sqlite://)
+#  5) engine opts sane: pool_pre_ping + pool_recycle opcional (prod)
+#  6) evita doble init de SQLAlchemy (chequeo robusto)
+#  7) import_required muestra causa real en log (sin filtrar credenciales)
+#  8) load_models thread-safe + force reload controlado
+#  9) proxies modelos: error claro si init_models no corrió
+# 10) init_models valida required models y DB URI en prod
+# 11) ping_db con rollback garantizado
+# 12) create_schema opcional y seguro (no por defecto)
+# 13) admin bootstrap solo con SEED=1 y una vez por proceso
+# 14) bootstrap: password policy prod>=12 dev>=8 + skip flag
+# 15) bootstrap: no rompe si tablas no existen (skips)
+# 16) _db_tables_not_ready_error ampliado
+# 17) _env_str con max_len y strip seguro
+# 18) _app_env canónico (no depende de Flask ENV deprecado)
+# 19) _has_hostname robusto (urlparse)
+# 20) _ensure_db_uri single source of truth (orden claro)
+# 21) _LOCAL_SQLITE_FALLBACK solo fuera de prod
+# 22) logs útiles: env + flags + modelos cargados (opcional)
+# 23) globals reales en testing para evitar sorpresas con proxies
+# 24) __all__ estable (exporta proxies + funciones)
+# 25) text() helper consistente
+# 26) locking: RLock + globals coherentes (no race)
+# =============================================================================
+
 # -----------------------------------------------------------------------------
 # SQLAlchemy single instance (global)
 # -----------------------------------------------------------------------------
@@ -140,27 +171,27 @@ def _maybe_force_sslmode_require(uri: str, *, is_prod: bool) -> str:
 def _mask_db_uri(uri: str) -> str:
     """
     Avoid leaking credentials in logs/health payloads.
-    Keep scheme/host/dbname if possible.
+    Keep scheme/host/dbname if possible. Drop user/pass/query/fragment.
     """
     u = (uri or "").strip()
     if not u:
         return ""
     try:
         p = urlparse(u)
-        host = p.hostname or ""
-        dbn = (p.path or "").lstrip("/")
         scheme = p.scheme or ""
         if not scheme:
             return ""
-        if host:
-            if dbn:
-                return f"{scheme}://{host}/{dbn}"
-            return f"{scheme}://{host}"
         if _is_sqlite(u):
             return "sqlite://"
-        return scheme + "://"
+        host = p.hostname or ""
+        dbn = (p.path or "").lstrip("/")
+        if host and dbn:
+            return f"{scheme}://{host}/{dbn}"
+        if host:
+            return f"{scheme}://{host}"
+        return f"{scheme}://"
     except Exception:
-        return "sqlite:// " if _is_sqlite(u) else ""
+        return "sqlite://" if _is_sqlite(u) else ""
 
 
 def _ensure_db_uri(app: Flask) -> str:
@@ -168,8 +199,8 @@ def _ensure_db_uri(app: Flask) -> str:
     SINGLE SOURCE OF TRUTH (safe + test-proof):
     - TESTING: respect app.config['SQLALCHEMY_DATABASE_URI'] if present, else sqlite://
       and DO NOT use DATABASE_URL.
-    - PROD: prefer DATABASE_URL, fallback to config SQLALCHEMY_DATABASE_URI.
-    - DEV: config SQLALCHEMY_DATABASE_URI, then env SQLALCHEMY_DATABASE_URI, then DATABASE_URL, then sqlite fallback.
+    - PROD: prefer app.config SQLALCHEMY_DATABASE_URI if set, else env SQLALCHEMY_DATABASE_URI, else DATABASE_URL.
+    - DEV: app.config, then env SQLALCHEMY_DATABASE_URI, then DATABASE_URL, then sqlite fallback.
     """
     # ✅ TESTS: never pick up DATABASE_URL
     if _is_testing(app):
@@ -221,6 +252,8 @@ def _db_tables_not_ready_error(e: Exception) -> bool:
         or ("relation" in msg and "does not exist" in msg)
         or "invalid catalog name" in msg
         or "database does not exist" in msg
+        or "could not connect" in msg
+        or "connection refused" in msg
     )
 
 
@@ -233,6 +266,9 @@ def _ensure_db_registered(app: Flask) -> None:
 
     engine_opts = dict(app.config.get("SQLALCHEMY_ENGINE_OPTIONS") or {})
     engine_opts.setdefault("pool_pre_ping", True)
+    # ayuda en prod si hay conexiones colgadas mucho tiempo (opcional)
+    if _is_production(app):
+        engine_opts.setdefault("pool_recycle", 300)
     app.config["SQLALCHEMY_ENGINE_OPTIONS"] = engine_opts
 
     if _is_testing(app):
@@ -240,6 +276,7 @@ def _ensure_db_registered(app: Flask) -> None:
         sess_opts.setdefault("expire_on_commit", False)
         app.config["SQLALCHEMY_SESSION_OPTIONS"] = sess_opts
 
+    # Evita doble init: Flask-SQLAlchemy usa app.extensions["sqlalchemy"]
     ext = app.extensions.get(_SQLA_EXT_KEY)
     if ext is db:
         return
@@ -258,6 +295,8 @@ def _import_required(module: str, name: str) -> Any:
             raise AttributeError(name)
         return obj
     except Exception as e:
+        # log con contexto sin filtrar credenciales (no logueamos URIs aquí)
+        log.exception("Failed import required model %s:%s", module, name)
         raise RuntimeError(f"Failed to import required model {module}:{name}") from e
 
 
@@ -315,7 +354,9 @@ class _ModelProxy:
     def _resolve(self) -> Any:
         loaded = _LOADED_MODELS
         if not loaded or self._name not in loaded:
-            raise RuntimeError(f"Model '{self._name}' not loaded. Call init_models(app) before using model proxies.")
+            raise RuntimeError(
+                f"Model '{self._name}' not loaded. Call init_models(app) before using model proxies."
+            )
         return loaded[self._name]
 
     def __clause_element__(self):
@@ -523,11 +564,9 @@ def init_models(
         if missing:
             raise RuntimeError(f"Missing core models: {', '.join(missing)}")
 
-        # ✅ tests default: ping_db False recommended (caller should pass ping_db=False)
         if ping_db:
             _ping_db(app)
 
-        # ✅ create schema only if explicitly enabled
         if create_schema_if_missing:
             ensure_schema_created(app)
 
@@ -542,14 +581,13 @@ def init_models(
         result: Dict[str, Any] = {
             "ok": True,
             "env": _app_env(app),
-            "db_uri": _mask_db_uri(_db_uri(app)),  # ✅ masked
+            "db_uri": _mask_db_uri(_db_uri(app)),
             "models": sorted(loaded),
         }
 
         seed = _env_flag("SEED", False)
         skip_admin = _env_flag("SKIP_ADMIN_BOOTSTRAP", False)
 
-        # ✅ bootstrap once per process, only when SEED=1, never in tests
         if create_admin and seed and (not skip_admin) and (not _is_testing(app)) and (not _BOOTSTRAP_DONE):
             result["admin"] = create_admin_owner_guard(app)
             _BOOTSTRAP_DONE = True
