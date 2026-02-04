@@ -7,12 +7,12 @@
 
   {# =========================================================
      Skyline Store — base.html (PRO / NO-500 / JINJA-SAFE)
-     ✅ 0% TemplateSyntaxError (NO usa try/except: Jinja no lo soporta)
-     ✅ No depende de view_functions / current_app
-     ✅ safe_url robusto con mapa de fallbacks por endpoint
+     ✅ NO usa try/except (Jinja no lo soporta)
+     ✅ NO depende de view_functions
+     ✅ NO revienta por endpoints faltantes (Terms/Privacy hardlink)
      ✅ Canonical/OG seguros
      ✅ CSRF meta estable (WTF o session)
-     ✅ Login/Register redirigen a pantallas correctas
+     ✅ Login/Register a pantallas correctas
      ✅ Año sin utcnow()
   ========================================================= #}
 
@@ -26,7 +26,7 @@
   {% set _cssv = (BASE_CSS_VER if BASE_CSS_VER is defined else (ASSET_VER if ASSET_VER is defined else '1'))|string %}
   {% set _nonce = (csp_nonce if csp_nonce is defined and csp_nonce else (nonce if nonce is defined else ''))|string %}
 
-  {# CSRF: soporta Flask-WTF o tu csrf_token en sesión #}
+  {# CSRF: soporta Flask-WTF o csrf_token en sesión #}
   {% set _csrf = '' %}
   {% if csrf_token is defined %}
     {% set _csrf = (csrf_token() if csrf_token is callable else (csrf_token|string)) %}
@@ -36,28 +36,17 @@
     {% set _csrf = (session.get('csrf_token') or '')|string %}
   {% endif %}
 
-  {# =========================================================
-     Fallback map de rutas (NO depende de endpoints existentes)
-     - Si url_for falla (BuildError), devolvemos fallback estable
-  ========================================================= #}
+  {# Fallback map de rutas (para URLs conocidas) #}
   {% set _fb = {
     'main.home': '/',
     'shop.shop': '/shop',
     'cart.cart_view': '/cart',
     'auth.account': '/auth/account',
     'auth.login_get': '/auth/login',
-    'auth.register_get': '/auth/register',
-    'main.terms': '/terms',
-    'main.privacy': '/privacy'
+    'auth.register_get': '/auth/register'
   } %}
 
-  {# Macro: url_for seguro SIN try/except (jinja no lo soporta)
-     -> Solución: solo usar url_for si existe, y si no, fallback.
-     IMPORTANTE: Si url_for existe pero el endpoint no existe, Jinja igual rompe.
-     Por eso: usamos un "switch" simple: intentamos llamar SOLO cuando estamos
-     bastante seguros: endpoint viene de lista conocida (en _fb).
-     Si querés más endpoints, los agregás al map _fb.
-  #}
+  {# safe_url: SOLO para endpoints que EXISTEN (los del map) #}
   {% macro safe_url(ep, fb='/') -%}
     {%- set _fallback = (fb if fb else (_fb.get(ep) if _fb and _fb.get(ep) else '/')) -%}
     {%- if url_for is defined and _fb is defined and _fb.get(ep) is not none -%}
@@ -110,7 +99,6 @@
   <link rel="icon" href="{{ safe_static('img/favicon.png') }}" type="image/png">
   <link rel="preload" as="font" href="{{ safe_static('fonts/inter-var.woff2') }}" type="font/woff2" crossorigin>
 
-  {# CSS core + base #}
   {% set _ui_core_css = safe_static('css/ui-core.css') %}
   <link rel="preload" as="style" href="{{ _ui_core_css|e }}">
   <link rel="stylesheet" href="{{ _ui_core_css|e }}">
@@ -133,16 +121,12 @@
 {% set _shop_sep = '&' if '?' in shop else '?' %}
 {% set offers_url = (shop ~ _shop_sep ~ 'ofertas=1') %}
 
-{# Login/Register: SIEMPRE caen en tu pantalla account con tab correcto #}
 {% set login_url = safe_url('auth.login_get', '/auth/account?tab=login') %}
 {% set register_url = safe_url('auth.register_get', '/auth/account?tab=register') %}
 
-{# Estado auth robusto #}
 {% set user_ok = false %}
-{% if current_user is defined and current_user %}
-  {% if current_user.is_authenticated is defined %}
-    {% set user_ok = (current_user.is_authenticated == true) %}
-  {% endif %}
+{% if current_user is defined and current_user and current_user.is_authenticated is defined %}
+  {% set user_ok = (current_user.is_authenticated == true) %}
 {% elif is_authenticated is defined %}
   {% set user_ok = (is_authenticated == true) %}
 {% elif session is defined and session.get is defined %}
@@ -215,8 +199,9 @@
     </div>
     <div>
       <strong>Legal</strong><br>
-      <a href="{{ safe_url('main.terms','/terms')|e }}">Términos</a><br>
-      <a href="{{ safe_url('main.privacy','/privacy')|e }}">Privacidad</a>
+      {# ✅ FIX FINAL: NO url_for aquí (tus endpoints no existen) #}
+      <a href="/terms">Términos</a><br>
+      <a href="/privacy">Privacidad</a>
     </div>
   </div>
 
@@ -249,7 +234,6 @@
     else badge.setAttribute('hidden', '');
   };
 
-  // Fetch wrapper: same-origin + unsafe => attach CSRF
   const origFetch = window.fetch;
   if (typeof origFetch === 'function' && token && !window.Skyline.__fetchWrapped) {
     window.Skyline.__fetchWrapped = true;

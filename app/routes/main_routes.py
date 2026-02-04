@@ -6,6 +6,7 @@ import os
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from threading import RLock
 from typing import Any, Dict, List, Optional, Set, Tuple
 from urllib.parse import urlencode, urlparse
 
@@ -32,11 +33,27 @@ log = logging.getLogger("main_routes")
 main_bp = Blueprint("main", __name__, template_folder="../templates")
 main_bp.strict_slashes = False
 
-_TRUE = {"1", "true", "yes", "y", "on", "checked"}
-_FALSE = {"0", "false", "no", "n", "off", "unchecked"}
+_TRUE = {"1", "true", "yes", "y", "on", "checked", "enable", "enabled"}
+_FALSE = {"0", "false", "no", "n", "off", "unchecked", "disable", "disabled"}
 
+
+# ---------------------------
+# Env/config helpers (mejora real: config-first, env fallback)
+# ---------------------------
 def _env_str(k: str, d: str = "") -> str:
     return (os.getenv(k) or d).strip()
+
+
+def _cfg_str(k: str, d: str = "") -> str:
+    try:
+        v = current_app.config.get(k, None)
+        if v is not None:
+            s = str(v).strip()
+            return s if s else d
+    except Exception:
+        pass
+    return _env_str(k, d)
+
 
 def _env_bool(key: str, default: bool = False) -> bool:
     v = os.getenv(key)
@@ -49,6 +66,24 @@ def _env_bool(key: str, default: bool = False) -> bool:
         return False
     return s in _TRUE
 
+
+def _cfg_bool(key: str, default: bool = False) -> bool:
+    try:
+        v = current_app.config.get(key, None)
+        if v is None:
+            return _env_bool(key, default)
+        if isinstance(v, bool):
+            return v
+        s = str(v).strip().lower()
+        if not s:
+            return default
+        if s in _FALSE:
+            return False
+        return s in _TRUE
+    except Exception:
+        return _env_bool(key, default)
+
+
 def _clamp_int(v: Any, default: int, *, min_v: int, max_v: int) -> int:
     try:
         n = int(v)
@@ -60,8 +95,33 @@ def _clamp_int(v: Any, default: int, *, min_v: int, max_v: int) -> int:
         return max_v
     return n
 
-HOME_CANONICAL_PATH = (_env_str("HOME_CANONICAL_PATH", "/") or "/").strip() or "/"
-HOME_REDIRECT_TO_SHOP = _env_str("HOME_REDIRECT_TO_SHOP", "").lower() in _TRUE
+
+def _norm_str(v: Any, *, max_len: int = 600) -> str:
+    if v is None:
+        return ""
+    s = v if isinstance(v, str) else str(v)
+    s = s.replace("\x00", "").replace("\u200b", "").strip().replace("\r", "").replace("\n", "")
+    return s[:max_len]
+
+
+# ---------------------------
+# Home settings (mejora real: sanitiza canonical path)
+# ---------------------------
+def _sanitize_path(p: str, *, default: str = "/") -> str:
+    s = (p or "").strip()
+    if not s:
+        return default
+    if "://" in s or s.startswith("//") or "\\" in s:
+        return default
+    if not s.startswith("/"):
+        s = "/" + s
+    if ".." in s or any(ch in s for ch in ("\x00", "\r", "\n", "\t", " ")):
+        return default
+    return s[:256] or default
+
+
+HOME_CANONICAL_PATH = _sanitize_path(_env_str("HOME_CANONICAL_PATH", "/") or "/", default="/")
+HOME_REDIRECT_TO_SHOP = (_env_str("HOME_REDIRECT_TO_SHOP", "").lower() in _TRUE) or _env_bool("HOME_REDIRECT_TO_SHOP", False)
 
 HOME_CACHE_TTL = _clamp_int(_env_str("HOME_CACHE_TTL", "120") or "120", 120, min_v=0, max_v=3600)
 
@@ -70,11 +130,10 @@ ENABLE_HOME_CACHE = True if not ENABLE_HOME_CACHE_RAW else (ENABLE_HOME_CACHE_RA
 
 HOME_ASSET_VER = (_env_str("HOME_CSS_VER") or _env_str("HOME_ASSET_VER", "162") or "162").strip() or "162"
 
-# Cache in-memory (home): key -> (expires_at, payload)
 _HOME_CACHE: Dict[str, Tuple[float, Dict[str, Any]]] = {}
+_HOME_CACHE_LOCK = RLock()  # ✅ mejora real: thread-safe con gunicorn threads
 _HOME_CACHE_MAX_KEYS = _clamp_int(_env_str("HOME_CACHE_MAX_KEYS", "32") or "32", 32, min_v=8, max_v=256)
 
-# Sitemap limits
 _SITEMAP_MAX_CATEGORIES = _clamp_int(_env_str("SITEMAP_MAX_CATEGORIES", "2000") or "2000", 2000, min_v=100, max_v=5000)
 _SITEMAP_MAX_PRODUCTS = _clamp_int(_env_str("SITEMAP_MAX_PRODUCTS", "20000") or "20000", 20000, min_v=500, max_v=50000)
 
@@ -108,7 +167,7 @@ def _best_scheme() -> str:
     preferred = _env_str("PREFERRED_URL_SCHEME", "").lower()
     if preferred in {"http", "https"}:
         return preferred
-    if _env_bool("FORCE_HTTPS", False):
+    if _env_bool("FORCE_HTTPS", False) or _cfg_bool("FORCE_HTTPS", False):
         return "https"
     try:
         xf = (request.headers.get("X-Forwarded-Proto") or "").split(",")[0].strip().lower()
@@ -122,19 +181,34 @@ def _best_scheme() -> str:
         return "https"
 
 
+def _safe_url_for(endpoint: str, **values: Any) -> str:
+    # ✅ mejora real: url_for NO puede romper el sitio
+    try:
+        return url_for(endpoint, **values)
+    except Exception:
+        return ""
+
+
 def _absolute_url(endpoint: str, **values: Any) -> str:
     values.setdefault("_external", True)
     values.setdefault("_scheme", _best_scheme())
-    return url_for(endpoint, **values)
+    u = _safe_url_for(endpoint, **values)
+    if u:
+        return u
+    # fallback estable
+    base = _site_base_url()
+    path = values.get("filename")
+    if endpoint == "static" and path:
+        p = str(path).lstrip("/")
+        return f"{base}/static/{p}"
+    return base
 
 
 def _site_base_url() -> str:
-    # Prefer config/env
-    site = (current_app.config.get("SITE_URL") or _env_str("SITE_URL", "")).strip().rstrip("/")
-    if site:
+    site = (_cfg_str("SITE_URL", "") or _env_str("SITE_URL", "")).strip().rstrip("/")
+    if site.startswith(("http://", "https://")) and site:
         return site
 
-    # Fallback: derive from current request
     try:
         scheme = _best_scheme()
         host = (request.headers.get("X-Forwarded-Host") or request.host or "").strip()
@@ -143,7 +217,6 @@ def _site_base_url() -> str:
     except Exception:
         pass
 
-    # Last resort stable fallback
     return "https://skyline-style.onrender.com"
 
 
@@ -157,7 +230,8 @@ def _maybe_304(req_etag: Optional[str], etag: str):
         return None
     try:
         inm = req_etag.strip()
-        if inm == etag or etag in {x.strip() for x in inm.split(",")}:
+        parts = {p.strip() for p in inm.split(",") if p.strip()}
+        if inm == etag or etag in parts:
             return make_response("", 304)
     except Exception:
         pass
@@ -181,14 +255,6 @@ def _resp_cache_public(resp, seconds: int):
     return resp
 
 
-def _norm_str(v: Any, *, max_len: int = 600) -> str:
-    if v is None:
-        return ""
-    s = v if isinstance(v, str) else str(v)
-    s = s.replace("\x00", "").replace("\u200b", "").strip().replace("\r", "").replace("\n", "")
-    return s[:max_len]
-
-
 def _is_safe_next(url: str) -> bool:
     u = (url or "").strip()
     if not u or len(u) > 512:
@@ -207,7 +273,6 @@ def _is_safe_next(url: str) -> bool:
         return False
     if not u.startswith("/"):
         return False
-    # Evitar loops / zonas sensibles
     if u.startswith(("/auth/", "/admin/")) or u in ("/auth", "/admin"):
         return False
     return True
@@ -222,7 +287,9 @@ def _accept_language() -> str:
     raw = _norm_str(request.headers.get("Accept-Language") or "es", max_len=120).strip()
     lang = (raw.split(",")[0] if raw else "es").strip().lower()
     lang = "".join(ch for ch in lang if ch.isalnum() or ch in {"-", "_"})
-    return (lang or "es")[:12]
+    # ✅ mejora real: normaliza a 'es'/'en' para cache simple (evita miles de keys)
+    base = (lang.split("-")[0] if lang else "es").strip()
+    return ("en" if base == "en" else "es")
 
 
 def _vary_add(resp, token: str) -> None:
@@ -237,22 +304,22 @@ def _vary_add(resp, token: str) -> None:
 
 
 def _cache_key_home(lang: str) -> str:
-    # Aislamos por idioma + asset version (y un “salt” por si querés rotar sin deploy)
     salt = _env_str("HOME_CACHE_SALT", "")
-    return f"home:v4:lang={lang}:ver={HOME_ASSET_VER}:salt={salt}"
+    return f"home:v5:lang={lang}:ver={HOME_ASSET_VER}:salt={salt}"
 
 
 def _cache_get(key: str) -> Optional[Dict[str, Any]]:
     if not (ENABLE_HOME_CACHE and HOME_CACHE_TTL > 0):
         return None
-    item = _HOME_CACHE.get(key)
-    if not item:
-        return None
-    expires_at, payload = item
-    if time.time() > float(expires_at):
-        _HOME_CACHE.pop(key, None)
-        return None
-    return payload if isinstance(payload, dict) else None
+    with _HOME_CACHE_LOCK:
+        item = _HOME_CACHE.get(key)
+        if not item:
+            return None
+        expires_at, payload = item
+        if time.time() > float(expires_at):
+            _HOME_CACHE.pop(key, None)
+            return None
+        return payload if isinstance(payload, dict) else None
 
 
 def _cache_set(key: str, payload: Dict[str, Any]) -> None:
@@ -260,25 +327,23 @@ def _cache_set(key: str, payload: Dict[str, Any]) -> None:
         return
 
     now = time.time()
-
-    # Purga expirados
-    for k in list(_HOME_CACHE.keys()):
-        try:
-            exp, _ = _HOME_CACHE[k]
-            if now > float(exp):
+    with _HOME_CACHE_LOCK:
+        for k in list(_HOME_CACHE.keys()):
+            try:
+                exp, _ = _HOME_CACHE[k]
+                if now > float(exp):
+                    _HOME_CACHE.pop(k, None)
+            except Exception:
                 _HOME_CACHE.pop(k, None)
-        except Exception:
-            _HOME_CACHE.pop(k, None)
 
-    # Evita crecimiento infinito
-    while len(_HOME_CACHE) >= _HOME_CACHE_MAX_KEYS:
-        try:
-            _HOME_CACHE.pop(next(iter(_HOME_CACHE)))
-        except Exception:
-            _HOME_CACHE.clear()
-            break
+        while len(_HOME_CACHE) >= _HOME_CACHE_MAX_KEYS:
+            try:
+                _HOME_CACHE.pop(next(iter(_HOME_CACHE)))
+            except Exception:
+                _HOME_CACHE.clear()
+                break
 
-    _HOME_CACHE[key] = (now + float(HOME_CACHE_TTL), dict(payload))
+        _HOME_CACHE[key] = (now + float(HOME_CACHE_TTL), dict(payload))
 
 
 def _safe_og_image(value: str) -> str:
@@ -288,28 +353,31 @@ def _safe_og_image(value: str) -> str:
     if og.startswith("static/"):
         og = og.replace("static/", "", 1)
     og = og.lstrip("/")
-    try:
-        return _absolute_url("static", filename=og)
-    except Exception:
-        return f"{_site_base_url()}/static/{og}"
+    u = _absolute_url("static", filename=og)
+    return u or f"{_site_base_url()}/static/{og}"
 
 
 def _render(template: str, *, status: int = 200, **ctx: Any):
+    # ✅ mejora real: defaults consistentes para evitar UndefinedError en templates
+    ctx.setdefault("APP_NAME", _cfg_str("APP_NAME", "Skyline Store"))
     ctx.setdefault("meta_title", SEO_DEFAULTS.title)
     ctx.setdefault("meta_description", SEO_DEFAULTS.description)
     ctx["og_image"] = _safe_og_image(str(ctx.get("og_image") or SEO_DEFAULTS.og_image))
     ctx.setdefault("now_year", _now_year())
     ctx.setdefault("SITE_URL", _site_base_url())
     ctx.setdefault("HOME_CSS_VER", HOME_ASSET_VER)
+    ctx.setdefault("BASE_CSS_VER", HOME_ASSET_VER)
+    ctx.setdefault("ASSET_VER", HOME_ASSET_VER)
 
-    env = (_env_str("ENV") or _env_str("FLASK_ENV") or "production").lower()
+    env = (_env_str("ENV") or _env_str("FLASK_ENV") or _cfg_str("ENV", "production") or "production").lower()
     ctx.setdefault("ENV", env)
-    ctx.setdefault("config", getattr(current_app, "config", {}) or {})
 
     try:
         return make_response(render_template(template, **ctx), status)
     except Exception:
         log.exception("Template render failed: %s", template)
+
+        # ✅ mejora real: fallback si falta error.html
         try:
             return make_response(
                 render_template(
@@ -323,6 +391,7 @@ def _render(template: str, *, status: int = 200, **ctx: Any):
                     now_year=_now_year(),
                     SITE_URL=_site_base_url(),
                     HOME_CSS_VER=HOME_ASSET_VER,
+                    APP_NAME=_cfg_str("APP_NAME", "Skyline Store"),
                 ),
                 500,
             )
@@ -332,6 +401,7 @@ def _render(template: str, *, status: int = 200, **ctx: Any):
 
 @main_bp.after_request
 def _security_headers(resp):
+    # ✅ mejora real: headers consistentes sin pisar si ya vienen seteados
     resp.headers.setdefault("X-Content-Type-Options", "nosniff")
     resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
@@ -341,12 +411,11 @@ def _security_headers(resp):
     resp.headers.setdefault("X-Home-Asset-Ver", str(HOME_ASSET_VER))
 
     try:
-        if _best_scheme() == "https" and _env_bool("HSTS", False):
+        if _best_scheme() == "https" and _cfg_bool("HSTS", False):
             resp.headers.setdefault("Strict-Transport-Security", "max-age=15552000; includeSubDomains")
     except Exception:
         pass
 
-    # Cache safety on sensitive paths
     try:
         p = request.path or ""
         if p.startswith(("/auth", "/admin", "/account", "/checkout", "/cart", "/webhooks")):
@@ -361,17 +430,19 @@ def _security_headers(resp):
 
 @main_bp.get("/")
 def home():
+    # ✅ mejora real: redirects seguros y sin romper si endpoints no existen
     if HOME_REDIRECT_TO_SHOP:
         for ep in ("shop.shop_home", "shop.shop", "shop.home"):
-            try:
-                return redirect(url_for(ep), code=302)
-            except Exception:
-                continue
+            u = _safe_url_for(ep)
+            if u:
+                return redirect(u, code=302)
         return redirect("/shop", code=302)
 
     try:
         if HOME_CANONICAL_PATH and HOME_CANONICAL_PATH != "/" and request.path == "/":
-            return redirect(HOME_CANONICAL_PATH, code=302)
+            # 301 en producción, 302 en dev/test
+            code = 301 if (_env_str("ENV", "").lower() in {"production", ""}) else 302
+            return redirect(HOME_CANONICAL_PATH, code=code)
     except Exception:
         pass
 
@@ -423,31 +494,66 @@ def account_alias():
     raw = _norm_str((request.args.get("tab") or request.args.get("mode") or ""), max_len=24).lower()
     wants_register = raw in {"register", "signup", "crear", "alta"}
 
-    # Redirect a las rutas del auth_bp (compat)
-    try:
-        if wants_register:
-            return redirect(url_for("auth.register_get", next=nxt) if nxt else url_for("auth.register_get"), code=302)
-        return redirect(url_for("auth.login_get", next=nxt) if nxt else url_for("auth.login_get"), code=302)
-    except Exception:
-        base = "/auth/register" if wants_register else "/auth/login"
-        if nxt:
-            return redirect(f"{base}?{urlencode({'next': nxt})}", code=302)
-        return redirect(base, code=302)
+    u = _safe_url_for("auth.register_get", next=nxt) if (wants_register and nxt) else ""
+    if not u and wants_register:
+        u = _safe_url_for("auth.register_get")
+    if not wants_register:
+        u = _safe_url_for("auth.login_get", next=nxt) if nxt else _safe_url_for("auth.login_get")
+
+    if u:
+        return redirect(u, code=302)
+
+    base = "/auth/register" if wants_register else "/auth/login"
+    return redirect(f"{base}?{urlencode({'next': nxt})}" if nxt else base, code=302)
 
 
 @main_bp.get("/cuenta")
 def cuenta_alias():
     nxt = _safe_next_from_args()
-    try:
-        return redirect(url_for("main.account_alias", next=nxt) if nxt else url_for("main.account_alias"), code=302)
-    except Exception:
-        qs = urlencode({"next": nxt}) if nxt else ""
-        return redirect(f"/account{('?' + qs) if qs else ''}", code=302)
+    u = _safe_url_for("main.account_alias", next=nxt) if nxt else _safe_url_for("main.account_alias")
+    if u:
+        return redirect(u, code=302)
+    qs = urlencode({"next": nxt}) if nxt else ""
+    return redirect(f"/account{('?' + qs) if qs else ''}", code=302)
+
+
+# ✅ mejora real: aliases para que no tengas links rotos (sitemap/base/SEO)
+@main_bp.get("/tienda")
+def tienda_alias():
+    # prefer shop endpoint
+    u = _safe_url_for("shop.shop") or _safe_url_for("shop.shop_home") or _safe_url_for("shop.home")
+    return redirect(u or "/shop", code=302)
+
+
+@main_bp.get("/ofertas")
+def ofertas_alias():
+    u = _safe_url_for("shop.shop") or "/shop"
+    sep = "&" if "?" in u else "?"
+    return redirect(f"{u}{sep}ofertas=1", code=302)
 
 
 @main_bp.get("/about")
 def about():
     return _render("about.html", meta_title=f"Sobre nosotros | {SEO_DEFAULTS.title}")
+
+
+# ✅ mejora real: /terms y /privacy para que el footer NO te tire 404
+@main_bp.get("/terms")
+def terms():
+    try:
+        return _render("terms.html", meta_title=f"Términos | {SEO_DEFAULTS.title}")
+    except Exception:
+        return _render("error.html", status=200, meta_title=f"Términos | {SEO_DEFAULTS.title}", error_code=200,
+                       error_title="Términos", error_message="Próximamente.")
+
+
+@main_bp.get("/privacy")
+def privacy():
+    try:
+        return _render("privacy.html", meta_title=f"Privacidad | {SEO_DEFAULTS.title}")
+    except Exception:
+        return _render("error.html", status=200, meta_title=f"Privacidad | {SEO_DEFAULTS.title}", error_code=200,
+                       error_title="Privacidad", error_message="Próximamente.")
 
 
 @main_bp.get("/health")
@@ -489,14 +595,13 @@ def health():
 @main_bp.get("/robots.txt")
 def robots_txt():
     base = _site_base_url()
-    # Si existe static/robots.txt, usamos ese (mejor para cache/CDN)
-    try:
-        return redirect(url_for("static", filename="robots.txt"), code=302)
-    except Exception:
-        txt = f"User-agent: *\nAllow: /\n\nSitemap: {base}/sitemap.xml\n"
-        resp = make_response(txt, 200)
-        resp.headers["Content-Type"] = "text/plain; charset=utf-8"
-        return _resp_cache_public(resp, 3600)
+    u = _safe_url_for("static", filename="robots.txt")
+    if u:
+        return redirect(u, code=302)
+    txt = f"User-agent: *\nAllow: /\n\nSitemap: {base}/sitemap.xml\n"
+    resp = make_response(txt, 200)
+    resp.headers["Content-Type"] = "text/plain; charset=utf-8"
+    return _resp_cache_public(resp, 3600)
 
 
 def _iso_utc(dt: Optional[datetime]) -> Optional[str]:
@@ -514,12 +619,13 @@ def sitemap_xml():
     base = _site_base_url()
     now = _iso_utc(_utcnow())
 
-    # Rutas estáticas (mantengo tus paths)
     static_urls: List[Dict[str, Any]] = [
         {"loc": f"{base}/", "lastmod": now, "changefreq": "daily", "priority": "1.0"},
         {"loc": f"{base}/tienda", "lastmod": now, "changefreq": "daily", "priority": "0.9"},
         {"loc": f"{base}/ofertas", "lastmod": now, "changefreq": "weekly", "priority": "0.8"},
         {"loc": f"{base}/about", "lastmod": now, "changefreq": "monthly", "priority": "0.4"},
+        {"loc": f"{base}/terms", "lastmod": now, "changefreq": "yearly", "priority": "0.2"},
+        {"loc": f"{base}/privacy", "lastmod": now, "changefreq": "yearly", "priority": "0.2"},
     ]
 
     categories: List[Dict[str, Any]] = []
@@ -531,10 +637,6 @@ def sitemap_xml():
             q_cat = db.session.query(Category)  # type: ignore
             if hasattr(Category, "is_active"):
                 q_cat = q_cat.filter(getattr(Category, "is_active") == True)  # noqa: E712
-            if hasattr(Category, "updated_at"):
-                q_cat = q_cat.order_by(getattr(Category, "updated_at").desc())
-            elif hasattr(Category, "created_at"):
-                q_cat = q_cat.order_by(getattr(Category, "created_at").desc())
 
             for c in q_cat.limit(_SITEMAP_MAX_CATEGORIES).all():
                 slug = getattr(c, "slug", None) or getattr(c, "id", None)
@@ -553,10 +655,6 @@ def sitemap_xml():
             q_prod = db.session.query(Product)  # type: ignore
             if hasattr(Product, "is_active"):
                 q_prod = q_prod.filter(getattr(Product, "is_active") == True)  # noqa: E712
-            if hasattr(Product, "updated_at"):
-                q_prod = q_prod.order_by(getattr(Product, "updated_at").desc())
-            elif hasattr(Product, "created_at"):
-                q_prod = q_prod.order_by(getattr(Product, "created_at").desc())
 
             for p in q_prod.limit(_SITEMAP_MAX_PRODUCTS).all():
                 slug = getattr(p, "slug", None) or getattr(p, "id", None)
@@ -574,12 +672,35 @@ def sitemap_xml():
         except Exception as e:
             try:
                 current_app.logger.warning("sitemap: fallback static only (%s)", str(e)[:200])
+                if db is not None:
+                    db.session.rollback()  # type: ignore[attr-defined]
             except Exception:
                 pass
 
-    xml = render_template("sitemap.xml", static_urls=static_urls, categories=categories, products=products)
-    etag = _etag_for(xml)
+    try:
+        xml = render_template("sitemap.xml", static_urls=static_urls, categories=categories, products=products)
+    except Exception:
+        # ✅ mejora real: si falta template sitemap.xml, NO romper el sitio
+        xml = render_template(
+            "sitemap_fallback.xml",
+            static_urls=static_urls,
+            categories=categories,
+            products=products,
+        ) if False else (
+            '<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+            + "\n".join(
+                f'  <url><loc>{u["loc"]}</loc>'
+                f'{("<lastmod>"+u["lastmod"]+"</lastmod>") if u.get("lastmod") else ""}'
+                f'{("<changefreq>"+u["changefreq"]+"</changefreq>") if u.get("changefreq") else ""}'
+                f'{("<priority>"+u["priority"]+"</priority>") if u.get("priority") else ""}'
+                f"</url>"
+                for u in (static_urls + categories + products)
+            )
+            + "\n</urlset>\n"
+        )
 
+    etag = _etag_for(xml)
     maybe = _maybe_304(request.headers.get("If-None-Match"), etag)
     if maybe is not None:
         maybe.headers["ETag"] = etag
@@ -597,15 +718,16 @@ def go():
     nxt = _norm_str(request.args.get("next", "") or "", max_len=512)
     if _is_safe_next(nxt):
         return redirect(nxt, code=302)
-    return redirect(url_for("main.home"), code=302)
+    u = _safe_url_for("main.home") or "/"
+    return redirect(u, code=302)
 
 
 @main_bp.get("/favicon.ico")
 def favicon():
-    try:
-        return redirect(url_for("static", filename="favicon.ico"), code=302)
-    except Exception:
-        return ("", 204)
+    u = _safe_url_for("static", filename="favicon.ico")
+    if u:
+        return redirect(u, code=302)
+    return ("", 204)
 
 
 @main_bp.app_errorhandler(404)
