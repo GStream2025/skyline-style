@@ -8,37 +8,41 @@
   {% set _req = (request if request is defined and request else none) %}
   {% set _args = (_req.args if _req and _req.args else {}) %}
   {% set _path = (_req.path if _req and _req.path else '/') %}
-  {% set _env  = (ENV if ENV is defined and ENV else 'production')|lower|trim %}
   {% set _app  = (APP_NAME if APP_NAME is defined and APP_NAME else 'Skyline Store')|string %}
+  {% set _env  = (ENV if ENV is defined and ENV else 'production')|lower|trim %}
   {% set _title = (meta_title if meta_title is defined and meta_title else _app)|string %}
   {% set _desc  = (meta_description if meta_description is defined and meta_description else 'Marketplace premium de tecnología y streetwear.')|string %}
   {% set _cssv = (BASE_CSS_VER if BASE_CSS_VER is defined else (ASSET_VER if ASSET_VER is defined else '1'))|string %}
-  {% set _nonce = (csp_nonce if csp_nonce is defined and csp_nonce else (nonce if nonce is defined else '')) %}
+  {% set _nonce = (csp_nonce if csp_nonce is defined and csp_nonce else (nonce if nonce is defined else ''))|string %}
+  {% set _vf = (view_functions if view_functions is defined and view_functions else {}) %}
 
   {% set _csrf = '' %}
   {% if csrf_token is defined %}
     {% set _csrf = (csrf_token() if csrf_token is callable else (csrf_token|string)) %}
   {% elif csrf_token_value is defined and csrf_token_value %}
-    {% set _csrf = csrf_token_value %}
+    {% set _csrf = csrf_token_value|string %}
   {% elif session is defined and session.get is defined %}
-    {% set _csrf = (session.get('csrf_token') or '') %}
+    {% set _csrf = (session.get('csrf_token') or '')|string %}
   {% endif %}
 
+  {% macro _has_ep(ep) -%}
+    {{- (ep and _vf and _vf.get(ep)) and true or false -}}
+  {%- endmacro %}
+
   {% macro safe_url(ep, fb='/') -%}
-    {%- if url_for is defined and ep -%}
-      {%- set u = '' -%}
-      {%- try -%}{%- set u = url_for(ep) -%}{%- except -%}{%- set u = '' -%}{%- endtry -%}
-      {{- u if u else fb -}}
+    {%- if url_for is defined and _has_ep(ep) -%}
+      {{- url_for(ep) -}}
     {%- else -%}
       {{- fb -}}
     {%- endif -%}
   {%- endmacro %}
 
   {% macro safe_static(f) -%}
+    {%- set _f = (f|string).lstrip('/') -%}
     {%- if url_for is defined -%}
-      {{- url_for('static', filename=f) ~ '?v=' ~ _cssv -}}
+      {{- url_for('static', filename=_f) ~ '?v=' ~ _cssv -}}
     {%- else -%}
-      {{- '/static/' ~ f -}}
+      {{- '/static/' ~ _f ~ '?v=' ~ _cssv -}}
     {%- endif -%}
   {%- endmacro %}
 
@@ -67,7 +71,7 @@
   <meta name="theme-color" content="#2563eb">
   <meta name="color-scheme" content="light dark">
   <meta name="referrer" content="strict-origin-when-cross-origin">
-  <meta name="csrf-token" content="{{ (_csrf|string)|e }}">
+  <meta name="csrf-token" content="{{ _csrf|e }}">
 
   <link rel="icon" href="{{ safe_static('img/favicon.png') }}" type="image/png">
   <link rel="preload" as="font" href="{{ safe_static('fonts/inter-var.woff2') }}" type="font/woff2" crossorigin>
@@ -86,8 +90,11 @@
 {% set shop = safe_url('shop.shop','/shop') %}
 {% set cart = safe_url('cart.cart_view','/cart') %}
 {% set account_panel = safe_url('auth.account','/auth/account') %}
-{% set login_url = safe_url('auth.login_get', account_panel ~ '?tab=login') %}
-{% set register_url = safe_url('auth.register_get', account_panel ~ '?tab=register') %}
+
+{% set _shop_sep = '&' if '?' in shop else '?' %}
+{% set offers_url = (shop ~ _shop_sep ~ 'ofertas=1') %}
+{% set login_url = safe_url('auth.login_get', account_panel ~ ('&' if '?' in account_panel else '?') ~ 'tab=login') %}
+{% set register_url = safe_url('auth.register_get', account_panel ~ ('&' if '?' in account_panel else '?') ~ 'tab=register') %}
 
 {% set user_ok = false %}
 {% if current_user is defined and current_user and current_user.is_authenticated is defined %}
@@ -109,12 +116,13 @@
     <nav class="nav" aria-label="Navegación principal">
       <a href="{{ home|e }}" {% if _path == '/' %}aria-current="page"{% endif %}>Inicio</a>
       <a href="{{ shop|e }}" {% if (_path|string).startswith('/shop') %}aria-current="page"{% endif %}>Tienda</a>
-      <a href="{{ (shop ~ ('&' if '?' in shop else '?') ~ 'ofertas=1')|e }}" {% if _args and _args.get('ofertas') %}aria-current="page"{% endif %}>Ofertas</a>
+      <a href="{{ offers_url|e }}" {% if _args and _args.get('ofertas') %}aria-current="page"{% endif %}>Ofertas</a>
     </nav>
 
-    <form class="search" action="{{ shop|e }}" method="get" role="search" autocomplete="off">
+    <form class="search" action="{{ shop|e }}" method="get" role="search" autocomplete="off" novalidate>
       <label class="sr-only" for="q">Buscar productos</label>
-      <input id="q" type="search" name="q" placeholder="Buscar productos…" value="{{ _q|e }}" inputmode="search" maxlength="80">
+      <input id="q" type="search" name="q" placeholder="Buscar productos…" value="{{ _q|e }}"
+             inputmode="search" maxlength="80" aria-label="Buscar productos">
       <button class="btn primary" type="submit">Buscar</button>
     </form>
 
@@ -150,7 +158,7 @@
     <div>
       <strong>Explorar</strong><br>
       <a href="{{ shop|e }}">Tienda</a><br>
-      <a href="{{ (shop ~ ('&' if '?' in shop else '?') ~ 'ofertas=1')|e }}">Ofertas</a>
+      <a href="{{ offers_url|e }}">Ofertas</a>
     </div>
     <div>
       <strong>Cuenta</strong><br>
@@ -163,20 +171,25 @@
       <a href="{{ safe_url('main.privacy','/privacy')|e }}">Privacidad</a>
     </div>
   </div>
-  <p class="small container">© {{ now_year|default(2026)|e }} {{ _app|e }}</p>
+  <p class="small container">© {{ (now_year|default(utcnow().year if utcnow is defined else 2026))|e }} {{ _app|e }}</p>
 </footer>
 
 <script{% if _nonce %} nonce="{{ _nonce|e }}"{% endif %}>
 (() => {
+  'use strict';
+
   const meta = document.querySelector('meta[name="csrf-token"]');
   const token = meta && meta.content ? String(meta.content) : '';
   const badge = document.querySelector('[data-cart-badge]');
+
   const clampInt = (n, min, max) => {
-    const v = Number.isFinite(+n) ? Math.trunc(+n) : 0;
+    const num = Number(n);
+    const v = Number.isFinite(num) ? Math.trunc(num) : 0;
     return Math.max(min, Math.min(max, v));
   };
 
   window.Skyline = window.Skyline || {};
+
   window.Skyline.setCartBadge = (n = 0) => {
     if (!badge) return;
     const num = clampInt(n, 0, 999);
@@ -186,32 +199,37 @@
   };
 
   const origFetch = window.fetch;
-  if (origFetch && token) {
-    window.fetch = (url, opts = {}) => {
-      const o = Object.assign({}, opts);
-      const m = String(o.method || 'GET').toUpperCase();
-      const h = new Headers(o.headers || {});
+  if (typeof origFetch === 'function' && token) {
+    window.fetch = (input, init) => {
+      const o = init ? { ...init } : {};
+      const method = String(o.method || (input && input.method) || 'GET').toUpperCase();
+
+      const h = new Headers(o.headers || (input && input.headers) || {});
       if (!h.has('X-Requested-With')) h.set('X-Requested-With', 'XMLHttpRequest');
 
       try {
+        const url = (typeof input === 'string') ? input : (input && input.url) ? input.url : '';
         const u = new URL(String(url), window.location.href);
-        const sameOrigin = (u.origin === window.location.origin);
-        const unsafeMethod = !['GET', 'HEAD', 'OPTIONS'].includes(m);
-        if (sameOrigin && unsafeMethod) {
+        const sameOrigin = u.origin === window.location.origin;
+        const unsafe = !['GET', 'HEAD', 'OPTIONS'].includes(method);
+
+        if (sameOrigin && unsafe) {
           if (!h.has('X-CSRFToken')) h.set('X-CSRFToken', token);
           if (!h.has('X-CSRF-Token')) h.set('X-CSRF-Token', token);
-          if (!o.credentials) o.credentials = 'same-origin';
+          if (!('credentials' in o)) o.credentials = 'same-origin';
         }
       } catch (_) {}
 
       o.headers = h;
-      return origFetch(url, o);
+      return origFetch(input, o);
     };
   }
 
   window.addEventListener('pageshow', () => {
-    try { window.Skyline.setCartBadge(window.Skyline.cartCount || 0); } catch (_) {}
-  });
+    try {
+      window.Skyline.setCartBadge(window.Skyline.cartCount || 0);
+    } catch (_) {}
+  }, { passive: true });
 })();
 </script>
 

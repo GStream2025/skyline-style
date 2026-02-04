@@ -29,6 +29,9 @@ _FALSE = {"0", "false", "no", "n", "off", "disable", "disabled"}
 _ALLOWED_LOG_LEVELS = {"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"}
 
 
+# -----------------------------------------------------------------------------
+# Env helpers
+# -----------------------------------------------------------------------------
 def _env_str(name: str, default: str = "", *, max_len: int = 4096) -> str:
     v = os.getenv(name)
     s = (default if v is None else str(v)).strip()
@@ -65,6 +68,9 @@ def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+# -----------------------------------------------------------------------------
+# Env detection
+# -----------------------------------------------------------------------------
 def _env_name(app: Flask) -> str:
     env = (
         app.config.get("ENV")
@@ -91,6 +97,9 @@ def _is_testing(app: Flask) -> bool:
     return bool(app.config.get("TESTING")) or _env_name(app) == "testing"
 
 
+# -----------------------------------------------------------------------------
+# Content negotiation
+# -----------------------------------------------------------------------------
 def wants_json() -> bool:
     try:
         if request.is_json:
@@ -116,6 +125,9 @@ def current_app_config(key: str, default: Any = None) -> Any:
         return default
 
 
+# -----------------------------------------------------------------------------
+# Errors
+# -----------------------------------------------------------------------------
 def resp_error(status: int, code: str, message: str):
     status_i = int(status or 500)
     err = (code or "error").strip().lower()[:64] or "error"
@@ -139,6 +151,9 @@ def resp_error(status: int, code: str, message: str):
     return msg, status_i, headers
 
 
+# -----------------------------------------------------------------------------
+# Logging
+# -----------------------------------------------------------------------------
 def setup_logging(app: Flask) -> None:
     env_level = (_env_str("LOG_LEVEL", "") or "").upper().strip()
     if env_level in _ALLOWED_LOG_LEVELS:
@@ -155,11 +170,13 @@ def setup_logging(app: Flask) -> None:
     root.setLevel(level)
     app.logger.setLevel(level)
 
-    # Menos ruido en prod
     if _is_prod(app):
         logging.getLogger("werkzeug").setLevel(logging.WARNING)
 
 
+# -----------------------------------------------------------------------------
+# Safe redirect handling
+# -----------------------------------------------------------------------------
 def _safe_next_path(v: str) -> str:
     nxt = (v or "").strip()
     if not nxt:
@@ -167,12 +184,10 @@ def _safe_next_path(v: str) -> str:
     if len(nxt) > 2048:
         nxt = nxt[:2048]
 
-    # hard blocks
     if any(c in nxt for c in ("\x00", "\r", "\n", "\\")):
         return ""
     if "://" in nxt:
         return ""
-
     if nxt.startswith("//"):
         return ""
     if not nxt.startswith("/"):
@@ -208,6 +223,9 @@ def _rule_exists(app: Flask, rule: str) -> bool:
     return False
 
 
+# -----------------------------------------------------------------------------
+# Blueprint loading
+# -----------------------------------------------------------------------------
 def _import_bp(module_name: str, attr: str):
     try:
         mod = importlib.import_module(module_name)
@@ -226,6 +244,7 @@ def _register_blueprints(app: Flask) -> dict[str, Any]:
         "routes_report": {},
     }
 
+    # Preferred: centralized registrar
     try:
         from app.routes import register_blueprints as reg  # type: ignore
 
@@ -237,6 +256,7 @@ def _register_blueprints(app: Flask) -> dict[str, Any]:
     except Exception as e:
         stats["errors"]["app.routes.register_blueprints"] = f"{type(e).__name__}: {e}"
 
+    # Fallback list
     candidates = [
         ("app.routes.main_routes", "main_bp"),
         ("app.routes.shop_routes", "shop_bp"),
@@ -262,7 +282,6 @@ def _register_blueprints(app: Flask) -> dict[str, Any]:
             if err:
                 stats["errors"][f"{mod_name}:{bp_name}"] = err
             continue
-
         try:
             name = str(getattr(bp, "name", "") or "").strip()
             if name and name in (app.blueprints or {}):
@@ -278,6 +297,9 @@ def _register_blueprints(app: Flask) -> dict[str, Any]:
     return stats
 
 
+# -----------------------------------------------------------------------------
+# Runtime defaults
+# -----------------------------------------------------------------------------
 def _apply_runtime_defaults(app: Flask) -> None:
     is_prod = _is_prod(app)
 
@@ -328,7 +350,7 @@ def _apply_runtime_defaults(app: Flask) -> None:
     app.config.setdefault("ADMIN_LOGIN_ENDPOINT", _env_str("ADMIN_LOGIN_ENDPOINT", "admin.login"))
     app.config.setdefault("AUTH_ACCOUNT_ENDPOINT", _env_str("AUTH_ACCOUNT_ENDPOINT", "auth.account"))
 
-    # ✅ Tests: evita que ProxyFix / HSTS molesten
+    # Tests: no ProxyFix / no HSTS
     if _is_testing(app):
         app.config.setdefault("TRUST_PROXY_HEADERS", False)
         app.config.setdefault("HSTS_ENABLED", False)
@@ -367,7 +389,6 @@ def _apply_security_headers(app: Flask, resp: Response) -> Response:
     resp.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
     resp.headers.setdefault("Cross-Origin-Resource-Policy", "same-origin")
 
-    # ✅ En prod real, HSTS; en tests no.
     if bool(app.config.get("HSTS_ENABLED", False)) and _is_prod(app):
         max_age = int(app.config.get("HSTS_MAX_AGE", 31536000) or 31536000)
         resp.headers.setdefault("Strict-Transport-Security", f"max-age={max_age}; includeSubDomains")
@@ -390,6 +411,9 @@ def _apply_security_headers(app: Flask, resp: Response) -> Response:
     return resp
 
 
+# -----------------------------------------------------------------------------
+# SQLAlchemy config (test-proof)
+# -----------------------------------------------------------------------------
 def _normalize_db_uri(uri: str, *, is_prod: bool) -> str:
     u = (uri or "").strip()
     if not u:
@@ -411,14 +435,14 @@ def _normalize_db_uri(uri: str, *, is_prod: bool) -> str:
 
 def _configure_sqlalchemy(app: Flask) -> None:
     """
-    ✅ Corrección crítica:
-    - TESTING=True -> usa SIEMPRE SQLALCHEMY_DATABASE_URI y NO toca DATABASE_URL.
-    - Prod -> prioriza DATABASE_URL.
-    - Dev -> cfg_uri o DATABASE_URL.
+    Rules:
+    - TESTING: only app.config['SQLALCHEMY_DATABASE_URI'] (default sqlite://); NEVER DATABASE_URL.
+    - PROD: prefer DATABASE_URL; fallback to SQLALCHEMY_DATABASE_URI.
+    - DEV: prefer SQLALCHEMY_DATABASE_URI; fallback to DATABASE_URL.
+    Also: prevent double init of SQLAlchemy.
     """
     is_prod = _is_prod(app)
 
-    # ✅ TESTS: nunca Postgres por env
     if _is_testing(app):
         uri = str(app.config.get("SQLALCHEMY_DATABASE_URI") or "sqlite://").strip()
         uri = _normalize_db_uri(uri, is_prod=False)
@@ -426,14 +450,15 @@ def _configure_sqlalchemy(app: Flask) -> None:
         app.config.setdefault("SQLALCHEMY_TRACK_MODIFICATIONS", False)
 
         engine_opts = dict(app.config.get("SQLALCHEMY_ENGINE_OPTIONS") or {})
-        # Si usas sqlite en tests, sacá pool opts peligrosos
         if uri.startswith("sqlite"):
             engine_opts.pop("pool_size", None)
             engine_opts.pop("max_overflow", None)
             engine_opts.pop("pool_timeout", None)
         app.config["SQLALCHEMY_ENGINE_OPTIONS"] = engine_opts
 
-        db.init_app(app)
+        # init once
+        if app.extensions.get("sqlalchemy") is not db:
+            db.init_app(app)
         return
 
     db_url = _env_str("DATABASE_URL", "")
@@ -472,9 +497,14 @@ def _configure_sqlalchemy(app: Flask) -> None:
         engine_opts.pop("pool_timeout", None)
 
     app.config["SQLALCHEMY_ENGINE_OPTIONS"] = engine_opts
-    db.init_app(app)
+
+    if app.extensions.get("sqlalchemy") is not db:
+        db.init_app(app)
 
 
+# -----------------------------------------------------------------------------
+# Redirects
+# -----------------------------------------------------------------------------
 def _best_redirect_to_account(app: Flask, tab: str) -> Response:
     nxt = _safe_next_path(request.args.get("next", "")) or "/"
     endpoint = str(app.config.get("AUTH_ACCOUNT_ENDPOINT", "auth.account") or "auth.account")
@@ -483,6 +513,27 @@ def _best_redirect_to_account(app: Flask, tab: str) -> Response:
     return redirect("/auth/account?" + urlencode({"tab": tab, "next": nxt}), code=302)
 
 
+# -----------------------------------------------------------------------------
+# Jinja helpers (fixes "try/endtry" issue)
+# -----------------------------------------------------------------------------
+def _safe_url(app: Flask, endpoint: str, **values: Any) -> str:
+    """
+    Jinja-friendly safe url_for:
+    - never raises
+    - returns '' if endpoint doesn't exist / fails
+    """
+    ep = (endpoint or "").strip()
+    if not ep or not _endpoint_exists(app, ep):
+        return ""
+    try:
+        return url_for(ep, **values)
+    except Exception:
+        return ""
+
+
+# -----------------------------------------------------------------------------
+# App factory
+# -----------------------------------------------------------------------------
 def create_app(overrides: Optional[dict[str, Any]] = None) -> Flask:
     cfg: Type = get_config()
 
@@ -495,7 +546,7 @@ def create_app(overrides: Optional[dict[str, Any]] = None) -> Flask:
 
     app.config.from_mapping(cfg.as_flask_config())
 
-    # ✅ Mejora clave: overrides tempranos (antes de defaults/DB)
+    # overrides early
     if overrides:
         app.config.update(overrides)
 
@@ -523,6 +574,7 @@ def create_app(overrides: Optional[dict[str, Any]] = None) -> Flask:
         asset_ver = app.config.get("ASSET_VER", app.config.get("BASE_CSS_VER", "1"))
         home_ver = app.config.get("HOME_CSS_VER", asset_ver)
 
+        # ✅ expose safe_url to templates (fixes your Render crash)
         return {
             "ENV": _env_name(app),
             "APP_NAME": app_name,
@@ -533,6 +585,7 @@ def create_app(overrides: Optional[dict[str, Any]] = None) -> Flask:
             "now_year": utcnow().year,
             "view_functions": {k: True for k in vf},
             "REQUEST_ID": cast(str, getattr(g, "request_id", "")) if hasattr(g, "request_id") else "",
+            "safe_url": partial(_safe_url, app),
         }
 
     @app.before_request
@@ -544,7 +597,6 @@ def create_app(overrides: Optional[dict[str, Any]] = None) -> Flask:
         g.request_id = rid[:128] if rid else secrets.token_urlsafe(10)
         g._t0 = time.perf_counter()
 
-        # Redirect /login & /register only on safe methods (never break POST)
         if request.method in {"GET", "HEAD"}:
             p = request.path.rstrip("/") or "/"
             if p in {"/login", "/auth/login"}:
@@ -578,7 +630,7 @@ def create_app(overrides: Optional[dict[str, Any]] = None) -> Flask:
     init_ok = True
     init_err: Optional[str] = None
     try:
-        # ✅ Mejora: en TESTING no hagas ping a DB externa
+        # never ping external DB on tests
         ping = bool(app.config.get("PING_DB_ON_STARTUP", True)) and not _is_testing(app)
         init_models(app, create_admin=True, log_loaded_models=True, ping_db=ping)
     except Exception as e:
@@ -623,7 +675,7 @@ def create_app(overrides: Optional[dict[str, Any]] = None) -> Flask:
         if not _endpoint_exists(app, endpoint) and not _rule_exists(app, rule):
             app.add_url_rule(rule, endpoint, partial(_best_redirect_to_account, app, tab), methods=["GET", "HEAD"])
 
-    # Emergency account page if auth.account route is missing
+    # Emergency account page if auth.account missing
     account_ep = str(app.config.get("AUTH_ACCOUNT_ENDPOINT", "auth.account") or "auth.account")
     if not _endpoint_exists(app, account_ep) and not _rule_exists(app, "/auth/account"):
 
@@ -683,6 +735,10 @@ def create_app(overrides: Optional[dict[str, Any]] = None) -> Flask:
 
     @app.get("/ready")
     def ready():
+        # In tests: don't attempt external health probes
+        if _is_testing(app):
+            return {"ok": True, "db": True, "init": bool(init_ok), "env": _env_name(app), "ts": int(time.time())}, 200
+
         ok = True
         db_ok = True
         try:

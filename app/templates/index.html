@@ -1,38 +1,49 @@
 {% extends "base.html" %}
 
-{% block title %}{{ (meta_title if meta_title is defined and meta_title else "Skyline Store · Tech + Streetwear premium")|e }}{% endblock %}
+{% block title %}
+  {{ (meta_title if meta_title is defined and meta_title else "Skyline Store · Tech + Streetwear premium")|e }}
+{% endblock %}
 
 {% block extra_head %}
   {% set _env = (ENV if ENV is defined and ENV else 'production')|string|lower|trim %}
   {% set _req = (request if request is defined and request else none) %}
   {% set _args = (_req.args if _req and _req.args else {}) %}
-  {% set _path = (_req.path if _req and _req.path else '') %}
+  {% set _path = (_req.path if _req and _req.path else '/') %}
   {% set _vf  = (view_functions if view_functions is defined and view_functions else {}) %}
   {% set _home_ver = (HOME_CSS_VER if HOME_CSS_VER is defined and HOME_CSS_VER else (ASSET_VER if ASSET_VER is defined and ASSET_VER else '165'))|string|trim %}
-  {% set _nonce = (csp_nonce if csp_nonce is defined and csp_nonce else (nonce if nonce is defined and nonce else '')) %}
+  {% set _nonce = (csp_nonce if csp_nonce is defined and csp_nonce else (nonce if nonce is defined and nonce else ''))|string %}
+
+  {% macro _has_ep(ep) -%}
+    {{- (ep and _vf and _vf.get(ep)) and true or false -}}
+  {%- endmacro %}
+
+  {% macro safe_url(ep, fb='/') -%}
+    {%- if url_for is defined and _has_ep(ep) -%}{{- url_for(ep) -}}{%- else -%}{{- fb -}}{%- endif -%}
+  {%- endmacro %}
 
   {% macro safe_static(f) -%}
-    {%- if url_for is defined -%}{{ url_for('static', filename=f) ~ '?v=' ~ _home_ver }}{%- else -%}{{ '/static/' ~ f }}{%- endif -%}
+    {%- set _f = (f|string).lstrip('/') -%}
+    {%- if url_for is defined -%}{{- url_for('static', filename=_f) ~ '?v=' ~ _home_ver -}}
+    {%- else -%}{{- '/static/' ~ _f ~ '?v=' ~ _home_ver -}}{%- endif -%}
   {%- endmacro %}
 
   {% set _canonical = (_req.base_url if _req and _req.base_url else 'https://skyline-style.onrender.com/') %}
   {% set _root = (_req.url_root if _req and _req.url_root else 'https://skyline-style.onrender.com/') %}
-  {% set _root_abs = (_root if _root and _root.startswith('http') else 'https://skyline-style.onrender.com/') %}
+  {% set _root_abs = (_root if _root and (_root|string).startswith('http') else 'https://skyline-style.onrender.com/') %}
 
-  {% set hero_png = (url_for('static', filename='img/banners/hero_home.png') if url_for is defined else '/static/img/banners/hero_home.png') %}
-  {% set hero_webp = (url_for('static', filename='img/banners/hero_home.webp') if url_for is defined else hero_png) %}
-  {% set og_img_local = (url_for('static', filename='img/og.png', _external=True) if url_for is defined else (_root_abs ~ 'static/img/og.png')) %}
+  {% set hero_png  = safe_static('img/banners/hero_home.png') %}
+  {% set hero_webp = safe_static('img/banners/hero_home.webp') %}
+  {% set og_img_local = (safe_static('img/og.png')) %}
   {% set og_img = (og_image if og_image is defined and og_image else og_img_local) %}
 
-  {% set _desc = (meta_description if meta_description is defined and meta_description else 'Moda urbana premium, accesorios y tecnología.')|string|trim %}
+  {% set _desc = (meta_description if meta_description is defined and meta_description else 'Moda urbana premium, accesorios y tecnología. Ofertas reales, soporte y experiencia de marca.')|string|trim %}
   {% set _t = (meta_title if meta_title is defined and meta_title else 'Skyline Store · Tech + Streetwear premium')|string|trim %}
 
-  {% set _shop_url = (url_for('shop.shop') if url_for is defined and 'shop.shop' in _vf else '/shop') %}
-  {% if not _shop_url or not _shop_url.startswith('/') %}{% set _shop_url = '/shop' %}{% endif %}
-  {% set _shop_abs = (_root_abs ~ _shop_url.lstrip('/')) %}
-
-  {% set _hero_abs = hero_png %}
-  {% if _hero_abs and _hero_abs.startswith('/') %}{% set _hero_abs = (_root_abs ~ _hero_abs.lstrip('/')) %}{% endif %}
+  {% set _shop_url = safe_url('shop.shop','/shop') %}
+  {% if not _shop_url or not (_shop_url|string).startswith('/') %}{% set _shop_url = '/shop' %}{% endif %}
+  {% set _shop_sep = '&' if '?' in _shop_url else '?' %}
+  {% set _offers_url = _shop_url ~ _shop_sep ~ 'sort=new&available=1' %}
+  {% set _shop_abs = _root_abs ~ (_shop_url|string).lstrip('/') %}
 
   <meta name="description" content="{{ _desc|e }}">
   <meta name="robots" content="{{ 'index,follow' if _env == 'production' else 'noindex,nofollow' }}">
@@ -54,28 +65,25 @@
   <meta name="twitter:description" content="{{ _desc|e }}">
   {% if og_img %}<meta name="twitter:image" content="{{ og_img|e }}">{% endif %}
 
-  <link rel="dns-prefetch" href="//skyline-style.onrender.com">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://skyline-style.onrender.com" crossorigin>
+  <link rel="dns-prefetch" href="//skyline-style.onrender.com">
 
-  <link rel="preload" as="image" href="{{ hero_webp|e }}" fetchpriority="high" imagesizes="(max-width: 900px) 92vw, 720px">
-  <link rel="preload" as="image" href="{{ hero_png|e }}" fetchpriority="high" imagesizes="(max-width: 900px) 92vw, 720px">
+  <link rel="preload" as="image" href="{{ hero_webp|e }}" fetchpriority="high" imagesizes="(max-width: 980px) 92vw, 860px">
+  <link rel="preload" as="image" href="{{ hero_png|e }}" fetchpriority="high" imagesizes="(max-width: 980px) 92vw, 860px">
 
   <link rel="stylesheet" href="{{ safe_static('css/home.css')|e }}">
-
   <link rel="prefetch" href="{{ _shop_url|e }}" as="document">
 
   <script type="application/ld+json"{% if _nonce %} nonce="{{ _nonce|e }}"{% endif %}>
   {
     "@context":"https://schema.org",
     "@graph":[
-      {"@type":"Organization","name":"Skyline Store","url":"{{ _root_abs|e }}","logo":"{{ (url_for('static', filename='img/og.png', _external=True) if url_for is defined else (_root_abs ~ 'static/img/og.png'))|e }}"},
+      {"@type":"Organization","name":"Skyline Store","url":"{{ _root_abs|e }}","logo":"{{ (_root_abs ~ 'static/img/og.png')|e }}"},
       {"@type":"WebSite","name":"Skyline Store","url":"{{ _root_abs|e }}",
         "potentialAction":{"@type":"SearchAction","target":"{{ (_shop_abs ~ '?q={search_term_string}')|e }}","query-input":"required name=search_term_string"}
       },
       {"@type":"WebPage","name":"{{ _t|e }}","url":"{{ _canonical|e }}",
-        "primaryImageOfPage":{"@type":"ImageObject","url":"{{ _hero_abs|e }}"}
+        "primaryImageOfPage":{"@type":"ImageObject","url":"{{ (_root_abs ~ 'static/img/banners/hero_home.png')|e }}"}
       }
     ]
   }
@@ -83,85 +91,101 @@
 
   <style{% if _nonce %} nonce="{{ _nonce|e }}"{% endif %}>
     :root{color-scheme:light dark}
-    html,body{background:#f6f8fc;color:#0b1220}
-    @media (prefers-color-scheme: dark){html,body{background:#070b14;color:#e5e7eb}}
+    .hp{--bg:#f6f8fc;--ink:#0b1220;--mut:#5b6b82;--card:rgba(255,255,255,.82);--card2:rgba(255,255,255,.68);
+        --bd:rgba(15,23,42,.14);--sh:0 18px 60px rgba(2,6,23,.12);--sh2:0 8px 24px rgba(2,6,23,.10);
+        --p:#2563eb;--p2:#0ea5e9;--acc:#22c55e;--warn:#f59e0b;--r:22px;--r2:16px}
+    @media (prefers-color-scheme: dark){
+      .hp{--bg:#070b14;--ink:#e5e7eb;--mut:#9aa4b2;--card:rgba(2,6,23,.62);--card2:rgba(2,6,23,.44);
+          --bd:rgba(148,163,184,.16);--sh:0 18px 70px rgba(0,0,0,.38);--sh2:0 10px 28px rgba(0,0,0,.34)}
+    }
+    .hp{background:var(--bg);color:var(--ink)}
+    .hp a{color:inherit}
     .hp :focus-visible{outline:none;box-shadow:0 0 0 4px rgba(37,99,235,.18);border-radius:14px}
-    .hp .btn:focus-visible{box-shadow:0 0 0 4px rgba(56,189,248,.22)}
+    .hp .btn:focus-visible{box-shadow:0 0 0 4px rgba(14,165,233,.22)}
+    .hp .hp-wrap{max-width:1180px;margin:0 auto;padding:0 18px}
+    .hp .hp-glass{background:var(--card);border:1px solid var(--bd);border-radius:var(--r);box-shadow:var(--sh);backdrop-filter:saturate(160%) blur(14px)}
+    .hp .hp-badge{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:999px;border:1px solid var(--bd);background:var(--card2);font-weight:700;font-size:12px;letter-spacing:.06em}
+    .hp .hp-badge i{width:8px;height:8px;border-radius:999px;background:linear-gradient(90deg,var(--p),var(--p2))}
+    .hp .hp-grad{background:linear-gradient(90deg,var(--p),var(--p2));-webkit-background-clip:text;background-clip:text;color:transparent}
+    .hp .hp-softLine{height:1px;background:linear-gradient(90deg,transparent,rgba(37,99,235,.25),transparent)}
+    @media (prefers-reduced-motion: reduce){
+      .hp [data-reveal]{transition:none!important;transform:none!important;opacity:1!important}
+    }
   </style>
 {% endblock %}
 
 {% block content %}
   {% set _env = (ENV if ENV is defined and ENV else 'production')|string|lower|trim %}
   {% set _vf = (view_functions if view_functions is defined and view_functions else {}) %}
-  {% set _home_ver = (HOME_CSS_VER if HOME_CSS_VER is defined and HOME_CSS_VER else (ASSET_VER if ASSET_VER is defined and ASSET_VER else '165'))|string|trim %}
+  {% set _home_ver = (HOME_CSS_VER if HOME_CSS_VER is defined and HOME_CSS_VER else (ASSET_VER if ASSET_VER is defined and ASSET_VER is not none else '165'))|string|trim %}
 
-  {% set hero_png = (url_for('static', filename='img/banners/hero_home.png') if url_for is defined else '/static/img/banners/hero_home.png') %}
-  {% set hero_webp = (url_for('static', filename='img/banners/hero_home.webp') if url_for is defined else hero_png) %}
+  {% macro _has_ep(ep) -%}
+    {{- (ep and _vf and _vf.get(ep)) and true or false -}}
+  {%- endmacro %}
 
-  {% set shop_url = (url_for('shop.shop') if url_for is defined and 'shop.shop' in _vf else '/shop') %}
-  {% if not shop_url or not shop_url.startswith('/') %}{% set shop_url = '/shop' %}{% endif %}
-  {% set offers_url = shop_url ~ ('?sort=new&available=1' if '?' not in shop_url else '&sort=new&available=1') %}
+  {% macro safe_url(ep, fb='/') -%}
+    {%- if url_for is defined and _has_ep(ep) -%}{{- url_for(ep) -}}{%- else -%}{{- fb -}}{%- endif -%}
+  {%- endmacro %}
 
-  {% set account_url =
-      (url_for('auth.account') if url_for is defined and 'auth.account' in _vf
-        else (url_for('main.account') if url_for is defined and 'main.account' in _vf
-          else '/auth/account'))
-  %}
-  {% set account_login_url = account_url ~ ('?tab=login' if '?' not in account_url else '&tab=login') %}
-  {% set account_register_url = account_url ~ ('?tab=register' if '?' not in account_url else '&tab=register') %}
+  {% macro safe_static(f) -%}
+    {%- set _f = (f|string).lstrip('/') -%}
+    {%- if url_for is defined -%}{{- url_for('static', filename=_f) ~ '?v=' ~ _home_ver -}}
+    {%- else -%}{{- '/static/' ~ _f ~ '?v=' ~ _home_ver -}}{%- endif -%}
+  {%- endmacro %}
+
+  {% set hero_png  = safe_static('img/banners/hero_home.png') %}
+  {% set hero_webp = safe_static('img/banners/hero_home.webp') %}
+
+  {% set shop_url = safe_url('shop.shop','/shop') %}
+  {% if not shop_url or not (shop_url|string).startswith('/') %}{% set shop_url = '/shop' %}{% endif %}
+  {% set shop_sep = '&' if '?' in shop_url else '?' %}
+  {% set offers_url = shop_url ~ shop_sep ~ 'sort=new&available=1' %}
+
+  {% set account_url = safe_url('auth.account','/auth/account') %}
+  {% set acc_sep = '&' if '?' in account_url else '?' %}
+  {% set account_login_url = account_url ~ acc_sep ~ 'tab=login' %}
+  {% set account_register_url = account_url ~ acc_sep ~ 'tab=register' %}
 
   {% set featured_list = (featured if featured is defined and featured else []) %}
   {% if featured_list is none %}{% set featured_list = [] %}{% endif %}
 
-  {% set _hero_overlay = "linear-gradient(90deg, rgba(255,255,255,.98) 0%, rgba(255,255,255,.92) 46%, rgba(255,255,255,.58) 73%, rgba(255,255,255,0) 100%)" %}
-  {% set _hero_overlay_dark = "linear-gradient(90deg, rgba(2,6,23,.92) 0%, rgba(2,6,23,.78) 46%, rgba(2,6,23,.30) 73%, rgba(2,6,23,0) 100%)" %}
+  {% set _hero_overlay = "linear-gradient(90deg, rgba(255,255,255,.98) 0%, rgba(255,255,255,.92) 46%, rgba(255,255,255,.52) 74%, rgba(255,255,255,0) 100%)" %}
+  {% set _hero_overlay_dark = "linear-gradient(90deg, rgba(2,6,23,.92) 0%, rgba(2,6,23,.78) 46%, rgba(2,6,23,.26) 74%, rgba(2,6,23,0) 100%)" %}
 
-  <div class="hp hp-v15 hp-v161" id="hp" role="main" aria-label="Inicio Skyline Store" data-home-ver="{{ _home_ver|e }}" data-env="{{ _env|e }}">
+  <div class="hp hp-v16 hp-pro" id="hp" aria-label="Inicio Skyline Store" data-home-ver="{{ _home_ver|e }}" data-env="{{ _env|e }}">
     <section class="hp-top" aria-label="Beneficios">
       <div class="hp-wrap">
         <ul class="hp-topTrust" role="list">
-          <li class="hp-topTrust__item" role="listitem">
-            <span class="hp-ico" aria-hidden="true">🔒</span>
-            <div><b>Pago protegido</b><small>Soporte y respaldo</small></div>
-          </li>
-          <li class="hp-topTrust__item" role="listitem">
-            <span class="hp-ico" aria-hidden="true">🚚</span>
-            <div><b>Envíos con tracking</b><small>Seguimiento del pedido</small></div>
-          </li>
-          <li class="hp-topTrust__item" role="listitem">
-            <span class="hp-ico" aria-hidden="true">↩️</span>
-            <div><b>Devoluciones claras</b><small>Políticas simples</small></div>
-          </li>
-          <li class="hp-topTrust__item" role="listitem">
-            <span class="hp-ico" aria-hidden="true">⚡</span>
-            <div><b>Ofertas reales</b><small>Promos y drops</small></div>
-          </li>
+          <li class="hp-topTrust__item" role="listitem"><span class="hp-ico" aria-hidden="true">🔒</span><div><b>Pago protegido</b><small>Soporte y respaldo</small></div></li>
+          <li class="hp-topTrust__item" role="listitem"><span class="hp-ico" aria-hidden="true">🚚</span><div><b>Envíos con tracking</b><small>Seguimiento del pedido</small></div></li>
+          <li class="hp-topTrust__item" role="listitem"><span class="hp-ico" aria-hidden="true">↩️</span><div><b>Devoluciones claras</b><small>Políticas simples</small></div></li>
+          <li class="hp-topTrust__item" role="listitem"><span class="hp-ico" aria-hidden="true">⚡</span><div><b>Ofertas reales</b><small>Promos y drops</small></div></li>
         </ul>
       </div>
     </section>
 
     <section class="hp-hero hp-heroFull" aria-labelledby="hpTitle"
-             style="--hero-url:url('{{ hero_png|e }}'); --hero-overlay: {{ _hero_overlay }}; --hero-overlay-dark: {{ _hero_overlay_dark }};">
+      style="--hero-url:url('{{ hero_png|e }}'); --hero-overlay: {{ _hero_overlay }}; --hero-overlay-dark: {{ _hero_overlay_dark }};">
       <div class="hp-wrap hp-hero__grid">
         <div class="hp-hero__copy">
           <div class="hp-kickerRow">
-            <span class="hp-kicker">SKYLINE STORE</span>
+            <span class="hp-badge"><i aria-hidden="true"></i> SKYLINE STORE</span>
             <span class="hp-verified" aria-label="Verificado">Verificado</span>
             <button class="hp-pill" type="button" data-pill data-target="#hpCats" aria-controls="hpCats" aria-expanded="false">Categorías</button>
             <button class="hp-pill" type="button" data-pill data-target="#hpGrid" aria-controls="hpGrid" aria-expanded="false">Destacados</button>
-            <a class="hp-pill hp-pill--link" href="{{ offers_url|e }}" aria-label="Ver ofertas">Ofertas</a>
+            <a class="hp-pill hp-pill--link" href="{{ offers_url|e }}">Ofertas</a>
           </div>
 
           <h1 id="hpTitle" class="hp-title">Tech + Streetwear <span class="hp-grad">premium</span></h1>
 
           <p class="hp-sub">
-            Una selección real de <b>moda urbana</b>, <b>accesorios</b> y <b>tecnología</b>.
-            Comprá seguro, con soporte y experiencia de marca.
+            Selección real de <b>moda urbana</b>, <b>accesorios</b> y <b>tecnología</b>.
+            Marca, soporte y experiencia de compra cuidada.
           </p>
 
           <div class="hp-mini" role="list" aria-label="Diferenciales">
             <div class="hp-mini__item" role="listitem"><b>Curado</b><span>Productos elegidos</span></div>
-            <div class="hp-mini__item" role="listitem"><b>Envío</b><span>Tracking y soporte</span></div>
+            <div class="hp-mini__item" role="listitem"><b>Envío</b><span>Tracking + soporte</span></div>
             <div class="hp-mini__item" role="listitem"><b>Marca</b><span>Drops Skyline</span></div>
             <div class="hp-mini__item" role="listitem"><b>Pagos</b><span>Protección</span></div>
           </div>
@@ -188,18 +212,18 @@
         </div>
 
         <div class="hp-hero__media" aria-label="Imagen principal">
-          <figure class="hp-heroCard is-heroFull" data-reveal>
+          <figure class="hp-heroCard is-heroFull hp-glass" data-reveal>
             <div class="hp-heroGlow" aria-hidden="true"></div>
             <picture>
               <source srcset="{{ hero_webp|e }}" type="image/webp">
               <img src="{{ hero_png|e }}" alt="Skyline Store: tecnología y streetwear premium" width="1600" height="900"
-                   sizes="(max-width: 900px) 92vw, 720px" loading="eager" decoding="async" fetchpriority="high"
+                   sizes="(max-width: 980px) 92vw, 860px" loading="eager" decoding="async" fetchpriority="high"
                    referrerpolicy="no-referrer-when-downgrade" class="hp-heroImg"
-                   onerror="this.onerror=null; try{ this.closest('.hp-heroCard') && this.closest('.hp-heroCard').classList.add('is-fallback'); }catch(e){}">
+                   onerror="this.onerror=null; this.src='{{ hero_png|e }}'; try{ this.closest('figure') && this.closest('figure').classList.add('is-fallback'); }catch(e){}">
             </picture>
             <figcaption class="hp-heroCap">
               <b>Curado por calidad</b>
-              <span>Productos elegidos + ofertas reales</span>
+              <span>Selección premium + ofertas reales</span>
             </figcaption>
           </figure>
 
@@ -213,6 +237,8 @@
       </div>
     </section>
 
+    <div class="hp-wrap" aria-hidden="true"><div class="hp-softLine"></div></div>
+
     <section class="hp-trust" aria-label="Confianza y seguridad">
       <div class="hp-wrap hp-trust__grid">
         {% set trust = [
@@ -222,9 +248,9 @@
           {'img':'img/banners/service_quality.png','title':'Calidad curada','desc':'Selección premium y transparente'}
         ] %}
         {% for t in trust %}
-          <article class="hp-trustCard" data-reveal aria-label="{{ t.title|e }}">
+          <article class="hp-trustCard hp-glass" data-reveal aria-label="{{ t.title|e }}">
             <div class="hp-trustCard__img" aria-hidden="true">
-              <img src="{{ url_for('static', filename=t.img) }}" alt="" loading="lazy" decoding="async" class="hp-trustIcon"
+              <img src="{{ safe_static(t.img)|e }}" alt="" loading="lazy" decoding="async" class="hp-trustIcon"
                    onerror="this.onerror=null; this.style.display='none';">
             </div>
             <div class="hp-trustCard__meta">
@@ -241,23 +267,23 @@
         <div class="hp-secHead">
           <div>
             <h2 id="hpCatsLabel">Elegí una categoría</h2>
-            <p>Accesos directos tipo marketplace.</p>
+            <p>Accesos directos tipo marketplace, rápidos y claros.</p>
           </div>
           <a class="hp-linkMore" href="{{ shop_url|e }}">Ver todo →</a>
         </div>
 
         {% set cats = [
-          {'label':'Ropa urbana','img':'img/banners/cat_women.png','href': shop_url ~ ('?categoria=ropa' if '?' not in shop_url else '&categoria=ropa')},
-          {'label':'Accesorios','img':'img/banners/cat_accessories.png','href': shop_url ~ ('?categoria=accesorios' if '?' not in shop_url else '&categoria=accesorios')},
-          {'label':'Tecnología','img':'img/banners/cat_tech.png','href': shop_url ~ ('?categoria=tecnologia' if '?' not in shop_url else '&categoria=tecnologia')},
+          {'label':'Ropa urbana','img':'img/banners/cat_women.png','href': shop_url ~ (('?categoria=ropa') if '?' not in shop_url else '&categoria=ropa')},
+          {'label':'Accesorios','img':'img/banners/cat_accessories.png','href': shop_url ~ (('?categoria=accesorios') if '?' not in shop_url else '&categoria=accesorios')},
+          {'label':'Tecnología','img':'img/banners/cat_tech.png','href': shop_url ~ (('?categoria=tecnologia') if '?' not in shop_url else '&categoria=tecnologia')},
           {'label':'Ofertas','img':'img/banners/promo_week.png','href': offers_url}
         ] %}
 
         <div class="hp-catsGrid" role="list">
           {% for c in cats %}
-            <a class="hp-catCard" data-reveal href="{{ c.href|e }}" aria-label="{{ c.label|e }}" role="listitem">
+            <a class="hp-catCard hp-glass" data-reveal href="{{ c.href|e }}" aria-label="{{ c.label|e }}" role="listitem">
               <div class="hp-catCard__media" aria-hidden="true">
-                <img src="{{ url_for('static', filename=c.img) }}" alt="" loading="lazy" decoding="async" class="hp-catImg"
+                <img src="{{ safe_static(c.img)|e }}" alt="" loading="lazy" decoding="async" class="hp-catImg"
                      onerror="this.onerror=null; this.src='{{ hero_png|e }}'; this.style.opacity='.92';">
               </div>
               <div class="hp-catCard__overlay">
@@ -275,14 +301,14 @@
         <div class="hp-secHead">
           <div>
             <h2 id="hpFeat">Destacados</h2>
-            <p>Selección recomendada para arrancar.</p>
+            <p>Selección recomendada para arrancar con lo mejor.</p>
           </div>
           <a class="hp-linkMore" href="{{ offers_url|e }}">Ofertas →</a>
         </div>
 
         <div class="hp-products" role="list">
           {% if featured_list|length == 0 %}
-            <div class="hp-empty" aria-live="polite">
+            <div class="hp-empty hp-glass" aria-live="polite">
               <b>Estamos armando los destacados</b>
               <p>Mientras tanto, explorá el catálogo completo y mirá las ofertas.</p>
               <div class="hp-empty__actions" role="group" aria-label="Acciones recomendadas">
@@ -297,7 +323,7 @@
               {% set p_href  = (p.href  if p and p.href  is defined and p.href  else (p.get('href')  if p is mapping and p.get('href')  else shop_url))|string %}
               {% set p_img   = (p.img   if p and p.img   is defined and p.img   else (p.get('img')   if p is mapping and p.get('img')   else hero_png))|string %}
 
-              <article class="hp-prod" data-reveal aria-label="{{ p_title|e }}" role="listitem">
+              <article class="hp-prod hp-glass" data-reveal aria-label="{{ p_title|e }}" role="listitem">
                 <a class="hp-prod__img" href="{{ p_href|e }}" aria-label="{{ p_title|e }}">
                   <img src="{{ p_img|e }}" alt="{{ p_title|e }}" loading="lazy" decoding="async" class="hp-prodImg"
                        onerror="this.onerror=null; this.src='{{ hero_png|e }}'; this.style.opacity='.92';">
@@ -327,7 +353,7 @@
     </section>
 
     <section class="hp-cta" aria-label="Llamado a la acción final">
-      <div class="hp-wrap hp-cta__inner" data-reveal>
+      <div class="hp-wrap hp-cta__inner hp-glass" data-reveal>
         <div>
           <h2 class="hp-cta__title">Comprá con confianza</h2>
           <p class="hp-cta__sub">Marketplace + marca propia. Envíos con seguimiento y soporte real.</p>
@@ -353,10 +379,13 @@
 
 {% block extra_js %}
   {% set _home_ver = (HOME_CSS_VER if HOME_CSS_VER is defined and HOME_CSS_VER else (ASSET_VER if ASSET_VER is defined and ASSET_VER else '165'))|string|trim %}
-  <script src="{{ url_for('static', filename='js/home.js') }}?v={{ _home_ver|e }}" defer></script>
+  {% if url_for is defined %}
+    <script src="{{ url_for('static', filename='js/home.js') }}?v={{ _home_ver|e }}" defer></script>
+  {% endif %}
 
   <script{% if csp_nonce is defined and csp_nonce %} nonce="{{ csp_nonce|e }}"{% elif nonce is defined and nonce %} nonce="{{ nonce|e }}"{% endif %} defer>
   (() => {
+    'use strict';
     const root = document.getElementById('hp');
     if (!root) return;
 
@@ -387,14 +416,12 @@
       toTop.addEventListener('click', () => window.scrollTo({ top:0, behavior: prefersReduced ? 'auto' : 'smooth' }));
     }
 
-    try{
-      const st = document.getElementById('hpSticky');
-      if (st){
-        const onS = () => st.classList.toggle('is-on', (window.scrollY || 0) > 520);
-        window.addEventListener('scroll', onS, { passive:true });
-        onS();
-      }
-    }catch(_){}
+    const st = document.getElementById('hpSticky');
+    if (st){
+      const onS = () => st.classList.toggle('is-on', (window.scrollY || 0) > 520);
+      window.addEventListener('scroll', onS, { passive:true });
+      onS();
+    }
   })();
   </script>
 {% endblock %}
