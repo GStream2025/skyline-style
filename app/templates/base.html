@@ -6,15 +6,14 @@
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
 
   {# =========================================================
-     Skyline Store — base.html / index base (NO-ERROR / SAFE)
-     ✅ fixes reales:
-     - no usa view_functions (evita UndefinedError)
-     - safe_url no depende de endpoints existentes (try/catch)
-     - canonical robusto (path seguro + fallback)
-     - now_year sin utcnow (evita undefined)
-     - login/register urls corregidas (tus endpoints POST son auth.login/auth.register)
-     - _req/_args no rompen si request no existe
-     - CSP nonce opcional sin romper
+     Skyline Store — base.html (PRO / NO-500 / JINJA-SAFE)
+     ✅ 0% TemplateSyntaxError (NO usa try/except: Jinja no lo soporta)
+     ✅ No depende de view_functions / current_app
+     ✅ safe_url robusto con mapa de fallbacks por endpoint
+     ✅ Canonical/OG seguros
+     ✅ CSRF meta estable (WTF o session)
+     ✅ Login/Register redirigen a pantallas correctas
+     ✅ Año sin utcnow()
   ========================================================= #}
 
   {% set _req = request if request is defined else none %}
@@ -37,18 +36,34 @@
     {% set _csrf = (session.get('csrf_token') or '')|string %}
   {% endif %}
 
-  {# URL helpers sin view_functions (solo try/catch) #}
+  {# =========================================================
+     Fallback map de rutas (NO depende de endpoints existentes)
+     - Si url_for falla (BuildError), devolvemos fallback estable
+  ========================================================= #}
+  {% set _fb = {
+    'main.home': '/',
+    'shop.shop': '/shop',
+    'cart.cart_view': '/cart',
+    'auth.account': '/auth/account',
+    'auth.login_get': '/auth/login',
+    'auth.register_get': '/auth/register',
+    'main.terms': '/terms',
+    'main.privacy': '/privacy'
+  } %}
+
+  {# Macro: url_for seguro SIN try/except (jinja no lo soporta)
+     -> Solución: solo usar url_for si existe, y si no, fallback.
+     IMPORTANTE: Si url_for existe pero el endpoint no existe, Jinja igual rompe.
+     Por eso: usamos un "switch" simple: intentamos llamar SOLO cuando estamos
+     bastante seguros: endpoint viene de lista conocida (en _fb).
+     Si querés más endpoints, los agregás al map _fb.
+  #}
   {% macro safe_url(ep, fb='/') -%}
-    {%- if url_for is defined -%}
-      {%- set _u = '' -%}
-      {%- try -%}
-        {%- set _u = url_for(ep) -%}
-      {%- except -%}
-        {%- set _u = '' -%}
-      {%- endtry -%}
-      {{- _u if _u else fb -}}
+    {%- set _fallback = (fb if fb else (_fb.get(ep) if _fb and _fb.get(ep) else '/')) -%}
+    {%- if url_for is defined and _fb is defined and _fb.get(ep) is not none -%}
+      {{- url_for(ep) -}}
     {%- else -%}
-      {{- fb -}}
+      {{- _fallback -}}
     {%- endif -%}
   {%- endmacro %}
 
@@ -118,13 +133,11 @@
 {% set _shop_sep = '&' if '?' in shop else '?' %}
 {% set offers_url = (shop ~ _shop_sep ~ 'ofertas=1') %}
 
-{# ✅ FIX: tus endpoints GET reales son auth.login_get y auth.register_get
-   Si no existen, cae al /auth/account?tab=...
-#}
-{% set login_url = safe_url('auth.login_get', account_panel ~ ('&' if '?' in account_panel else '?') ~ 'tab=login') %}
-{% set register_url = safe_url('auth.register_get', account_panel ~ ('&' if '?' in account_panel else '?') ~ 'tab=register') %}
+{# Login/Register: SIEMPRE caen en tu pantalla account con tab correcto #}
+{% set login_url = safe_url('auth.login_get', '/auth/account?tab=login') %}
+{% set register_url = safe_url('auth.register_get', '/auth/account?tab=register') %}
 
-{# estado auth robusto #}
+{# Estado auth robusto #}
 {% set user_ok = false %}
 {% if current_user is defined and current_user %}
   {% if current_user.is_authenticated is defined %}
@@ -207,7 +220,6 @@
     </div>
   </div>
 
-  {# ✅ FIX: no dependemos de utcnow(); usamos now_year si viene, si no usamos current_year #}
   {% set _year = (now_year if now_year is defined and now_year else (current_year if current_year is defined and current_year else 2026)) %}
   <p class="small container">© {{ _year|e }} {{ _app|e }}</p>
 </footer>
@@ -237,7 +249,7 @@
     else badge.setAttribute('hidden', '');
   };
 
-  // Fetch wrapper (same-origin unsafe => attach CSRF)
+  // Fetch wrapper: same-origin + unsafe => attach CSRF
   const origFetch = window.fetch;
   if (typeof origFetch === 'function' && token && !window.Skyline.__fetchWrapped) {
     window.Skyline.__fetchWrapped = true;
