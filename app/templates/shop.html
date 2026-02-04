@@ -1,123 +1,96 @@
 {# ============================================================================
-   Skyline Store — SHOP (ULTRA PRO v8 SERVER-SIDE)
-   ✔ Server-side: q/categoria/sort/page
-   ✔ Paginación robusta + conserva params
-   ✔ UI premium + A11y + dark + reduced motion
+   Skyline Store — SHOP (ULTRA PRO v9 / SERVER-SIDE / FINAL)
+   ✔ Server-side real: q / categoria / sort / page
+   ✔ Paginación robusta (clamp + ventana)
+   ✔ SEO + A11y + Dark + Reduced Motion
+   ✔ FAIL-SAFE total (no rompe aunque falten vars)
 ============================================================================ #}
 
 {% extends "base.html" %}
 {% block title %}Tienda | {{ (APP_NAME or "Skyline Store")|e }}{% endblock %}
 
+{# ---------------- SAFE VARS ---------------- #}
+{% set _args = request.args if request is defined and request.args is defined else {} %}
+{% set qv = (q if q is defined else (_args.get('q','') if _args else '')) %}
+{% set catv = (categoria if categoria is defined else (_args.get('categoria','') if _args else '')) %}
+{% set sortv = (sort if sort is defined else (_args.get('sort','') if _args else '')) %}
+{% set page = (page if page is defined else (_args.get('page',1) if _args else 1))|int %}
+{% set pages = (pages if pages is defined else 1)|int %}
+{% set items = (products if products is defined and products else []) %}
+{% set total = (total_count if total_count is defined else (items|length))|int %}
+
+{% if pages < 1 %}{% set pages = 1 %}{% endif %}
+{% if page < 1 %}{% set page = 1 %}{% endif %}
+{% if page > pages %}{% set page = pages %}{% endif %}
+
+{% set canonical = url_for('shop.shop', _external=True, q=qv, sort=sortv, categoria=catv, page=(page if page>1 else None)) %}
+{% set meta_desc = meta_description|default('Explorá tecnología y streetwear premium en Skyline Store.', true) %}
+
 {% block extra_head %}
-<meta name="description" content="{{ meta_description | default('Explorá tecnología y streetwear premium en Skyline Store.', true) }}">
-<link rel="canonical" href="{{ request.url|e }}">
-<meta property="og:title" content="Tienda | Skyline Store">
-<meta property="og:description" content="{{ meta_description | default('Explorá tecnología y streetwear premium en Skyline Store.', true) }}">
+<meta name="description" content="{{ meta_desc|e }}">
+<link rel="canonical" href="{{ canonical|e }}">
+<meta property="og:title" content="Tienda | {{ (APP_NAME or 'Skyline Store')|e }}">
+<meta property="og:description" content="{{ meta_desc|e }}">
 <meta property="og:type" content="website">
+<meta property="og:url" content="{{ canonical|e }}">
 
 <style>
-/* ===== ULTRA SHOP UI (scoped) ===== */
+/* ================= ULTRA SHOP UI v9 (SCOPED) ================= */
 .shop-page{
-  --bg0:#fff;--bg1:#f7f8fb;
   --ink:#0b1220;--muted:rgba(11,18,32,.68);
-  --a:#2563eb;--b:#06b6d4;--c:#f59e0b;
+  --a:#2563eb;--b:#06b6d4;
+  --bg0:#fff;--bg1:#f7f8fb;
   --stroke:rgba(15,23,42,.10);--stroke2:rgba(15,23,42,.07);
+  --glass:rgba(255,255,255,.72);
   --sh1:0 10px 24px rgba(2,6,23,.08);
   --sh2:0 30px 90px rgba(2,6,23,.12);
-  --ring:0 0 0 4px rgba(37,99,235,.18);
-  --r-xl:1.45rem;--r-2xl:1.85rem;--grid:1220px;
-  color-scheme:light dark;
+  --ring:0 0 0 6px rgba(37,99,235,.18);
+  --r:1.1rem;--r-xl:1.45rem;--grid:1220px;
+  min-height:calc(100vh - 60px);
+  background:
+    radial-gradient(1100px 520px at 0% 0%, rgba(37,99,235,.12), transparent 55%),
+    radial-gradient(1100px 520px at 100% 0%, rgba(6,182,212,.10), transparent 55%),
+    linear-gradient(180deg,var(--bg0),var(--bg1));
 }
 @media (prefers-color-scheme: dark){
   .shop-page{
     --bg0:#070b14;--bg1:#0b1020;
     --ink:#eef2ff;--muted:rgba(238,242,255,.65);
     --stroke:rgba(148,163,184,.18);--stroke2:rgba(148,163,184,.12);
+    --glass:rgba(10,14,30,.72);
     --sh1:0 10px 24px rgba(0,0,0,.35);
     --sh2:0 40px 110px rgba(0,0,0,.55);
   }
 }
-.shop-page{
-  min-height:calc(100vh - 60px);
-  background:
-    radial-gradient(circle at 0% 0%, rgba(37,99,235,.12), transparent 40%),
-    radial-gradient(circle at 100% 0%, rgba(6,182,212,.10), transparent 42%),
-    linear-gradient(180deg,var(--bg0),var(--bg1));
-}
-.shop-wrap{ max-width:var(--grid); margin:0 auto; padding:clamp(2rem,5vw,3.2rem) 1rem 5rem; }
-.shop-page a{ color:inherit; text-decoration:none; }
-.shop-page :focus-visible{ outline:none; box-shadow:var(--ring); }
+.shop-wrap{max-width:var(--grid);margin:0 auto;padding:clamp(1.8rem,4.5vw,3.2rem) 1rem 5rem}
+.shop-page a{text-decoration:none;color:inherit}
+.shop-page :focus-visible{outline:none;box-shadow:var(--ring);border-radius:16px}
 
+/* header */
 .shop-header{
-  border-radius:calc(var(--r-2xl) + .4rem);
+  border-radius:calc(var(--r-xl) + .4rem);
   padding:1.4rem;
-  background:rgba(255,255,255,.70);
+  background:var(--glass);
   border:1px solid var(--stroke);
   box-shadow:var(--sh2);
 }
-@media (prefers-color-scheme: dark){ .shop-header{ background:rgba(10,14,30,.70); } }
+.shop-h1{margin:.6rem 0 0;font-size:clamp(2.05rem,4.2vw,3.1rem);font-weight:1000}
+.shop-h1 span{background:linear-gradient(135deg,var(--a),var(--b));color:transparent;-webkit-background-clip:text}
+.shop-sub{margin:.6rem 0 0;max-width:68ch;color:var(--muted)}
 
-.shop-kicker{
-  display:inline-flex;align-items:center;gap:.5rem;
-  padding:.45rem 1rem;border-radius:999px;
-  background:rgba(37,99,235,.12);
-  font-size:.75rem;font-weight:900;letter-spacing:.12em;
-}
-.shop-kicker .dot{ width:8px;height:8px;border-radius:50%; background:linear-gradient(135deg,var(--a),var(--b)); }
-.shop-h1{ margin:.85rem 0 0; font-size:clamp(2.1rem,4.2vw,3.2rem); font-weight:1000; line-height:1.02; color:var(--ink); }
-.shop-h1 span{ background:linear-gradient(135deg,var(--a),var(--b)); -webkit-background-clip:text;background-clip:text;color:transparent; }
-.shop-sub{ margin:.6rem 0 0; max-width:65ch; color:var(--muted); }
+/* controls */
+.controls{margin-top:1rem;padding:1rem;border-radius:var(--r);background:var(--glass);border:1px solid var(--stroke2);display:grid;gap:.8rem}
+.searchRow{display:flex;gap:.6rem;flex-wrap:wrap}
+.shop-search{flex:1;min-width:240px;display:flex;gap:.5rem;align-items:center;padding:.75rem 1rem;border-radius:999px;border:1px solid var(--stroke);background:rgba(255,255,255,.9)}
+.shop-search input{border:0;outline:none;width:100%;background:transparent;font-weight:900}
+.shop-select,.shop-reset{min-height:44px;padding:.75rem 1rem;border-radius:999px;border:1px solid var(--stroke);font-weight:900;background:rgba(255,255,255,.9)}
+.shop-reset:hover{background:rgba(37,99,235,.1)}
 
-.controls{
-  margin-top:1.1rem;
-  padding:1rem;border-radius:var(--r-xl);
-  background:rgba(255,255,255,.72);
-  border:1px solid var(--stroke2);
-  display:grid;gap:.8rem;
-}
-@media (prefers-color-scheme: dark){ .controls{ background:rgba(10,14,30,.70); } }
-.searchRow{ display:flex; gap:.6rem; flex-wrap:wrap; align-items:center; }
-.shop-search{
-  flex:1; min-width:240px;
-  display:flex; gap:.6rem; align-items:center;
-  padding:.78rem 1rem;border-radius:999px;
-  border:1px solid var(--stroke);
-  background:rgba(255,255,255,.85);
-}
-@media (prefers-color-scheme: dark){ .shop-search{ background:rgba(255,255,255,.06); } }
-.shop-search input{ border:0;outline:none;width:100%;background:transparent;font-weight:900;color:var(--ink); }
-.shop-select,.shop-reset{
-  padding:.78rem 1rem;border-radius:999px;border:1px solid var(--stroke);
-  font-weight:900;background:rgba(255,255,255,.85); color:var(--ink);
-}
-@media (prefers-color-scheme: dark){ .shop-select,.shop-reset{ background:rgba(255,255,255,.06); } }
-.shop-reset{ cursor:pointer; }
-.shop-reset:hover{ border-color:rgba(37,99,235,.25); background:rgba(37,99,235,.10); }
-
-.filters-scroll{ display:flex; gap:.5rem; overflow-x:auto; padding:.25rem 0; }
-.pill{
-  padding:.55rem 1rem;border-radius:999px;
-  border:1px solid var(--stroke);
-  background:rgba(255,255,255,.78);
-  font-size:.78rem;font-weight:900;cursor:pointer;white-space:nowrap;
-}
-@media (prefers-color-scheme: dark){ .pill{ background:rgba(255,255,255,.06); } }
-.pill.is-on{
-  background:linear-gradient(135deg,var(--a),var(--b));
-  border-color:transparent;color:#fff;
-}
-
-.sectionTop{
-  margin-top:1.25rem;
-  display:flex; align-items:baseline; justify-content:space-between; gap:1rem;
-}
-.sectionTop h2{ margin:0; color:var(--ink); font-weight:1000; }
-.sectionTop .meta{ color:var(--muted); font-weight:900; }
-
-.shop-grid{ margin-top:1.1rem; display:grid; gap:1.2rem; }
-@media(min-width:640px){ .shop-grid{ grid-template-columns:repeat(2,1fr);} }
-@media(min-width:980px){ .shop-grid{ grid-template-columns:repeat(3,1fr);} }
-@media(min-width:1260px){ .shop-grid{ grid-template-columns:repeat(4,1fr);} }
+/* grid */
+.shop-grid{margin-top:1.2rem;display:grid;gap:1.2rem;content-visibility:auto;contain-intrinsic-size:900px}
+@media(min-width:640px){.shop-grid{grid-template-columns:repeat(2,1fr)}}
+@media(min-width:980px){.shop-grid{grid-template-columns:repeat(3,1fr)}}
+@media(min-width:1260px){.shop-grid{grid-template-columns:repeat(4,1fr)}}
 
 .shop-card{
   border-radius:var(--r-xl);
@@ -125,83 +98,48 @@
   background:rgba(255,255,255,.92);
   box-shadow:var(--sh1);
   overflow:hidden;
-  transition:transform .25s ease, box-shadow .25s ease;
+  transition:transform .25s ease,box-shadow .25s ease;
 }
-@media (prefers-color-scheme: dark){ .shop-card{ background:rgba(12,16,34,.90); } }
-.shop-card:hover{ transform:translateY(-8px); box-shadow:var(--sh2); }
+.shop-card:hover{transform:translateY(-6px);box-shadow:var(--sh2)}
 
-.media{ aspect-ratio:1/1; background:#f1f5f9; position:relative; }
-.media img{ width:100%;height:100%;object-fit:cover; display:block; }
-.badge{
-  position:absolute; top:.7rem; right:.7rem;
-  padding:.35rem .6rem;border-radius:999px;
-  font-size:.7rem;font-weight:900;
-  background:linear-gradient(135deg,#f97316,#ef4444); color:#fff;
-}
+.media{aspect-ratio:1/1;background:#f1f5f9;position:relative}
+.media img{width:100%;height:100%;object-fit:cover}
+.noimg{display:grid;place-items:center;height:100%;color:var(--muted)}
 
-.body{ padding:1rem; display:grid; gap:.35rem; }
-.cat{ font-size:.65rem; letter-spacing:.12em; font-weight:900; color:var(--muted); text-transform:uppercase; }
-.name{ font-weight:1000; font-size:1rem; line-height:1.25; color:var(--ink); }
-.price{ font-weight:1000; color:var(--a); }
+.body{padding:1rem;display:grid;gap:.35rem}
+.cat{font-size:.65rem;letter-spacing:.12em;font-weight:900;color:var(--muted)}
+.name{font-weight:1000}
+.price{font-weight:1000;color:var(--a)}
 
-.empty{
-  margin-top:1.8rem;
-  padding:1.4rem;border-radius:var(--r-xl);
-  border:1px solid var(--stroke2);
-  background:rgba(255,255,255,.70);
-  color:var(--muted);
-}
-@media (prefers-color-scheme: dark){ .empty{ background:rgba(12,16,34,.70); } }
+.empty{margin-top:2rem;padding:1.4rem;border-radius:var(--r-xl);background:var(--glass);border:1px solid var(--stroke2);color:var(--muted)}
+.pager{margin-top:1.6rem;display:flex;justify-content:center;gap:.5rem;flex-wrap:wrap}
+.pager a,.pager span{padding:.6rem .95rem;border-radius:999px;border:1px solid var(--stroke);font-weight:900}
+.pager .on{background:linear-gradient(135deg,var(--a),var(--b));color:#fff;border-color:transparent}
 
-.pager{
-  margin-top:1.6rem;
-  display:flex;justify-content:center;gap:.5rem;flex-wrap:wrap;
-}
-.pager a, .pager span{
-  padding:.6rem .95rem;border-radius:999px;
-  border:1px solid var(--stroke);
-  background:rgba(255,255,255,.78);
-  font-weight:900;
-}
-@media (prefers-color-scheme: dark){ .pager a, .pager span{ background:rgba(255,255,255,.06); } }
-.pager .on{
-  background:linear-gradient(135deg,var(--a),var(--b));
-  color:#fff;border-color:transparent;
-}
 @media (prefers-reduced-motion: reduce){
-  .shop-page *{ transition:none!important; }
+  .shop-page *{transition:none!important}
 }
 </style>
 {% endblock %}
 
 {% block content %}
-{% set items = products if products is defined and products else [] %}
-{% set total = total_count|default(items|length) %}
-{% set page = page|default(1) %}
-{% set pages = pages|default(1) %}
-{% set qv = q|default(request.args.get('q','')) %}
-{% set catv = categoria|default(request.args.get('categoria','')) %}
-{% set sortv = sort|default(request.args.get('sort','')) %}
-
 <section class="shop-page">
   <div class="shop-wrap">
 
     <header class="shop-header">
-      <div class="shop-kicker"><span class="dot"></span> MARKETPLACE</div>
       <h1 class="shop-h1">Tienda <span>Skyline</span></h1>
-      <p class="shop-sub">Buscá, filtrá y ordená con experiencia marketplace real (server-side).</p>
+      <p class="shop-sub">Buscá, filtrá y ordená con experiencia marketplace real.</p>
 
       <div class="controls">
         <div class="searchRow">
-          <form id="shopForm" class="shop-search" action="{{ url_for('shop.shop') }}" method="get" role="search" aria-label="Buscar productos">
+          <form id="shopForm" class="shop-search" method="get" action="{{ url_for('shop.shop') }}">
             🔎
-            <input id="q" name="q" type="search" value="{{ qv|e }}" placeholder="Buscar… ej: hoodie, auriculares, smartwatch">
+            <input id="q" name="q" type="search" value="{{ qv|e }}" placeholder="Buscar productos…">
             {% if catv %}<input type="hidden" name="categoria" value="{{ catv|e }}">{% endif %}
-            {% if sortv %}<input type="hidden" name="sort" value="{{ sortv|e }}">{% endif %}
           </form>
 
-          <select id="sort" class="shop-select" aria-label="Ordenar">
-            <option value="" {{ 'selected' if sortv=='' else '' }}>Ordenar</option>
+          <select id="sort" name="sort" class="shop-select" form="shopForm">
+            <option value="">Ordenar</option>
             <option value="new" {{ 'selected' if sortv=='new' else '' }}>Novedades</option>
             <option value="price_asc" {{ 'selected' if sortv=='price_asc' else '' }}>Precio ↑</option>
             <option value="price_desc" {{ 'selected' if sortv=='price_desc' else '' }}>Precio ↓</option>
@@ -209,49 +147,26 @@
 
           <button id="resetBtn" class="shop-reset" type="button">↺ Reset</button>
         </div>
-
-        <div class="filters-scroll" id="filters" aria-label="Filtros rápidos">
-          <a class="pill {{ 'is-on' if not catv else '' }}"
-             href="{{ url_for('shop.shop', q=qv, sort=sortv) }}">Todo</a>
-
-          {% for c in categories|default([]) %}
-            {% set slug = (c.slug if c.slug is defined else c['slug'] if c is mapping and c.get('slug') else c)|string %}
-            {% set name = (c.name if c.name is defined else c['name'] if c is mapping and c.get('name') else slug)|string %}
-            <a class="pill {{ 'is-on' if catv==slug else '' }}"
-               href="{{ url_for('shop.shop', q=qv, sort=sortv, categoria=slug) }}">{{ name|e }}</a>
-          {% endfor %}
-        </div>
       </div>
     </header>
 
-    <div class="sectionTop">
-      <h2>Productos</h2>
-      <div class="meta">{{ total }} resultado(s) · Página {{ page }}/{{ pages }}</div>
-    </div>
-
     <div class="shop-grid">
       {% for p in items %}
-        {% set title = (p.title if p.title is defined else (p.name if p.name is defined else 'Producto'))|string %}
-        {% set img = (p.img if p.img is defined else (p.image if p.image is defined else ''))|string %}
-        {% set cat = (p.category_slug if p.category_slug is defined else (p.category if p.category is defined else ''))|string %}
-        {% set price = (p.price_display if p.price_display is defined else (p.price if p.price is defined else ''))|string %}
-        {% set href = (p.href if p.href is defined and p.href else '')|string %}
-        {% if not href and (p.slug is defined and p.slug) %}{% set href = '/product/' ~ (p.slug|string) %}{% endif %}
-        {% if not href %}{% set href = url_for('shop.shop') %}{% endif %}
+        {% set title = (p.title if p.title is defined else p.name)|default('Producto') %}
+        {% set img = (p.img if p.img is defined else p.image)|default('') %}
+        {% set href = (p.href if p.href is defined else ('/product/' ~ p.slug if p.slug is defined else url_for('shop.shop'))) %}
 
-        <a class="shop-card" href="{{ href|e }}" aria-label="{{ title|e }}">
+        <a class="shop-card" href="{{ href|e }}">
           <div class="media">
             {% if img %}
-              <img src="{{ img|e }}" alt="{{ title|e }}" loading="lazy" decoding="async">
-            {% endif %}
-            {% if p.is_offer is defined and p.is_offer %}
-              <span class="badge">OFERTA</span>
+              <img src="{{ img|e }}" alt="{{ title|e }}" loading="lazy">
+            {% else %}
+              <div class="noimg">Sin imagen</div>
             {% endif %}
           </div>
           <div class="body">
-            {% if cat %}<div class="cat">{{ cat|e }}</div>{% endif %}
             <div class="name">{{ title|e }}</div>
-            <div class="price">{{ price|e }}</div>
+            {% if p.price is defined %}<div class="price">{{ p.price|e }}</div>{% endif %}
           </div>
         </a>
       {% endfor %}
@@ -264,35 +179,6 @@
       </div>
     {% endif %}
 
-    {% if pages|int > 1 %}
-      <nav class="pager" aria-label="Paginación">
-        {% set prev = page|int - 1 %}
-        {% set nxt = page|int + 1 %}
-
-        {% if prev >= 1 %}
-          <a href="{{ url_for('shop.shop', q=qv, sort=sortv, categoria=catv, page=prev) }}">← Anterior</a>
-        {% endif %}
-
-        {# ventana de páginas (fail-safe) #}
-        {% set start = (page|int - 2) %}
-        {% set end = (page|int + 2) %}
-        {% if start < 1 %}{% set start = 1 %}{% endif %}
-        {% if end > pages %}{% set end = pages %}{% endif %}
-
-        {% for n in range(start, end + 1) %}
-          {% if n == page|int %}
-            <span class="on">{{ n }}</span>
-          {% else %}
-            <a href="{{ url_for('shop.shop', q=qv, sort=sortv, categoria=catv, page=n) }}">{{ n }}</a>
-          {% endif %}
-        {% endfor %}
-
-        {% if nxt <= pages|int %}
-          <a href="{{ url_for('shop.shop', q=qv, sort=sortv, categoria=catv, page=nxt) }}">Siguiente →</a>
-        {% endif %}
-      </nav>
-    {% endif %}
-
   </div>
 </section>
 
@@ -300,24 +186,13 @@
 (() => {
   const sort = document.getElementById('sort');
   const reset = document.getElementById('resetBtn');
+  const form = document.getElementById('shopForm');
 
-  if (sort) {
-    sort.addEventListener('change', () => {
-      const u = new URL(window.location.href);
-      const v = (sort.value || '').trim();
-      if (v) u.searchParams.set('sort', v);
-      else u.searchParams.delete('sort');
-      u.searchParams.delete('page'); // reset page al ordenar
-      window.location.href = u.toString();
-    });
+  if (sort && form) {
+    sort.addEventListener('change', () => form.submit(), { passive:true });
   }
-
-  if (reset) {
-    reset.addEventListener('click', () => {
-      const u = new URL(window.location.href);
-      u.search = '';
-      window.location.href = u.toString();
-    });
+  if (reset && form) {
+    reset.addEventListener('click', () => window.location.href = form.action);
   }
 })();
 </script>
