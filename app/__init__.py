@@ -28,6 +28,8 @@ _TRUE = {"1", "true", "yes", "y", "on", "checked", "enable", "enabled"}
 _FALSE = {"0", "false", "no", "n", "off", "disable", "disabled"}
 _ALLOWED_LOG_LEVELS = {"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"}
 
+_STATIC_404_PASSTHROUGH = {"/favicon.ico"}
+
 
 # -----------------------------------------------------------------------------
 # Env helpers
@@ -142,6 +144,8 @@ def resp_error(status: int, code: str, message: str):
         headers["Pragma"] = "no-cache"
         headers["Expires"] = "0"
 
+    # Renderiza error sin romper aunque base.html tenga links malos:
+    # (safe_url ya no rompe, pero esto igual está blindado).
     for tpl in (f"errors/{status_i}.html", "error.html"):
         try:
             return render_template(tpl, message=msg, status=status_i, code=err), status_i, headers
@@ -256,7 +260,6 @@ def _register_blueprints(app: Flask) -> dict[str, Any]:
     except Exception as e:
         stats["errors"]["app.routes.register_blueprints"] = f"{type(e).__name__}: {e}"
 
-    # Fallback list
     candidates = [
         ("app.routes.main_routes", "main_bp"),
         ("app.routes.shop_routes", "shop_bp"),
@@ -350,7 +353,6 @@ def _apply_runtime_defaults(app: Flask) -> None:
     app.config.setdefault("ADMIN_LOGIN_ENDPOINT", _env_str("ADMIN_LOGIN_ENDPOINT", "admin.login"))
     app.config.setdefault("AUTH_ACCOUNT_ENDPOINT", _env_str("AUTH_ACCOUNT_ENDPOINT", "auth.account"))
 
-    # Tests: no ProxyFix / no HSTS
     if _is_testing(app):
         app.config.setdefault("TRUST_PROXY_HEADERS", False)
         app.config.setdefault("HSTS_ENABLED", False)
@@ -412,7 +414,7 @@ def _apply_security_headers(app: Flask, resp: Response) -> Response:
 
 
 # -----------------------------------------------------------------------------
-# SQLAlchemy config (test-proof)
+# SQLAlchemy config (test-proof, no double-init)
 # -----------------------------------------------------------------------------
 def _normalize_db_uri(uri: str, *, is_prod: bool) -> str:
     u = (uri or "").strip()
@@ -434,13 +436,6 @@ def _normalize_db_uri(uri: str, *, is_prod: bool) -> str:
 
 
 def _configure_sqlalchemy(app: Flask) -> None:
-    """
-    Rules:
-    - TESTING: only app.config['SQLALCHEMY_DATABASE_URI'] (default sqlite://); NEVER DATABASE_URL.
-    - PROD: prefer DATABASE_URL; fallback to SQLALCHEMY_DATABASE_URI.
-    - DEV: prefer SQLALCHEMY_DATABASE_URI; fallback to DATABASE_URL.
-    Also: prevent double init of SQLAlchemy.
-    """
     is_prod = _is_prod(app)
 
     if _is_testing(app):
@@ -456,7 +451,6 @@ def _configure_sqlalchemy(app: Flask) -> None:
             engine_opts.pop("pool_timeout", None)
         app.config["SQLALCHEMY_ENGINE_OPTIONS"] = engine_opts
 
-        # init once
         if app.extensions.get("sqlalchemy") is not db:
             db.init_app(app)
         return
@@ -514,21 +508,23 @@ def _best_redirect_to_account(app: Flask, tab: str) -> Response:
 
 
 # -----------------------------------------------------------------------------
-# Jinja helpers (fixes "try/endtry" issue)
+# Jinja helpers (safe_url REAL, with fallback)
 # -----------------------------------------------------------------------------
-def _safe_url(app: Flask, endpoint: str, **values: Any) -> str:
+def _safe_url(app: Flask, endpoint: str, fallback: str = "", **values: Any) -> str:
     """
-    Jinja-friendly safe url_for:
+    safe_url(endpoint, fallback="/path") for Jinja:
     - never raises
-    - returns '' if endpoint doesn't exist / fails
+    - if endpoint doesn't exist: returns fallback
+    - if url_for fails: returns fallback
     """
     ep = (endpoint or "").strip()
+    fb = (fallback or "").strip()
     if not ep or not _endpoint_exists(app, ep):
-        return ""
+        return fb
     try:
         return url_for(ep, **values)
     except Exception:
-        return ""
+        return fb
 
 
 # -----------------------------------------------------------------------------
@@ -546,7 +542,6 @@ def create_app(overrides: Optional[dict[str, Any]] = None) -> Flask:
 
     app.config.from_mapping(cfg.as_flask_config())
 
-    # overrides early
     if overrides:
         app.config.update(overrides)
 
@@ -574,7 +569,6 @@ def create_app(overrides: Optional[dict[str, Any]] = None) -> Flask:
         asset_ver = app.config.get("ASSET_VER", app.config.get("BASE_CSS_VER", "1"))
         home_ver = app.config.get("HOME_CSS_VER", asset_ver)
 
-        # ✅ expose safe_url to templates (fixes your Render crash)
         return {
             "ENV": _env_name(app),
             "APP_NAME": app_name,
@@ -585,6 +579,7 @@ def create_app(overrides: Optional[dict[str, Any]] = None) -> Flask:
             "now_year": utcnow().year,
             "view_functions": {k: True for k in vf},
             "REQUEST_ID": cast(str, getattr(g, "request_id", "")) if hasattr(g, "request_id") else "",
+            # ✅ SAFE: base.html can call safe_url('main.terms','/terms') and it will never 500
             "safe_url": partial(_safe_url, app),
         }
 
@@ -597,12 +592,14 @@ def create_app(overrides: Optional[dict[str, Any]] = None) -> Flask:
         g.request_id = rid[:128] if rid else secrets.token_urlsafe(10)
         g._t0 = time.perf_counter()
 
+        # Alias /login /register
         if request.method in {"GET", "HEAD"}:
             p = request.path.rstrip("/") or "/"
             if p in {"/login", "/auth/login"}:
                 return _best_redirect_to_account(app, "login")
             if p in {"/register", "/auth/register"}:
                 return _best_redirect_to_account(app, "register")
+
         return None
 
     @app.after_request
@@ -620,7 +617,12 @@ def create_app(overrides: Optional[dict[str, Any]] = None) -> Flask:
         except Exception:
             pass
 
-        if bool(app.config.get("NO_STORE_ERROR_PAGES", True)) and (resp.status_code >= 400):
+        # ⚠️ No-cache solo para errores, pero no para 404 static (/favicon.ico)
+        if (
+            bool(app.config.get("NO_STORE_ERROR_PAGES", True))
+            and resp.status_code >= 400
+            and request.path not in _STATIC_404_PASSTHROUGH
+        ):
             resp.headers.setdefault("Cache-Control", "no-store, max-age=0, must-revalidate")
             resp.headers.setdefault("Pragma", "no-cache")
             resp.headers.setdefault("Expires", "0")
@@ -630,7 +632,6 @@ def create_app(overrides: Optional[dict[str, Any]] = None) -> Flask:
     init_ok = True
     init_err: Optional[str] = None
     try:
-        # never ping external DB on tests
         ping = bool(app.config.get("PING_DB_ON_STARTUP", True)) and not _is_testing(app)
         init_models(app, create_admin=True, log_loaded_models=True, ping_db=ping)
     except Exception as e:
@@ -650,7 +651,7 @@ def create_app(overrides: Optional[dict[str, Any]] = None) -> Flask:
 
     stats = _register_blueprints(app)
 
-    # Fallbacks for /auth/login and /auth/register (GET/HEAD)
+    # Fallbacks /auth/login and /auth/register (GET/HEAD)
     if not _endpoint_exists(app, "_fallback_auth_login"):
         app.add_url_rule(
             "/auth/login",
@@ -685,12 +686,7 @@ def create_app(overrides: Optional[dict[str, Any]] = None) -> Flask:
             if tab not in {"login", "register"}:
                 tab = "login"
             nxt = _safe_next_path(request.args.get("next", "")) or "/"
-            headers: dict[str, str] = {}
-            if bool(app.config.get("NO_STORE_ERROR_PAGES", True)):
-                headers["Cache-Control"] = "no-store, max-age=0, must-revalidate"
-                headers["Pragma"] = "no-cache"
-                headers["Expires"] = "0"
-            return render_template("auth/account.html", active_tab=tab, next=nxt, prefill_email=""), 200, headers
+            return render_template("auth/account.html", active_tab=tab, next=nxt, prefill_email=""), 200
 
     # Root fallback
     if not _rule_exists(app, "/"):
@@ -735,7 +731,6 @@ def create_app(overrides: Optional[dict[str, Any]] = None) -> Flask:
 
     @app.get("/ready")
     def ready():
-        # In tests: don't attempt external health probes
         if _is_testing(app):
             return {"ok": True, "db": True, "init": bool(init_ok), "env": _env_name(app), "ts": int(time.time())}, 200
 

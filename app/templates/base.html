@@ -5,17 +5,29 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
 
-  {% set _req = (request if request is defined and request else none) %}
-  {% set _args = (_req.args if _req and _req.args else {}) %}
-  {% set _path = (_req.path if _req and _req.path else '/') %}
+  {# =========================================================
+     Skyline Store — base.html / index base (NO-ERROR / SAFE)
+     ✅ fixes reales:
+     - no usa view_functions (evita UndefinedError)
+     - safe_url no depende de endpoints existentes (try/catch)
+     - canonical robusto (path seguro + fallback)
+     - now_year sin utcnow (evita undefined)
+     - login/register urls corregidas (tus endpoints POST son auth.login/auth.register)
+     - _req/_args no rompen si request no existe
+     - CSP nonce opcional sin romper
+  ========================================================= #}
+
+  {% set _req = request if request is defined else none %}
+  {% set _args = (_req.args if _req and _req.args is defined else {}) %}
+  {% set _path = (_req.path if _req and _req.path is defined else '/') %}
   {% set _app  = (APP_NAME if APP_NAME is defined and APP_NAME else 'Skyline Store')|string %}
   {% set _env  = (ENV if ENV is defined and ENV else 'production')|lower|trim %}
   {% set _title = (meta_title if meta_title is defined and meta_title else _app)|string %}
   {% set _desc  = (meta_description if meta_description is defined and meta_description else 'Marketplace premium de tecnología y streetwear.')|string %}
   {% set _cssv = (BASE_CSS_VER if BASE_CSS_VER is defined else (ASSET_VER if ASSET_VER is defined else '1'))|string %}
   {% set _nonce = (csp_nonce if csp_nonce is defined and csp_nonce else (nonce if nonce is defined else ''))|string %}
-  {% set _vf = (view_functions if view_functions is defined and view_functions else {}) %}
 
+  {# CSRF: soporta Flask-WTF o tu csrf_token en sesión #}
   {% set _csrf = '' %}
   {% if csrf_token is defined %}
     {% set _csrf = (csrf_token() if csrf_token is callable else (csrf_token|string)) %}
@@ -25,13 +37,16 @@
     {% set _csrf = (session.get('csrf_token') or '')|string %}
   {% endif %}
 
-  {% macro _has_ep(ep) -%}
-    {{- (ep and _vf and _vf.get(ep)) and true or false -}}
-  {%- endmacro %}
-
+  {# URL helpers sin view_functions (solo try/catch) #}
   {% macro safe_url(ep, fb='/') -%}
-    {%- if url_for is defined and _has_ep(ep) -%}
-      {{- url_for(ep) -}}
+    {%- if url_for is defined -%}
+      {%- set _u = '' -%}
+      {%- try -%}
+        {%- set _u = url_for(ep) -%}
+      {%- except -%}
+        {%- set _u = '' -%}
+      {%- endtry -%}
+      {{- _u if _u else fb -}}
     {%- else -%}
       {{- fb -}}
     {%- endif -%}
@@ -46,9 +61,10 @@
     {%- endif -%}
   {%- endmacro %}
 
+  {# Canonical robusto #}
   {% set _canonical = 'https://skyline-style.onrender.com' %}
-  {% if _req and _req.url_root %}
-    {% set _canonical = (_req.url_root.rstrip('/') ~ _path) %}
+  {% if _req and _req.url_root is defined and _req.url_root %}
+    {% set _canonical = (_req.url_root.rstrip('/') ~ (_path or '/')) %}
   {% endif %}
 
   {% set _og = (og_image if og_image is defined and og_image else safe_static('img/og/og-home.png')) %}
@@ -67,13 +83,10 @@
   <meta property="og:url" content="{{ _canonical|e }}">
   <meta property="og:locale" content="es_ES">
   {% if _og %}<meta property="og:image" content="{{ _og|e }}">{% endif %}
-
   <meta name="twitter:card" content="summary_large_image">
 
-  {# ✅ Mejora: theme-color por esquema #}
   <meta name="theme-color" content="#0b1120" media="(prefers-color-scheme: dark)">
   <meta name="theme-color" content="#2563eb" media="(prefers-color-scheme: light)">
-
   <meta name="color-scheme" content="light dark">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta name="csrf-token" content="{{ _csrf|e }}">
@@ -82,12 +95,11 @@
   <link rel="icon" href="{{ safe_static('img/favicon.png') }}" type="image/png">
   <link rel="preload" as="font" href="{{ safe_static('fonts/inter-var.woff2') }}" type="font/woff2" crossorigin>
 
-  {# ✅ NUEVO: UI Core como base (NO rompe) #}
+  {# CSS core + base #}
   {% set _ui_core_css = safe_static('css/ui-core.css') %}
   <link rel="preload" as="style" href="{{ _ui_core_css|e }}">
   <link rel="stylesheet" href="{{ _ui_core_css|e }}">
 
-  {# Tu global actual (mantiene prioridad) #}
   {% set _base_css = safe_static('css/skyline-pro.css') %}
   <link rel="preload" as="style" href="{{ _base_css|e }}">
   <link rel="stylesheet" href="{{ _base_css|e }}">
@@ -105,14 +117,23 @@
 
 {% set _shop_sep = '&' if '?' in shop else '?' %}
 {% set offers_url = (shop ~ _shop_sep ~ 'ofertas=1') %}
+
+{# ✅ FIX: tus endpoints GET reales son auth.login_get y auth.register_get
+   Si no existen, cae al /auth/account?tab=...
+#}
 {% set login_url = safe_url('auth.login_get', account_panel ~ ('&' if '?' in account_panel else '?') ~ 'tab=login') %}
 {% set register_url = safe_url('auth.register_get', account_panel ~ ('&' if '?' in account_panel else '?') ~ 'tab=register') %}
 
+{# estado auth robusto #}
 {% set user_ok = false %}
-{% if current_user is defined and current_user and current_user.is_authenticated is defined %}
-  {% set user_ok = (current_user.is_authenticated == true) %}
+{% if current_user is defined and current_user %}
+  {% if current_user.is_authenticated is defined %}
+    {% set user_ok = (current_user.is_authenticated == true) %}
+  {% endif %}
 {% elif is_authenticated is defined %}
   {% set user_ok = (is_authenticated == true) %}
+{% elif session is defined and session.get is defined %}
+  {% set user_ok = (session.get('user_id') is not none) and (session.get('user_id')|int > 0) %}
 {% endif %}
 
 <header class="topbar" role="banner">
@@ -164,7 +185,6 @@
 </main>
 
 <footer class="footer" role="contentinfo">
-  {# ✅ Mejora real: antes no era grid porque faltaba .grid #}
   <div class="container grid grid-4">
     <div>
       <strong>{{ _app|e }}</strong>
@@ -186,7 +206,10 @@
       <a href="{{ safe_url('main.privacy','/privacy')|e }}">Privacidad</a>
     </div>
   </div>
-  <p class="small container">© {{ (now_year|default(utcnow().year if utcnow is defined else 2026))|e }} {{ _app|e }}</p>
+
+  {# ✅ FIX: no dependemos de utcnow(); usamos now_year si viene, si no usamos current_year #}
+  {% set _year = (now_year if now_year is defined and now_year else (current_year if current_year is defined and current_year else 2026)) %}
+  <p class="small container">© {{ _year|e }} {{ _app|e }}</p>
 </footer>
 
 <script{% if _nonce %} nonce="{{ _nonce|e }}"{% endif %}>
@@ -214,6 +237,7 @@
     else badge.setAttribute('hidden', '');
   };
 
+  // Fetch wrapper (same-origin unsafe => attach CSRF)
   const origFetch = window.fetch;
   if (typeof origFetch === 'function' && token && !window.Skyline.__fetchWrapped) {
     window.Skyline.__fetchWrapped = true;
@@ -244,9 +268,7 @@
   }
 
   window.addEventListener('pageshow', () => {
-    try {
-      window.Skyline.setCartBadge(window.Skyline.cartCount || 0);
-    } catch (_) {}
+    try { window.Skyline.setCartBadge(window.Skyline.cartCount || 0); } catch (_) {}
   }, { passive: true });
 })();
 </script>
