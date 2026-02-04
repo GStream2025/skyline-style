@@ -189,6 +189,9 @@ def _wants_json() -> bool:
             return True
         if (request.headers.get("X-Requested-With") or "").lower() == "xmlhttprequest":
             return True
+        best = request.accept_mimetypes.best_match(["application/json", "text/html"])
+        if best == "application/json" and request.accept_mimetypes[best] > request.accept_mimetypes["text/html"]:
+            return True
     except Exception:
         return False
     return False
@@ -224,7 +227,9 @@ def _no_store(resp: Response) -> Response:
             resp.headers.setdefault(k, v)
         for k, v in _SECURITY_HEADERS.items():
             resp.headers.setdefault(k, v)
-        resp.headers.setdefault("Content-Security-Policy", _clean_str(current_app.config.get("CSP_ADMIN"), 5000, default=_DEFAULT_CSP))
+
+        csp = current_app.config.get("CSP_ADMIN") or _DEFAULT_CSP
+        resp.headers.setdefault("Content-Security-Policy", _clean_str(csp, 5000, default=_DEFAULT_CSP))
 
         vary = resp.headers.get("Vary", "")
         parts = [p.strip() for p in vary.split(",") if p.strip()]
@@ -246,7 +251,9 @@ def _template_exists(name: str) -> bool:
 
 
 def _render_safe(template: str, **ctx: Any):
-    ui = cast(Dict[str, Any], ctx.get("ui") or {})
+    ui_in = ctx.get("ui")
+    ui = dict(ui_in) if isinstance(ui_in, dict) else {}
+
     ui.setdefault("brand", _clean_str(current_app.config.get("BRAND_NAME"), 48, default="Skyline Store"))
     ui.setdefault("page_title", _clean_str(ctx.get("title") or ui.get("title") or "Admin", 120, default="Admin"))
     ui.setdefault("subtitle", _clean_str(ui.get("subtitle"), 160, default=""))
@@ -265,7 +272,7 @@ def _render_safe(template: str, **ctx: Any):
     brand = _clean_str(ui.get("brand") or "Skyline Store", 60, default="Skyline Store")
     hint = _clean_str(template, 180, default="template")
 
-    body = f"""<!doctype html>
+    body = """<!doctype html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
@@ -274,7 +281,7 @@ def _render_safe(template: str, **ctx: Any):
   <title>{title}</title>
   <style>
     :root{{--a:{accent};--bg:#0b1220;--card:rgba(255,255,255,.06);--ink:#e8eefc;--mut:rgba(232,238,252,.72);--b:rgba(232,238,252,.12)}}
-    @media (prefers-color-scheme: light){{:root{{--bg:#f6f8fc;--card:rgba(255,255,255,.9);--ink:#0b1220;--mut:rgba(11,18,32,.68);--b:rgba(15,23,42,.12)}}}
+    @media (prefers-color-scheme: light){{:root{{--bg:#f6f8fc;--card:rgba(255,255,255,.9);--ink:#0b1220;--mut:rgba(11,18,32,.68);--b:rgba(15,23,42,.12)}}}}
     body{{margin:0;background:radial-gradient(900px 380px at 15% 0, color-mix(in srgb, var(--a) 22%, transparent), transparent 65%),
                          radial-gradient(900px 380px at 85% 0, color-mix(in srgb, var(--a) 12%, transparent), transparent 65%),
                          var(--bg);
@@ -305,7 +312,13 @@ def _render_safe(template: str, **ctx: Any):
     </div>
   </div>
 </body>
-</html>"""
+</html>""".format(
+        title=title,
+        accent=accent,
+        brand=brand,
+        hint=hint,
+    )
+
     return body, 200, {"Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store"}
 
 
@@ -339,8 +352,6 @@ def _require_csrf() -> None:
 
     sess_tok = _clean_str(session.get(_SESSION_CSRF_KEY), 256)
     if not sess_tok:
-        if _wants_json():
-            abort(400)
         abort(400)
 
     header_name = _clean_str(current_app.config.get("CSRF_HEADER"), 64, default="X-CSRF-Token")
@@ -860,7 +871,7 @@ def commission_tiers_edit(id: int):
     rate_raw = request.form.get("rate")
     label = _clean_str(request.form.get("label"), 80, default="") or None
     sort_order = request.form.get("sort_order")
-    active = request.form.get("activer"er5ptf0auT09kw???r-d
+    active = request.form.get("active")
 
     if min_sales is not None and str(min_sales).strip() != "":
         _safe_set(t, "min_sales", as_int(min_sales, 0, min_value=0, max_value=1_000_000))
