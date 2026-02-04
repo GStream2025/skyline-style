@@ -36,14 +36,14 @@ try:
     from flask_login import current_user as _fl_current_user  # type: ignore
     from flask_login import login_user as _fl_login_user  # type: ignore
     from flask_login import logout_user as _fl_logout_user  # type: ignore
-except Exception:
+except Exception:  # pragma: no cover
     _fl_current_user = None  # type: ignore
     _fl_login_user = None  # type: ignore
     _fl_logout_user = None  # type: ignore
 
 try:
     from app.models import AffiliateProfile  # type: ignore
-except Exception:
+except Exception:  # pragma: no cover
     AffiliateProfile = None  # type: ignore
 
 log = logging.getLogger("auth_routes")
@@ -51,18 +51,18 @@ log = logging.getLogger("auth_routes")
 auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
 auth_bp.strict_slashes = False
 
-_TRUE: Set[str] = {"1", "true", "yes", "y", "on", "checked"}
-_FALSE: Set[str] = {"0", "false", "no", "n", "off", "unchecked"}
+_TRUE: Set[str] = {"1", "true", "yes", "y", "on", "checked", "enable", "enabled"}
+_FALSE: Set[str] = {"0", "false", "no", "n", "off", "unchecked", "disable", "disabled"}
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _ALLOWED_PUBLIC_ROLES: Set[str] = {"customer", "affiliate"}
 
-# Rate limit (session-based) + TTL cleanup
+# Session-based rate limit
 _RL_WINDOW_SEC = 60
 _RL_MAX = 8
 _RL_STORE_CAP = 250
 _RL_STORE_TTL_SEC = 60 * 25
-_RL_STORE_SESSION_KEY = "rl_store_v7"
+_RL_STORE_SESSION_KEY = "rl_store_v8"
 
 _RL_LOGIN_KEY = "login"
 _RL_REG_KEY = "register"
@@ -85,22 +85,13 @@ _HONEYPOT_FIELD = "website"
 TAB_LOGIN = "login"
 TAB_REGISTER = "register"
 
+# prevent redirect loops / sensitive zones
 _BLOCKED_NEXT_PREFIXES = ("/auth/", "/admin/")
+_ALLOWED_NEXT_PREFIXES = ("/",)  # keep simple: only internal absolute paths
 
 # Abstract Email Validation
 _ABSTRACT_TIMEOUT_SEC = 6
 _ABSTRACT_ENDPOINT = "https://emailvalidation.abstractapi.com/v1/"
-# Behavior
-# - If API key missing => skip external validation (still validates regex)
-# - If API fails => allow (soft-fail) unless STRICT enabled
-# You can control via config:
-#   REQUIRE_EMAIL_VERIFICATION (bool) default True
-#   ABSTRACT_VALIDATE_ON_REGISTER (bool) default True
-#   ABSTRACT_STRICT (bool) default False  (if True, blocks when API errors)
-#   ABSTRACT_BLOCK_DISPOSABLE (bool) default True
-#   ABSTRACT_BLOCK_UNDELIVERABLE (bool) default True
-#   ABSTRACT_BLOCK_HIGH_RISK (bool) default True
-#   ABSTRACT_MAX_RISK_SCORE (int) default 70 (0-100)
 
 
 def _now() -> int:
@@ -128,7 +119,8 @@ def _cfg_bool(key: str, default: bool) -> bool:
 
 def _cfg_int(key: str, default: int, *, min_v: int = 0, max_v: int = 10**9) -> int:
     try:
-        v = int(current_app.config.get(key, default) or default)
+        raw = current_app.config.get(key, default)
+        v = int(raw) if raw is not None else int(default)
     except Exception:
         v = default
     if v < min_v:
@@ -171,11 +163,11 @@ def _safe_next(nxt: Any) -> str:
     s = _norm(nxt, max_len=_MAX_NEXT_LEN)
     if not s:
         return ""
+    if not s.startswith(_ALLOWED_NEXT_PREFIXES):
+        return ""
     if any(c in s for c in ("\x00", "\\", "\r", "\n", "\t", " ")):
         return ""
-    if "://" in s:
-        return ""
-    if not s.startswith("/") or s.startswith("//"):
+    if "://" in s or s.startswith("//"):
         return ""
     if ".." in s:
         return ""
@@ -183,7 +175,7 @@ def _safe_next(nxt: Any) -> str:
         p = urlparse(s)
         if p.scheme or p.netloc:
             return ""
-        clean = (p.path or "").strip()
+        clean = (p.path or "").strip() or "/"
         if not clean.startswith("/") or clean.startswith("//"):
             return ""
         clean = clean[:_MAX_NEXT_LEN]
@@ -246,12 +238,13 @@ def _account_home_url() -> str:
 def _auth_account_url(*, tab: str, nxt: str = "", email: str = "", name: str = "") -> str:
     tab_v = TAB_LOGIN if tab not in (TAB_LOGIN, TAB_REGISTER) else tab
     params: Dict[str, Any] = {"tab": tab_v}
-    if nxt:
-        params["next"] = nxt
+    nxt_clean = _safe_next(nxt)
+    if nxt_clean:
+        params["next"] = nxt_clean
     if email:
-        params["email"] = email
+        params["email"] = _safe_email(email)
     if name:
-        params["name"] = name
+        params["name"] = _normalize_name(name)
 
     u = _url_for_safe("auth.account", **params)
     if u:
@@ -271,7 +264,10 @@ def _client_ip() -> str:
 def _client_fp() -> str:
     ip = _client_ip()
     ua = _norm(request.headers.get("User-Agent") or "", max_len=200)[:120]
-    return f"{ip}|{ua}"
+    # include a tiny salt so two different users behind NAT don't always collide
+    salt = _norm(current_app.config.get("FP_SALT") or "", max_len=64)
+    raw = f"{ip}|{ua}|{salt}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
 
 
 def _rate_limit(bucket: str) -> Tuple[bool, int]:
@@ -499,6 +495,7 @@ def _user_password_check(user: Any, password: str) -> bool:
     except Exception:
         ok = False
 
+    # tiny constant-time-ish stabilization
     try:
         secrets.compare_digest("a", "a" if ok else "b")
     except Exception:
@@ -699,23 +696,18 @@ def _is_password_reasonable(pw: str) -> bool:
 
 
 def _abstract_api_key() -> str:
-    # supports config override OR env already loaded into config by your app
     k = _norm(current_app.config.get("ABSTRACT_EMAIL_API_KEY") or "", max_len=128)
     if k:
         return k
-    # if your app doesn't map env->config, try os.getenv via current_app
     try:
         import os
+
         return _norm(os.getenv("ABSTRACT_EMAIL_API_KEY") or "", max_len=128)
     except Exception:
         return ""
 
 
 def _abstract_validate_email(email: str) -> Tuple[bool, str]:
-    """
-    Returns (ok, reason). ok=True means it's acceptable.
-    Soft-fails (ok=True) if API key missing or API errors, unless ABSTRACT_STRICT=True.
-    """
     email = _safe_email(email)
     if not _valid_email(email):
         return False, "Email inválido."
@@ -725,7 +717,6 @@ def _abstract_validate_email(email: str) -> Tuple[bool, str]:
 
     api_key = _abstract_api_key()
     if not api_key:
-        # no key: skip external validation
         return True, "no_key"
 
     params = urllib.parse.urlencode({"api_key": api_key, "email": email})
@@ -741,10 +732,7 @@ def _abstract_validate_email(email: str) -> Tuple[bool, str]:
         req = urllib.request.Request(
             url,
             method="GET",
-            headers={
-                "Accept": "application/json",
-                "User-Agent": "SkylineStore/1.0",
-            },
+            headers={"Accept": "application/json", "User-Agent": "SkylineStore/1.0"},
         )
         with urllib.request.urlopen(req, timeout=_ABSTRACT_TIMEOUT_SEC) as resp:
             raw = resp.read().decode("utf-8", "replace")
@@ -752,16 +740,12 @@ def _abstract_validate_email(email: str) -> Tuple[bool, str]:
         if not isinstance(data, dict):
             return (True, "api_bad_payload") if not strict else (False, "No se pudo verificar el email.")
 
-        # Abstract fields (commonly returned)
         is_disposable = bool((data.get("is_disposable_email", {}) or {}).get("value") is True)
         deliverability = _norm((data.get("deliverability") or "").upper(), max_len=32)
-        # risk score sometimes under "quality_score" (0..1) or "score"
-        # We'll interpret:
-        #  - if "quality_score" exists (0..1), risk = (1-quality)*100
-        #  - else if "score" exists (0..100) treat as risk
+
         risk = 0
         try:
-            qs = (data.get("quality_score") if "quality_score" in data else None)
+            qs = data.get("quality_score") if "quality_score" in data else None
             if isinstance(qs, (int, float)):
                 qf = float(qs)
                 qf = 0.0 if qf < 0 else 1.0 if qf > 1 else qf
@@ -777,7 +761,6 @@ def _abstract_validate_email(email: str) -> Tuple[bool, str]:
             except Exception:
                 pass
 
-        # Format / MX checks
         is_valid_format = bool((data.get("is_valid_format", {}) or {}).get("value") is True)
         is_mx_found = bool((data.get("is_mx_found", {}) or {}).get("value") is True)
 
@@ -785,19 +768,15 @@ def _abstract_validate_email(email: str) -> Tuple[bool, str]:
             return False, "Email inválido."
         if not is_mx_found:
             return False, "El dominio del email no parece válido."
-
         if block_disposable and is_disposable:
             return False, "No se permiten emails temporales."
-
         if block_undeliverable and deliverability in {"UNDELIVERABLE"}:
             return False, "Ese email no parece entregable."
-
         if block_high_risk and risk >= max_risk:
             return False, "Ese email parece riesgoso. Probá con otro."
 
         return True, "ok"
     except Exception:
-        # API fail: soft-fail unless strict
         return (True, "api_error") if not strict else (False, "No se pudo verificar el email. Reintentá.")
 
 
@@ -968,7 +947,6 @@ def register():
             status_err=400,
         )
 
-    # Abstract validation (fast)
     ok_ext, reason = _abstract_validate_email(email)
     if not ok_ext:
         return _json_or_redirect(ok=False, message=reason, tab=TAB_REGISTER, nxt=nxt, status_err=400)
