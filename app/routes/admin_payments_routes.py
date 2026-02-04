@@ -8,7 +8,6 @@ from urllib.parse import urlencode, urlparse
 from flask import (
     Blueprint,
     Response,
-    abort,
     current_app,
     flash,
     jsonify,
@@ -23,7 +22,7 @@ from app.models import db
 
 try:
     from app.models.payment_provider import PaymentProvider, PaymentProviderService  # type: ignore
-except Exception:
+except Exception:  # pragma: no cover
     PaymentProvider = None  # type: ignore
     PaymentProviderService = None  # type: ignore
 
@@ -41,10 +40,11 @@ _MAX_STR = 500
 _MAX_CFG_STR = 800
 _MAX_FLASH = 240
 
-_RL_DEFAULT_SEC = 0.75
-_RL_BUCKET = "_rl_admin_payments_v1"
-_RL_CAP = 220
+# Rate limit (session bucket) – tuned for admin config saves
+_RL_BUCKET = "_rl_admin_payments_v2"
 _RL_TTL_SEC = 60 * 45
+_RL_CAP = 220
+_RL_DEFAULT_SEC = 0.75
 
 _SESSION_CSRF_KEY = "csrf_token"
 
@@ -59,8 +59,20 @@ _NO_STORE_HEADERS = {
 }
 
 
+# ---------------------------
+# Core helpers
+# ---------------------------
+
 def _now() -> int:
     return int(time.time())
+
+
+def _mono() -> float:
+    # monotonic for rate limiting windows (safe vs clock changes)
+    try:
+        return time.monotonic()
+    except Exception:
+        return float(_now())
 
 
 def _clean_str(v: Any, max_len: int, *, default: str = "") -> str:
@@ -71,7 +83,10 @@ def _clean_str(v: Any, max_len: int, *, default: str = "") -> str:
     s = str(v).replace("\x00", "").replace("\u200b", "").strip()
     if not s:
         return default
+    # collapse whitespace
     s = " ".join(s.split())
+    # strip control chars
+    s = "".join(ch for ch in s if ch >= " " or ch in "\n\t")
     return s[:max_len] if len(s) > max_len else s
 
 
@@ -96,9 +111,6 @@ def _wants_json() -> bool:
         if "application/json" in accept or "text/json" in accept:
             return True
         if (request.headers.get("X-Requested-With") or "").lower() == "xmlhttprequest":
-            return True
-        best = request.accept_mimetypes.best_match(["application/json", "text/html"])
-        if best == "application/json" and request.accept_mimetypes[best] > request.accept_mimetypes["text/html"]:
             return True
     except Exception:
         return False
@@ -142,6 +154,7 @@ def _render_safe(template: str, **ctx: Any):
                 current_app.logger.exception("Template render failed: %s", template)
             except Exception:
                 pass
+
     title = _clean_str(ctx.get("title") or "Admin Payments", 100, default="Admin Payments")
     body = (
         "<!doctype html><html lang='es'><head><meta charset='utf-8'>"
@@ -190,14 +203,17 @@ def _ensure_csrf() -> str:
 def _csrf_ok() -> bool:
     if request.method in {"GET", "HEAD", "OPTIONS"}:
         return True
-    sess = _clean_str(session.get(_SESSION_CSRF_KEY), 256, default="")
-    if not sess:
+
+    sess_tok = _clean_str(session.get(_SESSION_CSRF_KEY), 256, default="")
+    if not sess_tok:
         return False
 
     header_name = _clean_str(current_app.config.get("CSRF_HEADER"), 64, default="X-CSRF-Token")
     sent = _clean_str(request.headers.get(header_name), 256, default="")
+
     if not sent:
         sent = _clean_str(request.form.get("csrf_token"), 256, default="")
+
     if not sent and request.is_json:
         try:
             data = request.get_json(silent=True) or {}
@@ -208,8 +224,9 @@ def _csrf_ok() -> bool:
 
     if not sent:
         return False
+
     try:
-        return secrets.compare_digest(sess, sent)
+        return secrets.compare_digest(sess_tok, sent)
     except Exception:
         return False
 
@@ -237,7 +254,7 @@ def _sanitize_next(path: str, *, fallback: str = "/admin") -> str:
     return p or fallback
 
 
-def _safe_redirect(endpoint: str, **values):
+def _safe_redirect(endpoint: str, **values: Any):
     try:
         return redirect(url_for(endpoint, **values), code=302)
     except Exception:
@@ -248,8 +265,7 @@ def _safe_redirect(endpoint: str, **values):
 
 
 def _safe_redirect_path(path: str):
-    p = _sanitize_next(path, fallback="/")
-    return redirect(p, code=302)
+    return redirect(_sanitize_next(path, fallback="/"), code=302)
 
 
 def _audit_user_email() -> str:
@@ -257,11 +273,9 @@ def _audit_user_email() -> str:
         uid = int(session.get("user_id") or 0)
         if uid:
             from app.models import User  # type: ignore
-
             u = db.session.get(User, uid)
             if u:
-                em = _clean_str(getattr(u, "email", ""), _MAX_EMAIL, default="").lower()
-                return em[:_MAX_EMAIL]
+                return _clean_str(getattr(u, "email", ""), _MAX_EMAIL, default="").lower()[:_MAX_EMAIL]
     except Exception:
         pass
     return _clean_str(session.get("user_email"), _MAX_EMAIL, default="").lower()[:_MAX_EMAIL]
@@ -271,7 +285,7 @@ def _admin_required():
     uid = session.get("user_id")
     if not uid:
         if _wants_json():
-            return _json({"ok": False, "error": "auth_required"}, 401)
+            return _json({"ok": False, "error": "auth_required", "message": "login_required"}, 401)
         flash("Iniciá sesión para entrar al admin.", "warning")
         nxt = _sanitize_next(request.path, fallback="/admin")
         try:
@@ -284,7 +298,6 @@ def _admin_required():
 
     try:
         from app.models import User  # type: ignore
-
         u = db.session.get(User, int(uid))
         if u and (_bool(getattr(u, "is_admin", False)) or _bool(getattr(u, "is_owner", False))):
             session["is_admin"] = True
@@ -295,11 +308,15 @@ def _admin_required():
         pass
 
     if _wants_json():
-        return _json({"ok": False, "error": "forbidden"}, 403)
+        return _json({"ok": False, "error": "forbidden", "message": "admin_required"}, 403)
 
     flash("No tenés permisos para acceder al admin.", "error")
     return _safe_redirect("main.home")
 
+
+# ---------------------------
+# Rate limiting (session based)
+# ---------------------------
 
 def _rl_get_store() -> Dict[str, Dict[str, Any]]:
     store = session.get(_RL_BUCKET)
@@ -318,18 +335,19 @@ def _rl_put_store(store: Dict[str, Dict[str, Any]]) -> None:
 
 
 def _rate_limit(key: str, seconds: float = _RL_DEFAULT_SEC) -> bool:
-    now = _now()
+    # key should include ip/user to avoid punishing everyone
+    now_ts = _now()
+    now_m = _mono()
     store = _rl_get_store()
 
-    cutoff = now - _RL_TTL_SEC
-    if store:
-        for k in list(store.keys()):
-            try:
-                t0 = int(store.get(k, {}).get("t", 0) or 0)
-            except Exception:
-                t0 = 0
-            if t0 and t0 < cutoff:
-                store.pop(k, None)
+    cutoff = now_ts - _RL_TTL_SEC
+    for k in list(store.keys()):
+        try:
+            t0 = int(store.get(k, {}).get("t", 0) or 0)
+        except Exception:
+            t0 = 0
+        if t0 and t0 < cutoff:
+            store.pop(k, None)
 
     if len(store) > _RL_CAP:
         items: List[Tuple[int, str]] = []
@@ -342,24 +360,23 @@ def _rate_limit(key: str, seconds: float = _RL_DEFAULT_SEC) -> bool:
         for _, k in items[: max(0, len(store) - _RL_CAP)]:
             store.pop(k, None)
 
-    b = store.get(key)
-    if not isinstance(b, dict):
-        store[key] = {"t": now}
-        _rl_put_store(store)
-        return True
-
+    b = store.get(key) or {}
     try:
-        last = int(b.get("t", 0) or 0)
+        last_m = float(b.get("m", 0.0) or 0.0)
     except Exception:
-        last = 0
+        last_m = 0.0
 
-    if (now - last) < int(max(1, seconds * 1000)) // 1000 and (time.time() - float(last)) < float(seconds):
+    if last_m and (now_m - last_m) < float(max(0.05, seconds)):
         return False
 
-    store[key] = {"t": now}
+    store[key] = {"t": now_ts, "m": now_m}
     _rl_put_store(store)
     return True
 
+
+# ---------------------------
+# Payments domain helpers
+# ---------------------------
 
 def _payments_available() -> bool:
     return PaymentProvider is not None and PaymentProviderService is not None
@@ -369,7 +386,12 @@ def _bootstrap_defaults_if_needed() -> None:
     if not _payments_available():
         return
     try:
+        ext = getattr(current_app, "extensions", None)
+        if isinstance(ext, dict) and ext.get("payments_bootstrapped"):
+            return
         PaymentProviderService.bootstrap_defaults()  # type: ignore[attr-defined]
+        if isinstance(ext, dict):
+            ext["payments_bootstrapped"] = True
     except Exception:
         try:
             db.session.rollback()
@@ -400,7 +422,7 @@ def _get_provider_by_code(code: str):
 
 
 def _safe_checkout_url() -> str:
-    for ep in ("shop.checkout", "checkout.checkout", "main.home"):
+    for ep in ("shop.checkout", "checkout.checkout_page", "checkout.checkout", "main.home"):
         try:
             return url_for(ep)
         except Exception:
@@ -485,6 +507,29 @@ def _get_schema(p) -> List[Dict[str, Any]]:
     return []
 
 
+def _read_int(form_key: str, *, default: int) -> int:
+    raw = _clean_str(request.form.get(form_key), 32, default="")
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except Exception:
+        return default
+
+
+def _clamp_int(v: int, lo: int, hi: int) -> int:
+    return lo if v < lo else (hi if v > hi else v)
+
+
+def _valid_country2(s: str) -> str:
+    c = _clean_str(s, 2, default="").upper()
+    return c if len(c) == 2 and c.isalpha() else "UY"
+
+
+# ---------------------------
+# Blueprint hooks
+# ---------------------------
+
 @admin_payments_bp.before_request
 def _before():
     _ensure_csrf()
@@ -503,8 +548,14 @@ def _inject():
     }
 
 
-@admin_payments_bp.get("/payments")
-def admin_payments_page():
+# ---------------------------
+# Routes (NO CONFLICT)
+#   /admin/payments/config
+#   /admin/payments/config/<code>/save
+# ---------------------------
+
+@admin_payments_bp.get("/payments/config")
+def admin_payments_config_page():
     guard = _admin_required()
     if guard:
         return guard
@@ -516,12 +567,16 @@ def admin_payments_page():
     _bootstrap_defaults_if_needed()
 
     try:
-        providers = PaymentProvider.query.order_by(  # type: ignore[attr-defined]
-            PaymentProvider.enabled.desc(),  # type: ignore[attr-defined]
-            PaymentProvider.recommended.desc(),  # type: ignore[attr-defined]
-            PaymentProvider.sort_order.asc(),  # type: ignore[attr-defined]
-            PaymentProvider.name.asc(),  # type: ignore[attr-defined]
-        ).all()
+        q = PaymentProvider.query  # type: ignore[attr-defined]
+        # orden robusto con fallback
+        providers = (
+            q.order_by(
+                getattr(PaymentProvider, "enabled").desc(),       # type: ignore[attr-defined]
+                getattr(PaymentProvider, "recommended").desc(),   # type: ignore[attr-defined]
+                getattr(PaymentProvider, "sort_order").asc(),     # type: ignore[attr-defined]
+                getattr(PaymentProvider, "name").asc(),           # type: ignore[attr-defined]
+            ).all()
+        )
     except Exception:
         try:
             current_app.logger.exception("Error listando providers")
@@ -548,8 +603,8 @@ def admin_payments_page():
     )
 
 
-@admin_payments_bp.post("/payments/<code>/save")
-def admin_payments_save(code: str):
+@admin_payments_bp.post("/payments/config/<code>/save")
+def admin_payments_config_save(code: str):
     guard = _admin_required()
     if guard:
         return guard
@@ -559,63 +614,53 @@ def admin_payments_save(code: str):
         if _wants_json():
             return _json({"ok": False, "error": "bad_code"}, 400)
         flash("Código inválido.", "error")
-        return _safe_redirect("admin_payments.admin_payments_page")
+        return _safe_redirect("admin_payments.admin_payments_config_page")
 
     if not _csrf_ok():
         if _wants_json():
             return _json({"ok": False, "error": "csrf_invalid"}, 400)
         flash("CSRF inválido. Recargá la página e intentá de nuevo.", "warning")
-        return _safe_redirect("admin_payments.admin_payments_page")
+        return _safe_redirect("admin_payments.admin_payments_config_page")
 
-    if not _rate_limit(f"save:{norm_code}", seconds=_RL_DEFAULT_SEC):
+    # key by ip + user + provider
+    uid = _clean_str(session.get("user_id"), 24, default="0")
+    rl_key = f"save:{norm_code}:{_client_ip()}:{uid}"
+    if not _rate_limit(rl_key, seconds=_RL_DEFAULT_SEC):
         if _wants_json():
             return _json({"ok": False, "error": "rate_limited"}, 429)
         flash("Muy rápido 😅 Esperá un segundo y reintentá.", "warning")
-        return _safe_redirect("admin_payments.admin_payments_page")
+        return _safe_redirect("admin_payments.admin_payments_config_page")
 
     if not _payments_available():
         if _wants_json():
             return _json({"ok": False, "error": "payments_not_ready"}, 500)
         flash("Payments no disponibles.", "error")
-        return _safe_redirect("admin_payments.admin_payments_page")
+        return _safe_redirect("admin_payments.admin_payments_config_page")
 
     p = _get_provider_by_code(norm_code)
     if not p:
         if _wants_json():
             return _json({"ok": False, "error": "not_found"}, 404)
         flash("Método no encontrado.", "error")
-        return _safe_redirect("admin_payments.admin_payments_page")
+        return _safe_redirect("admin_payments.admin_payments_config_page")
 
     enabled = _bool(request.form.get("enabled"))
     recommended = _bool(request.form.get("recommended"))
     if not enabled and recommended:
         recommended = False
 
-    def _read_int(name: str, default: int = 0) -> int:
-        v = _clean_str(request.form.get(name), 32, default="")
-        if not v:
-            return default
-        try:
-            return int(v)
-        except Exception:
-            return default
-
-    def _clamp_int(v: int, lo: int, hi: int) -> int:
-        return lo if v < lo else (hi if v > hi else v)
-
-    sort_order = _clamp_int(_read_int("sort_order", int(getattr(p, "sort_order", 100) or 100)), 0, 9999)
+    sort_order = _clamp_int(_read_int("sort_order", default=int(getattr(p, "sort_order", 100) or 100)), 0, 9999)
     kind_in = _clean_str(request.form.get("kind"), 20, default=str(getattr(p, "kind", "other") or "other")).lower()
     kind = kind_in[:20] or "other"
 
-    country_in = _clean_str(request.form.get("country"), 2, default=str(getattr(p, "country", "UY") or "UY")).upper()
-    country = country_in if len(country_in) == 2 and country_in.isalpha() else "UY"
+    country = _valid_country2(request.form.get("country") or getattr(p, "country", "UY") or "UY")
 
-    fee_percent = _clamp_int(_read_int("fee_percent", int(getattr(p, "fee_percent", 0) or 0)), 0, 100)
-    eta_minutes = _clamp_int(_read_int("eta_minutes", int(getattr(p, "eta_minutes", 0) or 0)), 0, 100000)
+    fee_percent = _clamp_int(_read_int("fee_percent", default=int(getattr(p, "fee_percent", 0) or 0)), 0, 100)
+    eta_minutes = _clamp_int(_read_int("eta_minutes", default=int(getattr(p, "eta_minutes", 0) or 0)), 0, 100000)
 
-    min_amount = _clamp_int(_read_int("min_amount", int(getattr(p, "min_amount", 0) or 0)), 0, 1_000_000_000)
-    max_amount = _clamp_int(_read_int("max_amount", int(getattr(p, "max_amount", 0) or 0)), 0, 1_000_000_000)
-    if max_amount != 0 and max_amount < min_amount:
+    min_amount = _clamp_int(_read_int("min_amount", default=int(getattr(p, "min_amount", 0) or 0)), 0, 1_000_000_000)
+    max_amount = _clamp_int(_read_int("max_amount", default=int(getattr(p, "max_amount", 0) or 0)), 0, 1_000_000_000)
+    if max_amount and max_amount < min_amount:
         max_amount = min_amount
 
     notes = _clean_str(request.form.get("notes"), _MAX_STR, default="")
@@ -631,14 +676,11 @@ def admin_payments_save(code: str):
     _set_if_exists(p, "max_amount", int(max_amount))
     _set_if_exists(p, "notes", notes)
 
-    cfg: Dict[str, Any] = {}
+    # config update (schema-driven)
     try:
-        cfg = dict(p.ensure_config())
+        cfg: Dict[str, Any] = dict(getattr(p, "config", {}) or {})
     except Exception:
-        try:
-            cfg = dict(getattr(p, "config", {}) or {})
-        except Exception:
-            cfg = {}
+        cfg = {}
 
     schema = _get_schema(p)
     for f in schema:
@@ -646,10 +688,12 @@ def admin_payments_save(code: str):
         typ = _clean_str(f.get("type"), 20, default="text").lower()
         if not k:
             continue
+
         field_name = f"cfg__{k}"
         if typ == "bool":
             cfg[k] = _bool(request.form.get(field_name))
             continue
+
         val = _clean_str(request.form.get(field_name), _MAX_CFG_STR, default="")
         if val == "":
             cfg.pop(k, None)
@@ -677,10 +721,11 @@ def admin_payments_save(code: str):
             db.session.rollback()
         except Exception:
             pass
+        msg = _clean_str(e, 500, default="invalid")
         if _wants_json():
-            return _json({"ok": False, "error": "config_invalid", "message": _clean_str(e, 500, default="invalid")}, 400)
-        flash(_clean_str(f"Config inválida: {e}", _MAX_FLASH, default="Config inválida"), "error")
-        return _safe_redirect("admin_payments.admin_payments_page")
+            return _json({"ok": False, "error": "config_invalid", "message": msg}, 400)
+        flash(_clean_str(f"Config inválida: {msg}", _MAX_FLASH, default="Config inválida"), "error")
+        return _safe_redirect("admin_payments.admin_payments_config_page")
 
     _set_if_exists(p, "updated_by", _audit_user_email())
     _set_if_exists(p, "updated_ip", _client_ip())
@@ -695,28 +740,18 @@ def admin_payments_save(code: str):
         if _wants_json():
             return _json({"ok": False, "error": "save_failed"}, 500)
         flash("No se pudo guardar. Reintentá.", "error")
-        return _safe_redirect("admin_payments.admin_payments_page")
+        return _safe_redirect("admin_payments.admin_payments_config_page")
 
     if not _commit_safe():
         if _wants_json():
             return _json({"ok": False, "error": "save_failed"}, 500)
         flash("No se pudo guardar. Reintentá.", "error")
-        return _safe_redirect("admin_payments.admin_payments_page")
+        return _safe_redirect("admin_payments.admin_payments_config_page")
 
     if _wants_json():
         prev = _provider_to_ui_dict(p)
         ready = bool(getattr(p, "enabled", False)) and bool(ok)
-        return _json(
-            {
-                "ok": True,
-                "saved": True,
-                "code": norm_code,
-                "ready": ready,
-                "errors": errs if not ok else [],
-                "provider": prev,
-            },
-            200,
-        )
+        return _json({"ok": True, "saved": True, "code": norm_code, "ready": ready, "errors": errs if not ok else [], "provider": prev}, 200)
 
     if ok and bool(getattr(p, "enabled", False)):
         flash("Método actualizado ✅ (listo para checkout)", "success")
@@ -726,7 +761,7 @@ def admin_payments_save(code: str):
         msg = "Guardado ✅ pero falta completar: " + " | ".join(_clean_str(x, 120, default="") for x in (errs or ["config incompleta"]))
         flash(_clean_str(msg, _MAX_FLASH, default="Guardado"), "warning")
 
-    return _safe_redirect("admin_payments.admin_payments_page")
+    return _safe_redirect("admin_payments.admin_payments_config_page")
 
 
 __all__ = ["admin_payments_bp"]

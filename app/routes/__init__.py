@@ -34,8 +34,9 @@ _DEFAULT_SPECS: Tuple[str, ...] = (
     "app.routes.webhook_routes",
 )
 
+# ✅ patterns corregidos (sin el punto raro "*.__pycache__*")
 _DEFAULT_SCAN_EXCLUDE: Tuple[str, ...] = (
-    "*.__pycache__*",
+    "*__pycache__*",
     "*migrations*",
     "*tests*",
     "*test_*",
@@ -99,16 +100,17 @@ def _split_csv(key: str) -> List[str]:
     return out
 
 
-def _dedupe_keep_order(items: Iterable[str]) -> List[str]:
+def _dedupe_keep_order(items: Iterable[str], *, lower: bool = False) -> List[str]:
     seen: Set[str] = set()
     out: List[str] = []
     for x in items:
         s = _s(x)
         if not s:
             continue
-        if s in seen:
+        k = s.lower() if lower else s
+        if k in seen:
             continue
-        seen.add(s)
+        seen.add(k)
         out.append(s)
     return out
 
@@ -172,14 +174,13 @@ def _import_module(path: str) -> Tuple[Optional[Any], Optional[str]]:
 def _iter_blueprints_in_module(mod: Any) -> Iterable[Tuple[Any, str]]:
     """
     Detecta:
-    - blueprint directo
-    - lista/tupla/set de blueprints
-    - dict con values blueprint
+      - blueprint directo
+      - lista/tupla/set de blueprints
+      - dict con values blueprint
     """
     for name in dir(mod):
         if name.startswith("_"):
             continue
-
         try:
             obj = getattr(mod, name)
         except Exception:
@@ -202,7 +203,7 @@ def _iter_blueprints_in_module(mod: Any) -> Iterable[Tuple[Any, str]]:
 
 
 def _scan_route_modules(exclude: List[str], *, max_modules: int) -> List[str]:
-    merged_exclude = _dedupe_keep_order([*(exclude or []), *_DEFAULT_SCAN_EXCLUDE])
+    merged_exclude = _dedupe_keep_order([*(exclude or []), *_DEFAULT_SCAN_EXCLUDE], lower=True)
     out: List[str] = []
 
     try:
@@ -214,7 +215,8 @@ def _scan_route_modules(exclude: List[str], *, max_modules: int) -> List[str]:
         for m in pkgutil.iter_modules(pkg_path, _ROUTES_PACKAGE + "."):
             mod_name = _s(m.name)
             low = mod_name.lower()
-            if not mod_name or low.endswith(".__init__"):
+            # iter_modules ya devuelve módulos; no hace falta chequear __init__ con ".__init__"
+            if not mod_name:
                 continue
             if _match(low, merged_exclude):
                 continue
@@ -224,7 +226,7 @@ def _scan_route_modules(exclude: List[str], *, max_modules: int) -> List[str]:
     except Exception as e:
         log.error("Route scan failed: %s", e, exc_info=True)
 
-    return sorted(_dedupe_keep_order(out))
+    return sorted(_dedupe_keep_order(out, lower=True))
 
 
 def _should_skip_module(mod_path: str, disable: List[str], allow_specs: Set[str]) -> bool:
@@ -238,8 +240,11 @@ def _should_skip_module(mod_path: str, disable: List[str], allow_specs: Set[str]
 
     if allow_specs and low not in allow_specs:
         return True
+
+    # allow/disable son patterns: aplicamos sobre el módulo completo
     if _match(low, disable):
         return True
+
     return False
 
 
@@ -248,10 +253,14 @@ def _should_skip_bp(bp_name: str, origin: str, disable: List[str], allow_bps: Se
     origin_low = _low(origin)
     if not name_low:
         return True
+
     if allow_bps and name_low not in allow_bps:
         return True
+
+    # disable patterns aplican a: nombre de bp o origen completo (mod.sym)
     if _match(name_low, disable) or _match(origin_low, disable):
         return True
+
     return False
 
 
@@ -284,7 +293,8 @@ class RoutesReport:
     duplicates: List[str]
     disabled: List[str]
     skipped_no_blueprint: List[str]
-    imports_failed: List[str]
+    import_failed: List[str]
+    register_failed: List[str]
     missing_required: List[str]
     timing_ms: int
     scanned: bool
@@ -299,8 +309,9 @@ class RoutesReport:
 def register_blueprints(app: Any) -> Dict[str, Any]:
     """
     Registro robusto de blueprints (app.routes.*) con hardening y observabilidad PRO.
+
     ENV:
-      - ROUTES_DISABLE: csv patterns
+      - ROUTES_DISABLE: csv patterns (aplica a módulos, bp name o origin)
       - ROUTES_ALLOW: csv blueprint names (lower)
       - ROUTES_ALLOW_SPECS: csv module paths (lower)
       - ROUTES_REQUIRE: csv blueprint names (lower)
@@ -311,12 +322,12 @@ def register_blueprints(app: Any) -> Dict[str, Any]:
       - ROUTES_STRICT_REQUIRE: true/false (crashea si faltan required)
       - ROUTES_PREFIX_DEFAULT: "/x" (opcional)
       - ROUTES_PREFIX_<BP_NAME>: "/x" (opcional)
-      - ROUTES_LOG_LEVEL: debug/info/warning/error (opcional)
+      - ROUTES_LOG_LEVEL: debug/info/warning/error/critical (opcional)
       - ROUTES_LOG_SUMMARY: true/false (default true)
     """
     t0 = time.perf_counter()
 
-    # 👁️ Visual/log: posibilidad de ajustar nivel solo para este módulo
+    # Ajuste de log nivel solo para este logger
     log_level = _env_str("ROUTES_LOG_LEVEL", "").lower()
     if log_level in {"debug", "info", "warning", "error", "critical"}:
         try:
@@ -345,24 +356,23 @@ def register_blueprints(app: Any) -> Dict[str, Any]:
     except Exception:
         initial_bp_names = []
 
-    seen_bp_real: Set[str] = set(initial_bp_names)
-    seen_bp_low: Set[str] = {x.lower() for x in seen_bp_real}
+    seen_bp_low: Set[str] = {x.lower() for x in initial_bp_names if x}
 
-    # Specs
+    # Specs base + scan opcional
     specs: List[str] = list(_DEFAULT_SPECS)
     scanned = False
     if scan_enabled:
         scanned = True
         specs.extend(_scan_route_modules(scan_exclude, max_modules=max_scan))
-    specs = _dedupe_keep_order(specs)
+    specs = _dedupe_keep_order(specs, lower=True)
 
     registered: List[str] = []
     duplicates: List[str] = []
     disabled_out: List[str] = []
     skipped_no_bp: List[str] = []
-    imports_failed: List[str] = []
+    import_failed: List[str] = []
+    register_failed: List[str] = []
 
-    # Registro
     for mod_path in specs:
         if _should_skip_module(mod_path, disable, allow_specs):
             disabled_out.append(f"{mod_path} :: module-disabled")
@@ -371,8 +381,8 @@ def register_blueprints(app: Any) -> Dict[str, Any]:
         mod, err = _import_module(mod_path)
         if err or mod is None:
             msg = f"{mod_path} :: {err or 'import failed'}"
-            imports_failed.append(msg)
-            log.error("IMPORT FAILED %s", msg, exc_info=False)
+            import_failed.append(msg)
+            log.error("IMPORT FAILED %s", msg, exc_info=True)
             if fail_fast:
                 raise RuntimeError(f"Routes import failed: {msg}")
             continue
@@ -394,7 +404,6 @@ def register_blueprints(app: Any) -> Dict[str, Any]:
                 disabled_out.append(f"{origin} :: empty-blueprint-name")
                 continue
 
-            # Duplicado (case-insensitive)
             if bp_name_low in seen_bp_low:
                 duplicates.append(origin)
                 continue
@@ -403,13 +412,12 @@ def register_blueprints(app: Any) -> Dict[str, Any]:
             reg_err = _safe_register(app, bp, prefix)
             if reg_err:
                 msg = f"{origin} :: {reg_err}"
-                imports_failed.append(msg)
-                log.error("REGISTER FAILED %s", msg, exc_info=False)
+                register_failed.append(msg)
+                log.error("REGISTER FAILED %s", msg, exc_info=True)
                 if fail_fast:
                     raise RuntimeError(f"Routes register failed: {msg}")
                 continue
 
-            seen_bp_real.add(bp_name_real)
             seen_bp_low.add(bp_name_low)
             registered.append(origin)
 
@@ -419,19 +427,19 @@ def register_blueprints(app: Any) -> Dict[str, Any]:
     missing_required = sorted(x for x in require if x and x not in seen_bp_low)
 
     timing_ms = _now_ms(t0)
-    errors_total = len(imports_failed) + len(missing_required)
+    errors_total = len(import_failed) + len(register_failed) + len(missing_required)
     warnings_total = len(duplicates) + len(skipped_no_bp)
 
-    # “Visual” summary (más legible)
     summary_on = _env_bool("ROUTES_LOG_SUMMARY", True)
 
     log.info(
-        "✅ Routes ready | reg=%d | dup=%d | disabled=%d | no_bp=%d | import_fail=%d | missing_req=%d | scanned=%s | specs=%d | %dms",
+        "✅ Routes ready | reg=%d | dup=%d | disabled=%d | no_bp=%d | import_fail=%d | register_fail=%d | missing_req=%d | scanned=%s | specs=%d | %dms",
         len(registered),
         len(duplicates),
         len(disabled_out),
         len(skipped_no_bp),
-        len(imports_failed),
+        len(import_failed),
+        len(register_failed),
         len(missing_required),
         scanned,
         len(specs),
@@ -445,8 +453,10 @@ def register_blueprints(app: Any) -> Dict[str, Any]:
             log.warning("⚠ Duplicates (skipped): %s", _short_list(duplicates, 12))
         if skipped_no_bp:
             log.warning("⚠ No blueprint in module: %s", _short_list(skipped_no_bp, 12))
-        if imports_failed:
-            log.error("❌ Import/Register failed: %s", _short_list(imports_failed, 8))
+        if import_failed:
+            log.error("❌ Import failed: %s", _short_list(import_failed, 8))
+        if register_failed:
+            log.error("❌ Register failed: %s", _short_list(register_failed, 8))
         if missing_required:
             log.warning("⛔ Missing required: %s", ", ".join(missing_required))
 
@@ -458,7 +468,8 @@ def register_blueprints(app: Any) -> Dict[str, Any]:
         duplicates=duplicates,
         disabled=disabled_out,
         skipped_no_blueprint=skipped_no_bp,
-        imports_failed=imports_failed,
+        import_failed=import_failed,
+        register_failed=register_failed,
         missing_required=missing_required,
         timing_ms=timing_ms,
         scanned=scanned,

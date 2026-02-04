@@ -9,7 +9,7 @@ import time
 import unicodedata
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, cast
+from typing import Any, Dict, List, Mapping, Optional, Tuple, cast
 from urllib.parse import urlparse
 
 from flask import (
@@ -82,6 +82,26 @@ _NO_STORE_HEADERS = {
     "Cross-Origin-Opener-Policy": "same-origin",
 }
 
+_SECURITY_HEADERS = {
+    "X-Permitted-Cross-Domain-Policies": "none",
+    "Cross-Origin-Resource-Policy": "same-origin",
+    "Cross-Origin-Embedder-Policy": "credentialless",
+}
+
+_DEFAULT_CSP = (
+    "default-src 'self'; "
+    "base-uri 'self'; "
+    "object-src 'none'; "
+    "frame-ancestors 'self'; "
+    "img-src 'self' data: blob:; "
+    "style-src 'self' 'unsafe-inline'; "
+    "script-src 'self' 'unsafe-inline'; "
+    "connect-src 'self'; "
+    "font-src 'self' data:; "
+    "media-src 'self' blob: data:; "
+    "form-action 'self'"
+)
+
 
 def utcnow_ts() -> int:
     return int(time.time())
@@ -96,6 +116,7 @@ def _clean_str(v: Any, max_len: int, *, default: str = "") -> str:
     if not s:
         return default
     s = " ".join(s.split())
+    s = "".join(ch for ch in s if ch >= " " or ch in "\n\t")
     return s[:max_len] if len(s) > max_len else s
 
 
@@ -168,9 +189,6 @@ def _wants_json() -> bool:
             return True
         if (request.headers.get("X-Requested-With") or "").lower() == "xmlhttprequest":
             return True
-        best = request.accept_mimetypes.best_match(["application/json", "text/html"])
-        if best == "application/json" and request.accept_mimetypes[best] > request.accept_mimetypes["text/html"]:
-            return True
     except Exception:
         return False
     return False
@@ -204,12 +222,15 @@ def _no_store(resp: Response) -> Response:
     try:
         for k, v in _NO_STORE_HEADERS.items():
             resp.headers.setdefault(k, v)
+        for k, v in _SECURITY_HEADERS.items():
+            resp.headers.setdefault(k, v)
+        resp.headers.setdefault("Content-Security-Policy", _clean_str(current_app.config.get("CSP_ADMIN"), 5000, default=_DEFAULT_CSP))
+
         vary = resp.headers.get("Vary", "")
         parts = [p.strip() for p in vary.split(",") if p.strip()]
-        if "Accept" not in parts:
-            parts.append("Accept")
-        if "Cookie" not in parts:
-            parts.append("Cookie")
+        for need in ("Accept", "Cookie"):
+            if need not in parts:
+                parts.append(need)
         resp.headers["Vary"] = ", ".join(parts)
     except Exception:
         pass
@@ -225,21 +246,66 @@ def _template_exists(name: str) -> bool:
 
 
 def _render_safe(template: str, **ctx: Any):
+    ui = cast(Dict[str, Any], ctx.get("ui") or {})
+    ui.setdefault("brand", _clean_str(current_app.config.get("BRAND_NAME"), 48, default="Skyline Store"))
+    ui.setdefault("page_title", _clean_str(ctx.get("title") or ui.get("title") or "Admin", 120, default="Admin"))
+    ui.setdefault("subtitle", _clean_str(ui.get("subtitle"), 160, default=""))
+    ui.setdefault("accent", _clean_str(current_app.config.get("UI_ACCENT"), 40, default="#4f46e5"))
+    ui.setdefault("section", _clean_str(ui.get("section"), 40, default="Admin"))
+    ctx["ui"] = ui
+
     if _template_exists(template):
         try:
             return render_template(template, **ctx)
         except Exception:
             log.exception("Template render failed: %s", template)
-    title = _clean_str(ctx.get("title") or "Admin", 120, default="Admin")
-    body = (
-        "<!doctype html><html lang='es'><head><meta charset='utf-8'>"
-        "<meta name='viewport' content='width=device-width,initial-scale=1'>"
-        f"<title>{title}</title></head>"
-        "<body style='font-family:system-ui;padding:24px;max-width:920px;margin:0 auto'>"
-        f"<h1 style='margin:0 0 10px'>{title}</h1>"
-        f"<p style='opacity:.75;margin:0'>Template faltante o error: <code>{_clean_str(template, 180)}</code></p>"
-        "</body></html>"
-    )
+
+    title = _clean_str(ui.get("page_title") or "Admin", 120, default="Admin")
+    accent = _clean_str(ui.get("accent") or "#4f46e5", 40, default="#4f46e5")
+    brand = _clean_str(ui.get("brand") or "Skyline Store", 60, default="Skyline Store")
+    hint = _clean_str(template, 180, default="template")
+
+    body = f"""<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>{title}</title>
+  <style>
+    :root{{--a:{accent};--bg:#0b1220;--card:rgba(255,255,255,.06);--ink:#e8eefc;--mut:rgba(232,238,252,.72);--b:rgba(232,238,252,.12)}}
+    @media (prefers-color-scheme: light){{:root{{--bg:#f6f8fc;--card:rgba(255,255,255,.9);--ink:#0b1220;--mut:rgba(11,18,32,.68);--b:rgba(15,23,42,.12)}}}
+    body{{margin:0;background:radial-gradient(900px 380px at 15% 0, color-mix(in srgb, var(--a) 22%, transparent), transparent 65%),
+                         radial-gradient(900px 380px at 85% 0, color-mix(in srgb, var(--a) 12%, transparent), transparent 65%),
+                         var(--bg);
+         color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif}}
+    .wrap{{max-width:980px;margin:0 auto;padding:28px 18px}}
+    .card{{border:1px solid var(--b);background:var(--card);backdrop-filter:blur(10px);border-radius:18px;padding:18px 18px}}
+    .top{{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-bottom:12px}}
+    .brand{{font-weight:800;letter-spacing:.2px}}
+    .pill{{font-size:12px;padding:6px 10px;border-radius:999px;border:1px solid var(--b);color:var(--mut)}}
+    h1{{margin:0 0 8px;font-size:20px}}
+    p{{margin:0;color:var(--mut);line-height:1.45}}
+    code{{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}}
+    .btn{{display:inline-flex;align-items:center;gap:8px;margin-top:14px;padding:10px 12px;border-radius:12px;border:1px solid var(--b);
+          color:var(--ink);text-decoration:none;background:color-mix(in srgb, var(--a) 12%, transparent)}}
+    .btn:hover{{background:color-mix(in srgb, var(--a) 18%, transparent)}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="top">
+        <div class="brand">{brand}</div>
+        <div class="pill">Admin UI fallback</div>
+      </div>
+      <h1>{title}</h1>
+      <p>No se pudo renderizar <code>{hint}</code>. Revisá que exista el template o mirá logs.</p>
+      <a class="btn" href="/admin">Volver al panel</a>
+    </div>
+  </div>
+</body>
+</html>"""
     return body, 200, {"Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store"}
 
 
@@ -273,10 +339,13 @@ def _require_csrf() -> None:
 
     sess_tok = _clean_str(session.get(_SESSION_CSRF_KEY), 256)
     if not sess_tok:
+        if _wants_json():
+            abort(400)
         abort(400)
 
+    header_name = _clean_str(current_app.config.get("CSRF_HEADER"), 64, default="X-CSRF-Token")
     form_tok = _clean_str(request.form.get("csrf_token"), 256)
-    hdr_tok = _clean_str(request.headers.get("X-CSRF-Token") or request.headers.get("X-CSRFToken"), 256)
+    hdr_tok = _clean_str(request.headers.get(header_name) or request.headers.get("X-CSRFToken"), 256)
     tok = form_tok or hdr_tok or _clean_str(_safe_get_json().get("csrf_token"), 256)
     if not tok:
         abort(400)
@@ -309,11 +378,12 @@ def _admin_is_fresh() -> bool:
 def _require_admin_fresh() -> None:
     if request.method in {"GET", "HEAD", "OPTIONS"}:
         return
-    if not _admin_is_fresh():
-        if _wants_json():
-            abort(401)
-        _flash_warn("Tu sesión admin expiró. Volvé a iniciar sesión.")
+    if _admin_is_fresh():
+        return
+    if _wants_json():
         abort(401)
+    _flash_warn("Tu sesión admin expiró. Volvé a iniciar sesión.")
+    abort(401)
 
 
 def _commit_ok() -> bool:
@@ -395,16 +465,17 @@ def _file_too_large(file: FileStorage, max_mb: int) -> bool:
                     return True
             except Exception:
                 pass
+
         stream = getattr(file, "stream", None)
-        if stream and hasattr(stream, "tell") and hasattr(stream, "seek"):
-            pos = stream.tell()
-            stream.seek(0, os.SEEK_END)
-            size = stream.tell()
-            stream.seek(pos, os.SEEK_SET)
-            return int(size) > max_bytes
+        if not stream or not hasattr(stream, "tell") or not hasattr(stream, "seek"):
+            return False
+        pos = stream.tell()
+        stream.seek(0, os.SEEK_END)
+        size = stream.tell()
+        stream.seek(pos, os.SEEK_SET)
+        return int(size) > max_bytes
     except Exception:
         return False
-    return False
 
 
 def _atomic_save_upload(file: FileStorage, dest: Path) -> None:
@@ -417,6 +488,14 @@ def _atomic_save_upload(file: FileStorage, dest: Path) -> None:
     except Exception:
         pass
     os.replace(str(tmp), str(dest))
+
+
+def _validate_mimetype(kind: str, mimetype: str) -> bool:
+    m = (mimetype or "").lower().strip()
+    if not m:
+        return True
+    allowed = _MIME_ALLOW["images"] if kind == "products" else _MIME_ALLOW["media"]
+    return m in allowed
 
 
 def save_upload(file: Optional[FileStorage], kind: str, allow_ext: set[str]) -> Optional[str]:
@@ -436,9 +515,7 @@ def save_upload(file: Optional[FileStorage], kind: str, allow_ext: set[str]) -> 
     if _file_too_large(file, max_mb):
         raise ValueError(f"Archivo muy grande (max {max_mb}MB)")
 
-    mimetype = (getattr(file, "mimetype", "") or "").lower().strip()
-    allowed_m = _MIME_ALLOW["images"] if kind2 == "products" else _MIME_ALLOW["media"]
-    if mimetype and mimetype not in allowed_m:
+    if not _validate_mimetype(kind2, getattr(file, "mimetype", "") or ""):
         raise ValueError("Tipo de archivo no permitido")
 
     final = _random_filename(filename)
@@ -493,6 +570,22 @@ def load_payments() -> Dict[str, Any]:
     return base
 
 
+def _emailish(s: str) -> bool:
+    ss = _clean_str(s, 200, default="").lower()
+    return bool(ss) and ("@" in ss) and (" " not in ss) and (len(ss) <= 160)
+
+
+def _httpish(s: str) -> bool:
+    ss = _clean_str(s, 600, default="")
+    if not ss:
+        return True
+    try:
+        u = urlparse(ss)
+        return u.scheme in {"http", "https"} and bool(u.netloc)
+    except Exception:
+        return False
+
+
 def save_payments(data: Dict[str, Any]) -> None:
     base = payments_defaults()
     safe = payments_defaults()
@@ -505,6 +598,14 @@ def save_payments(data: Dict[str, Any]) -> None:
                 if kk == "active":
                     continue
                 safe[k][kk] = _clean_str(v.get(kk), _MAX_INFO) if v.get(kk) is not None else ""
+
+    if safe["paypal"]["email"] and not _emailish(str(safe["paypal"]["email"])):
+        safe["paypal"]["email"] = ""
+
+    for key in ("mercadopago_uy", "mercadopago_ar"):
+        link = str(safe[key].get("link") or "")
+        if link and not _httpish(link):
+            safe[key]["link"] = ""
 
     _atomic_write_text(payments_path(), json.dumps(safe, indent=2, ensure_ascii=False))
 
@@ -532,7 +633,7 @@ def _clean_next_path(raw: Optional[str], *, default_path: str = "/admin") -> str
         return default_path
 
     pl = p.lower()
-    if (
+    bad = (
         not p.startswith("/")
         or p.startswith("//")
         or "://" in p
@@ -545,7 +646,8 @@ def _clean_next_path(raw: Optional[str], *, default_path: str = "/admin") -> str
         or pl.startswith("/%5c")
         or pl.startswith("/%2f%2f")
         or pl.startswith("/%2f%5c")
-    ):
+    )
+    if bad:
         return default_path
 
     try:
@@ -585,6 +687,10 @@ def _inject():
     return {
         "csrf_token_value": session.get(_SESSION_CSRF_KEY, ""),
         "admin_fresh": _admin_is_fresh(),
+        "ui": {
+            "brand": _clean_str(current_app.config.get("BRAND_NAME"), 48, default="Skyline Store"),
+            "accent": _clean_str(current_app.config.get("UI_ACCENT"), 40, default="#4f46e5"),
+        },
     }
 
 
@@ -608,13 +714,21 @@ def dashboard():
         offer_count=_count(Offer.query),
         csrf_token_value=_csrf_token(),
         next_path=_clean_next_path(request.args.get("next"), default_path="/admin"),
+        title="Panel admin",
+        ui={"section": "Dashboard", "page_title": "Panel admin"},
     )
 
 
 @admin_bp.get("/payments")
 @admin_required
 def payments():
-    return _render_safe("admin/payments.html", data=load_payments(), csrf_token_value=_csrf_token())
+    return _render_safe(
+        "admin/payments.html",
+        data=load_payments(),
+        csrf_token_value=_csrf_token(),
+        title="Pagos",
+        ui={"section": "Pagos", "page_title": "Métodos de pago"},
+    )
 
 
 @admin_bp.post("/payments/save")
@@ -667,6 +781,8 @@ def commission_tiers():
         ok=ok,
         issues=issues,
         csrf_token_value=_csrf_token(),
+        title="Tiers de comisión",
+        ui={"section": "Afiliados", "page_title": "Tiers de comisión"},
     )
 
 
@@ -744,7 +860,7 @@ def commission_tiers_edit(id: int):
     rate_raw = request.form.get("rate")
     label = _clean_str(request.form.get("label"), 80, default="") or None
     sort_order = request.form.get("sort_order")
-    active = request.form.get("active")
+    active = request.form.get("activer"er5ptf0auT09kw???r-d
 
     if min_sales is not None and str(min_sales).strip() != "":
         _safe_set(t, "min_sales", as_int(min_sales, 0, min_value=0, max_value=1_000_000))
@@ -812,7 +928,13 @@ def categories():
         except Exception:
             pass
         cats = []
-    return _render_safe("admin/categories.html", categories=cats, csrf_token_value=_csrf_token())
+    return _render_safe(
+        "admin/categories.html",
+        categories=cats,
+        csrf_token_value=_csrf_token(),
+        title="Categorías",
+        ui={"section": "Catálogo", "page_title": "Categorías"},
+    )
 
 
 @admin_bp.post("/categories/new")
@@ -961,6 +1083,8 @@ def products():
         per_page=per_page,
         total=total,
         csrf_token_value=_csrf_token(),
+        title="Productos",
+        ui={"section": "Catálogo", "page_title": "Productos"},
     )
 
 
@@ -975,7 +1099,14 @@ def products_new():
         except Exception:
             pass
         cats = []
-    return _render_safe("admin/product_edit.html", product=None, categories=cats, csrf_token_value=_csrf_token())
+    return _render_safe(
+        "admin/product_edit.html",
+        product=None,
+        categories=cats,
+        csrf_token_value=_csrf_token(),
+        title="Nuevo producto",
+        ui={"section": "Catálogo", "page_title": "Nuevo producto"},
+    )
 
 
 @admin_bp.post("/products/new")
@@ -1050,7 +1181,14 @@ def products_edit(id: int):
             pass
         cats = []
 
-    return _render_safe("admin/product_edit.html", product=p, categories=cats, csrf_token_value=_csrf_token())
+    return _render_safe(
+        "admin/product_edit.html",
+        product=p,
+        categories=cats,
+        csrf_token_value=_csrf_token(),
+        title="Editar producto",
+        ui={"section": "Catálogo", "page_title": "Editar producto"},
+    )
 
 
 @admin_bp.post("/products/edit/<int:id>")
@@ -1137,7 +1275,13 @@ def offers():
             pass
         items = []
 
-    return _render_safe("admin/offers.html", offers=items, csrf_token_value=_csrf_token())
+    return _render_safe(
+        "admin/offers.html",
+        offers=items,
+        csrf_token_value=_csrf_token(),
+        title="Ofertas",
+        ui={"section": "Marketing", "page_title": "Ofertas"},
+    )
 
 
 @admin_bp.post("/offers/new")
