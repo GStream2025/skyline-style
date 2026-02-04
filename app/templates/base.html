@@ -65,17 +65,29 @@
   <meta property="og:title" content="{{ _title|e }}">
   <meta property="og:description" content="{{ _desc|e }}">
   <meta property="og:url" content="{{ _canonical|e }}">
+  <meta property="og:locale" content="es_ES">
   {% if _og %}<meta property="og:image" content="{{ _og|e }}">{% endif %}
 
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="theme-color" content="#2563eb">
+
+  {# ✅ Mejora: theme-color por esquema #}
+  <meta name="theme-color" content="#0b1120" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#2563eb" media="(prefers-color-scheme: light)">
+
   <meta name="color-scheme" content="light dark">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta name="csrf-token" content="{{ _csrf|e }}">
+  <meta name="format-detection" content="telephone=no">
 
   <link rel="icon" href="{{ safe_static('img/favicon.png') }}" type="image/png">
   <link rel="preload" as="font" href="{{ safe_static('fonts/inter-var.woff2') }}" type="font/woff2" crossorigin>
 
+  {# ✅ NUEVO: UI Core como base (NO rompe) #}
+  {% set _ui_core_css = safe_static('css/ui-core.css') %}
+  <link rel="preload" as="style" href="{{ _ui_core_css|e }}">
+  <link rel="stylesheet" href="{{ _ui_core_css|e }}">
+
+  {# Tu global actual (mantiene prioridad) #}
   {% set _base_css = safe_static('css/skyline-pro.css') %}
   <link rel="preload" as="style" href="{{ _base_css|e }}">
   <link rel="stylesheet" href="{{ _base_css|e }}">
@@ -122,13 +134,15 @@
     <form class="search" action="{{ shop|e }}" method="get" role="search" autocomplete="off" novalidate>
       <label class="sr-only" for="q">Buscar productos</label>
       <input id="q" type="search" name="q" placeholder="Buscar productos…" value="{{ _q|e }}"
-             inputmode="search" maxlength="80" aria-label="Buscar productos">
+             inputmode="search" enterkeyhint="search" spellcheck="false"
+             maxlength="80" aria-label="Buscar productos">
       <button class="btn primary" type="submit">Buscar</button>
     </form>
 
     <div class="topbar-actions">
       <a href="{{ cart|e }}" class="icon-btn" aria-label="Carrito">
-        🛒 <span class="cart-badge" data-cart-badge hidden>0</span>
+        🛒
+        <span class="cart-badge" data-cart-badge hidden role="status" aria-live="polite" aria-atomic="true">0</span>
       </a>
 
       {% if user_ok %}
@@ -150,7 +164,8 @@
 </main>
 
 <footer class="footer" role="contentinfo">
-  <div class="container grid-4">
+  {# ✅ Mejora real: antes no era grid porque faltaba .grid #}
+  <div class="container grid grid-4">
     <div>
       <strong>{{ _app|e }}</strong>
       <p class="small">Marketplace premium de tecnología y streetwear.</p>
@@ -189,6 +204,7 @@
   };
 
   window.Skyline = window.Skyline || {};
+  window.Skyline.csrfToken = token;
 
   window.Skyline.setCartBadge = (n = 0) => {
     if (!badge) return;
@@ -199,7 +215,9 @@
   };
 
   const origFetch = window.fetch;
-  if (typeof origFetch === 'function' && token) {
+  if (typeof origFetch === 'function' && token && !window.Skyline.__fetchWrapped) {
+    window.Skyline.__fetchWrapped = true;
+
     window.fetch = (input, init) => {
       const o = init ? { ...init } : {};
       const method = String(o.method || (input && input.method) || 'GET').toUpperCase();

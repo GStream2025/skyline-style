@@ -17,8 +17,19 @@
 
   <title>{% block title %}Admin · {{ (APP_NAME or "Skyline Store")|e }}{% endblock %}</title>
 
+  {# ✅ 1) UI Core global (SE CARGA PRIMERO para NO romper admin-base) #}
+  <link rel="preload" href="{{ url_for('static', filename='css/ui-core.css') }}" as="style">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/ui-core.css') }}">
+
+  {# ✅ 2) Admin base (se carga después y mantiene prioridad) #}
   <link rel="preload" href="{{ url_for('static', filename='css/admin-base.css') }}" as="style">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/admin-base.css') }}">
+
+  {# ✅ 3) Fix mínimo: que el navegador respete tu data-theme (mejora estable) #}
+  <style>
+    html[data-theme="dark"]{ color-scheme:dark; }
+    html[data-theme="light"]{ color-scheme:light; }
+  </style>
 
   {% block extra_head %}{% endblock %}
 </head>
