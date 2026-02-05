@@ -5,40 +5,41 @@
 {% endblock %}
 
 {% block extra_head %}
-  {# =========================
-     Vars + helpers (sin duplicar)
-     ========================= #}
+  {# =========================================================
+     Skyline Store — index.html (FINAL / NO-500 / ENDPOINT-SAFE)
+     ✅ NO usa url_for() para endpoints opcionales
+     ✅ Usa safe_url() (inyectado por app/__init__.py) => NUNCA rompe
+     ✅ first_url seguro (sin macros “truthy string”)
+     ✅ OG absoluto si viene relativo
+     ✅ Assets reales según tu static/ (hero_home.png existe)
+  ========================================================= #}
+
   {% set _env = (ENV if ENV is defined and ENV else 'production')|string|lower|trim %}
   {% set _req = (request if request is defined and request else none) %}
-  {% set _vf  = (view_functions if view_functions is defined and view_functions else {}) %}
   {% set _home_ver = (HOME_CSS_VER if HOME_CSS_VER is defined and HOME_CSS_VER else (ASSET_VER if ASSET_VER is defined and ASSET_VER else '165'))|string|trim %}
   {% set _nonce = (csp_nonce if csp_nonce is defined and csp_nonce else (nonce if nonce is defined and nonce else ''))|string %}
 
-  {% macro _has_ep(ep) -%}
-    {{- (ep and _vf and _vf.get(ep)) and true or false -}}
+  {# Helpers SAFE (NO url_for directo para endpoints) #}
+  {% macro safe_static(f) -%}
+    {%- set _f = (f|string).lstrip('/') -%}
+    {%- if url_for is defined -%}
+      {{- url_for('static', filename=_f) ~ '?v=' ~ _home_ver -}}
+    {%- else -%}
+      {{- '/static/' ~ _f ~ '?v=' ~ _home_ver -}}
+    {%- endif -%}
   {%- endmacro %}
 
-  {% macro safe_url(ep, fb='/') -%}
-    {%- if url_for is defined and _has_ep(ep) -%}{{- url_for(ep) -}}{%- else -%}{{- fb -}}{%- endif -%}
-  {%- endmacro %}
-
-  {# ✅ Mejora 1: elige el primer endpoint existente (evita links rotos) #}
   {% macro first_url(eps, fb='/') -%}
     {%- set out = '' -%}
     {%- if eps is iterable -%}
       {%- for ep in eps -%}
-        {%- if not out and url_for is defined and _has_ep(ep) -%}
-          {%- set out = url_for(ep) -%}
+        {%- if not out -%}
+          {%- set u = (safe_url(ep, '') if safe_url is defined else '') -%}
+          {%- if u -%}{%- set out = u -%}{%- endif -%}
         {%- endif -%}
       {%- endfor -%}
     {%- endif -%}
     {{- out if out else fb -}}
-  {%- endmacro %}
-
-  {% macro safe_static(f) -%}
-    {%- set _f = (f|string).lstrip('/') -%}
-    {%- if url_for is defined -%}{{- url_for('static', filename=_f) ~ '?v=' ~ _home_ver -}}
-    {%- else -%}{{- '/static/' ~ _f ~ '?v=' ~ _home_ver -}}{%- endif -%}
   {%- endmacro %}
 
   {# Canonical/root robusto #}
@@ -46,12 +47,12 @@
   {% set _root = (_req.url_root if _req and _req.url_root else 'https://skyline-style.onrender.com/') %}
   {% set _root_abs = (_root if _root and (_root|string).startswith('http') else 'https://skyline-style.onrender.com/') %}
 
-  {# ✅ FIX: en tu /static/img/banners existe hero_home.png (no .webp) #}
-  {% set hero_png  = safe_static('img/banners/hero_home.png') %}
+  {# Assets reales (según tu tree) #}
+  {% set hero_png = safe_static('img/banners/hero_home.png') %}
   {% set og_img_local = safe_static('img/og.png') %}
   {% set og_img_in = (og_image if og_image is defined and og_image else og_img_local) %}
 
-  {# ✅ Mejora 4: OG image absoluta si viene relativa #}
+  {# OG absoluto si viene relativo #}
   {% set og_img = og_img_in %}
   {% if og_img and not (og_img|string).startswith('http') %}
     {% set og_img = _root_abs ~ (og_img|string).lstrip('/') %}
@@ -60,17 +61,15 @@
   {% set _desc = (meta_description if meta_description is defined and meta_description else 'Moda urbana premium, accesorios y tecnología. Ofertas reales, soporte y experiencia de marca.')|string|trim %}
   {% set _t = (meta_title if meta_title is defined and meta_title else 'Skyline Store · Tech + Streetwear premium')|string|trim %}
 
-  {% set _shop_url = first_url(['shop.shop','shop.index','main.shop'], '/shop') %}
+  {# ✅ FIX REAL: shop.index removido (no existe). Usamos shop.shop sí o sí #}
+  {% set _shop_url = first_url(['shop.shop','main.tienda_alias','main.tienda'], '/shop') %}
   {% if not _shop_url or not (_shop_url|string).startswith('/') %}{% set _shop_url = '/shop' %}{% endif %}
   {% set _shop_sep = '&' if '?' in _shop_url else '?' %}
   {% set _offers_url = _shop_url ~ _shop_sep ~ 'sort=new&available=1' %}
   {% set _shop_abs = _root_abs ~ (_shop_url|string).lstrip('/') %}
 
-  {# ✅ Mejora 2: admin login robusto (varios endpoints + fallback) #}
-  {% set _admin_login = first_url(
-    ['admin_auth.login','admin.login','admin_login','admin_auth_routes.login'],
-    '/admin/login'
-  ) %}
+  {# Admin login robusto #}
+  {% set _admin_login = first_url(['admin_auth.login','admin.login'], '/admin/login') %}
 
   <meta name="description" content="{{ _desc|e }}">
   <meta name="robots" content="{{ 'index,follow' if _env == 'production' else 'noindex,nofollow' }}">
@@ -95,17 +94,13 @@
   <link rel="preconnect" href="{{ _root_abs|e }}" crossorigin>
   <link rel="dns-prefetch" href="//skyline-style.onrender.com">
 
-  {# ✅ preload solo lo que existe (PNG). Evita warning/404 #}
-  <link rel="preload" as="image" href="{{ hero_png|e }}" fetchpriority="high" imagesizes="(max-width: 980px) 92vw, 860px">
+  <link rel="preload" as="image" href="{{ hero_png|e }}" fetchpriority="high"
+        imagesizes="(max-width: 980px) 92vw, 860px">
 
-  {# CSS principal #}
   <link rel="stylesheet" href="{{ safe_static('css/home.css')|e }}">
   <link rel="prefetch" href="{{ _shop_url|e }}" as="document">
-
-  {# ✅ opcional: prefetch login admin para acceso rápido (no rompe nada) #}
   <link rel="prefetch" href="{{ _admin_login|e }}" as="document">
 
-  {# ✅ CSP: JSON-LD permitido con nonce #}
   <script type="application/ld+json"{% if _nonce %} nonce="{{ _nonce|e }}"{% endif %}>
   {
     "@context":"https://schema.org",
@@ -121,7 +116,6 @@
   }
   </script>
 
-  {# ✅ Mejora: inline CSS mínimo de “paint seguro” (con nonce) + link admin discreto #}
   <style{% if _nonce %} nonce="{{ _nonce|e }}"{% endif %}>
     :root{color-scheme:light dark}
     .hp{background:#f6f8fc;color:#0b1220}
@@ -134,7 +128,7 @@
 {% endblock %}
 
 {% block content %}
-  {% set account_url = first_url(['auth.account','account.account','auth_bp.account'], '/auth/account') %}
+  {% set account_url = first_url(['auth.account','account.account'], '/auth/account') %}
   {% set acc_sep = '&' if '?' in account_url else '?' %}
   {% set account_login_url = account_url ~ acc_sep ~ 'tab=login' %}
   {% set account_register_url = account_url ~ acc_sep ~ 'tab=register' %}
@@ -178,7 +172,7 @@
 
           <noscript>
             <div class="hp-noscript" role="status" aria-live="polite">
-              Tu navegador tiene JavaScript deshabilitado. La tienda funciona, pero algunas mejoras visuales (scroll pills / botón arriba) pueden no activarse.
+              Tu navegador tiene JavaScript deshabilitado. La tienda funciona, pero algunas mejoras visuales pueden no activarse.
             </div>
           </noscript>
 
@@ -207,14 +201,7 @@
             <span aria-hidden="true">·</span>
             <a href="{{ _shop_url|e }}" class="hp-link">Catálogo</a>
             <span aria-hidden="true">·</span>
-
-            {# ✅ Mejora 3: Acceso Admin conectado y seguro (siempre funcional) #}
-            <a href="{{ _admin_login|e }}"
-               class="hp-link hp-linkAdmin"
-               rel="nofollow noopener"
-               aria-label="Acceso administrador">
-              Admin
-            </a>
+            <a href="{{ _admin_login|e }}" class="hp-link hp-linkAdmin" rel="nofollow noopener" aria-label="Acceso administrador">Admin</a>
           </nav>
         </div>
 
@@ -257,8 +244,7 @@
         {% for t in trust %}
           <article class="hp-trustCard hp-glass" data-reveal aria-label="{{ t.title|e }}">
             <div class="hp-trustCard__img" aria-hidden="true">
-              <img src="{{ safe_static(t.img)|e }}" alt="" loading="lazy" decoding="async" class="hp-trustIcon"
-                   data-fallback="{{ hero_png|e }}">
+              <img src="{{ safe_static(t.img)|e }}" alt="" loading="lazy" decoding="async" class="hp-trustIcon" data-fallback="{{ hero_png|e }}">
             </div>
             <div class="hp-trustCard__meta">
               <b>{{ t.title|e }}</b>
@@ -279,10 +265,11 @@
           <a class="hp-linkMore" href="{{ _shop_url|e }}">Ver todo →</a>
         </div>
 
+        {% set _cat_sep = '&' if '?' in _shop_url else '?' %}
         {% set cats = [
-          {'label':'Ropa urbana','img':'img/banners/cat_women.png','href': _shop_url ~ (('?categoria=ropa') if '?' not in _shop_url else '&categoria=ropa')},
-          {'label':'Accesorios','img':'img/banners/cat_accessories.png','href': _shop_url ~ (('?categoria=accesorios') if '?' not in _shop_url else '&categoria=accesorios')},
-          {'label':'Tecnología','img':'img/banners/cat_tech.png','href': _shop_url ~ (('?categoria=tecnologia') if '?' not in _shop_url else '&categoria=tecnologia')},
+          {'label':'Ropa urbana','img':'img/banners/cat_women.png','href': _shop_url ~ _cat_sep ~ 'categoria=ropa'},
+          {'label':'Accesorios','img':'img/banners/cat_accessories.png','href': _shop_url ~ _cat_sep ~ 'categoria=accesorios'},
+          {'label':'Tecnología','img':'img/banners/cat_tech.png','href': _shop_url ~ _cat_sep ~ 'categoria=tecnologia'},
           {'label':'Ofertas','img':'img/banners/promo_week.png','href': _offers_url}
         ] %}
 
@@ -290,8 +277,7 @@
           {% for c in cats %}
             <a class="hp-catCard hp-glass" data-reveal href="{{ c.href|e }}" aria-label="{{ c.label|e }}" role="listitem">
               <div class="hp-catCard__media" aria-hidden="true">
-                <img src="{{ safe_static(c.img)|e }}" alt="" loading="lazy" decoding="async" class="hp-catImg"
-                     data-fallback="{{ hero_png|e }}">
+                <img src="{{ safe_static(c.img)|e }}" alt="" loading="lazy" decoding="async" class="hp-catImg" data-fallback="{{ hero_png|e }}">
               </div>
               <div class="hp-catCard__overlay">
                 <b>{{ c.label|e }}</b>
@@ -332,8 +318,7 @@
 
               <article class="hp-prod hp-glass" data-reveal aria-label="{{ p_title|e }}" role="listitem">
                 <a class="hp-prod__img" href="{{ p_href|e }}" aria-label="{{ p_title|e }}">
-                  <img src="{{ p_img|e }}" alt="{{ p_title|e }}" loading="lazy" decoding="async" class="hp-prodImg"
-                       data-fallback="{{ hero_png|e }}">
+                  <img src="{{ p_img|e }}" alt="{{ p_title|e }}" loading="lazy" decoding="async" class="hp-prodImg" data-fallback="{{ hero_png|e }}">
                 </a>
 
                 <div class="hp-prod__meta">
@@ -385,9 +370,9 @@
 {% endblock %}
 
 {% block extra_js %}
-  {% set _home_ver = (HOME_CSS_VER if HOME_CSS_VER is defined and HOME_CSS_VER else (ASSET_VER if ASSET_VER is defined and ASSET_VER else '165'))|string|trim %}
+  {% set _home_ver2 = (HOME_CSS_VER if HOME_CSS_VER is defined and HOME_CSS_VER else (ASSET_VER if ASSET_VER is defined and ASSET_VER else '165'))|string|trim %}
   {% if url_for is defined %}
-    <script src="{{ url_for('static', filename='js/home.js') }}?v={{ _home_ver|e }}" defer></script>
-    <script src="{{ url_for('static', filename='js/home_boot.js') }}?v={{ _home_ver|e }}" defer></script>
+    <script src="{{ url_for('static', filename='js/home.js') }}?v={{ _home_ver2|e }}" defer></script>
+    <script src="{{ url_for('static', filename='js/home_boot.js') }}?v={{ _home_ver2|e }}" defer></script>
   {% endif %}
 {% endblock %}
