@@ -6,24 +6,27 @@
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
 
   {# =========================================================
-     Skyline Store — base.html (PRO / NO-500 / JINJA-SAFE)
+     Skyline Store — base.html (FINAL PRO / NO-500 / JINJA-SAFE)
      ✅ NO usa try/except (Jinja no lo soporta)
-     ✅ NO depende de view_functions
-     ✅ NO revienta por endpoints faltantes (Terms/Privacy hardlink)
-     ✅ Canonical/OG seguros
+     ✅ NO revienta por endpoints faltantes (safe_url NO llama url_for)
+     ✅ Canonical/OG robustos
      ✅ CSRF meta estable (WTF o session)
-     ✅ Login/Register a pantallas correctas
-     ✅ Año sin utcnow()
+     ✅ CSS/JS versionados + carga condicional por pantalla
+     ✅ Fetch wrapper compatible + badge persistente
   ========================================================= #}
 
-  {% set _req = request if request is defined else none %}
+  {% set _req  = request if request is defined else none %}
   {% set _args = (_req.args if _req and _req.args is defined else {}) %}
   {% set _path = (_req.path if _req and _req.path is defined else '/') %}
+
   {% set _app  = (APP_NAME if APP_NAME is defined and APP_NAME else 'Skyline Store')|string %}
   {% set _env  = (ENV if ENV is defined and ENV else 'production')|lower|trim %}
   {% set _title = (meta_title if meta_title is defined and meta_title else _app)|string %}
   {% set _desc  = (meta_description if meta_description is defined and meta_description else 'Marketplace premium de tecnología y streetwear.')|string %}
-  {% set _cssv = (BASE_CSS_VER if BASE_CSS_VER is defined else (ASSET_VER if ASSET_VER is defined else '1'))|string %}
+
+  {# ✅ Mejora: fuente única de versionado para assets (evita des-sync) #}
+  {% set _cssv = (ASSET_VER if ASSET_VER is defined and ASSET_VER else '1')|string %}
+
   {% set _nonce = (csp_nonce if csp_nonce is defined and csp_nonce else (nonce if nonce is defined else ''))|string %}
 
   {# CSRF: soporta Flask-WTF o csrf_token en sesión #}
@@ -36,7 +39,7 @@
     {% set _csrf = (session.get('csrf_token') or '')|string %}
   {% endif %}
 
-  {# Fallback map de rutas (para URLs conocidas) #}
+  {# Fallback map de rutas (URLs conocidas) #}
   {% set _fb = {
     'main.home': '/',
     'shop.shop': '/shop',
@@ -46,14 +49,10 @@
     'auth.register_get': '/auth/register'
   } %}
 
-  {# safe_url: SOLO para endpoints que EXISTEN (los del map) #}
+  {# ✅ FIX CRÍTICO: safe_url NO llama url_for (evita 500 por endpoint inexistente) #}
   {% macro safe_url(ep, fb='/') -%}
     {%- set _fallback = (fb if fb else (_fb.get(ep) if _fb and _fb.get(ep) else '/')) -%}
-    {%- if url_for is defined and _fb is defined and _fb.get(ep) is not none -%}
-      {{- url_for(ep) -}}
-    {%- else -%}
-      {{- _fallback -}}
-    {%- endif -%}
+    {{- _fallback -}}
   {%- endmacro %}
 
   {% macro safe_static(f) -%}
@@ -70,10 +69,21 @@
   {% if _req and _req.url_root is defined and _req.url_root %}
     {% set _canonical = (_req.url_root.rstrip('/') ~ (_path or '/')) %}
   {% endif %}
+  {# normaliza solo para no duplicar con slash final #}
+  {% if _path != '/' %}
+    {% set _canonical = _canonical.rstrip('/') %}
+  {% endif %}
 
   {% set _og = (og_image if og_image is defined and og_image else safe_static('img/og/og-home.png')) %}
+
   {% set _q = (_args.get('q','') if _args else '')|string %}
   {% if _q|length > 80 %}{% set _q = _q[:80] %}{% endif %}
+
+  {# ✅ Mejora: preconnect para acelerar carga en móvil/desktop #}
+  {% set _origin = ('https://skyline-style.onrender.com') %}
+  {% if _req and _req.url_root is defined and _req.url_root %}
+    {% set _origin = _req.url_root.rstrip('/') %}
+  {% endif %}
 
   <title>{% block title %}{{ _title|e }}{% endblock %}</title>
   <meta name="description" content="{{ _desc|e }}">
@@ -96,8 +106,12 @@
   <meta name="csrf-token" content="{{ _csrf|e }}">
   <meta name="format-detection" content="telephone=no">
 
+  <link rel="preconnect" href="{{ _origin|e }}">
+
   <link rel="icon" href="{{ safe_static('img/favicon.png') }}" type="image/png">
-  <link rel="preload" as="font" href="{{ safe_static('fonts/inter-var.woff2') }}" type="font/woff2" crossorigin>
+
+  {# Preload font si existe (si no existe, solo ensucia logs pero no rompe) #}
+  <link rel="preload" as="font" href="{{ safe_static('fonts/inter-var.woff2') }}" type="font/woff2" crossorigin="anonymous">
 
   {% set _ui_core_css = safe_static('css/ui-core.css') %}
   <link rel="preload" as="style" href="{{ _ui_core_css|e }}">
@@ -106,6 +120,17 @@
   {% set _base_css = safe_static('css/skyline-pro.css') %}
   <link rel="preload" as="style" href="{{ _base_css|e }}">
   <link rel="stylesheet" href="{{ _base_css|e }}">
+
+  {# ✅ Mejora: CSS por pantalla si existe (home/auth/account) #}
+  {% if _path == '/' %}
+    <link rel="stylesheet" href="{{ safe_static('css/home.css') }}">
+  {% elif (_path|string).startswith('/auth/login') %}
+    <link rel="stylesheet" href="{{ safe_static('css/auth-login.css') }}">
+  {% elif (_path|string).startswith('/auth/register') %}
+    <link rel="stylesheet" href="{{ safe_static('css/auth-register.css') }}">
+  {% elif (_path|string).startswith('/account') or (_path|string).startswith('/cuenta') %}
+    <link rel="stylesheet" href="{{ safe_static('css/account.css') }}">
+  {% endif %}
 
   {% block extra_head %}{% endblock %}
 </head>
@@ -121,8 +146,8 @@
 {% set _shop_sep = '&' if '?' in shop else '?' %}
 {% set offers_url = (shop ~ _shop_sep ~ 'ofertas=1') %}
 
-{% set login_url = safe_url('auth.login_get', '/auth/account?tab=login') %}
-{% set register_url = safe_url('auth.register_get', '/auth/account?tab=register') %}
+{% set login_url = safe_url('auth.login_get', '/auth/login') %}
+{% set register_url = safe_url('auth.register_get', '/auth/register') %}
 
 {% set user_ok = false %}
 {% if current_user is defined and current_user and current_user.is_authenticated is defined %}
@@ -149,11 +174,11 @@
       <a href="{{ offers_url|e }}" {% if _args and _args.get('ofertas') %}aria-current="page"{% endif %}>Ofertas</a>
     </nav>
 
-    <form class="search" action="{{ shop|e }}" method="get" role="search" autocomplete="off" novalidate>
+    <form class="search" action="{{ shop|e }}" method="get" role="search" autocomplete="on" novalidate>
       <label class="sr-only" for="q">Buscar productos</label>
       <input id="q" type="search" name="q" placeholder="Buscar productos…" value="{{ _q|e }}"
              inputmode="search" enterkeyhint="search" spellcheck="false"
-             maxlength="80" aria-label="Buscar productos">
+             autocapitalize="none" maxlength="80" aria-label="Buscar productos">
       <button class="btn primary" type="submit">Buscar</button>
     </form>
 
@@ -199,7 +224,6 @@
     </div>
     <div>
       <strong>Legal</strong><br>
-      {# ✅ FIX FINAL: NO url_for aquí (tus endpoints no existen) #}
       <a href="/terms">Términos</a><br>
       <a href="/privacy">Privacidad</a>
     </div>
@@ -232,8 +256,23 @@
     badge.textContent = String(num);
     if (num > 0) badge.removeAttribute('hidden');
     else badge.setAttribute('hidden', '');
+    try { localStorage.setItem('skyline_cart_count', String(num)); } catch (_) {}
   };
 
+  // ✅ Badge persistente: si no hay cartCount, usa localStorage
+  const readCartCount = () => {
+    try {
+      const v = Number(window.Skyline.cartCount || 0);
+      if (Number.isFinite(v) && v >= 0) return v;
+    } catch (_) {}
+    try {
+      const v2 = Number(localStorage.getItem('skyline_cart_count') || 0);
+      if (Number.isFinite(v2) && v2 >= 0) return v2;
+    } catch (_) {}
+    return 0;
+  };
+
+  // ✅ Fetch wrapper compatible (no usa input.headers)
   const origFetch = window.fetch;
   if (typeof origFetch === 'function' && token && !window.Skyline.__fetchWrapped) {
     window.Skyline.__fetchWrapped = true;
@@ -242,7 +281,7 @@
       const o = init ? { ...init } : {};
       const method = String(o.method || (input && input.method) || 'GET').toUpperCase();
 
-      const h = new Headers(o.headers || (input && input.headers) || {});
+      const h = new Headers(o.headers || {});
       if (!h.has('X-Requested-With')) h.set('X-Requested-With', 'XMLHttpRequest');
 
       try {
@@ -263,11 +302,27 @@
     };
   }
 
+  // ✅ Siempre restaura badge al volver atrás / cache del navegador
   window.addEventListener('pageshow', () => {
-    try { window.Skyline.setCartBadge(window.Skyline.cartCount || 0); } catch (_) {}
+    try { window.Skyline.setCartBadge(readCartCount()); } catch (_) {}
   }, { passive: true });
+
+  // primera pintura
+  try { window.Skyline.setCartBadge(readCartCount()); } catch (_) {}
 })();
 </script>
+
+{# ✅ JS por pantalla (existen en /static/js según tu tree) #}
+{% if _path == '/' %}
+  <script defer src="{{ safe_static('js/home_boot.js') }}"></script>
+  <script defer src="{{ safe_static('js/home.js') }}"></script>
+{% elif (_path|string).startswith('/auth/login') %}
+  <script defer src="{{ safe_static('js/login.js') }}"></script>
+{% elif (_path|string).startswith('/auth/register') %}
+  <script defer src="{{ safe_static('js/register.js') }}"></script>
+{% elif (_path|string).startswith('/account') or (_path|string).startswith('/cuenta') %}
+  <script defer src="{{ safe_static('js/account.js') }}"></script>
+{% endif %}
 
 {% block extra_js %}{% endblock %}
 </body>

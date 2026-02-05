@@ -28,7 +28,7 @@ _TRUE = {"1", "true", "yes", "y", "on", "checked", "enable", "enabled"}
 _FALSE = {"0", "false", "no", "n", "off", "disable", "disabled"}
 _ALLOWED_LOG_LEVELS = {"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"}
 
-_STATIC_404_PASSTHROUGH = {"/favicon.ico"}
+_STATIC_404_PASSTHROUGH = {"/favicon.ico", "/robots.txt", "/sitemap.xml"}
 
 
 # -----------------------------------------------------------------------------
@@ -144,9 +144,8 @@ def resp_error(status: int, code: str, message: str):
         headers["Pragma"] = "no-cache"
         headers["Expires"] = "0"
 
-    # Renderiza error sin romper aunque base.html tenga links malos:
-    # (safe_url ya no rompe, pero esto igual está blindado).
-    for tpl in (f"errors/{status_i}.html", "error.html"):
+    # ✅ mejora: orden preferido y variables consistentes
+    for tpl in (f"errors/{status_i}.html", "errors/error.html", "error.html"):
         try:
             return render_template(tpl, message=msg, status=status_i, code=err), status_i, headers
         except Exception:
@@ -187,26 +186,23 @@ def _safe_next_path(v: str) -> str:
         return ""
     if len(nxt) > 2048:
         nxt = nxt[:2048]
-
-    if any(c in nxt for c in ("\x00", "\r", "\n", "\\")):
+    if any(c in nxt for c in ("\x00", "\r", "\n", "\\", " ")):
         return ""
-    if "://" in nxt:
-        return ""
-    if nxt.startswith("//"):
+    if "://" in nxt or nxt.startswith("//"):
         return ""
     if not nxt.startswith("/"):
         return ""
-
     p = urlparse(nxt)
     if p.scheme or p.netloc:
         return ""
-
     path_only = p.path or ""
     if not path_only.startswith("/") or path_only.startswith("//"):
         return ""
     if ".." in path_only:
         return ""
-
+    # ✅ mejora: evita loops a auth/admin directos
+    if path_only.startswith(("/auth/", "/admin/")):
+        return ""
     return path_only[:512]
 
 
@@ -260,9 +256,11 @@ def _register_blueprints(app: Flask) -> dict[str, Any]:
     except Exception as e:
         stats["errors"]["app.routes.register_blueprints"] = f"{type(e).__name__}: {e}"
 
+    # Fallback direct imports
     candidates = [
         ("app.routes.main_routes", "main_bp"),
         ("app.routes.shop_routes", "shop_bp"),
+        ("app.routes.shop_routes", "shop_compat_bp"),  # ✅ mejora: no te olvides del compat
         ("app.routes.auth_routes", "auth_bp"),
         ("app.routes.account_routes", "account_bp"),
         ("app.routes.cart_routes", "cart_bp"),
@@ -414,7 +412,7 @@ def _apply_security_headers(app: Flask, resp: Response) -> Response:
 
 
 # -----------------------------------------------------------------------------
-# SQLAlchemy config (test-proof, no double-init)
+# SQLAlchemy config (no double-init / sqlite-safe)
 # -----------------------------------------------------------------------------
 def _normalize_db_uri(uri: str, *, is_prod: bool) -> str:
     u = (uri or "").strip()
@@ -502,21 +500,19 @@ def _configure_sqlalchemy(app: Flask) -> None:
 def _best_redirect_to_account(app: Flask, tab: str) -> Response:
     nxt = _safe_next_path(request.args.get("next", "")) or "/"
     endpoint = str(app.config.get("AUTH_ACCOUNT_ENDPOINT", "auth.account") or "auth.account")
+    # ✅ mejora: si existe endpoint real, usalo; si no, fallback a path fijo
     if _endpoint_exists(app, endpoint):
-        return redirect(url_for(endpoint, tab=tab, next=nxt), code=302)
+        try:
+            return redirect(url_for(endpoint, tab=tab, next=nxt), code=302)
+        except Exception:
+            pass
     return redirect("/auth/account?" + urlencode({"tab": tab, "next": nxt}), code=302)
 
 
 # -----------------------------------------------------------------------------
-# Jinja helpers (safe_url REAL, with fallback)
+# Jinja helpers (safe_url REAL)
 # -----------------------------------------------------------------------------
 def _safe_url(app: Flask, endpoint: str, fallback: str = "", **values: Any) -> str:
-    """
-    safe_url(endpoint, fallback="/path") for Jinja:
-    - never raises
-    - if endpoint doesn't exist: returns fallback
-    - if url_for fails: returns fallback
-    """
     ep = (endpoint or "").strip()
     fb = (fallback or "").strip()
     if not ep or not _endpoint_exists(app, ep):
@@ -541,7 +537,6 @@ def create_app(overrides: Optional[dict[str, Any]] = None) -> Flask:
     )
 
     app.config.from_mapping(cfg.as_flask_config())
-
     if overrides:
         app.config.update(overrides)
 
@@ -558,17 +553,12 @@ def create_app(overrides: Optional[dict[str, Any]] = None) -> Flask:
     if bool(app.config.get("WTF_CSRF_ENABLED", True)):
         csrf.init_app(app)
 
+    # ✅ mejora: context globals estables (no expone view_functions gigante)
     @app.context_processor
     def _inject_globals():
-        try:
-            vf = set((app.view_functions or {}).keys())
-        except Exception:
-            vf = set()
-
         app_name = app.config.get("APP_NAME", "Skyline Store")
         asset_ver = app.config.get("ASSET_VER", app.config.get("BASE_CSS_VER", "1"))
         home_ver = app.config.get("HOME_CSS_VER", asset_ver)
-
         return {
             "ENV": _env_name(app),
             "APP_NAME": app_name,
@@ -577,9 +567,7 @@ def create_app(overrides: Optional[dict[str, Any]] = None) -> Flask:
             "PUBLIC_BASE_URL": app.config.get("PUBLIC_BASE_URL", ""),
             "MAIL_FROM": app.config.get("MAIL_FROM", ""),
             "now_year": utcnow().year,
-            "view_functions": {k: True for k in vf},
             "REQUEST_ID": cast(str, getattr(g, "request_id", "")) if hasattr(g, "request_id") else "",
-            # ✅ SAFE: base.html can call safe_url('main.terms','/terms') and it will never 500
             "safe_url": partial(_safe_url, app),
         }
 
@@ -592,7 +580,7 @@ def create_app(overrides: Optional[dict[str, Any]] = None) -> Flask:
         g.request_id = rid[:128] if rid else secrets.token_urlsafe(10)
         g._t0 = time.perf_counter()
 
-        # Alias /login /register
+        # ✅ mejora: aliases /login /register y /auth/login /auth/register sin loops
         if request.method in {"GET", "HEAD"}:
             p = request.path.rstrip("/") or "/"
             if p in {"/login", "/auth/login"}:
@@ -617,7 +605,7 @@ def create_app(overrides: Optional[dict[str, Any]] = None) -> Flask:
         except Exception:
             pass
 
-        # ⚠️ No-cache solo para errores, pero no para 404 static (/favicon.ico)
+        # ✅ mejora: no-store en errores, excepto assets típicos
         if (
             bool(app.config.get("NO_STORE_ERROR_PAGES", True))
             and resp.status_code >= 400
@@ -629,6 +617,7 @@ def create_app(overrides: Optional[dict[str, Any]] = None) -> Flask:
 
         return _apply_security_headers(app, resp)
 
+    # ✅ mejora: init_models no tumba el server si STRICT_STARTUP off
     init_ok = True
     init_err: Optional[str] = None
     try:
@@ -651,8 +640,8 @@ def create_app(overrides: Optional[dict[str, Any]] = None) -> Flask:
 
     stats = _register_blueprints(app)
 
-    # Fallbacks /auth/login and /auth/register (GET/HEAD)
-    if not _endpoint_exists(app, "_fallback_auth_login"):
+    # ✅ mejora: no crear fallback si ya existe regla real (evita colisiones)
+    if not _rule_exists(app, "/auth/login"):
         app.add_url_rule(
             "/auth/login",
             "_fallback_auth_login",
@@ -660,7 +649,7 @@ def create_app(overrides: Optional[dict[str, Any]] = None) -> Flask:
             methods=["GET", "HEAD"],
         )
 
-    if not _endpoint_exists(app, "_fallback_auth_register"):
+    if not _rule_exists(app, "/auth/register"):
         app.add_url_rule(
             "/auth/register",
             "_fallback_auth_register",
@@ -668,15 +657,14 @@ def create_app(overrides: Optional[dict[str, Any]] = None) -> Flask:
             methods=["GET", "HEAD"],
         )
 
-    # Alias /login and /register (GET/HEAD only)
     for rule, endpoint, tab in (
         ("/login", "_fallback_login", "login"),
         ("/register", "_fallback_register", "register"),
     ):
-        if not _endpoint_exists(app, endpoint) and not _rule_exists(app, rule):
+        if not _rule_exists(app, rule):
             app.add_url_rule(rule, endpoint, partial(_best_redirect_to_account, app, tab), methods=["GET", "HEAD"])
 
-    # Emergency account page if auth.account missing
+    # ✅ emergencia /auth/account si falta endpoint
     account_ep = str(app.config.get("AUTH_ACCOUNT_ENDPOINT", "auth.account") or "auth.account")
     if not _endpoint_exists(app, account_ep) and not _rule_exists(app, "/auth/account"):
 
@@ -688,16 +676,20 @@ def create_app(overrides: Optional[dict[str, Any]] = None) -> Flask:
             nxt = _safe_next_path(request.args.get("next", "")) or "/"
             return render_template("auth/account.html", active_tab=tab, next=nxt, prefill_email=""), 200
 
-    # Root fallback
+    # Root fallback si nadie lo registró
     if not _rule_exists(app, "/"):
 
         @app.get("/")
         def _root():
             for ep in ("main.home", "main.index", "shop.shop"):
                 if _endpoint_exists(app, ep):
-                    return redirect(url_for(ep), code=302)
+                    try:
+                        return redirect(url_for(ep), code=302)
+                    except Exception:
+                        continue
             return "Skyline Store", 200, {"Cache-Control": "no-store"}
 
+    # ✅ health: útil para Render + debug
     @app.get("/health")
     def health():
         rr = stats.get("routes_report") if isinstance(stats.get("routes_report"), dict) else {}
@@ -729,6 +721,7 @@ def create_app(overrides: Optional[dict[str, Any]] = None) -> Flask:
             payload["init_models_error"] = init_err
         return payload
 
+    # ✅ ready: check DB real
     @app.get("/ready")
     def ready():
         if _is_testing(app):
@@ -736,21 +729,26 @@ def create_app(overrides: Optional[dict[str, Any]] = None) -> Flask:
 
         ok = True
         db_ok = True
+        err: Optional[str] = None
         try:
             if sql_text is None:
                 raise RuntimeError("sqlalchemy.text no disponible")
             with db.engine.connect() as conn:  # type: ignore[attr-defined]
                 conn.execute(sql_text("SELECT 1"))
-        except Exception:
+        except Exception as e:
             ok = False
             db_ok = False
+            err = f"{type(e).__name__}: {e}"
 
         if not init_ok:
             ok = False
 
-        payload = {"ok": ok, "db": db_ok, "init": init_ok, "env": _env_name(app), "ts": int(time.time())}
+        payload: dict[str, Any] = {"ok": ok, "db": db_ok, "init": init_ok, "env": _env_name(app), "ts": int(time.time())}
+        if bool(app.config.get("HEALTH_REVEAL_ERRORS", not _is_prod(app))) and err:
+            payload["db_error"] = err[:260]
         return payload, (200 if ok else 503)
 
+    # ✅ error handlers
     @app.errorhandler(HTTPException)
     def http_error(e: HTTPException):
         code = int(getattr(e, "code", 500) or 500)
