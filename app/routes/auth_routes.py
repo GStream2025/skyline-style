@@ -1,3 +1,4 @@
+# app/routes/auth_routes.py — Skyline Store (FINAL / NO-CSRF-FAIL / PROD SAFE)
 from __future__ import annotations
 
 import hashlib
@@ -19,6 +20,7 @@ from flask import (
     Response,
     current_app,
     flash,
+    g,
     jsonify,
     make_response,
     redirect,
@@ -27,6 +29,7 @@ from flask import (
     session,
     url_for,
 )
+from flask_wtf.csrf import CSRFError, generate_csrf, validate_csrf
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -405,61 +408,25 @@ def _no_store(resp: Response) -> Response:
     return resp
 
 
-def _csrf_token() -> str:
-    tok = session.get("csrf_token")
-    if not tok or not isinstance(tok, str) or len(tok) < 16:
-        tok = secrets.token_urlsafe(32)
-        session["csrf_token"] = tok
-        session.modified = True
-    return tok
-
-
-def _rotate_csrf() -> None:
-    try:
-        session["csrf_token"] = secrets.token_urlsafe(32)
-        session.modified = True
-    except Exception:
-        pass
-
-
-def _json_or_redirect(
-    *,
-    ok: bool,
-    message: str,
-    tab: str,
-    nxt: str,
-    redirect_to: str = "",
-    status_ok: int = 200,
-    status_err: int = 400,
-    retry_after: int = 0,
-):
-    if _wants_json():
-        status = status_ok if ok else status_err
-        payload: Dict[str, Any] = {"message": message, "tab": tab, "redirect": redirect_to or ""}
-        if retry_after:
-            payload["retry_after"] = int(retry_after)
-        return _json(ok, payload, status)
-
-    _flash("success" if ok else "danger", message)
-
-    if redirect_to:
-        return redirect(redirect_to, code=302)
-
-    nxt_clean = _safe_next(nxt)
-    return redirect(_auth_account_url(tab=tab, nxt=nxt_clean), code=302)
-
-
-def _require_form_csrf_or_fail(tab: str, nxt: str):
-    tok = _norm(request.form.get("csrf_token") or "", max_len=2048)
-    sess_tok = _norm(session.get("csrf_token") or "", max_len=2048)
-    if not tok or not sess_tok:
+def _require_wtf_csrf_or_fail(tab: str, nxt: str):
+    tok = _norm(request.form.get("csrf_token") or "", max_len=4096)
+    if not tok:
         return _json_or_redirect(ok=False, message="CSRF inválido.", tab=tab, nxt=nxt, status_err=400)
     try:
-        if not secrets.compare_digest(tok, sess_tok):
-            return _json_or_redirect(ok=False, message="CSRF inválido.", tab=tab, nxt=nxt, status_err=400)
+        validate_csrf(tok)
     except Exception:
         return _json_or_redirect(ok=False, message="CSRF inválido.", tab=tab, nxt=nxt, status_err=400)
     return None
+
+
+def _rotate_wtf_csrf() -> None:
+    # regeneración segura (sin inventar tokens)
+    try:
+        session.pop("csrf_token", None)
+        generate_csrf()
+        session.modified = True
+    except Exception:
+        pass
 
 
 def _db_rollback_quiet() -> None:
@@ -470,6 +437,7 @@ def _db_rollback_quiet() -> None:
 
 
 def _clear_auth_session() -> None:
+    # ✅ mantener rl_store y csrf_token de Flask-WTF
     keep_exact = {_RL_STORE_SESSION_KEY, "csrf_token", _VERIFY_TOKEN_SESSION_KEY, _VERIFY_TOKEN_TS_SESSION_KEY}
     keep_prefix = ("verify_rl:",)
     for k in list(session.keys()):
@@ -485,7 +453,6 @@ def _user_password_check(user: Any, password: str) -> bool:
     if not pw:
         return False
 
-    # prefer método del modelo si existe
     try:
         fn = getattr(user, "check_password", None)
         if callable(fn):
@@ -506,7 +473,6 @@ def _user_password_check(user: Any, password: str) -> bool:
     except Exception:
         ok = False
 
-    # micro “stabilizer”
     try:
         secrets.compare_digest("a", "a" if ok else "b")
     except Exception:
@@ -561,7 +527,7 @@ def _set_user_session(user: User) -> None:
         pass
 
     session.modified = True
-    _rotate_csrf()
+    _rotate_wtf_csrf()
 
     if _fl_login_user:
         try:
@@ -645,10 +611,13 @@ def _save_verify_token_db(user: User, token: str) -> bool:
 
 
 # ------------------------
-# base url helpers (FIX: usa APP_URL/SITE_URL y headers)
+# base url helpers
 # ------------------------
 def _best_scheme() -> str:
-    preferred = _norm(current_app.config.get("PREFERRED_URL_SCHEME") or _env_str("PREFERRED_URL_SCHEME") or "", max_len=10).lower()
+    preferred = _norm(
+        current_app.config.get("PREFERRED_URL_SCHEME") or _env_str("PREFERRED_URL_SCHEME") or "",
+        max_len=10,
+    ).lower()
     if preferred in {"http", "https"}:
         return preferred
     if _cfg_bool("FORCE_HTTPS", True) or _parse_bool(_env_str("FORCE_HTTPS", "1")):
@@ -666,7 +635,6 @@ def _best_scheme() -> str:
 
 
 def _site_base_url() -> str:
-    # prioridad: config/env (APP_URL / SITE_URL)
     raw = _norm(
         current_app.config.get("APP_URL")
         or current_app.config.get("SITE_URL")
@@ -679,7 +647,6 @@ def _site_base_url() -> str:
     if raw.startswith("http://") or raw.startswith("https://"):
         return raw
 
-    # inferir por headers (Render)
     try:
         scheme = _best_scheme()
         host = (request.headers.get("X-Forwarded-Host") or request.host or "").strip()
@@ -718,7 +685,6 @@ def _send_verify_email(email: str, verify_url: str) -> None:
         except Exception:
             log.exception("send_email failed")
 
-    # fallback log (no rompe deploy)
     try:
         rid = _norm(request.headers.get("X-Request-Id") or "", max_len=80)
         current_app.logger.info("VERIFY_EMAIL rid=%s to=%s url=%s", rid or "-", email, verify_url)
@@ -751,12 +717,18 @@ def _is_password_reasonable(pw: str) -> bool:
 # Email validation (best-effort, no rompe registro)
 # ------------------------
 def _email_validation_provider() -> str:
-    p = _norm(current_app.config.get("EMAIL_VALIDATION_PROVIDER") or _env_str("EMAIL_VALIDATION_PROVIDER") or "", max_len=40).lower()
+    p = _norm(
+        current_app.config.get("EMAIL_VALIDATION_PROVIDER") or _env_str("EMAIL_VALIDATION_PROVIDER") or "",
+        max_len=40,
+    ).lower()
     return p or "none"
 
 
 def _mailboxvalidator_key() -> str:
-    return _norm(current_app.config.get("MAILBOXVALIDATOR_API_KEY") or _env_str("MAILBOXVALIDATOR_API_KEY") or "", max_len=128)
+    return _norm(
+        current_app.config.get("MAILBOXVALIDATOR_API_KEY") or _env_str("MAILBOXVALIDATOR_API_KEY") or "",
+        max_len=128,
+    )
 
 
 def _validate_email_external(email: str) -> Tuple[bool, str]:
@@ -764,58 +736,83 @@ def _validate_email_external(email: str) -> Tuple[bool, str]:
     if not _valid_email(email):
         return False, "Email inválido."
 
-    # si está desactivado, skip
     if not _cfg_bool("VALIDATE_EMAIL_ON_REGISTER", True):
         return True, "skip"
 
     provider = _email_validation_provider()
-
-    # provider none => skip
     if provider in {"", "none", "off", "disabled"}:
         return True, "skip"
 
-    # MAILBOXVALIDATOR (best-effort)
     if provider == "mailboxvalidator":
         key = _mailboxvalidator_key()
         if not key:
             return True, "no_key"
 
-        # endpoint típico (si cambia o falla, NO bloqueamos si no está strict)
         strict = _cfg_bool("EMAIL_VALIDATION_STRICT", False)
-
-        # muchos setups usan v1/single; si falla, no cortamos el registro salvo strict
         url = (
             "https://api.mailboxvalidator.com/v1/validation/single?"
             + urllib.parse.urlencode({"key": key, "email": email, "format": "json"})
         )
 
         try:
-            req = urllib.request.Request(url, method="GET", headers={"Accept": "application/json", "User-Agent": "SkylineStore/1.0"})
+            req = urllib.request.Request(
+                url,
+                method="GET",
+                headers={"Accept": "application/json", "User-Agent": "SkylineStore/1.0"},
+            )
             with urllib.request.urlopen(req, timeout=_VALIDATE_TIMEOUT_SEC) as resp:
                 raw = resp.read().decode("utf-8", "replace")
             data = json.loads(raw) if raw else {}
             if not isinstance(data, dict):
                 return (True, "api_bad_payload") if not strict else (False, "No se pudo verificar el email.")
 
-            # heurística común
-            # mailboxvalidator suele devolver "status":"True/False" o "status":"True"/"False"
             status = _norm(data.get("status") or "", max_len=20).lower()
-            is_free = _norm(data.get("is_free") or "", max_len=20).lower()
-            is_disposable = _norm(data.get("is_disposable") or data.get("is_disposable_email") or "", max_len=20).lower()
+            is_disposable = _norm(
+                data.get("is_disposable") or data.get("is_disposable_email") or "",
+                max_len=20,
+            ).lower()
 
             if status in {"false", "invalid"}:
                 return False, "Email inválido."
             if is_disposable in {"true", "yes", "1"} and _cfg_bool("BLOCK_DISPOSABLE_EMAILS", True):
                 return False, "No se permiten emails temporales."
 
-            # si no podemos interpretar, no bloqueamos (salvo strict)
             return True, "ok"
 
         except Exception:
             return (True, "api_error") if not strict else (False, "No se pudo verificar el email. Reintentá.")
 
-    # provider desconocido => no bloquea
     return True, "skip"
+
+
+# ------------------------
+# json/redirect helpers
+# ------------------------
+def _json_or_redirect(
+    *,
+    ok: bool,
+    message: str,
+    tab: str,
+    nxt: str,
+    redirect_to: str = "",
+    status_ok: int = 200,
+    status_err: int = 400,
+    retry_after: int = 0,
+):
+    if _wants_json():
+        status = status_ok if ok else status_err
+        payload: Dict[str, Any] = {"message": message, "tab": tab, "redirect": redirect_to or ""}
+        if retry_after:
+            payload["retry_after"] = int(retry_after)
+        return _json(ok, payload, status)
+
+    _flash("success" if ok else "danger", message)
+
+    if redirect_to:
+        return redirect(redirect_to, code=302)
+
+    nxt_clean = _safe_next(nxt)
+    return redirect(_auth_account_url(tab=tab, nxt=nxt_clean), code=302)
 
 
 # ------------------------
@@ -823,12 +820,26 @@ def _validate_email_external(email: str) -> Tuple[bool, str]:
 # ------------------------
 @auth_bp.before_request
 def _auth_before_request():
-    _csrf_token()
+    # ✅ CSRF Flask-WTF real (evita “Solicitud inválida”)
+    try:
+        g.csrf_token = generate_csrf()
+    except Exception:
+        g.csrf_token = ""
 
 
 @auth_bp.after_request
 def _auth_after_request(resp: Response):
     return _no_store(resp)
+
+
+@auth_bp.app_errorhandler(CSRFError)
+def _handle_csrf_error(e):
+    _ = e
+    nxt = _safe_next(request.args.get("next", "")) or "/"
+    if _wants_json():
+        return jsonify({"ok": False, "message": "CSRF inválido.", "redirect": ""}), 400
+    flash("Solicitud inválida. Recargá la página e intentá nuevamente.", "danger")
+    return redirect(_auth_account_url(tab=TAB_LOGIN, nxt=nxt), code=302)
 
 
 # =========================================================
@@ -848,21 +859,22 @@ def account():
     email = _safe_email(request.args.get("email", ""))
     name = _normalize_name(request.args.get("name", ""))
 
-    r = make_response(
+    tok = getattr(g, "csrf_token", "") or generate_csrf()
+
+    return make_response(
         render_template(
             "auth/account.html",
             tab=tab,
             next=nxt,
             prefill_email=email,
             prefill_name=name,
-            csrf_token=_csrf_token(),
+            csrf_token_value=tok,  # ✅ templates modernos
+            csrf_token=tok,        # ✅ compat templates viejos
         ),
         200,
     )
-    return r
 
 
-# ✅ compat con templates: auth.login_get
 @auth_bp.get("/login")
 @auth_bp.get("/login/")
 def login_get():
@@ -874,7 +886,6 @@ def login_get():
     return redirect(_auth_account_url(tab=TAB_LOGIN, nxt=nxt, email=email), code=302)
 
 
-# ✅ compat con templates: auth.register_get
 @auth_bp.get("/register")
 @auth_bp.get("/register/")
 def register_get():
@@ -894,7 +905,7 @@ def compat_aliases():
     return redirect(_auth_account_url(tab=tab), code=302)
 
 
-# ✅ POST login: endpoint name compatible con templates -> auth.login_post
+# ✅ POST login (endpoint = auth.login_post)
 @auth_bp.post("/login")
 def login_post():
     nxt = _safe_next(request.form.get("next", "")) or _safe_next(request.args.get("next", ""))
@@ -903,7 +914,7 @@ def login_post():
     if (not ok_rl) or _is_honeypot_triggered():
         return _bad_auth(TAB_LOGIN, nxt, retry_after=retry)
 
-    csrf_fail = _require_form_csrf_or_fail(TAB_LOGIN, nxt)
+    csrf_fail = _require_wtf_csrf_or_fail(TAB_LOGIN, nxt)
     if csrf_fail is not None:
         return csrf_fail
 
@@ -965,16 +976,16 @@ def login_post():
     )
 
 
-# ✅ POST register: endpoint name compatible con templates -> auth.register
-@auth_bp.post("/register")
-def register_post():
+# ✅ POST register (endpoint = auth.register) para tu template register.html
+@auth_bp.post("/register", endpoint="register")
+def register():
     nxt = _safe_next(request.form.get("next", "")) or _safe_next(request.args.get("next", ""))
 
     ok_rl, retry = _rate_limit(_RL_REG_KEY)
     if (not ok_rl) or _is_honeypot_triggered():
         return _bad_auth(TAB_REGISTER, nxt, retry_after=retry)
 
-    csrf_fail = _require_form_csrf_or_fail(TAB_REGISTER, nxt)
+    csrf_fail = _require_wtf_csrf_or_fail(TAB_REGISTER, nxt)
     if csrf_fail is not None:
         return csrf_fail
 
@@ -1078,12 +1089,12 @@ def logout():
     nxt = _safe_next(request.values.get("next", "")) or "/"
 
     if request.method == "POST":
-        csrf_fail = _require_form_csrf_or_fail(TAB_LOGIN, nxt)
+        csrf_fail = _require_wtf_csrf_or_fail(TAB_LOGIN, nxt)
         if csrf_fail is not None:
             return csrf_fail
 
     _clear_auth_session()
-    _rotate_csrf()
+    _rotate_wtf_csrf()
 
     if _fl_logout_user:
         try:
@@ -1152,7 +1163,7 @@ def resend_verification():
                 pass
         return r
 
-    csrf_fail = _require_form_csrf_or_fail(TAB_LOGIN, nxt)
+    csrf_fail = _require_wtf_csrf_or_fail(TAB_LOGIN, nxt)
     if csrf_fail is not None:
         return csrf_fail
 
@@ -1271,7 +1282,7 @@ def verify(token: str):
     session.pop(_VERIFY_TOKEN_SESSION_KEY, None)
     session.pop(_VERIFY_TOKEN_TS_SESSION_KEY, None)
     session.modified = True
-    _rotate_csrf()
+    _rotate_wtf_csrf()
 
     _flash("success", "Cuenta verificada ✅")
     return redirect(nxt, code=302)
