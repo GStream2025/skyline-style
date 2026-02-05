@@ -9,7 +9,7 @@ import time
 import unicodedata
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Tuple, cast
+from typing import Any, Dict, List, Optional, Tuple, cast
 from urllib.parse import urlparse
 
 from flask import (
@@ -43,11 +43,13 @@ admin_bp.strict_slashes = False
 _TRUE = {"1", "true", "yes", "y", "on", "checked"}
 _FALSE = {"0", "false", "no", "n", "off", "unchecked"}
 
-SAFE_STATUSES = {"active", "inactive", "draft"}
+# ✅ Mejora 1: estados alineados con UI (incluye hidden) + fallback robusto
+SAFE_STATUSES = {"active", "inactive", "draft", "hidden"}
 
 _ALLOWED_IMAGES = {"png", "jpg", "jpeg", "webp"}
 _ALLOWED_MEDIA = _ALLOWED_IMAGES | {"mp4", "webm"}
 
+# ✅ Mejora 2: whitelist MIME por tipo
 _MIME_ALLOW: Dict[str, set[str]] = {
     "images": {"image/png", "image/jpeg", "image/webp"},
     "media": {"image/png", "image/jpeg", "image/webp", "video/mp4", "video/webm"},
@@ -61,6 +63,8 @@ _MAX_EMAIL = 160
 _MAX_URL = 500
 _MAX_NOTE = 500
 _MAX_INFO = 3000
+_MAX_TITLE = 180
+_MAX_DESC = 6000
 
 _DEC_RATE_Q = Decimal("0.0001")
 _DEC_RATE_MAX = Decimal("0.8000")
@@ -71,6 +75,7 @@ _SESSION_ADMIN_LOGIN_AT = "admin_login_at"
 _UPLOAD_MAX_MB_PRODUCTS = max(1, int(os.getenv("UPLOAD_MAX_MB_PRODUCTS", "8") or "8"))
 _UPLOAD_MAX_MB_OFFERS = max(1, int(os.getenv("UPLOAD_MAX_MB_OFFERS", "25") or "25"))
 
+# ✅ Mejora 3: headers anti-cache + seguridad
 _NO_STORE_HEADERS = {
     "Cache-Control": "no-store, max-age=0, must-revalidate",
     "Pragma": "no-cache",
@@ -81,7 +86,6 @@ _NO_STORE_HEADERS = {
     "Permissions-Policy": "geolocation=(), microphone=(), camera=()",
     "Cross-Origin-Opener-Policy": "same-origin",
 }
-
 _SECURITY_HEADERS = {
     "X-Permitted-Cross-Domain-Policies": "none",
     "Cross-Origin-Resource-Policy": "same-origin",
@@ -250,6 +254,7 @@ def _template_exists(name: str) -> bool:
         return False
 
 
+# ✅ Mejora 4: render seguro con fallback limpio (sin explotar admin en prod)
 def _render_safe(template: str, **ctx: Any):
     ui_in = ctx.get("ui")
     ui = dict(ui_in) if isinstance(ui_in, dict) else {}
@@ -273,51 +278,31 @@ def _render_safe(template: str, **ctx: Any):
     hint = _clean_str(template, 180, default="template")
 
     body = """<!doctype html>
-<html lang="es">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="color-scheme" content="light dark">
-  <title>{title}</title>
-  <style>
-    :root{{--a:{accent};--bg:#0b1220;--card:rgba(255,255,255,.06);--ink:#e8eefc;--mut:rgba(232,238,252,.72);--b:rgba(232,238,252,.12)}}
-    @media (prefers-color-scheme: light){{:root{{--bg:#f6f8fc;--card:rgba(255,255,255,.9);--ink:#0b1220;--mut:rgba(11,18,32,.68);--b:rgba(15,23,42,.12)}}}}
-    body{{margin:0;background:radial-gradient(900px 380px at 15% 0, color-mix(in srgb, var(--a) 22%, transparent), transparent 65%),
-                         radial-gradient(900px 380px at 85% 0, color-mix(in srgb, var(--a) 12%, transparent), transparent 65%),
-                         var(--bg);
-         color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif}}
-    .wrap{{max-width:980px;margin:0 auto;padding:28px 18px}}
-    .card{{border:1px solid var(--b);background:var(--card);backdrop-filter:blur(10px);border-radius:18px;padding:18px 18px}}
-    .top{{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-bottom:12px}}
-    .brand{{font-weight:800;letter-spacing:.2px}}
-    .pill{{font-size:12px;padding:6px 10px;border-radius:999px;border:1px solid var(--b);color:var(--mut)}}
-    h1{{margin:0 0 8px;font-size:20px}}
-    p{{margin:0;color:var(--mut);line-height:1.45}}
-    code{{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}}
-    .btn{{display:inline-flex;align-items:center;gap:8px;margin-top:14px;padding:10px 12px;border-radius:12px;border:1px solid var(--b);
-          color:var(--ink);text-decoration:none;background:color-mix(in srgb, var(--a) 12%, transparent)}}
-    .btn:hover{{background:color-mix(in srgb, var(--a) 18%, transparent)}}
-  </style>
-</head>
-<body>
-  <div class="wrap">
-    <div class="card">
-      <div class="top">
-        <div class="brand">{brand}</div>
-        <div class="pill">Admin UI fallback</div>
-      </div>
-      <h1>{title}</h1>
-      <p>No se pudo renderizar <code>{hint}</code>. Revisá que exista el template o mirá logs.</p>
-      <a class="btn" href="/admin">Volver al panel</a>
-    </div>
-  </div>
-</body>
-</html>""".format(
-        title=title,
-        accent=accent,
-        brand=brand,
-        hint=hint,
-    )
+<html lang="es"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark"><title>{title}</title>
+<style>
+:root{{--a:{accent};--bg:#0b1220;--card:rgba(255,255,255,.06);--ink:#e8eefc;--mut:rgba(232,238,252,.72);--b:rgba(232,238,252,.12)}}
+@media (prefers-color-scheme: light){{:root{{--bg:#f6f8fc;--card:rgba(255,255,255,.9);--ink:#0b1220;--mut:rgba(11,18,32,.68);--b:rgba(15,23,42,.12)}}}}
+body{{margin:0;background:radial-gradient(900px 380px at 15% 0, color-mix(in srgb, var(--a) 22%, transparent), transparent 65%),
+radial-gradient(900px 380px at 85% 0, color-mix(in srgb, var(--a) 12%, transparent), transparent 65%),var(--bg);
+color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif}}
+.wrap{{max-width:980px;margin:0 auto;padding:28px 18px}}
+.card{{border:1px solid var(--b);background:var(--card);backdrop-filter:blur(10px);border-radius:18px;padding:18px}}
+.top{{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-bottom:12px}}
+.brand{{font-weight:800;letter-spacing:.2px}}
+.pill{{font-size:12px;padding:6px 10px;border-radius:999px;border:1px solid var(--b);color:var(--mut)}}
+h1{{margin:0 0 8px;font-size:20px}} p{{margin:0;color:var(--mut);line-height:1.45}}
+code{{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}}
+.btn{{display:inline-flex;align-items:center;gap:8px;margin-top:14px;padding:10px 12px;border-radius:12px;border:1px solid var(--b);
+color:var(--ink);text-decoration:none;background:color-mix(in srgb, var(--a) 12%, transparent)}}
+.btn:hover{{background:color-mix(in srgb, var(--a) 18%, transparent)}}
+</style></head>
+<body><div class="wrap"><div class="card">
+<div class="top"><div class="brand">{brand}</div><div class="pill">Admin UI fallback</div></div>
+<h1>{title}</h1><p>No se pudo renderizar <code>{hint}</code>. Revisá que exista el template o mirá logs.</p>
+<a class="btn" href="/admin">Volver al panel</a>
+</div></div></body></html>""".format(title=title, accent=accent, brand=brand, hint=hint)
 
     return body, 200, {"Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store"}
 
@@ -346,6 +331,7 @@ def _safe_get_json() -> Dict[str, Any]:
     return {}
 
 
+# ✅ Mejora 5: CSRF acepta form/header/json (ya lo tenías, lo reforzamos con nombres)
 def _require_csrf() -> None:
     if request.method in {"GET", "HEAD", "OPTIONS"}:
         return
@@ -427,6 +413,7 @@ def _safe_set(obj: Any, attr: str, value: Any) -> bool:
         return False
 
 
+# ✅ Mejora 6: slug único sin romper por rollbacks
 def _unique_slug(model, slug: str, *, id_exclude: Optional[int] = None, max_tries: int = 12) -> str:
     base = slugify(slug)
     cand = base
@@ -447,10 +434,15 @@ def _unique_slug(model, slug: str, *, id_exclude: Optional[int] = None, max_trie
     return cand
 
 
+# ✅ Mejora 7: uploads_dir siempre seguro y consistente (products/offers)
 def uploads_dir(kind: str) -> Path:
     base = _clean_str(current_app.config.get("UPLOADS_DIR"), 400, default="")
     root = Path(base) if base else (Path(current_app.root_path) / "static" / "uploads")
-    kind2 = slugify(kind).replace("-", "")[:24] or "files"
+
+    kind2 = slugify(kind).replace("-", "")
+    if kind2 not in {"products", "offers"}:
+        kind2 = "products"
+
     path = (root / kind2).resolve()
     path.mkdir(parents=True, exist_ok=True)
     return path
@@ -466,6 +458,7 @@ def _random_filename(original: str) -> str:
     return f"{stem}_{int(time.time() * 1000)}_{token}{ext}"
 
 
+# ✅ Mejora 8: size check (stream) + content_length
 def _file_too_large(file: FileStorage, max_mb: int) -> bool:
     try:
         max_bytes = int(max_mb) * 1024 * 1024
@@ -509,6 +502,7 @@ def _validate_mimetype(kind: str, mimetype: str) -> bool:
     return m in allowed
 
 
+# ✅ Mejora 9: save_upload devuelve URL static consistente
 def save_upload(file: Optional[FileStorage], kind: str, allow_ext: set[str]) -> Optional[str]:
     if not file or not getattr(file, "filename", ""):
         return None
@@ -517,7 +511,7 @@ def save_upload(file: Optional[FileStorage], kind: str, allow_ext: set[str]) -> 
     if not filename:
         return None
 
-    kind2 = kind if kind in {"products", "offers"} else "products"
+    kind2 = "offers" if kind == "offers" else "products"
     ext = Path(filename).suffix.lower().lstrip(".")
     if ext not in allow_ext:
         raise ValueError("Formato no permitido")
@@ -638,6 +632,7 @@ def _tiers_sanity() -> Tuple[bool, List[str]]:
         return False, ["No se pudo ejecutar sanity_check_overlaps()."]
 
 
+# ✅ Mejora 10: next path anti-open-redirect / anti-loops
 def _clean_next_path(raw: Optional[str], *, default_path: str = "/admin") -> str:
     p = _clean_str(raw, 512, default="")
     if not p:
@@ -705,6 +700,7 @@ def _inject():
     }
 
 
+# ✅ Mejora 11: dashboard cuenta seguro + no rompe si falla DB
 @admin_bp.get("/")
 @admin_required
 def dashboard():
@@ -823,111 +819,6 @@ def commission_tiers_validate():
     return _redir("admin.commission_tiers")
 
 
-@admin_bp.post("/commission-tiers/new")
-@admin_required
-def commission_tiers_new():
-    _require_csrf()
-    _require_admin_fresh()
-
-    min_sales = as_int(request.form.get("min_sales"), 0, min_value=0, max_value=1_000_000)
-    max_sales_raw = _clean_str(request.form.get("max_sales"), 32, default="")
-    max_sales = as_int(max_sales_raw, 0, min_value=0, max_value=1_000_000) if max_sales_raw else None
-    rate = _dec_rate(request.form.get("rate"), Decimal("0.0000"))
-    label = _clean_str(request.form.get("label"), 80, default="") or None
-    sort_order = as_int(request.form.get("sort_order"), 0, min_value=0, max_value=10_000)
-    active = _bool(request.form.get("active"))
-
-    try:
-        t = CommissionTier(min_sales=min_sales, max_sales=max_sales, rate=rate, label=label, sort_order=sort_order, active=active)
-        db.session.add(t)
-        if _commit_or_flash("Tier creado", "No se pudo crear el tier"):
-            try:
-                CommissionTier.validate_integrity()
-            except Exception as e:
-                _flash_warn(_clean_str(str(e), 180, default="Integridad a revisar"))
-    except Exception:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
-        _flash_err("No se pudo crear el tier")
-
-    return _redir("admin.commission_tiers")
-
-
-@admin_bp.post("/commission-tiers/edit/<int:id>")
-@admin_required
-def commission_tiers_edit(id: int):
-    _require_csrf()
-    _require_admin_fresh()
-
-    t = db.session.get(CommissionTier, id)
-    if not t:
-        _flash_warn("Tier no encontrado")
-        return _redir("admin.commission_tiers")
-
-    min_sales = request.form.get("min_sales")
-    max_sales = request.form.get("max_sales")
-    rate_raw = request.form.get("rate")
-    label = _clean_str(request.form.get("label"), 80, default="") or None
-    sort_order = request.form.get("sort_order")
-    active = request.form.get("active")
-
-    if min_sales is not None and str(min_sales).strip() != "":
-        _safe_set(t, "min_sales", as_int(min_sales, 0, min_value=0, max_value=1_000_000))
-
-    if max_sales is not None:
-        ms = str(max_sales).strip()
-        _safe_set(t, "max_sales", None if ms == "" else as_int(ms, 0, min_value=0, max_value=1_000_000))
-
-    if rate_raw is not None and str(rate_raw).strip() != "":
-        _safe_set(t, "rate", _dec_rate(rate_raw, Decimal("0.0000")))
-
-    _safe_set(t, "label", label)
-
-    if sort_order is not None and str(sort_order).strip() != "":
-        _safe_set(t, "sort_order", as_int(sort_order, 0, min_value=0, max_value=10_000))
-
-    if active is not None:
-        _safe_set(t, "active", _bool(active))
-
-    if _commit_or_flash("Tier actualizado", "No se pudo actualizar el tier"):
-        try:
-            CommissionTier.validate_integrity()
-        except Exception as e:
-            _flash_warn(_clean_str(str(e), 180, default="Integridad a revisar"))
-
-    return _redir("admin.commission_tiers")
-
-
-@admin_bp.post("/commission-tiers/delete/<int:id>")
-@admin_required
-def commission_tiers_delete(id: int):
-    _require_csrf()
-    _require_admin_fresh()
-
-    t = db.session.get(CommissionTier, id)
-    if not t:
-        _flash_warn("Tier no encontrado")
-        return _redir("admin.commission_tiers")
-
-    try:
-        db.session.delete(t)
-        if _commit_or_flash("Tier eliminado", "No se pudo eliminar el tier"):
-            try:
-                CommissionTier.validate_integrity()
-            except Exception as e:
-                _flash_warn(_clean_str(str(e), 180, default="Integridad a revisar"))
-    except Exception:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
-        _flash_err("No se pudo eliminar el tier")
-
-    return _redir("admin.commission_tiers")
-
-
 @admin_bp.get("/categories")
 @admin_required
 def categories():
@@ -974,13 +865,13 @@ def categories_new():
     return _redir("admin.categories")
 
 
-@admin_bp.post("/categories/edit/<int:id>")
+@admin_bp.post("/categories/edit/<int:cat_id>")
 @admin_required
-def categories_edit(id: int):
+def categories_edit(cat_id: int):
     _require_csrf()
     _require_admin_fresh()
 
-    c = db.session.get(Category, id)
+    c = db.session.get(Category, cat_id)
     if not c:
         _flash_warn("Categoría no encontrada")
         return _redir("admin.categories")
@@ -993,19 +884,19 @@ def categories_edit(id: int):
 
     if slug_in or name:
         base = slug_in or name or getattr(c, "name", "item")
-        _safe_set(c, "slug", _unique_slug(Category, base, id_exclude=id))
+        _safe_set(c, "slug", _unique_slug(Category, base, id_exclude=cat_id))
 
     _commit_or_flash("Categoría actualizada", "No se pudo actualizar la categoría")
     return _redir("admin.categories")
 
 
-@admin_bp.post("/categories/delete/<int:id>")
+@admin_bp.post("/categories/delete/<int:cat_id>")
 @admin_required
-def categories_delete(id: int):
+def categories_delete(cat_id: int):
     _require_csrf()
     _require_admin_fresh()
 
-    c = db.session.get(Category, id)
+    c = db.session.get(Category, cat_id)
     if c:
         try:
             db.session.delete(c)
@@ -1120,23 +1011,34 @@ def products_new():
     )
 
 
+# ✅ Mejora 12: endpoint POST consistente con template (products_create)
 @admin_bp.post("/products/new")
 @admin_required
 def products_create():
     _require_csrf()
     _require_admin_fresh()
 
-    title = _clean_str(request.form.get("title"), 180, default="")
+    title = _clean_str(request.form.get("title"), _MAX_TITLE, default="")
     if not title:
         _flash_warn("Título requerido")
         return _redir("admin.products_new")
 
-    slug = _unique_slug(Product, _clean_str(request.form.get("slug"), 180, default="") or title)
+    slug = _unique_slug(Product, _clean_str(request.form.get("slug"), _MAX_TITLE, default="") or title)
+
     price = as_float(request.form.get("price"), 0.0) or 0.0
     price = max(0.0, min(float(price), 10_000_000.0))
+
     stock = as_int(request.form.get("stock"), 0, min_value=0, max_value=1_000_000)
+
     status = _clean_str(request.form.get("status"), 16, default="active").lower()
     status = status if status in SAFE_STATUSES else "active"
+
+    desc = _clean_str(request.form.get("description"), _MAX_DESC, default="")
+    source = _clean_str(request.form.get("source"), 24, default="manual").lower() or "manual"
+
+    external_url = _clean_str(request.form.get("external_url"), _MAX_URL, default="")
+    if external_url and not _httpish(external_url):
+        external_url = ""
 
     image_url: Optional[str] = None
     try:
@@ -1148,6 +1050,9 @@ def products_create():
     _safe_set(p, "title", title)
     _safe_set(p, "name", title)
     _safe_set(p, "slug", slug)
+    _safe_set(p, "description", desc)
+    _safe_set(p, "source", source)
+    _safe_set(p, "external_url", external_url)
     _safe_set(p, "price", float(price))
 
     if not _safe_set(p, "stock", stock):
@@ -1159,7 +1064,17 @@ def products_create():
 
     cat_id = as_int(request.form.get("category_id"), 0, min_value=0)
     if cat_id:
-        _safe_set(p, "category_id", cat_id)
+        # ✅ Mejora 13: valida existencia de categoría antes de setear
+        try:
+            if db.session.get(Category, cat_id):
+                _safe_set(p, "category_id", cat_id)
+            else:
+                _flash_warn("Categoría no válida (se guardó sin categoría).")
+        except Exception:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
 
     try:
         db.session.add(p)
@@ -1175,10 +1090,11 @@ def products_create():
         return _redir("admin.products_new")
 
 
-@admin_bp.get("/products/edit/<int:id>")
+# ✅ Mejora 14: rutas con product_id (compatibles con tu template)
+@admin_bp.get("/products/edit/<int:product_id>")
 @admin_required
-def products_edit(id: int):
-    p = db.session.get(Product, id)
+def products_edit(product_id: int):
+    p = db.session.get(Product, product_id)
     if not p:
         _flash_warn("Producto no encontrado")
         return _redir("admin.products")
@@ -1202,29 +1118,36 @@ def products_edit(id: int):
     )
 
 
-@admin_bp.post("/products/edit/<int:id>")
+@admin_bp.post("/products/edit/<int:product_id>")
 @admin_required
-def products_update(id: int):
+def products_update(product_id: int):
     _require_csrf()
     _require_admin_fresh()
 
-    p = db.session.get(Product, id)
+    p = db.session.get(Product, product_id)
     if not p:
         _flash_warn("Producto no encontrado")
         return _redir("admin.products")
 
-    title = _clean_str(request.form.get("title"), 180, default="")
-    slug_in = _clean_str(request.form.get("slug"), 180, default="")
+    title = _clean_str(request.form.get("title"), _MAX_TITLE, default="")
+    slug_in = _clean_str(request.form.get("slug"), _MAX_TITLE, default="")
     price = as_float(request.form.get("price"), None)
     stock = as_int(request.form.get("stock"), -1)
     status = _clean_str(request.form.get("status"), 16, default="").lower()
+
+    desc = _clean_str(request.form.get("description"), _MAX_DESC, default="")
+    source = _clean_str(request.form.get("source"), 24, default="").lower()
+    external_url = _clean_str(request.form.get("external_url"), _MAX_URL, default="")
+
+    if external_url and not _httpish(external_url):
+        external_url = ""
 
     if title:
         _safe_set(p, "title", title)
         _safe_set(p, "name", title)
 
     base_slug = slug_in or title or getattr(p, "slug", "item")
-    _safe_set(p, "slug", _unique_slug(Product, base_slug, id_exclude=id))
+    _safe_set(p, "slug", _unique_slug(Product, base_slug, id_exclude=product_id))
 
     if price is not None:
         pr = max(0.0, min(float(price), 10_000_000.0))
@@ -1238,9 +1161,24 @@ def products_update(id: int):
     if status:
         _safe_set(p, "status", status if status in SAFE_STATUSES else "active")
 
+    # ✅ Mejora 15: update de description/source/external_url sin romper modelos viejos
+    _safe_set(p, "description", desc)
+    if source:
+        _safe_set(p, "source", source)
+    _safe_set(p, "external_url", external_url)
+
     cat_id = as_int(request.form.get("category_id"), 0, min_value=0)
     if cat_id:
-        _safe_set(p, "category_id", cat_id)
+        try:
+            if db.session.get(Category, cat_id):
+                _safe_set(p, "category_id", cat_id)
+            else:
+                _flash_warn("Categoría no válida (se dejó sin cambios).")
+        except Exception:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
 
     try:
         img = save_upload(request.files.get("image"), "products", _ALLOWED_IMAGES)
@@ -1250,16 +1188,16 @@ def products_update(id: int):
         _flash_err(_clean_str(str(e), 220, default="Error subiendo imagen"))
 
     _commit_or_flash("Producto actualizado", "No se pudo actualizar el producto")
-    return _redir("admin.products_edit", id=id)
+    return _redir("admin.products_edit", product_id=product_id)
 
 
-@admin_bp.post("/products/delete/<int:id>")
+@admin_bp.post("/products/delete/<int:product_id>")
 @admin_required
-def products_delete(id: int):
+def products_delete(product_id: int):
     _require_csrf()
     _require_admin_fresh()
 
-    p = db.session.get(Product, id)
+    p = db.session.get(Product, product_id)
     if p:
         try:
             db.session.delete(p)
@@ -1301,7 +1239,7 @@ def offers_new():
     _require_csrf()
     _require_admin_fresh()
 
-    title = _clean_str(request.form.get("title"), 180, default="")
+    title = _clean_str(request.form.get("title"), _MAX_TITLE, default="")
     if not title:
         _flash_warn("Título requerido")
         return _redir("admin.offers")
@@ -1334,13 +1272,13 @@ def offers_new():
     return _redir("admin.offers")
 
 
-@admin_bp.post("/offers/delete/<int:id>")
+@admin_bp.post("/offers/delete/<int:offer_id>")
 @admin_required
-def offers_delete(id: int):
+def offers_delete(offer_id: int):
     _require_csrf()
     _require_admin_fresh()
 
-    o = db.session.get(Offer, id)
+    o = db.session.get(Offer, offer_id)
     if o:
         try:
             db.session.delete(o)

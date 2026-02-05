@@ -1,11 +1,51 @@
+{# app/templates/admin/login.html — Skyline Admin Login (ULTRA PRO FINAL) #}
 <!doctype html>
-<html lang="es">
+<html lang="es" data-theme="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta name="robots" content="noindex,nofollow" />
-  <title>Admin · Login</title>
-  <style>
+  <meta name="color-scheme" content="dark light" />
+  <meta name="theme-color" content="#0b1120" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f8fafc" media="(prefers-color-scheme: light)">
+
+  {# ----- safe helpers (no rompe si faltan endpoints) ----- #}
+  {% set _vf = (view_functions if view_functions is defined and view_functions else {}) %}
+  {% macro safe_url(endpoint, fallback) -%}
+    {{- (url_for(endpoint) if (url_for is defined and endpoint and _vf and (endpoint in _vf)) else fallback) -}}
+  {%- endmacro %}
+
+  {% set _nonce = (csp_nonce if csp_nonce is defined and csp_nonce else (nonce if nonce is defined and nonce else ''))|string %}
+  {% set _app = (APP_NAME if APP_NAME is defined and APP_NAME else 'Skyline Store')|string %}
+  {% set _title = (page_title if page_title is defined and page_title else 'Admin · Login')|string %}
+
+  {# CSRF robusto: acepta varias convenciones #}
+  {% set _csrf =
+    (csrf_token if csrf_token is defined and csrf_token else
+     (csrf_token_value if csrf_token_value is defined and csrf_token_value else
+      (csrf if csrf is defined and csrf else '')))
+    |string|trim
+  %}
+
+  {# next robusto: evita open-redirect (solo paths) #}
+  {% set _next_raw = (next if next is defined and next else (request.args.get('next') if request is defined and request else ''))|string %}
+  {% set _next = (_next_raw if _next_raw.startswith('/') and not _next_raw.startswith('//') else '') %}
+
+  {# endpoints: si no existen, fallback a rutas fijas #}
+  {% set login_post_url = (login_post_url if login_post_url is defined and login_post_url else safe_url('admin.login','/admin/login')) %}
+  {% set register_url_safe = (register_url if register_url is defined and register_url else safe_url('admin.register','/admin/register')) %}
+  {% set home_url = safe_url('main.home','/') %}
+
+  <title>{{ _title|e }} · {{ _app|e }}</title>
+
+  {# Si querés mantener consistencia visual con tu sistema, podés cargar ui-core (ya existe en /static/css) #}
+  {% if url_for is defined %}
+    <link rel="preload" href="{{ url_for('static', filename='css/ui-core.css') }}" as="style">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/ui-core.css') }}">
+  {% endif %}
+
+  <style{% if _nonce %} nonce="{{ _nonce|e }}"{% endif %}>
     :root{
       --bg0:#070a12;
       --bg1:#0b1220;
@@ -35,18 +75,20 @@
         radial-gradient(900px 600px at 100% 20%, rgba(37,99,235,.18), transparent 55%),
         linear-gradient(180deg, var(--bg0), var(--bg1));
     }
+
     .wrap{width:min(980px, 92vw); display:grid; grid-template-columns: 1.1fr .9fr; gap:18px; align-items:stretch}
     @media (max-width: 900px){ .wrap{grid-template-columns:1fr; } }
 
-    .hero{
-      padding:26px 24px;
+    .hero,.card{
       border:1px solid var(--stroke);
-      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.04));
       border-radius: var(--r2);
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.04));
       box-shadow: var(--shadow);
       position:relative;
       overflow:hidden;
     }
+
+    .hero{padding:26px 24px}
     .hero:before{
       content:"";
       position:absolute; inset:-2px;
@@ -58,9 +100,8 @@
       pointer-events:none;
     }
     .hero > *{ position:relative; z-index:1; }
-    .brand{
-      display:flex; align-items:center; gap:12px; margin-bottom:14px;
-    }
+
+    .brand{display:flex; align-items:center; gap:12px; margin-bottom:14px}
     .logo{
       width:42px; height:42px; border-radius:14px;
       background: linear-gradient(135deg, rgba(56,189,248,.9), rgba(37,99,235,.9));
@@ -68,8 +109,7 @@
     }
     .brand h1{font-size:18px; margin:0}
     .brand p{margin:2px 0 0; color:var(--muted); font-size:13px}
-    .hero h2{margin:14px 0 8px; font-size:28px; letter-spacing:-.02em}
-    .hero .sub{color:var(--muted); margin:0 0 14px; line-height:1.5}
+
     .badge{
       display:inline-flex; gap:8px; align-items:center;
       padding:8px 10px;
@@ -80,28 +120,16 @@
       font-size:13px;
     }
     .dot{width:8px; height:8px; border-radius:99px; background: var(--ok); box-shadow:0 0 0 4px rgba(34,197,94,.18)}
-    .grid{
-      margin-top:16px;
-      display:grid;
-      grid-template-columns:1fr 1fr;
-      gap:10px;
-    }
-    .kpi{
-      border:1px solid var(--stroke);
-      background: rgba(255,255,255,.04);
-      border-radius:16px;
-      padding:12px;
-    }
+
+    .hero h2{margin:14px 0 8px; font-size:28px; letter-spacing:-.02em}
+    .hero .sub{color:var(--muted); margin:0 0 14px; line-height:1.5}
+
+    .grid{margin-top:16px; display:grid; grid-template-columns:1fr 1fr; gap:10px}
+    .kpi{border:1px solid var(--stroke); background: rgba(255,255,255,.04); border-radius:16px; padding:12px}
     .kpi b{display:block; font-size:14px}
     .kpi span{color:var(--muted); font-size:12px}
 
-    .card{
-      padding:22px;
-      border:1px solid var(--stroke);
-      background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.04));
-      border-radius: var(--r2);
-      box-shadow: var(--shadow);
-    }
+    .card{padding:22px}
     .card h3{margin:0 0 6px; font-size:18px}
     .card .muted{margin:0 0 14px; color:var(--muted); font-size:13px; line-height:1.5}
 
@@ -116,7 +144,7 @@
     }
     .flash.success{border-color: rgba(34,197,94,.35); background: rgba(34,197,94,.08)}
     .flash.warning{border-color: rgba(245,158,11,.35); background: rgba(245,158,11,.08)}
-    .flash.danger{border-color: rgba(239,68,68,.35); background: rgba(239,68,68,.08)}
+    .flash.error,.flash.danger{border-color: rgba(239,68,68,.35); background: rgba(239,68,68,.08)}
     .flash.info{border-color: rgba(56,189,248,.35); background: rgba(56,189,248,.08)}
 
     .field{margin-bottom:12px}
@@ -133,6 +161,7 @@
     }
     .input:focus{box-shadow: var(--ring); border-color: rgba(56,189,248,.55)}
     .row{display:flex; gap:10px; align-items:center}
+
     .btn{
       width:100%;
       padding:12px 14px;
@@ -151,7 +180,12 @@
       color: var(--text);
       border-color: var(--stroke);
       font-weight:700;
+      margin-top:10px;
     }
+
+    a{color: rgba(56,189,248,.95); text-decoration:none}
+    a:hover{text-decoration:underline}
+
     .small{
       margin-top:12px;
       display:flex;
@@ -160,8 +194,7 @@
       color: var(--muted);
       font-size:12px;
     }
-    a{color: rgba(56,189,248,.95); text-decoration:none}
-    a:hover{text-decoration:underline}
+
     .pw-toggle{
       border:1px solid var(--stroke);
       background: rgba(255,255,255,.06);
@@ -171,82 +204,168 @@
       cursor:pointer;
       white-space:nowrap;
     }
+    .pw-toggle:focus{box-shadow:var(--ring); border-color: rgba(56,189,248,.55); outline:none}
+    .caps{
+      margin-top:8px;
+      font-size:12px;
+      color: rgba(255,255,255,.70);
+      display:none;
+    }
+    .caps.on{display:block}
+    .noscript{
+      margin:0 0 12px;
+      padding:10px 12px;
+      border-radius:14px;
+      border:1px solid rgba(245,158,11,.35);
+      background: rgba(245,158,11,.10);
+      color: rgba(255,255,255,.88);
+      font-size:13px;
+    }
+
+    :focus-visible{outline:none; box-shadow:var(--ring); border-radius:14px}
+    @media (prefers-reduced-motion: reduce){
+      *{transition:none!important; animation:none!important}
+    }
   </style>
 </head>
+
 <body>
   <div class="wrap">
-    <section class="hero">
+    <section class="hero" aria-label="Acceso Skyline Admin">
       <div class="brand">
         <div class="logo" aria-hidden="true"></div>
         <div>
-          <h1>Skyline Store</h1>
+          <h1>{{ _app|e }}</h1>
           <p>Panel administrativo</p>
         </div>
       </div>
 
-      <div class="badge"><span class="dot"></span> Acceso seguro · sesiones protegidas</div>
+      <div class="badge"><span class="dot" aria-hidden="true"></span> Acceso seguro · sesiones protegidas</div>
 
       <h2>Ingresá al Dashboard</h2>
-      <p class="sub">Controlá pedidos, catálogo, pagos y métricas desde un panel premium. Este acceso está protegido por CSRF + rate limit.</p>
+      <p class="sub">
+        Controlá pedidos, catálogo, pagos y métricas desde un panel premium.
+        Este acceso está protegido por CSRF + rate limit.
+      </p>
 
-      <div class="grid">
+      <div class="grid" aria-label="Resumen">
         <div class="kpi"><b>Seguridad</b><span>Protección anti-fuerza bruta</span></div>
-        <div class="kpi"><b>Estabilidad</b><span>Diseño compatible Render/Proxy</span></div>
+        <div class="kpi"><b>Estabilidad</b><span>Compatible Render/Proxy</span></div>
       </div>
     </section>
 
-    <main class="card">
+    <main class="card" aria-label="Formulario de login admin">
       <h3>Admin · Login</h3>
       <p class="muted">Ingresá con tu email y contraseña de administrador.</p>
 
-      {% with msgs = get_flashed_messages(with_categories=true) %}
-        {% if msgs %}
-          {% for cat, msg in msgs %}
-            <div class="flash {{ cat|e }}">{{ msg }}</div>
-          {% endfor %}
-        {% endif %}
-      {% endwith %}
+      <noscript>
+        <div class="noscript">⚠️ JavaScript está desactivado. Podés iniciar sesión igual, pero sin botón “mostrar contraseña”.</div>
+      </noscript>
 
-      <form method="post" action="/admin/login" autocomplete="on">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token|e }}">
-        <input type="hidden" name="next" value="{{ next|e }}">
+      <div aria-live="polite" aria-atomic="true">
+        {% with msgs = get_flashed_messages(with_categories=true) %}
+          {% if msgs %}
+            {% for cat, msg in msgs %}
+              {% set c = (cat|string|lower|trim) %}
+              {% if c not in ['success','info','warning','error','danger'] %}{% set c = 'info' %}{% endif %}
+              <div class="flash {{ c|e }}">{{ (msg|string)|e }}</div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+      </div>
+
+      <form method="post" action="{{ login_post_url|e }}" autocomplete="on" novalidate>
+        {% if _csrf %}
+          <input type="hidden" name="csrf_token" value="{{ _csrf|e }}">
+        {% endif %}
+        <input type="hidden" name="next" value="{{ _next|e }}">
 
         <div class="field">
           <div class="label"><span>Email</span></div>
-          <input class="input" type="email" name="email" placeholder="admin@tudominio.com" required autocomplete="email">
+          <input class="input"
+                 type="email"
+                 name="email"
+                 placeholder="admin@tudominio.com"
+                 required
+                 autocomplete="email"
+                 inputmode="email"
+                 spellcheck="false">
         </div>
 
         <div class="field">
           <div class="label"><span>Contraseña</span></div>
           <div class="row">
-            <input class="input" id="pw" type="password" name="password" placeholder="••••••••••" required autocomplete="current-password">
-            <button class="pw-toggle" type="button" onclick="togglePw()">Mostrar</button>
+            <input class="input"
+                   id="pw"
+                   type="password"
+                   name="password"
+                   placeholder="••••••••••"
+                   required
+                   autocomplete="current-password">
+            <button class="pw-toggle"
+                    id="pwToggle"
+                    type="button"
+                    aria-controls="pw"
+                    aria-pressed="false">
+              Mostrar
+            </button>
           </div>
+          <div class="caps" id="capsHint">⚠️ Tenés activado Caps Lock</div>
         </div>
 
         <button class="btn" type="submit">Entrar</button>
 
         <div class="small">
-          <span>¿No podés entrar? Revisá verificación del email.</span>
+          <span>¿No podés entrar? Revisá tu email/contraseña.</span>
           {% if allow_register %}
-            <a href="{{ register_url|e }}">Crear admin</a>
+            <a href="{{ register_url_safe|e }}">Crear admin</a>
           {% endif %}
         </div>
 
-        <button class="btn secondary" type="button" onclick="window.location.href='/'">Volver a la tienda</button>
+        <button class="btn secondary" type="button" id="goHome">Volver a la tienda</button>
       </form>
     </main>
   </div>
 
-  <script>
-    function togglePw(){
-      const el = document.getElementById('pw');
-      const btn = event.currentTarget;
-      if(!el) return;
-      const isPw = el.type === 'password';
-      el.type = isPw ? 'text' : 'password';
-      btn.textContent = isPw ? 'Ocultar' : 'Mostrar';
-    }
+  <script{% if _nonce %} nonce="{{ _nonce|e }}"{% endif %} defer>
+    (() => {
+      "use strict";
+      const doc = document;
+
+      const pw = doc.getElementById("pw");
+      const btn = doc.getElementById("pwToggle");
+      const caps = doc.getElementById("capsHint");
+      const goHome = doc.getElementById("goHome");
+
+      if (goHome) {
+        goHome.addEventListener("click", () => {
+          location.assign("{{ home_url|e }}");
+        }, { passive: true });
+      }
+
+      if (pw && btn) {
+        const setState = (show) => {
+          pw.type = show ? "text" : "password";
+          btn.textContent = show ? "Ocultar" : "Mostrar";
+          btn.setAttribute("aria-pressed", show ? "true" : "false");
+        };
+
+        btn.addEventListener("click", () => {
+          setState(pw.type === "password");
+          pw.focus({ preventScroll: true });
+        });
+
+        // Caps Lock hint real
+        const capsCheck = (e) => {
+          if (!caps || !e || typeof e.getModifierState !== "function") return;
+          const on = e.getModifierState("CapsLock") === true;
+          caps.classList.toggle("on", on);
+        };
+        pw.addEventListener("keydown", capsCheck);
+        pw.addEventListener("keyup", capsCheck);
+        pw.addEventListener("blur", () => caps && caps.classList.remove("on"));
+      }
+    })();
   </script>
 </body>
 </html>

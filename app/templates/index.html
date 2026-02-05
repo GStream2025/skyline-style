@@ -22,6 +22,19 @@
     {%- if url_for is defined and _has_ep(ep) -%}{{- url_for(ep) -}}{%- else -%}{{- fb -}}{%- endif -%}
   {%- endmacro %}
 
+  {# ✅ Mejora 1: elige el primer endpoint existente (evita links rotos) #}
+  {% macro first_url(eps, fb='/') -%}
+    {%- set out = '' -%}
+    {%- if eps is iterable -%}
+      {%- for ep in eps -%}
+        {%- if not out and url_for is defined and _has_ep(ep) -%}
+          {%- set out = url_for(ep) -%}
+        {%- endif -%}
+      {%- endfor -%}
+    {%- endif -%}
+    {{- out if out else fb -}}
+  {%- endmacro %}
+
   {% macro safe_static(f) -%}
     {%- set _f = (f|string).lstrip('/') -%}
     {%- if url_for is defined -%}{{- url_for('static', filename=_f) ~ '?v=' ~ _home_ver -}}
@@ -36,16 +49,28 @@
   {# ✅ FIX: en tu /static/img/banners existe hero_home.png (no .webp) #}
   {% set hero_png  = safe_static('img/banners/hero_home.png') %}
   {% set og_img_local = safe_static('img/og.png') %}
-  {% set og_img = (og_image if og_image is defined and og_image else og_img_local) %}
+  {% set og_img_in = (og_image if og_image is defined and og_image else og_img_local) %}
+
+  {# ✅ Mejora 4: OG image absoluta si viene relativa #}
+  {% set og_img = og_img_in %}
+  {% if og_img and not (og_img|string).startswith('http') %}
+    {% set og_img = _root_abs ~ (og_img|string).lstrip('/') %}
+  {% endif %}
 
   {% set _desc = (meta_description if meta_description is defined and meta_description else 'Moda urbana premium, accesorios y tecnología. Ofertas reales, soporte y experiencia de marca.')|string|trim %}
   {% set _t = (meta_title if meta_title is defined and meta_title else 'Skyline Store · Tech + Streetwear premium')|string|trim %}
 
-  {% set _shop_url = safe_url('shop.shop','/shop') %}
+  {% set _shop_url = first_url(['shop.shop','shop.index','main.shop'], '/shop') %}
   {% if not _shop_url or not (_shop_url|string).startswith('/') %}{% set _shop_url = '/shop' %}{% endif %}
   {% set _shop_sep = '&' if '?' in _shop_url else '?' %}
   {% set _offers_url = _shop_url ~ _shop_sep ~ 'sort=new&available=1' %}
   {% set _shop_abs = _root_abs ~ (_shop_url|string).lstrip('/') %}
+
+  {# ✅ Mejora 2: admin login robusto (varios endpoints + fallback) #}
+  {% set _admin_login = first_url(
+    ['admin_auth.login','admin.login','admin_login','admin_auth_routes.login'],
+    '/admin/login'
+  ) %}
 
   <meta name="description" content="{{ _desc|e }}">
   <meta name="robots" content="{{ 'index,follow' if _env == 'production' else 'noindex,nofollow' }}">
@@ -70,12 +95,15 @@
   <link rel="preconnect" href="{{ _root_abs|e }}" crossorigin>
   <link rel="dns-prefetch" href="//skyline-style.onrender.com">
 
-  {# ✅ FIX: preload solo lo que existe (PNG). Evita warning/404 #}
+  {# ✅ preload solo lo que existe (PNG). Evita warning/404 #}
   <link rel="preload" as="image" href="{{ hero_png|e }}" fetchpriority="high" imagesizes="(max-width: 980px) 92vw, 860px">
 
   {# CSS principal #}
   <link rel="stylesheet" href="{{ safe_static('css/home.css')|e }}">
   <link rel="prefetch" href="{{ _shop_url|e }}" as="document">
+
+  {# ✅ opcional: prefetch login admin para acceso rápido (no rompe nada) #}
+  <link rel="prefetch" href="{{ _admin_login|e }}" as="document">
 
   {# ✅ CSP: JSON-LD permitido con nonce #}
   <script type="application/ld+json"{% if _nonce %} nonce="{{ _nonce|e }}"{% endif %}>
@@ -93,17 +121,20 @@
   }
   </script>
 
-  {# ✅ Mejora: inline CSS mínimo de “paint seguro” (con nonce) #}
+  {# ✅ Mejora: inline CSS mínimo de “paint seguro” (con nonce) + link admin discreto #}
   <style{% if _nonce %} nonce="{{ _nonce|e }}"{% endif %}>
     :root{color-scheme:light dark}
     .hp{background:#f6f8fc;color:#0b1220}
     @media (prefers-color-scheme: dark){ .hp{background:#070b14;color:#e5e7eb} }
     .hp :focus-visible{outline:none;box-shadow:0 0 0 4px rgba(37,99,235,.18);border-radius:14px}
+    .hp-linkAdmin{opacity:.62}
+    .hp-linkAdmin:hover{opacity:1}
+    .hp-noscript{margin:10px 0 0;padding:10px 12px;border-radius:14px;border:1px solid rgba(148,163,184,.22);background:rgba(255,255,255,.05);color:inherit}
   </style>
 {% endblock %}
 
 {% block content %}
-  {% set account_url = safe_url('auth.account','/auth/account') %}
+  {% set account_url = first_url(['auth.account','account.account','auth_bp.account'], '/auth/account') %}
   {% set acc_sep = '&' if '?' in account_url else '?' %}
   {% set account_login_url = account_url ~ acc_sep ~ 'tab=login' %}
   {% set account_register_url = account_url ~ acc_sep ~ 'tab=register' %}
@@ -126,10 +157,6 @@
       </div>
     </section>
 
-    {# ✅ FIX: no usar style inline si tu CSP bloquea 'unsafe-inline' en style
-       Si tu CSP también bloquea style inline, mové estos overlays a CSS (home.css).
-       Si style inline está permitido, esto está OK.
-    #}
     <section class="hp-hero hp-heroFull" aria-labelledby="hpTitle"
       style="--hero-url:url('{{ hero_png|e }}'); --hero-overlay: {{ _hero_overlay }}; --hero-overlay-dark: {{ _hero_overlay_dark }};">
       <div class="hp-wrap hp-hero__grid">
@@ -149,6 +176,12 @@
             Marca, soporte y experiencia de compra cuidada.
           </p>
 
+          <noscript>
+            <div class="hp-noscript" role="status" aria-live="polite">
+              Tu navegador tiene JavaScript deshabilitado. La tienda funciona, pero algunas mejoras visuales (scroll pills / botón arriba) pueden no activarse.
+            </div>
+          </noscript>
+
           <div class="hp-mini" role="list" aria-label="Diferenciales">
             <div class="hp-mini__item" role="listitem"><b>Curado</b><span>Productos elegidos</span></div>
             <div class="hp-mini__item" role="listitem"><b>Envío</b><span>Tracking + soporte</span></div>
@@ -167,12 +200,21 @@
             <span class="hp-chip" role="listitem">✅ Devoluciones claras</span>
           </div>
 
-          <nav class="hp-miniLinks" aria-label="Cuenta">
+          <nav class="hp-miniLinks" aria-label="Cuenta y accesos">
             <a href="{{ account_login_url|e }}" class="hp-link">Entrar</a>
             <span aria-hidden="true">·</span>
             <a href="{{ account_register_url|e }}" class="hp-link">Crear cuenta</a>
             <span aria-hidden="true">·</span>
             <a href="{{ _shop_url|e }}" class="hp-link">Catálogo</a>
+            <span aria-hidden="true">·</span>
+
+            {# ✅ Mejora 3: Acceso Admin conectado y seguro (siempre funcional) #}
+            <a href="{{ _admin_login|e }}"
+               class="hp-link hp-linkAdmin"
+               rel="nofollow noopener"
+               aria-label="Acceso administrador">
+              Admin
+            </a>
           </nav>
         </div>
 
@@ -207,7 +249,6 @@
 
     <section class="hp-trust" aria-label="Confianza y seguridad">
       <div class="hp-wrap hp-trust__grid">
-        {# ✅ FIX: assets existentes (tu tree no tiene service_quality.png) #}
         {% set trust = [
           {'img':'img/banners/service_payment.png','title':'Pago seguro','desc':'Transacciones protegidas y soporte'},
           {'img':'img/banners/service_shipping.png','title':'Envío con tracking','desc':'Seguimiento de tu pedido'},
@@ -347,7 +388,6 @@
   {% set _home_ver = (HOME_CSS_VER if HOME_CSS_VER is defined and HOME_CSS_VER else (ASSET_VER if ASSET_VER is defined and ASSET_VER else '165'))|string|trim %}
   {% if url_for is defined %}
     <script src="{{ url_for('static', filename='js/home.js') }}?v={{ _home_ver|e }}" defer></script>
-    {# ✅ nuevo: JS CSP-safe para pills/sticky/toTop + fallbacks #}
     <script src="{{ url_for('static', filename='js/home_boot.js') }}?v={{ _home_ver|e }}" defer></script>
   {% endif %}
 {% endblock %}
