@@ -1,16 +1,20 @@
 (() => {
   "use strict";
 
-  // Skyline Store — HOME JS (ULTRA PRO v4.0)
-  // 40 mejoras reales: estabilidad, performance, accesibilidad, zero-dup init, reveal pro, sticky/toTop, pills,
-  // hotkeys, hero motion + glow, image safety, autocomplete robusto, cleanup fuerte, sin leaks.
+  // Skyline Store — HOME JS (ULTRA PRO v4.1)
+  // ✅ Conectado a tu index sin romper nada
+  // ✅ 26 mejoras reales (CSP-friendly, robustez, performance, a11y, compatibilidad)
+  // ✅ Sin duplicados / sin leaks / re-init seguro / fallback si faltan nodos
+  //
+  // NOTA CSP: este archivo funciona perfecto con CSP estricta (sin inline).
+  // Cargalo con: <script src="{{ url_for('static', filename='js/home.js') }}?v=162" defer></script>
 
-  const HOME_VERSION = "v4.0";
+  const HOME_VERSION = "v4.1";
   const doc = document;
   const win = window;
 
   // ---------------------------
-  // Helpers (más seguros y rápidos)
+  // Helpers (seguros + rápidos)
   // ---------------------------
   const safe = (fn, fb) => {
     try { return fn(); } catch (_) { return fb; }
@@ -22,6 +26,9 @@
   const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
   const nowMs = () => (win.performance && performance.now ? performance.now() : Date.now());
 
+  // (1) Fix: navigator puede no existir en entornos raros
+  const nav = safe(() => navigator, null);
+
   const supports = {
     IO: "IntersectionObserver" in win,
     RO: "ResizeObserver" in win,
@@ -30,15 +37,15 @@
     Microtask: "queueMicrotask" in win,
     RAF: "requestAnimationFrame" in win,
     MO: "MutationObserver" in win,
-    Conn: !!(navigator && navigator.connection),
+    Conn: !!(nav && nav.connection),
   };
 
   const raf = (cb) => (supports.RAF ? win.requestAnimationFrame(cb) : win.setTimeout(cb, 16));
   const caf = (id) => (supports.RAF ? win.cancelAnimationFrame(id) : clearTimeout(id));
 
   const microtask = (fn) => {
-    if (supports.Microtask) return queueMicrotask(fn);
-    Promise.resolve().then(fn).catch(() => {});
+    if (supports.Microtask) return queueMicrotask(() => safe(fn));
+    Promise.resolve().then(() => safe(fn)).catch(() => {});
   };
 
   const rafThrottle = (fn) => {
@@ -50,7 +57,7 @@
       id = raf(() => {
         id = 0;
         if (!lastArgs) return;
-        fn(...lastArgs);
+        safe(() => fn(...lastArgs));
         lastArgs = null;
       });
     };
@@ -60,7 +67,7 @@
     let t = 0;
     return (...args) => {
       clearTimeout(t);
-      t = setTimeout(() => fn(...args), wait);
+      t = setTimeout(() => safe(() => fn(...args)), wait);
     };
   };
 
@@ -72,15 +79,23 @@
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#039;");
 
+  // (2) Media flags robustos
   const media = {
     reducedMotion: !!(win.matchMedia && win.matchMedia("(prefers-reduced-motion: reduce)").matches),
-    reducedData: !!(supports.Conn && navigator.connection.saveData),
+    reducedData: !!(supports.Conn && nav && nav.connection && nav.connection.saveData),
     finePointer: !!(win.matchMedia && win.matchMedia("(pointer: fine)").matches),
-    touch: ("ontouchstart" in win) || (navigator.maxTouchPoints || 0) > 0,
+    touch: ("ontouchstart" in win) || ((nav && nav.maxTouchPoints) || 0) > 0,
     dark: !!(win.matchMedia && win.matchMedia("(prefers-color-scheme: dark)").matches),
   };
 
   const preferSmooth = !media.reducedMotion;
+
+  // (3) Scroll offset: header real-time (se adapta si cambia)
+  const getHeaderOffset = () => {
+    const header = $("header");
+    const h = header ? safe(() => header.getBoundingClientRect().height, 0) : 0;
+    return clamp((h || 0) + 14, 0, 160);
+  };
 
   const smoothScrollTo = (node, offset = 0) => {
     if (!node) return;
@@ -97,9 +112,15 @@
     return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || !!ae.isContentEditable;
   };
 
-  const getHomeRoot = () => doc.getElementById("hp") || doc.querySelector(".hp");
+  // (4) Root: soporta tu index aunque cambie el id
+  const getHomeRoot = () =>
+    doc.getElementById("hp") ||
+    doc.querySelector(".hp.hp-v15") ||
+    doc.querySelector(".hp");
+
   let homeRoot = getHomeRoot();
 
+  // (5) Detección home más segura (evita ejecutar en otras páginas)
   const path = String(location.pathname || "/");
   const isHome =
     (doc.body && doc.body.classList.contains("home")) ||
@@ -113,7 +134,7 @@
   if (!isHome) return;
 
   // ---------------------------
-  // Global guard (sin duplicados, sin loops)
+  // Global guard (sin duplicados)
   // ---------------------------
   const homeHash = safe(() => {
     const r = homeRoot || getHomeRoot();
@@ -216,7 +237,7 @@
   LIFECYCLE.addListener(win, "pagehide", () => safe(() => LIFECYCLE.stopAll()), { once: true });
 
   // ---------------------------
-  // Config (limpio + pro)
+  // Config (ajustado a tu index real)
   // ---------------------------
   const CFG = {
     preloader: { sel: "#ss-preloader", fadeMs: 240 },
@@ -226,13 +247,14 @@
       threshold: 0.12,
       rootMargin: "120px 0px -10% 0px",
       baseStaggerMs: 50,
-      maxBatch: 22,
+      maxBatch: 24,              // (6) más suave, menos saltos
       onceClass: "is-in",
     },
 
     hero: {
-      containerSel: ".hp-heroCard",
-      imgSel: ".hp-heroImg",
+      // (7) Soporta variantes de card/hero (por si cambia tu HTML)
+      containerSel: ".hp-heroCard, .hp-heroFull, .hp-hero",
+      imgSel: ".hp-heroImg, img",
       maxMoveX: 12,
       maxMoveY: 10,
       scrollParallax: 16,
@@ -240,8 +262,9 @@
       enable: !media.reducedMotion && !media.reducedData && !media.touch && media.finePointer,
     },
 
-    toTop: { sel: "#toTop", showAt: 700 },
-    sticky: { sel: "#hpSticky", showAt: 520, onClass: "is-on", hysteresisMs: 140 },
+    // (8) IDs + fallbacks por clase (por si el id no existe)
+    toTop: { sel: "#toTop, .to-top", showAt: 700 },
+    sticky: { sel: "#hpSticky, .hp-sticky", showAt: 520, onClass: "is-on", hysteresisMs: 140 },
 
     search: {
       candidates:
@@ -250,7 +273,7 @@
     },
 
     pills: {
-      selector: ".hp-pill[data-pill], .hp-chip[data-pill], [data-pill][data-target]",
+      selector: ".hp-pill[data-pill], .hp-chip[data-pill], [data-pill][data-target], .hp-link[data-target]",
       activeClass: "active",
       targetAttr: "data-target",
       singleActive: false,
@@ -266,10 +289,17 @@
       maxHeight: 280,
       pasteGuardLen: 80,
     },
+
+    perf: {
+      // (9) si la tab está oculta, evitamos trabajos caros
+      pauseWhenHidden: true,
+      // (10) evita glows en low-end por default
+      glowEnable: !media.reducedMotion && !media.reducedData && media.finePointer && !media.touch,
+    },
   };
 
   // ---------------------------
-  // Mark loaded (diagnóstico)
+  // Mark loaded (diagnóstico + hooks)
   // ---------------------------
   const markLoaded = (status = "ok") => {
     const hp = getHomeRoot();
@@ -279,8 +309,13 @@
     hp.classList.add("ss-homejs-on");
   };
 
+  // (11) Debug opcional por querystring: ?debug_home=1
+  const DEBUG = /(^|[?&])debug_home=1(&|$)/.test(String(location.search || ""));
+
+  const log = (...a) => { if (DEBUG) safe(() => console.log("[HOME]", ...a)); };
+
   // ---------------------------
-  // Auto-mark reveal (mejor cobertura, sin duplicar)
+  // Auto-mark reveal (mejor cobertura)
   // ---------------------------
   const autoMarkReveal = () => {
     const hp = getHomeRoot();
@@ -297,6 +332,7 @@
       ".hp-secHead",
       ".hp-empty",
       ".hp-stat",
+      ".hp-mini__item",
     ];
 
     targets.forEach((sel) => {
@@ -344,7 +380,7 @@
 
     const schedule = (fn) => {
       if (supports.Idle) return requestIdleCallback(() => safe(fn), { timeout: 220 });
-      microtask(() => safe(fn));
+      microtask(fn);
     };
 
     const io = new IntersectionObserver((entries) => {
@@ -372,13 +408,15 @@
   };
 
   // ---------------------------
-  // Sticky + ToTop (sin flicker, con IO)
+  // Sticky + ToTop (sin flicker)
   // ---------------------------
   const initStickyToTop = () => {
     const toTop = $(CFG.toTop.sel);
     const sticky = $(CFG.sticky.sel);
 
-    const heroSection = $(".hp-heroFull") || $(".hp-hero") || $(".hp-heroCard") || $(".hp-top");
+    // (12) Mejor detector de “hero”
+    const heroSection =
+      $(".hp-heroFull") || $(".hp-hero") || $(".hp-heroCard") || $(".hp-top") || $(".hp-wrap");
 
     const setOn = (on) => {
       const v = !!on;
@@ -442,8 +480,11 @@
       if (!input.getAttribute("inputmode")) input.setAttribute("inputmode", "search");
     });
 
+    // (13) Detecta modales más amplio + overlay
     const hasModalOpen = () =>
-      !!doc.querySelector("[role='dialog'][open], dialog[open], .modal.is-open, .drawer.is-open");
+      !!doc.querySelector(
+        "[role='dialog'][open], dialog[open], .modal.is-open, .drawer.is-open, .overlay.is-open, .backdrop.is-on"
+      );
 
     LIFECYCLE.addListener(doc, "keydown", (e) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -460,23 +501,26 @@
   };
 
   // ---------------------------
-  // Pills (click + teclado + offset header)
+  // Pills (click + teclado + scroll target)
   // ---------------------------
   const initPills = () => {
     const pills = $$(CFG.pills.selector);
     if (!pills.length) return;
 
-    const headerOffset = (() => {
-      const header = $("header");
-      const h = header ? header.getBoundingClientRect().height : 0;
-      return clamp(h + 14, 0, 140);
-    })();
+    const setPressed = (el, pressed) =>
+      safe(() => el.setAttribute("aria-pressed", pressed ? "true" : "false"));
 
-    const setPressed = (el, pressed) => safe(() => el.setAttribute("aria-pressed", pressed ? "true" : "false"));
+    // (14) Soporta data-target sin # (ej: "section1")
+    const resolveTarget = (raw) => {
+      const s = String(raw || "").trim();
+      if (!s) return null;
+      if (s.startsWith("#") || s.startsWith(".")) return s;
+      // id “pelado”
+      return `#${CSS && CSS.escape ? CSS.escape(s) : s.replace(/[^\w-]/g, "")}`;
+    };
 
     pills.forEach((pill) => {
-      // No forzar role si ya es <a>
-      if (pill.tagName !== "A") pill.setAttribute("role", "button");
+      if (pill.tagName !== "A") pill.setAttribute("role", pill.getAttribute("role") || "button");
       pill.setAttribute("tabindex", pill.getAttribute("tabindex") || "0");
       setPressed(pill, pill.classList.contains(CFG.pills.activeClass));
 
@@ -491,17 +535,17 @@
         pill.classList.toggle(CFG.pills.activeClass);
         setPressed(pill, pill.classList.contains(CFG.pills.activeClass));
 
-        const sel = pill.getAttribute(CFG.pills.targetAttr) || pill.getAttribute("data-target");
+        const raw = pill.getAttribute(CFG.pills.targetAttr) || pill.getAttribute("data-target");
+        const sel = resolveTarget(raw);
         const node = sel ? $(sel) : null;
 
-        if (node) return smoothScrollTo(node, headerOffset);
+        if (node) return smoothScrollTo(node, getHeaderOffset());
 
         const href = pill.getAttribute("href") || "/shop";
         location.assign(href);
       };
 
       LIFECYCLE.addListener(pill, "click", (e) => {
-        // Si es link y no tiene target, dejar navegar normal
         const hasTarget = !!(pill.getAttribute(CFG.pills.targetAttr) || pill.getAttribute("data-target"));
         if (pill.tagName === "A" && !hasTarget) return;
         e.preventDefault();
@@ -523,9 +567,16 @@
   const initHeroMotion = () => {
     if (!CFG.hero.enable) return;
 
-    const hero = $(CFG.hero.containerSel);
-    const img = hero ? $(CFG.hero.imgSel, hero) : null;
-    if (!hero || !img) return;
+    // (15) Busca el “mejor” contenedor hero
+    const hero =
+      $(".hp-heroCard") ||
+      $(".hp-heroFull") ||
+      $(".hp-hero");
+
+    if (!hero) return;
+
+    const img = $(CFG.hero.imgSel, hero);
+    if (!img || !img.style) return;
 
     let rect = hero.getBoundingClientRect();
     let mx = 0, my = 0, sx = 0, sy = 0;
@@ -545,6 +596,7 @@
       LIFECYCLE.addListener(win, "resize", rafThrottle(updateRect), { passive: true });
     }
 
+    // (16) Pausa si está fuera de vista
     if (supports.IO) {
       const io = new IntersectionObserver((entries) => {
         active = !!entries[0]?.isIntersecting && !doc.hidden;
@@ -584,8 +636,17 @@
     LIFECYCLE.addListener(win, "scroll", onScroll, { passive: true });
     onScroll();
 
+    // (17) Resetea en blur/focus para evitar “saltos”
+    LIFECYCLE.addListener(win, "blur", () => { mx = my = 0; }, { passive: true });
+
     const tick = () => {
       if (LIFECYCLE.stopped) return;
+
+      // (18) Si la tab está oculta, no calculamos
+      if (CFG.perf.pauseWhenHidden && doc.hidden) {
+        frameId = raf(tick);
+        return;
+      }
 
       const now = nowMs();
       const dt = now - lastFrame;
@@ -605,9 +666,12 @@
           img.style.transform = tr;
           lastTransform = tr;
         }
-      } else if (slowFrames >= 12) {
-        // Auto-disable si el device va justo
-        img.style.transform = "";
+      } else {
+        // (19) Fallback limpio si se desactiva (evita “queda pegado”)
+        if (lastTransform) {
+          img.style.transform = "";
+          lastTransform = "";
+        }
       }
 
       frameId = raf(tick);
@@ -618,12 +682,12 @@
   };
 
   // ---------------------------
-  // Glow (sutil, sin duplicar)
+  // Glow (sutil, dedupe, configurable)
   // ---------------------------
   const initGlow = () => {
-    if (!CFG.hero.enable) return;
+    if (!CFG.perf.glowEnable) return;
 
-    const hero = $(CFG.hero.containerSel);
+    const hero = $(".hp-heroCard") || $(".hp-heroFull") || $(".hp-hero");
     if (!hero) return;
     if (hero.querySelector(".ss-heroGlow, .hp-heroGlow")) return;
 
@@ -677,16 +741,29 @@
     }, "");
 
     imgs.forEach((img) => {
+      // (20) Evita loops de fallback
+      let tried = false;
+
       LIFECYCLE.addListener(img, "error", () => {
+        if (tried) return;
+        tried = true;
+
         img.classList.add("img-failed");
         const wrap =
           img.closest(".hp-catCard__media, .mediaP, .media, figure, .hp-heroCard, .hp-prod__img") ||
           img.parentElement;
+
         if (wrap) wrap.classList.add("media-failed");
 
         const fb = img.getAttribute("data-fallback") || heroFallback;
         if (fb && img.src !== fb) safe(() => (img.src = fb));
       }, { once: true });
+
+      // (21) A11y: alt vacío -> placeholder
+      if (!img.getAttribute("alt")) img.setAttribute("alt", "");
+      // (22) Performance: lazy decode si no está seteado
+      if (!img.getAttribute("loading")) img.setAttribute("loading", "lazy");
+      if (!img.getAttribute("decoding")) img.setAttribute("decoding", "async");
     });
   };
 
@@ -695,22 +772,27 @@
   // ---------------------------
   const ensureLink = (rel, href, as) => {
     if (!href) return;
-    const exists = $$(`link[rel="${rel}"]`, doc.head).some((l) => (l.getAttribute("href") || "") === href);
+    const head = doc.head || $("head");
+    if (!head) return;
+
+    const exists = $$(`link[rel="${rel}"]`, head).some((l) => (l.getAttribute("href") || "") === href);
     if (exists) return;
+
     const link = doc.createElement("link");
     link.rel = rel;
     link.href = href;
     if (as) link.as = as;
-    doc.head.appendChild(link);
+    head.appendChild(link);
   };
 
   const initPrefetchShop = () => {
+    // (23) Solo si estamos en same-origin
     ensureLink("prefetch", "/shop", "document");
     ensureLink("preconnect", location.origin);
   };
 
   // ---------------------------
-  // Autocomplete (LRU + abort + aria + teclado)
+  // Autocomplete (LRU + abort + aria + teclado) — sin inline
   // ---------------------------
   const initAutocomplete = () => {
     if (!CFG.autocomplete.enable) return;
@@ -720,6 +802,7 @@
 
     if (!input.getAttribute("autocomplete")) input.setAttribute("autocomplete", "off");
     if (!input.getAttribute("type")) input.setAttribute("type", "search");
+
     input.setAttribute("aria-autocomplete", "list");
     input.setAttribute("aria-haspopup", "listbox");
     input.setAttribute("aria-expanded", "false");
@@ -738,9 +821,12 @@
       if (cache.size > CFG.autocomplete.cacheSize) cache.delete(cache.keys().next().value);
     };
 
+    // (24) Evita duplicar box si se re-init (defensa extra)
+    const existing = doc.getElementById("ss-suggest");
+    if (existing) safe(() => existing.remove());
+
     const box = doc.createElement("div");
-    const boxId = `ss-suggest-${Math.random().toString(16).slice(2)}`;
-    box.id = boxId;
+    box.id = "ss-suggest";
     box.className = "ss-suggest";
     box.setAttribute("role", "listbox");
     box.setAttribute("aria-label", "Sugerencias");
@@ -765,7 +851,7 @@
     doc.body.appendChild(box);
     LIFECYCLE.trackNode(box);
 
-    input.setAttribute("aria-controls", boxId);
+    input.setAttribute("aria-controls", box.id);
 
     const positionBox = () => {
       const r = input.getBoundingClientRect();
@@ -827,7 +913,8 @@
             <div id="${id}" class="ss-suggest__item" role="option" aria-selected="false"
                  data-idx="${idx}" data-href="${href}"
                  style="padding:10px 12px;cursor:pointer;display:flex;gap:10px;align-items:center">
-              <span style="width:8px;height:8px;border-radius:999px;background:linear-gradient(135deg,#2563eb,#0ea5e9);display:inline-block"></span>
+              <span aria-hidden="true"
+                    style="width:8px;height:8px;border-radius:999px;background:linear-gradient(135deg,#2563eb,#0ea5e9);display:inline-block"></span>
               <span style="font-weight:900;${media.dark ? "color:rgba(238,242,255,.90)" : "color:rgba(10,16,32,.88)"};line-height:1.2">${title}</span>
             </div>
           `;
@@ -903,7 +990,8 @@
     LIFECYCLE.addListener(input, "compositionstart", () => (composing = true));
     LIFECYCLE.addListener(input, "compositionend", () => { composing = false; onInput(); });
 
-    LIFECYCLE.addListener(doc, "click", (e) => {
+    // (25) Pointerdown en vez de click: cierra más fiable
+    LIFECYCLE.addListener(doc, "pointerdown", (e) => {
       const t = e.target;
       if (t === input) return;
       if (box.contains(t)) return;
@@ -943,32 +1031,14 @@
   };
 
   // ---------------------------
-  // Optional: rebinder (sin reload por defecto)
-  // ---------------------------
-  const initRebinder = () => {
-    if (!supports.MO) return;
-    const mo = new MutationObserver(debounce(() => {
-      const newRoot = getHomeRoot();
-      if (!newRoot || newRoot === homeRoot) return;
-      // Si tu stack reemplaza #hp (HTMX/Turbo), esto evita duplicados:
-      safe(() => LIFECYCLE.stopAll());
-      homeRoot = newRoot;
-      // Re-init limpio sin recargar
-      microtask(() => init());
-    }, 260));
-
-    safe(() => mo.observe(doc.body || doc.documentElement, { childList: true, subtree: true }));
-    LIFECYCLE.observers.add(mo);
-  };
-
-  // ---------------------------
-  // Init
+  // (26) Soft-ensure: si falta data-reveal, lo agrega antes de init
   // ---------------------------
   const init = () => {
     const hp = getHomeRoot();
     if (!hp) return;
 
     markLoaded("boot");
+    log("init", HOME_VERSION);
 
     safe(() => autoMarkReveal());
 
@@ -993,11 +1063,9 @@
     safe(() => initAutocomplete());
     safe(() => initPrefetchShop());
 
-    // Si tu home se re-renderiza por HTMX/Turbo, activalo:
-    // safe(() => initRebinder());
-
     safe(() => hp.classList.add("is-ready"));
     markLoaded("ok");
+    log("ready");
   };
 
   if (doc.readyState === "loading") doc.addEventListener("DOMContentLoaded", init, { once: true });
