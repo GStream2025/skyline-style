@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import json
 import logging
+import os
 import re
 import secrets
 import time
@@ -57,20 +58,22 @@ _FALSE: Set[str] = {"0", "false", "no", "n", "off", "unchecked", "disable", "dis
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _ALLOWED_PUBLIC_ROLES: Set[str] = {"customer", "affiliate"}
 
-# Session-based rate limit
+# Session-based rate limit (suave, anti-bot)
 _RL_WINDOW_SEC = 60
 _RL_MAX = 8
 _RL_STORE_CAP = 250
 _RL_STORE_TTL_SEC = 60 * 25
-_RL_STORE_SESSION_KEY = "rl_store_v8"
+_RL_STORE_SESSION_KEY = "rl_store_v9"
 
 _RL_LOGIN_KEY = "login"
 _RL_REG_KEY = "register"
 _RL_VERIFY_SEND_KEY = "verify_send"
 
-_MIN_PASS_LEN = 10
+# Password policy (alineado a tu UI)
+_MIN_PASS_LEN = 8
 _MAX_PASS_LEN = 256
 
+# Verify email
 _VERIFY_TTL_MIN = 45
 _VERIFY_RL_SEC = 60
 
@@ -87,13 +90,15 @@ TAB_REGISTER = "register"
 
 # prevent redirect loops / sensitive zones
 _BLOCKED_NEXT_PREFIXES = ("/auth/", "/admin/")
-_ALLOWED_NEXT_PREFIXES = ("/",)  # keep simple: only internal absolute paths
+_ALLOWED_NEXT_PREFIXES = ("/",)
 
-# Abstract Email Validation
-_ABSTRACT_TIMEOUT_SEC = 6
-_ABSTRACT_ENDPOINT = "https://emailvalidation.abstractapi.com/v1/"
+# External validation (best-effort)
+_VALIDATE_TIMEOUT_SEC = 6
 
 
+# ------------------------
+# time / basics
+# ------------------------
 def _now() -> int:
     return int(time.time())
 
@@ -130,15 +135,20 @@ def _cfg_int(key: str, default: int, *, min_v: int = 0, max_v: int = 10**9) -> i
     return v
 
 
+def _env_str(key: str, default: str = "") -> str:
+    try:
+        return (os.getenv(key) or default).strip()
+    except Exception:
+        return default
+
+
 def _norm(v: Any, *, max_len: int = 2000) -> str:
     if v is None:
         return ""
     s = v if isinstance(v, str) else str(v)
     s = s.replace("\x00", "").replace("\u200b", "").strip()
     s = s.replace("\r", "").replace("\n", "")
-    if max_len <= 0:
-        return s
-    return s[:max_len]
+    return s if max_len <= 0 else s[:max_len]
 
 
 def _safe_email(v: Any) -> str:
@@ -235,6 +245,20 @@ def _account_home_url() -> str:
     return u or "/account"
 
 
+def _normalize_name(name: Any) -> str:
+    v = re.sub(r"\s+", " ", _norm(name, max_len=180)).strip()
+    return v[:120]
+
+
+def _extract_role() -> str:
+    role = _norm(request.form.get("role", ""), max_len=24).lower()
+    if role in _ALLOWED_PUBLIC_ROLES:
+        return role
+    if _parse_bool(request.form.get("want_affiliate", "")):
+        return "affiliate"
+    return "customer"
+
+
 def _auth_account_url(*, tab: str, nxt: str = "", email: str = "", name: str = "") -> str:
     tab_v = TAB_LOGIN if tab not in (TAB_LOGIN, TAB_REGISTER) else tab
     params: Dict[str, Any] = {"tab": tab_v}
@@ -264,7 +288,6 @@ def _client_ip() -> str:
 def _client_fp() -> str:
     ip = _client_ip()
     ua = _norm(request.headers.get("User-Agent") or "", max_len=200)[:120]
-    # include a tiny salt so two different users behind NAT don't always collide
     salt = _norm(current_app.config.get("FP_SALT") or "", max_len=64)
     raw = f"{ip}|{ua}|{salt}"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
@@ -348,21 +371,7 @@ def _is_honeypot_triggered() -> bool:
         return False
 
 
-def _normalize_name(name: Any) -> str:
-    v = re.sub(r"\s+", " ", _norm(name, max_len=180)).strip()
-    return v[:120]
-
-
-def _extract_role() -> str:
-    role = _norm(request.form.get("role", ""), max_len=24).lower()
-    if role in _ALLOWED_PUBLIC_ROLES:
-        return role
-    if _parse_bool(request.form.get("want_affiliate", "")):
-        return "affiliate"
-    return "customer"
-
-
-def _json(ok: bool, payload: Dict[str, Any], status: int) -> Tuple[Response, int]:
+def _json(ok: bool, payload: Dict[str, Any], status: int):
     resp = jsonify({"ok": ok, **payload})
     if status == 429 and "retry_after" in payload:
         try:
@@ -381,8 +390,9 @@ def _flash(level: str, msg: str) -> None:
 
 
 def _no_store(resp: Response) -> Response:
+    # ✅ clave: evita cache del HTML con CSRF viejo
     try:
-        resp.headers.setdefault("Cache-Control", "no-store, max-age=0, must-revalidate")
+        resp.headers["Cache-Control"] = "no-store, max-age=0, must-revalidate"
         resp.headers.setdefault("Pragma", "no-cache")
         resp.headers.setdefault("Expires", "0")
         resp.headers.setdefault("Vary", "Cookie")
@@ -475,6 +485,7 @@ def _user_password_check(user: Any, password: str) -> bool:
     if not pw:
         return False
 
+    # prefer método del modelo si existe
     try:
         fn = getattr(user, "check_password", None)
         if callable(fn):
@@ -495,7 +506,7 @@ def _user_password_check(user: Any, password: str) -> bool:
     except Exception:
         ok = False
 
-    # tiny constant-time-ish stabilization
+    # micro “stabilizer”
     try:
         secrets.compare_digest("a", "a" if ok else "b")
     except Exception:
@@ -633,10 +644,50 @@ def _save_verify_token_db(user: User, token: str) -> bool:
         return False
 
 
+# ------------------------
+# base url helpers (FIX: usa APP_URL/SITE_URL y headers)
+# ------------------------
+def _best_scheme() -> str:
+    preferred = _norm(current_app.config.get("PREFERRED_URL_SCHEME") or _env_str("PREFERRED_URL_SCHEME") or "", max_len=10).lower()
+    if preferred in {"http", "https"}:
+        return preferred
+    if _cfg_bool("FORCE_HTTPS", True) or _parse_bool(_env_str("FORCE_HTTPS", "1")):
+        return "https"
+    try:
+        xf = (request.headers.get("X-Forwarded-Proto") or "").split(",")[0].strip().lower()
+        if xf in {"http", "https"}:
+            return xf
+    except Exception:
+        pass
+    try:
+        return (request.scheme or "https").lower()
+    except Exception:
+        return "https"
+
+
 def _site_base_url() -> str:
-    raw = _norm(current_app.config.get("SITE_URL") or "", max_len=300).rstrip("/")
+    # prioridad: config/env (APP_URL / SITE_URL)
+    raw = _norm(
+        current_app.config.get("APP_URL")
+        or current_app.config.get("SITE_URL")
+        or _env_str("APP_URL")
+        or _env_str("SITE_URL")
+        or "",
+        max_len=300,
+    ).rstrip("/")
+
     if raw.startswith("http://") or raw.startswith("https://"):
         return raw
+
+    # inferir por headers (Render)
+    try:
+        scheme = _best_scheme()
+        host = (request.headers.get("X-Forwarded-Host") or request.host or "").strip()
+        if host:
+            return f"{scheme}://{host}".rstrip("/")
+    except Exception:
+        pass
+
     return ""
 
 
@@ -667,6 +718,7 @@ def _send_verify_email(email: str, verify_url: str) -> None:
         except Exception:
             log.exception("send_email failed")
 
+    # fallback log (no rompe deploy)
     try:
         rid = _norm(request.headers.get("X-Request-Id") or "", max_len=80)
         current_app.logger.info("VERIFY_EMAIL rid=%s to=%s url=%s", rid or "-", email, verify_url)
@@ -695,91 +747,80 @@ def _is_password_reasonable(pw: str) -> bool:
     return has_letter and has_digit
 
 
-def _abstract_api_key() -> str:
-    k = _norm(current_app.config.get("ABSTRACT_EMAIL_API_KEY") or "", max_len=128)
-    if k:
-        return k
-    try:
-        import os
-
-        return _norm(os.getenv("ABSTRACT_EMAIL_API_KEY") or "", max_len=128)
-    except Exception:
-        return ""
+# ------------------------
+# Email validation (best-effort, no rompe registro)
+# ------------------------
+def _email_validation_provider() -> str:
+    p = _norm(current_app.config.get("EMAIL_VALIDATION_PROVIDER") or _env_str("EMAIL_VALIDATION_PROVIDER") or "", max_len=40).lower()
+    return p or "none"
 
 
-def _abstract_validate_email(email: str) -> Tuple[bool, str]:
+def _mailboxvalidator_key() -> str:
+    return _norm(current_app.config.get("MAILBOXVALIDATOR_API_KEY") or _env_str("MAILBOXVALIDATOR_API_KEY") or "", max_len=128)
+
+
+def _validate_email_external(email: str) -> Tuple[bool, str]:
     email = _safe_email(email)
     if not _valid_email(email):
         return False, "Email inválido."
 
-    if not _cfg_bool("ABSTRACT_VALIDATE_ON_REGISTER", True):
+    # si está desactivado, skip
+    if not _cfg_bool("VALIDATE_EMAIL_ON_REGISTER", True):
         return True, "skip"
 
-    api_key = _abstract_api_key()
-    if not api_key:
-        return True, "no_key"
+    provider = _email_validation_provider()
 
-    params = urllib.parse.urlencode({"api_key": api_key, "email": email})
-    url = _ABSTRACT_ENDPOINT + "?" + params
+    # provider none => skip
+    if provider in {"", "none", "off", "disabled"}:
+        return True, "skip"
 
-    strict = _cfg_bool("ABSTRACT_STRICT", False)
-    block_disposable = _cfg_bool("ABSTRACT_BLOCK_DISPOSABLE", True)
-    block_undeliverable = _cfg_bool("ABSTRACT_BLOCK_UNDELIVERABLE", True)
-    block_high_risk = _cfg_bool("ABSTRACT_BLOCK_HIGH_RISK", True)
-    max_risk = _cfg_int("ABSTRACT_MAX_RISK_SCORE", 70, min_v=0, max_v=100)
+    # MAILBOXVALIDATOR (best-effort)
+    if provider == "mailboxvalidator":
+        key = _mailboxvalidator_key()
+        if not key:
+            return True, "no_key"
 
-    try:
-        req = urllib.request.Request(
-            url,
-            method="GET",
-            headers={"Accept": "application/json", "User-Agent": "SkylineStore/1.0"},
+        # endpoint típico (si cambia o falla, NO bloqueamos si no está strict)
+        strict = _cfg_bool("EMAIL_VALIDATION_STRICT", False)
+
+        # muchos setups usan v1/single; si falla, no cortamos el registro salvo strict
+        url = (
+            "https://api.mailboxvalidator.com/v1/validation/single?"
+            + urllib.parse.urlencode({"key": key, "email": email, "format": "json"})
         )
-        with urllib.request.urlopen(req, timeout=_ABSTRACT_TIMEOUT_SEC) as resp:
-            raw = resp.read().decode("utf-8", "replace")
-        data = json.loads(raw) if raw else {}
-        if not isinstance(data, dict):
-            return (True, "api_bad_payload") if not strict else (False, "No se pudo verificar el email.")
 
-        is_disposable = bool((data.get("is_disposable_email", {}) or {}).get("value") is True)
-        deliverability = _norm((data.get("deliverability") or "").upper(), max_len=32)
-
-        risk = 0
         try:
-            qs = data.get("quality_score") if "quality_score" in data else None
-            if isinstance(qs, (int, float)):
-                qf = float(qs)
-                qf = 0.0 if qf < 0 else 1.0 if qf > 1 else qf
-                risk = int(round((1.0 - qf) * 100))
+            req = urllib.request.Request(url, method="GET", headers={"Accept": "application/json", "User-Agent": "SkylineStore/1.0"})
+            with urllib.request.urlopen(req, timeout=_VALIDATE_TIMEOUT_SEC) as resp:
+                raw = resp.read().decode("utf-8", "replace")
+            data = json.loads(raw) if raw else {}
+            if not isinstance(data, dict):
+                return (True, "api_bad_payload") if not strict else (False, "No se pudo verificar el email.")
+
+            # heurística común
+            # mailboxvalidator suele devolver "status":"True/False" o "status":"True"/"False"
+            status = _norm(data.get("status") or "", max_len=20).lower()
+            is_free = _norm(data.get("is_free") or "", max_len=20).lower()
+            is_disposable = _norm(data.get("is_disposable") or data.get("is_disposable_email") or "", max_len=20).lower()
+
+            if status in {"false", "invalid"}:
+                return False, "Email inválido."
+            if is_disposable in {"true", "yes", "1"} and _cfg_bool("BLOCK_DISPOSABLE_EMAILS", True):
+                return False, "No se permiten emails temporales."
+
+            # si no podemos interpretar, no bloqueamos (salvo strict)
+            return True, "ok"
+
         except Exception:
-            risk = 0
+            return (True, "api_error") if not strict else (False, "No se pudo verificar el email. Reintentá.")
 
-        if risk == 0:
-            try:
-                sc = data.get("score")
-                if isinstance(sc, (int, float)):
-                    risk = int(round(float(sc)))
-            except Exception:
-                pass
-
-        is_valid_format = bool((data.get("is_valid_format", {}) or {}).get("value") is True)
-        is_mx_found = bool((data.get("is_mx_found", {}) or {}).get("value") is True)
-
-        if not is_valid_format:
-            return False, "Email inválido."
-        if not is_mx_found:
-            return False, "El dominio del email no parece válido."
-        if block_disposable and is_disposable:
-            return False, "No se permiten emails temporales."
-        if block_undeliverable and deliverability in {"UNDELIVERABLE"}:
-            return False, "Ese email no parece entregable."
-        if block_high_risk and risk >= max_risk:
-            return False, "Ese email parece riesgoso. Probá con otro."
-
-        return True, "ok"
-    except Exception:
-        return (True, "api_error") if not strict else (False, "No se pudo verificar el email. Reintentá.")
+    # provider desconocido => no bloquea
+    return True, "skip"
 
 
+# ------------------------
+# hooks
+# ------------------------
 @auth_bp.before_request
 def _auth_before_request():
     _csrf_token()
@@ -790,6 +831,9 @@ def _auth_after_request(resp: Response):
     return _no_store(resp)
 
 
+# =========================================================
+# Views
+# =========================================================
 @auth_bp.get("/account")
 def account():
     if _is_authenticated():
@@ -818,6 +862,7 @@ def account():
     return r
 
 
+# ✅ compat con templates: auth.login_get
 @auth_bp.get("/login")
 @auth_bp.get("/login/")
 def login_get():
@@ -829,6 +874,7 @@ def login_get():
     return redirect(_auth_account_url(tab=TAB_LOGIN, nxt=nxt, email=email), code=302)
 
 
+# ✅ compat con templates: auth.register_get
 @auth_bp.get("/register")
 @auth_bp.get("/register/")
 def register_get():
@@ -848,8 +894,9 @@ def compat_aliases():
     return redirect(_auth_account_url(tab=tab), code=302)
 
 
+# ✅ POST login: endpoint name compatible con templates -> auth.login_post
 @auth_bp.post("/login")
-def login():
+def login_post():
     nxt = _safe_next(request.form.get("next", "")) or _safe_next(request.args.get("next", ""))
 
     ok_rl, retry = _rate_limit(_RL_LOGIN_KEY)
@@ -897,6 +944,7 @@ def login():
 
     verified = bool(getattr(user, "email_verified", False) or getattr(user, "is_verified", False))
     require_verify = _cfg_bool("REQUIRE_EMAIL_VERIFICATION", True)
+
     if require_verify and not verified:
         return _json_or_redirect(
             ok=True,
@@ -917,8 +965,9 @@ def login():
     )
 
 
+# ✅ POST register: endpoint name compatible con templates -> auth.register
 @auth_bp.post("/register")
-def register():
+def register_post():
     nxt = _safe_next(request.form.get("next", "")) or _safe_next(request.args.get("next", ""))
 
     ok_rl, retry = _rate_limit(_RL_REG_KEY)
@@ -947,7 +996,7 @@ def register():
             status_err=400,
         )
 
-    ok_ext, reason = _abstract_validate_email(email)
+    ok_ext, reason = _validate_email_external(email)
     if not ok_ext:
         return _json_or_redirect(ok=False, message=reason, tab=TAB_REGISTER, nxt=nxt, status_err=400)
 
@@ -1073,15 +1122,14 @@ def verify_send():
         return redirect(_auth_account_url(tab=TAB_LOGIN, nxt=nxt), code=302)
 
     token = _make_verify_token()
-
     saved_db = _save_verify_token_db(user, token)
     if not saved_db:
         session[_VERIFY_TOKEN_SESSION_KEY] = token
         session[_VERIFY_TOKEN_TS_SESSION_KEY] = _now()
         session.modified = True
 
-    rel = _url_for_safe("auth.verify", token=token, next=nxt) or f"/auth/verify/{token}?next={nxt}"
-    verify_url = _absolute_url(rel) or url_for("auth.verify", token=token, _external=True, next=nxt)
+    rel = _url_for_safe("auth.verify", token=token, next=nxt) or f"/auth/verify/{token}?next={urllib.parse.quote(nxt)}"
+    verify_url = _absolute_url(rel) or url_for("auth.verify", token=token, _external=True, _scheme=_best_scheme(), next=nxt)
 
     _send_verify_email(email, verify_url)
 
@@ -1137,8 +1185,8 @@ def resend_verification():
         session[_VERIFY_TOKEN_TS_SESSION_KEY] = _now()
         session.modified = True
 
-    rel = _url_for_safe("auth.verify", token=token, next=nxt) or f"/auth/verify/{token}?next={nxt}"
-    verify_url = _absolute_url(rel) or url_for("auth.verify", token=token, _external=True, next=nxt)
+    rel = _url_for_safe("auth.verify", token=token, next=nxt) or f"/auth/verify/{token}?next={urllib.parse.quote(nxt)}"
+    verify_url = _absolute_url(rel) or url_for("auth.verify", token=token, _external=True, _scheme=_best_scheme(), next=nxt)
 
     _send_verify_email(email, verify_url)
     _flash("success", "Correo reenviado ✅ Revisá tu email.")

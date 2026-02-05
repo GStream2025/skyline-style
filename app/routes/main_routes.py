@@ -190,9 +190,12 @@ def _safe_url_for(endpoint: str, **values: Any) -> str:
 
 
 def _site_base_url() -> str:
+    # prioridad: config/env explícito
     site = (_cfg_str("SITE_URL", "") or _env_str("SITE_URL", "")).strip().rstrip("/")
     if site.startswith(("http://", "https://")) and site:
         return site
+
+    # inferir de request + ProxyFix (Render)
     try:
         scheme = _best_scheme()
         host = (request.headers.get("X-Forwarded-Host") or request.host or "").strip()
@@ -200,6 +203,8 @@ def _site_base_url() -> str:
             return f"{scheme}://{host}".rstrip("/")
     except Exception:
         pass
+
+    # fallback estable
     return "https://skyline-style.onrender.com"
 
 
@@ -301,7 +306,7 @@ def _vary_add(resp, token: str) -> None:
 
 def _cache_key_home(lang: str) -> str:
     salt = _env_str("HOME_CACHE_SALT", "")
-    return f"home:v6:lang={lang}:ver={ASSET_VER}:salt={salt}"
+    return f"home:v7:lang={lang}:ver={ASSET_VER}:salt={salt}"
 
 
 def _cache_get(key: str) -> Optional[Dict[str, Any]]:
@@ -355,7 +360,6 @@ def _safe_og_image(value: str) -> str:
 
 
 def _asset_url(filename: str) -> str:
-    # ✅ mejora real: versionado consistente para CSS/JS/img (cache busting)
     fn = (filename or "").lstrip("/")
     u = _safe_url_for("static", filename=fn, v=ASSET_VER)
     if u:
@@ -365,11 +369,13 @@ def _asset_url(filename: str) -> str:
 
 @main_bp.app_context_processor
 def inject_globals():
-    # ✅ mejora real: tus templates pueden usar asset_url("css/home.css")
+    # ✅ FIX: SITE_URL ahora es string real, no función (evita templates rotos)
+    base = _site_base_url()
     return {
         "asset_url": _asset_url,
         "ASSET_VER": ASSET_VER,
-        "SITE_URL": _site_base_url,
+        "SITE_URL": base,
+        "site_url": _site_base_url,  # si querés llamar función en templates
     }
 
 
@@ -389,7 +395,6 @@ def _render(template: str, *, status: int = 200, **ctx: Any):
         return make_response(render_template(template, **ctx), status)
     except Exception:
         log.exception("Template render failed: %s", template)
-        # fallback si error.html rompe por algún include
         try:
             return make_response(
                 render_template(
@@ -427,12 +432,13 @@ def _security_headers(resp):
     except Exception:
         pass
 
-    # ✅ mejora real: páginas sensibles nunca cache
+    # ✅ páginas sensibles: no-cache SIEMPRE (mata CSRF desincronizado por cache)
     try:
         p = request.path or ""
         if p.startswith(("/auth", "/admin", "/account", "/checkout", "/cart", "/webhooks")):
-            resp.headers.setdefault("Cache-Control", "no-store, max-age=0, must-revalidate")
+            resp.headers["Cache-Control"] = "no-store, max-age=0, must-revalidate"
             resp.headers.setdefault("Pragma", "no-cache")
+            resp.headers.setdefault("Expires", "0")
             _vary_add(resp, "Cookie")
     except Exception:
         pass
@@ -510,16 +516,17 @@ def account_alias():
     raw = _norm_str((request.args.get("tab") or request.args.get("mode") or ""), max_len=24).lower()
     wants_register = raw in {"register", "signup", "crear", "alta"}
 
-    u = _safe_url_for("auth.register_get", next=nxt) if (wants_register and nxt) else ""
-    if not u and wants_register:
-        u = _safe_url_for("auth.register_get")
-    if not wants_register:
+    if wants_register:
+        u = _safe_url_for("auth.register_get", next=nxt) if nxt else _safe_url_for("auth.register_get")
+        if u:
+            return redirect(u, code=302)
+        base = "/auth/register"
+    else:
         u = _safe_url_for("auth.login_get", next=nxt) if nxt else _safe_url_for("auth.login_get")
+        if u:
+            return redirect(u, code=302)
+        base = "/auth/login"
 
-    if u:
-        return redirect(u, code=302)
-
-    base = "/auth/register" if wants_register else "/auth/login"
     return redirect(f"{base}?{urlencode({'next': nxt})}" if nxt else base, code=302)
 
 
@@ -534,7 +541,7 @@ def cuenta_alias():
 
 
 # =========================================================
-# 3) Aliases de tienda/ofertas (evita links rotos)
+# 3) Aliases de tienda/ofertas
 # =========================================================
 @main_bp.get("/tienda")
 def tienda_alias():
@@ -550,20 +557,19 @@ def ofertas_alias():
 
 
 # =========================================================
-# 4) ✅ FIX CLAVE: Alias de producto (MATA el SS-404 por rutas viejas)
+# 4) Alias producto (compat)
 # =========================================================
 def _redirect_product_detail(slug: str):
     s = _norm_str(slug, max_len=140).strip().strip("/")
     if not s:
         return None
 
-    # 1) Si existe endpoint real, redirigimos ahí (no adivinamos: probamos varios)
     for ep in ("shop.product_detail", "shop.product", "shop.product_view", "main.product_detail"):
         u = _safe_url_for(ep, slug=s) or _safe_url_for(ep, product_slug=s) or _safe_url_for(ep, id=s)
         if u:
             return redirect(u, code=302)
 
-    # 2) Fallback: si tenés Product model + template, render directo
+    # fallback render directo
     if db is not None and Product is not None:
         try:
             q = db.session.query(Product)  # type: ignore
@@ -688,7 +694,7 @@ def health():
 
 
 # =========================================================
-# 7) Robots + Sitemap (con URLs reales si existen)
+# 7) Robots + Sitemap
 # =========================================================
 @main_bp.get("/robots.txt")
 def robots_txt():
@@ -762,9 +768,7 @@ def sitemap_xml():
                 if not slug_s:
                     continue
 
-                # ✅ mejora real: sitemap usa alias estable /producto/<slug>
                 loc = f"{base}/producto/{slug_s}"
-
                 if loc in seen:
                     continue
                 seen.add(loc)
@@ -825,12 +829,11 @@ def favicon():
 
 
 # =========================================================
-# 9) Error handlers: usa templates/errors si existen
+# 9) Error handlers
 # =========================================================
 @main_bp.app_errorhandler(404)
 def not_found(e):
     _ = e
-    # ✅ mejora real: si existe templates/errors/404.html lo usa
     try:
         return _render(
             "errors/404.html",

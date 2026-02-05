@@ -1,4 +1,4 @@
-{# app/templates/auth/login.html — Skyline Store (ULTRA PRO / CSP-SAFE / NO-500) #}
+{# app/templates/auth/login.html — Skyline Store (ULTRA PRO / NO-CSRF / CSP-FRIENDLY) #}
 <!doctype html>
 <html lang="es" data-page="auth-login">
 <head>
@@ -8,22 +8,20 @@
   <meta name="robots" content="noindex,nofollow">
   <meta name="theme-color" content="#0b1120">
 
-  {# --------- APP NAME safe --------- #}
+  {# App name safe #}
   {% set _app = (APP_NAME if APP_NAME is defined and APP_NAME else "Skyline Store")|string|trim %}
   <title>{{ _app|e }} · Iniciar sesión</title>
 
-  {# --------- CSRF (robusto / NO callable) --------- #}
+  {# CSRF robusto: SIEMPRE preferir csrf_token() #}
   {% set _csrf = '' %}
-  {% if csrf_token_value is defined and csrf_token_value %}
+  {% if csrf_token is defined %}
+    {% set _csrf = csrf_token() %}
+  {% elif csrf_token_value is defined and csrf_token_value %}
     {% set _csrf = csrf_token_value %}
-  {% elif g is defined and g and (g.csrf_token is defined) and g.csrf_token %}
-    {% set _csrf = g.csrf_token %}
-  {% elif session is defined and session and session.get is defined and session.get('csrf_token') %}
-    {% set _csrf = session.get('csrf_token') %}
   {% endif %}
-  {% if _csrf %}<meta name="csrf-token" content="{{ (_csrf|string)|trim|e }}">{% endif %}
+  {% if _csrf %}<meta name="csrf-token" content="{{ _csrf|string|trim|e }}">{% endif %}
 
-  {# --------- next safe --------- #}
+  {# next safe (igual validalo en backend) #}
   {% set _next = (next if next is defined and next else '')|string|trim %}
   {% if request is defined and request and request.args is defined and request.args and request.args.get is defined %}
     {% if not _next %}{% set _next = (request.args.get('next') or '')|string|trim %}{% endif %}
@@ -35,7 +33,7 @@
   {% if '#' in _next %}{% set _next = _next.split('#', 1)[0] %}{% endif %}
   {% if not _next %}{% set _next = '/' %}{% endif %}
 
-  {# --------- URLs safe --------- #}
+  {# URLs safe #}
   {% set _login_post = (url_for('auth.login_post') if url_for is defined else '/auth/login') %}
   {% set _reg_get    = (url_for('auth.register_get', next=_next) if url_for is defined else '/auth/register') %}
   {% set _forgot_get = (url_for('auth.forgot_password_get', next=_next) if url_for is defined else '/auth/forgot-password') %}
@@ -43,10 +41,10 @@
   {% set _home_url   = (url_for('main.index') if url_for is defined else '/') %}
   {% set _support    = (url_for('main.contact') if url_for is defined else '/about') %}
 
-  {# --------- CSS --------- #}
+  {# CSS #}
   <link rel="stylesheet" href="{{ (url_for('static', filename='css/auth-login.css') if url_for is defined else '/static/css/auth-login.css')|e }}">
 
-  {# (opcional) mejora performance: prefetch del JS sin romper CSP #}
+  {# preload JS (ok) #}
   <link rel="preload" as="script" href="{{ (url_for('static', filename='js/login.js') if url_for is defined else '/static/js/login.js')|e }}">
 </head>
 
@@ -71,7 +69,7 @@
                 {% set c = (cat or '')|string|lower %}
                 {% set tone = 'good' if 'success' in c else ('bad' if 'danger' in c or 'error' in c else ('warn' if 'warn' in c else 'info')) %}
                 <div class="auth-alert" data-tone="{{ tone|e }}">
-                  <div style="min-width:0">
+                  <div class="auth-alert-inner">
                     <p class="auth-alert-title">
                       {{ 'Listo' if tone=='good' else ('Atención' if tone=='warn' else ('Error' if tone=='bad' else 'Aviso')) }}
                     </p>
@@ -90,12 +88,12 @@
               autocomplete="on"
               novalidate>
 
-          <input type="hidden" name="csrf_token" value="{{ (_csrf|string)|trim|e }}">
+          {# CSRF: si _csrf quedara vacío, el backend debe rechazar con error claro #}
+          <input type="hidden" name="csrf_token" value="{{ _csrf|string|trim|e }}">
           <input type="hidden" name="next" value="{{ _next|e }}">
 
-          {# honeypot anti-bots (no molesta a humanos) #}
-          <input type="text" name="website" value="" tabindex="-1" autocomplete="off" aria-hidden="true"
-                 style="position:absolute;left:-9999px;opacity:0;height:0;width:0">
+          {# Honeypot sin estilos inline (CSP-friendly). Ocultalo con CSS: .hp{position:absolute;left:-9999px;opacity:0;height:0;width:0} #}
+          <input class="hp" type="text" name="website" value="" tabindex="-1" autocomplete="off" aria-hidden="true">
 
           <div class="auth-row">
             <div class="auth-label">
@@ -132,12 +130,13 @@
                      minlength="8"
                      maxlength="256"
                      placeholder="••••••••">
+
               <button class="auth-icon-btn" type="button" id="togglePw" aria-label="Mostrar u ocultar contraseña">
                 <svg id="eyeOn" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" stroke="currentColor" stroke-width="1.8"/>
                   <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="currentColor" stroke-width="1.8"/>
                 </svg>
-                <svg id="eyeOff" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="display:none">
+                <svg id="eyeOff" viewBox="0 0 24 24" fill="none" aria-hidden="true" hidden>
                   <path d="M3 5l18 14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
                   <path d="M2 12s3.5-7 10-7c2.1 0 3.9.7 5.4 1.6M22 12s-3.5 7-10 7c-2.2 0-4.1-.7-5.7-1.7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
                   <path d="M10 10a3 3 0 0 0 4.2 4.2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
@@ -174,7 +173,7 @@
     </section>
   </main>
 
-  {# ✅ CSP-SAFE: solo scripts externos #}
+  {# CSP-SAFE: solo scripts externos #}
   <script src="{{ (url_for('static', filename='js/login.js') if url_for is defined else '/static/js/login.js')|e }}" defer></script>
 </body>
 </html>

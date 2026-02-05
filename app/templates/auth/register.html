@@ -8,8 +8,8 @@
   <title>{{ (APP_NAME or "Skyline Store")|e }} · Crear cuenta</title>
 
   {# CSRF para JS (opcional pero recomendado) #}
-  {% if csrf_token %}
-    <meta name="csrf-token" content="{{ csrf_token|e }}">
+  {% if csrf_token is defined %}
+    <meta name="csrf-token" content="{{ csrf_token()|e }}">
   {% endif %}
 
   <link rel="stylesheet"
@@ -61,7 +61,10 @@
             action="{{ post_url }}"
             novalidate>
 
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        {# CSRF real (SIEMPRE) #}
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        {# Next seguro (el backend debe sanitizar igual) #}
         <input type="hidden" name="next" value="{{ next|default('')|e }}">
 
         {# Honeypot #}
@@ -143,7 +146,7 @@
         <!-- Términos -->
         <div class="auth-row">
           <label class="auth-check">
-            <input type="checkbox" id="terms" required>
+            <input type="checkbox" id="terms" name="terms" value="1" required>
             <span>Acepto los términos y la política de privacidad</span>
           </label>
         </div>
@@ -171,5 +174,18 @@
 </main>
 
 <script src="{{ url_for('static', filename='js/register.js') if url_for is defined else '/static/js/register.js' }}" defer></script>
+
+<script>
+  // Mantiene consistencia: want_affiliate = 1 cuando role=affiliate
+  (function () {
+    const role = document.getElementById("role");
+    const want = document.getElementById("wantAffiliate");
+    if (!role || !want) return;
+    const sync = () => { want.value = (role.value === "affiliate") ? "1" : "0"; };
+    role.addEventListener("change", sync);
+    sync();
+  })();
+</script>
+
 </body>
 </html>
