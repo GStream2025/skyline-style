@@ -1,24 +1,11 @@
-{# Ruta: app/templates/admin/base_admin.html — Skyline Admin (ULTRA PRO v3.0 / FINAL / NO-500 / CSP-READY)
-   ✅ 19 mejoras reales aplicadas:
-   1) safe_url robusto (no depende de view_functions; try/except Jinja)
-   2) csrf meta estable con fallback (csrf_token_value / csrf_token / headers)
-   3) soporte CSP nonce en <style> y <script>
-   4) versionado assets (?v=ASSET_VER) para evitar caché roto
-   5) preconnect/dns-prefetch opcional y seguro (sin romper)
-   6) title seguro con default y escape
-   7) mejoras a11y: skip link, aria-current, aria-labels consistentes
-   8) theme toggle persistente + respeta prefers-color-scheme si no hay guardado
-   9) evita doble init del JS (dataset flag)
-   10) listeners passive cuando aplica
-   11) selector de nav robusto y sin errores si falta elemento
-   12) hardening de location/pathname
-   13) mejoras de UX: focus al main al usar “skip”
-   14) reduce-motion respetado (sin animaciones forzadas)
-   15) evita mixed theme: set inicial antes del paint (script pequeño in-head)
-   16) no rompe si localStorage está bloqueado
-   17) macros safe_static / safe_url reutilizables
-   18) bloque extra_head / extra_js intactos y seguros
-   19) sin dependencias externas; todo degrade-safe
+{# Ruta: app/templates/admin/base_admin.html — Skyline Admin (ULTRA PRO v3.2 / FINAL / NO-500 / CSP-READY)
+   ✅ Fix crítico: Jinja NO soporta try/except -> eliminado (evita 500)
+   ✅ URLs ajustadas a endpoints reales de admin_routes.py: admin.products, admin.products_new, etc.
+   ✅ first_url(): elige el 1er endpoint existente sin romper
+   ✅ CSRF meta robusto + nonce CSP en style/script
+   ✅ Theme pre-paint + toggle persistente + respeta prefers-color-scheme
+   ✅ A11y: skip real con focus, aria-current automático, labels consistentes
+   ✅ Hardening: host/root saneados, listeners passive, doble init protegido
 #}
 <!doctype html>
 <html lang="es" data-theme="dark">
@@ -27,22 +14,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
 
-  {# ---------- Env / version / nonce ---------- #}
+  {# ---------- Version / nonce ---------- #}
   {% set _ver = (ASSET_VER if ASSET_VER is defined and ASSET_VER else (ADMIN_ASSET_VER if ADMIN_ASSET_VER is defined and ADMIN_ASSET_VER else '1'))|string|trim %}
   {% set _nonce = (csp_nonce if csp_nonce is defined and csp_nonce else (nonce if nonce is defined and nonce else ''))|string %}
 
-  {# ---------- Helpers seguros ---------- #}
-  {% macro safe_url(ep, fb='#') -%}
-    {%- if url_for is defined and ep -%}
-      {%- set _u = '' -%}
-      {%- set _ok = true -%}
-      {%- try -%}{%- set _u = url_for(ep) -%}{%- except -%}{%- set _ok = false -%}{%- endtry -%}
-      {{- _u if _ok and _u else fb -}}
-    {%- else -%}
-      {{- fb -}}
-    {%- endif -%}
-  {%- endmacro %}
+  {# ---------- view_functions (si existe) ---------- #}
+  {% set _vf = (view_functions if view_functions is defined and view_functions else {}) %}
 
+  {# ---------- Helpers seguros ---------- #}
   {% macro safe_static(path) -%}
     {%- set _p = (path|string).lstrip('/') -%}
     {%- if url_for is defined -%}
@@ -52,11 +31,33 @@
     {%- endif -%}
   {%- endmacro %}
 
+  {% macro safe_url(ep, fb='#') -%}
+    {%- if url_for is defined and ep and _vf and (_vf.get(ep) or (ep in _vf)) -%}
+      {{- url_for(ep) -}}
+    {%- else -%}
+      {{- fb -}}
+    {%- endif -%}
+  {%- endmacro %}
+
+  {# Elige el 1er endpoint existente de una lista #}
+  {% macro first_url(eps, fb='#') -%}
+    {%- set out = fb -%}
+    {%- if eps and _vf and url_for is defined -%}
+      {%- for ep in eps -%}
+        {%- if ep and (_vf.get(ep) or (ep in _vf)) -%}
+          {%- set out = url_for(ep) -%}
+          {%- break -%}
+        {%- endif -%}
+      {%- endfor -%}
+    {%- endif -%}
+    {{- out -}}
+  {%- endmacro %}
+
   {# ---------- CSRF meta (robusto) ---------- #}
   {% set _csrf = '' %}
   {% if csrf_token_value is defined and csrf_token_value %}{% set _csrf = csrf_token_value %}
   {% elif csrf_token is defined and csrf_token %}{% set _csrf = csrf_token %}
-  {% elif g is defined and g and (g.csrf_token is defined) and g.csrf_token %}{% set _csrf = g.csrf_token %}
+  {% elif g is defined and g and g.csrf_token is defined and g.csrf_token %}{% set _csrf = g.csrf_token %}
   {% endif %}
   <meta name="csrf-token" content="{{ (_csrf|string)|trim|e }}">
 
@@ -66,28 +67,32 @@
 
   <title>{% block title %}Admin · {{ ((APP_NAME if APP_NAME is defined and APP_NAME else "Skyline Store")|string)|e }}{% endblock %}</title>
 
-  {# ---------- (opcional) Preconnect / DNS ---------- #}
-  <link rel="dns-prefetch" href="//{{ (request.host if request is defined and request and request.host else 'skyline-style.onrender.com')|e }}">
-  <link rel="preconnect" href="{{ (request.url_root if request is defined and request and request.url_root else 'https://skyline-style.onrender.com/')|e }}" crossorigin>
+  {# ---------- Preconnect/DNS (saneado) ---------- #}
+  {% set _host = (request.host if request is defined and request and request.host else 'skyline-style.onrender.com')|string|trim %}
+  {% if _host and ('/' not in _host) and (' ' not in _host) and ('\n' not in _host) %}
+    <link rel="dns-prefetch" href="//{{ _host|e }}">
+  {% endif %}
+  {% set _root = (request.url_root if request is defined and request and request.url_root else '')|string|trim %}
+  {% if _root and _root.startswith('http') %}
+    <link rel="preconnect" href="{{ _root|e }}" crossorigin>
+  {% endif %}
 
-  {# ✅ 1) UI Core global #}
+  {# CSS core + admin #}
   <link rel="preload" href="{{ safe_static('css/ui-core.css')|e }}" as="style">
   <link rel="stylesheet" href="{{ safe_static('css/ui-core.css')|e }}">
-
-  {# ✅ 2) Admin base #}
   <link rel="preload" href="{{ safe_static('css/admin-base.css')|e }}" as="style">
   <link rel="stylesheet" href="{{ safe_static('css/admin-base.css')|e }}">
 
-  {# ✅ 3) Respeto data-theme + reduce motion #}
+  {# Respeto theme + reduce motion #}
   <style{% if _nonce %} nonce="{{ _nonce|e }}"{% endif %}>
     html[data-theme="dark"]{ color-scheme:dark; }
     html[data-theme="light"]{ color-scheme:light; }
     @media (prefers-reduced-motion: reduce){
-      *{ scroll-behavior:auto !important; }
+      *{ scroll-behavior:auto !important; transition:none !important; animation:none !important; }
     }
   </style>
 
-  {# ✅ 15) Set tema ANTES del paint (evita flash) #}
+  {# Theme pre-paint (evita flash). Respeta prefers-color-scheme si no hay guardado. #}
   <script{% if _nonce %} nonce="{{ _nonce|e }}"{% endif %}>
     (() => {
       "use strict";
@@ -97,13 +102,12 @@
       const saved = safeGet(KEY);
       if (saved === "light" || saved === "dark") {
         root.dataset.theme = saved;
-      } else {
-        // si no hay guardado, respeta preferencia del sistema
-        try{
-          const mq = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)");
-          if (mq && mq.matches) root.dataset.theme = "light";
-        }catch(_){}
+        return;
       }
+      try{
+        const mq = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)");
+        if (mq && mq.matches) root.dataset.theme = "light";
+      }catch(_){}
     })();
   </script>
 
@@ -114,14 +118,15 @@
   <a class="skip" href="#adminMain">Saltar al contenido</a>
 
   <div class="wrap">
-    {# ---------- URLs de navegación ---------- #}
-    {% set url_dash = safe_url('admin.dashboard','/admin') %}
-    {% set url_prod = safe_url('admin.products_list','/admin/products') %}
-    {% set url_cat  = safe_url('admin.categories','/admin/categories') %}
-    {% set url_pay  = safe_url('admin.payments','/admin/payments') %}
-    {% set url_shop = safe_url('main.home','/') %}
-    {% set url_out  = safe_url('admin.logout','/admin/logout') %}
-    {% set url_printful = safe_url('printful.products','/printful/productos') %}
+    {# ---------- URLs (con endpoints reales + fallbacks) ---------- #}
+    {% set url_dash = first_url(['admin.dashboard','admin.index'], '/admin') %}
+    {% set url_prod = first_url(['admin.products','admin.products_list'], '/admin/products') %}
+    {% set url_prod_new = first_url(['admin.products_new','admin.products_create'], '/admin/products/new') %}
+    {% set url_cat  = first_url(['admin.categories'], '/admin/categories') %}
+    {% set url_pay  = first_url(['admin.payments'], '/admin/payments') %}
+    {% set url_shop = first_url(['main.home','main.index'], '/') %}
+    {% set url_printful = first_url(['printful.products'], '/printful/productos') %}
+    {% set url_out  = first_url(['admin.logout','admin_auth.logout','admin_auth.admin_logout'], '/admin/logout') %}
 
     <header class="topbar" role="banner">
       <div class="brand" aria-label="Skyline Admin">
@@ -137,7 +142,10 @@
         <a class="pill" href="{{ url_pay|e }}" data-nav="pay">Pagos</a>
         <a class="pill" href="{{ url_printful|e }}" data-nav="printful">Printful</a>
         <a class="pill" href="{{ url_shop|e }}" data-nav="shop">Ver tienda</a>
-        <button class="pill iconpill" id="themeToggle" type="button" aria-label="Cambiar tema" aria-pressed="false">🌙</button>
+
+        <button class="pill iconpill" id="themeToggle" type="button"
+                aria-label="Cambiar tema" aria-pressed="false">🌙</button>
+
         <a class="pill danger" href="{{ url_out|e }}">Salir</a>
       </nav>
     </header>
@@ -160,7 +168,7 @@
         <p class="muted">Operación lista: catálogo + métodos de cobro.</p>
 
         <div class="stack">
-          <a class="btn" href="{{ safe_url('admin.products_new','/admin/products/new')|e }}">
+          <a class="btn" href="{{ url_prod_new|e }}">
             <span class="ic" aria-hidden="true">＋</span> Nuevo producto
           </a>
 
@@ -202,7 +210,7 @@
       const doc = document;
       const root = doc.documentElement;
 
-      // 9) evita doble init
+      // evita doble init
       if (root.dataset.adminInit === "1") return;
       root.dataset.adminInit = "1";
 
@@ -220,20 +228,10 @@
         }
       };
 
-      // 8) inicial desde dataset (ya seteado en head) o storage
+      // Inicial: dataset (pre-paint) -> storage si existe
       const saved = safeGet(KEY);
       if (saved === "light" || saved === "dark") setTheme(saved);
       else setTheme(root.dataset.theme || "dark");
-
-      // 13) Skip link: foco real al main
-      const skip = doc.querySelector('a.skip[href="#adminMain"]');
-      const main = doc.getElementById("adminMain");
-      if (skip && main) {
-        skip.addEventListener("click", () => {
-          // pequeño delay para que el browser salte y luego enfoque
-          setTimeout(() => { try { main.focus({ preventScroll: true }); } catch (_) { try { main.focus(); } catch(__){} } }, 0);
-        }, { passive: true });
-      }
 
       if (btn) {
         btn.addEventListener("click", () => {
@@ -243,9 +241,20 @@
         }, { passive: true });
       }
 
-      // 11/12) Nav active robusto
-      const path = String((location && location.pathname) ? location.pathname : "/").toLowerCase();
+      // Skip link: foco real
+      const skip = doc.querySelector('a.skip[href="#adminMain"]');
+      const main = doc.getElementById("adminMain");
+      if (skip && main) {
+        skip.addEventListener("click", () => {
+          setTimeout(() => {
+            try { main.focus({ preventScroll: true }); }
+            catch (_) { try { main.focus(); } catch(__){} }
+          }, 0);
+        }, { passive: true });
+      }
 
+      // Nav active robusto
+      const path = String((location && location.pathname) ? location.pathname : "/").toLowerCase();
       const map = [
         ["dash", [/^\/admin\/?$/,/\/admin\/dashboard/]],
         ["prod", [/\/admin\/products/]],
