@@ -8,10 +8,10 @@
   {# =========================================================
      Skyline Store — index.html (FINAL / NO-500 / ENDPOINT-SAFE)
      ✅ NO usa url_for() para endpoints opcionales
-     ✅ Usa safe_url() (inyectado por app/__init__.py) => NUNCA rompe
-     ✅ first_url seguro (sin macros “truthy string”)
+     ✅ Usa safe_url() global => NUNCA rompe
+     ✅ first_url SOLO en este block (NO se usa en content)
      ✅ OG absoluto si viene relativo
-     ✅ Assets reales según tu static/ (hero_home.png existe)
+     ✅ Assets reales (hero_home.png existe)
   ========================================================= #}
 
   {% set _env = (ENV if ENV is defined and ENV else 'production')|string|lower|trim %}
@@ -19,7 +19,6 @@
   {% set _home_ver = (HOME_CSS_VER if HOME_CSS_VER is defined and HOME_CSS_VER else (ASSET_VER if ASSET_VER is defined and ASSET_VER else '165'))|string|trim %}
   {% set _nonce = (csp_nonce if csp_nonce is defined and csp_nonce else (nonce if nonce is defined and nonce else ''))|string %}
 
-  {# Helpers SAFE (NO url_for directo para endpoints) #}
   {% macro safe_static(f) -%}
     {%- set _f = (f|string).lstrip('/') -%}
     {%- if url_for is defined -%}
@@ -42,17 +41,14 @@
     {{- out if out else fb -}}
   {%- endmacro %}
 
-  {# Canonical/root robusto #}
   {% set _canonical = (_req.base_url if _req and _req.base_url else 'https://skyline-style.onrender.com/') %}
   {% set _root = (_req.url_root if _req and _req.url_root else 'https://skyline-style.onrender.com/') %}
   {% set _root_abs = (_root if _root and (_root|string).startswith('http') else 'https://skyline-style.onrender.com/') %}
 
-  {# Assets reales (según tu tree) #}
   {% set hero_png = safe_static('img/banners/hero_home.png') %}
   {% set og_img_local = safe_static('img/og.png') %}
   {% set og_img_in = (og_image if og_image is defined and og_image else og_img_local) %}
 
-  {# OG absoluto si viene relativo #}
   {% set og_img = og_img_in %}
   {% if og_img and not (og_img|string).startswith('http') %}
     {% set og_img = _root_abs ~ (og_img|string).lstrip('/') %}
@@ -61,14 +57,13 @@
   {% set _desc = (meta_description if meta_description is defined and meta_description else 'Moda urbana premium, accesorios y tecnología. Ofertas reales, soporte y experiencia de marca.')|string|trim %}
   {% set _t = (meta_title if meta_title is defined and meta_title else 'Skyline Store · Tech + Streetwear premium')|string|trim %}
 
-  {# ✅ FIX REAL: shop.index removido (no existe). Usamos shop.shop sí o sí #}
+  {# Shop / offers (NO shop.index) #}
   {% set _shop_url = first_url(['shop.shop','main.tienda_alias','main.tienda'], '/shop') %}
   {% if not _shop_url or not (_shop_url|string).startswith('/') %}{% set _shop_url = '/shop' %}{% endif %}
   {% set _shop_sep = '&' if '?' in _shop_url else '?' %}
   {% set _offers_url = _shop_url ~ _shop_sep ~ 'sort=new&available=1' %}
   {% set _shop_abs = _root_abs ~ (_shop_url|string).lstrip('/') %}
 
-  {# Admin login robusto #}
   {% set _admin_login = first_url(['admin_auth.login','admin.login'], '/admin/login') %}
 
   <meta name="description" content="{{ _desc|e }}">
@@ -128,7 +123,22 @@
 {% endblock %}
 
 {% block content %}
-  {% set account_url = first_url(['auth.account','account.account'], '/auth/account') %}
+  {# =========================================================
+     IMPORTANTE:
+     ✅ NO usar first_url aquí. Solo safe_url (GLOBAL).
+     => Evita para siempre "first_url is undefined"
+  ========================================================= #}
+
+  {% set _shop_url = (safe_url('shop.shop','/shop') if safe_url is defined else '/shop') %}
+  {% if not _shop_url or not (_shop_url|string).startswith('/') %}{% set _shop_url = '/shop' %}{% endif %}
+  {% set _shop_sep = '&' if '?' in _shop_url else '?' %}
+  {% set _offers_url = _shop_url ~ _shop_sep ~ 'sort=new&available=1' %}
+
+  {% set _admin_login = (safe_url('admin_auth.login','') if safe_url is defined else '') %}
+  {% if not _admin_login %}{% set _admin_login = (safe_url('admin.login','') if safe_url is defined else '') %}{% endif %}
+  {% if not _admin_login %}{% set _admin_login = '/admin/login' %}{% endif %}
+
+  {% set account_url = (safe_url('auth.account','/auth/account') if safe_url is defined else '/auth/account') %}
   {% set acc_sep = '&' if '?' in account_url else '?' %}
   {% set account_login_url = account_url ~ acc_sep ~ 'tab=login' %}
   {% set account_register_url = account_url ~ acc_sep ~ 'tab=register' %}
@@ -136,10 +146,15 @@
   {% set featured_list = (featured if featured is defined and featured else []) %}
   {% if featured_list is none %}{% set featured_list = [] %}{% endif %}
 
+  {# hero_png viene del extra_head, pero por seguridad lo recalculamos si faltara #}
+  {% if hero_png is not defined %}
+    {% set hero_png = (url_for('static', filename='img/banners/hero_home.png') if url_for is defined else '/static/img/banners/hero_home.png') %}
+  {% endif %}
+
   {% set _hero_overlay = "linear-gradient(90deg, rgba(255,255,255,.98) 0%, rgba(255,255,255,.92) 46%, rgba(255,255,255,.52) 74%, rgba(255,255,255,0) 100%)" %}
   {% set _hero_overlay_dark = "linear-gradient(90deg, rgba(2,6,23,.92) 0%, rgba(2,6,23,.78) 46%, rgba(2,6,23,.26) 74%, rgba(2,6,23,0) 100%)" %}
 
-  <div class="hp hp-v15 hp-v162" id="hp" aria-label="Inicio Skyline Store" data-home-ver="{{ _home_ver|e }}" data-env="{{ _env|e }}">
+  <div class="hp hp-v15 hp-v162" id="hp" aria-label="Inicio Skyline Store">
     <section class="hp-top" aria-label="Beneficios">
       <div class="hp-wrap">
         <ul class="hp-topTrust" role="list">
@@ -223,68 +238,6 @@
               <span>Selección premium + ofertas reales</span>
             </figcaption>
           </figure>
-
-          <div class="hp-stats" aria-label="Indicadores de confianza" role="list">
-            <div class="hp-stat" role="listitem"><b>Marketplace</b><span>Catálogo en crecimiento</span></div>
-            <div class="hp-stat" role="listitem"><b>Marca propia</b><span>Streetwear Skyline</span></div>
-            <div class="hp-stat" role="listitem"><b>Compra segura</b><span>Soporte y políticas claras</span></div>
-            <div class="hp-stat" role="listitem"><b>Ofertas</b><span>Promos y drops</span></div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="hp-trust" aria-label="Confianza y seguridad">
-      <div class="hp-wrap hp-trust__grid">
-        {% set trust = [
-          {'img':'img/banners/service_payment.png','title':'Pago seguro','desc':'Transacciones protegidas y soporte'},
-          {'img':'img/banners/service_shipping.png','title':'Envío con tracking','desc':'Seguimiento de tu pedido'},
-          {'img':'img/banners/service_support.png','title':'Soporte real','desc':'Atención y ayuda post-compra'}
-        ] %}
-        {% for t in trust %}
-          <article class="hp-trustCard hp-glass" data-reveal aria-label="{{ t.title|e }}">
-            <div class="hp-trustCard__img" aria-hidden="true">
-              <img src="{{ safe_static(t.img)|e }}" alt="" loading="lazy" decoding="async" class="hp-trustIcon" data-fallback="{{ hero_png|e }}">
-            </div>
-            <div class="hp-trustCard__meta">
-              <b>{{ t.title|e }}</b>
-              <span>{{ t.desc|e }}</span>
-            </div>
-          </article>
-        {% endfor %}
-      </div>
-    </section>
-
-    <section class="hp-cats" aria-labelledby="hpCatsLabel" id="hpCats">
-      <div class="hp-wrap">
-        <div class="hp-secHead">
-          <div>
-            <h2 id="hpCatsLabel">Elegí una categoría</h2>
-            <p>Accesos directos tipo marketplace, rápidos y claros.</p>
-          </div>
-          <a class="hp-linkMore" href="{{ _shop_url|e }}">Ver todo →</a>
-        </div>
-
-        {% set _cat_sep = '&' if '?' in _shop_url else '?' %}
-        {% set cats = [
-          {'label':'Ropa urbana','img':'img/banners/cat_women.png','href': _shop_url ~ _cat_sep ~ 'categoria=ropa'},
-          {'label':'Accesorios','img':'img/banners/cat_accessories.png','href': _shop_url ~ _cat_sep ~ 'categoria=accesorios'},
-          {'label':'Tecnología','img':'img/banners/cat_tech.png','href': _shop_url ~ _cat_sep ~ 'categoria=tecnologia'},
-          {'label':'Ofertas','img':'img/banners/promo_week.png','href': _offers_url}
-        ] %}
-
-        <div class="hp-catsGrid" role="list">
-          {% for c in cats %}
-            <a class="hp-catCard hp-glass" data-reveal href="{{ c.href|e }}" aria-label="{{ c.label|e }}" role="listitem">
-              <div class="hp-catCard__media" aria-hidden="true">
-                <img src="{{ safe_static(c.img)|e }}" alt="" loading="lazy" decoding="async" class="hp-catImg" data-fallback="{{ hero_png|e }}">
-              </div>
-              <div class="hp-catCard__overlay">
-                <b>{{ c.label|e }}</b>
-                <span>Explorar →</span>
-              </div>
-            </a>
-          {% endfor %}
         </div>
       </div>
     </section>
@@ -325,11 +278,6 @@
                   <b class="hp-prod__title">{{ p_title|e }}</b>
                   <div class="hp-prod__price" aria-label="Precio">
                     {% with product=p %}{% include "components/price.html" ignore missing %}{% endwith %}
-                  </div>
-                  <div class="hp-prod__micro" aria-label="Beneficios del producto">
-                    <span class="hp-microChip">⚡ Envío rápido</span>
-                    <span class="hp-microChip">🔒 Pago seguro</span>
-                    <span class="hp-microChip">↩️ Devoluciones</span>
                   </div>
                 </div>
 
