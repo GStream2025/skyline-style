@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}
+Solicitud inválida · {{ (APP_NAME if APP_NAME is defined and APP_NAME else "Skyline Store")|e }}
+{% endblock %}
+
+{% block content %}
+{% set home_url = (safe_url('main.index','/') if safe_url is defined else '/') %}
+{% set account_url = (safe_url('account.account','/account') if safe_url is defined else '/account') %}
+
+<main class="container" style="padding:56px 0;" role="main" aria-labelledby="invalidTitle">
+  <div style="max-width:760px;margin:0 auto;">
+
+    <header style="display:flex;gap:16px;align-items:flex-start;margin-bottom:18px;">
+      <div aria-hidden="true" style="font-size:36px;line-height:1;">⚠️</div>
+      <div>
+        <h1 id="invalidTitle" style="margin:0;font-size:28px;">
+          Solicitud inválida
+        </h1>
+        <p style="margin:6px 0 0;opacity:.85;">
+          El formulario expiró o el token de seguridad no coincide.
+        </p>
+      </div>
+    </header>
+
+    <section
+      style="
+        background:rgba(255,255,255,.04);
+        border:1px solid rgba(255,255,255,.12);
+        border-radius:16px;
+        padding:18px;
+        margin:20px 0;
+      "
+      aria-label="Qué hacer ahora"
+    >
+      <p style="margin:0 0 10px;opacity:.9;">
+        Esto suele pasar si la página quedó abierta mucho tiempo, se abrió en varias pestañas,
+        o se volvió atrás con el navegador.
+      </p>
+
+      <p style="margin:0;opacity:.9;">
+        👉 <b>Solución rápida:</b> recargá la página e intentá nuevamente.
+      </p>
+
+      <div
+        style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;"
+        role="group"
+        aria-label="Acciones"
+      >
+        <a
+          href="javascript:location.reload()"
+          class="btn"
+          style="text-decoration:none;"
+        >
+          🔄 Recargar
+        </a>
+
+        <a
+          href="{{ account_url|e }}"
+          class="btn"
+          style="text-decoration:none;"
+        >
+          👤 Mi cuenta
+        </a>
+
+        <a
+          href="{{ home_url|e }}"
+          class="btn"
+          style="text-decoration:none;"
+        >
+          🏠 Ir al inicio
+        </a>
+      </div>
+    </section>
+
+    <footer style="margin-top:18px;opacity:.6;font-size:14px;">
+      Si el problema continúa, cerrá la pestaña y abrí nuevamente la página desde el sitio.
+    </footer>
+
+  </div>
+</main>
+{% endblock %}

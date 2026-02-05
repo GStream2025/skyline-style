@@ -1,236 +1,270 @@
 {% extends "base.html" %}
-{% block title %}Mi cuenta · {{ (APP_NAME or "Skyline Store")|e }}{% endblock %}
+
+{% block title %}Mi cuenta · {{ (APP_NAME if APP_NAME is defined and APP_NAME else "Skyline Store")|e }}{% endblock %}
 
 {% block extra_head %}
-<meta name="robots" content="noindex,nofollow">
-<meta name="theme-color" content="#0b1220">
-{% set _csrf = (csrf_token() if csrf_token is defined else (csrf_token_value if csrf_token_value is defined else (session.get('csrf_token') if session is defined else ''))) %}
-{% if _csrf %}<meta name="csrf-token" content="{{ _csrf|e }}">{% endif %}
-<link rel="stylesheet" href="{{ (url_for('static', filename='css/account.css') if url_for is defined else '/static/css/account.css') }}">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="theme-color" content="#0b1220">
+
+  {# CSRF para JS (si existe) #}
+  {% set _csrf = (
+      csrf_token() if csrf_token is defined
+      else (csrf_token_value if csrf_token_value is defined else (session.get('csrf_token') if session is defined and session.get is defined else ''))
+  ) %}
+  {% if _csrf %}<meta name="csrf-token" content="{{ _csrf|e }}">{% endif %}
+
+  {# CSS #}
+  {% if url_for is defined %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/account.css') }}">
+  {% else %}
+    <link rel="stylesheet" href="/static/css/account.css">
+  {% endif %}
 {% endblock %}
 
 {% block content %}
-{% macro _safe_url(ep, fallback) -%}
-  {%- if url_for is defined and ep -%}
-    {%- set u = '' -%}
-    {%- try -%}{%- set u = url_for(ep) -%}{%- except -%}{%- set u = '' -%}{%- endtry -%}
-    {{- u if u else fallback -}}
-  {%- else -%}
-    {{- fallback -}}
-  {%- endif -%}
-{%- endmacro %}
+  {# =========================
+     Helpers (NO url_for directo)
+     ========================= #}
+  {% macro safe_ep(ep, fallback) -%}
+    {%- if ep and safe_url is defined -%}
+      {%- set u = safe_url(ep, '') -%}
+      {{- u if u else fallback -}}
+    {%- else -%}
+      {{- fallback -}}
+    {%- endif -%}
+  {%- endmacro %}
 
-{% macro _safe_next(raw, default_path='/account') -%}
-  {%- set p = (raw|string|trim) if raw is not none else '' -%}
-  {%- if not p or not p.startswith('/') -%}{{- default_path -}}
-  {%- elif p.startswith('//') or '://' in p -%}{{- default_path -}}
-  {%- elif '\\' in p or '\n' in p or '\r' in p or '\t' in p or ' ' in p or '\x00' in p -%}{{- default_path -}}
-  {%- elif '..' in p -%}{{- default_path -}}
-  {%- elif p.startswith('/auth/') or p == '/auth' or p.startswith('/logout') -%}{{- default_path -}}
-  {%- else -%}
-    {%- set out = p -%}
-    {%- if '?' in out -%}{%- set out = (out.split('?', 1)[0]) -%}{%- endif -%}
-    {%- if '#' in out -%}{%- set out = (out.split('#', 1)[0]) -%}{%- endif -%}
-    {{- out if out else default_path -}}
-  {%- endif -%}
-{%- endmacro %}
+  {% macro safe_next(raw, default_path='/account') -%}
+    {%- set p = (raw|string|trim) if raw is not none else '' -%}
+    {%- if not p or not p.startswith('/') -%}{{- default_path -}}
+    {%- elif p.startswith('//') or '://' in p -%}{{- default_path -}}
+    {%- elif '\\' in p or '\n' in p or '\r' in p or '\t' in p or ' ' in p or '\x00' in p -%}{{- default_path -}}
+    {%- elif '..' in p -%}{{- default_path -}}
+    {%- elif p.startswith('/auth/') or p == '/auth' or p.startswith('/logout') -%}{{- default_path -}}
+    {%- else -%}
+      {%- set out = p -%}
+      {%- if '?' in out -%}{%- set out = (out.split('?', 1)[0]) -%}{%- endif -%}
+      {%- if '#' in out -%}{%- set out = (out.split('#', 1)[0]) -%}{%- endif -%}
+      {{- out if out else default_path -}}
+    {%- endif -%}
+  {%- endmacro %}
 
-{% macro _add_q(url, k, v) -%}
-  {%- set u = (url|string) -%}
-  {%- set sep = '&' if '?' in u else '?' -%}
-  {{- u ~ sep ~ k ~ '=' ~ (v|string|urlencode) -}}
-{%- endmacro %}
+  {% macro add_q(url, k, v) -%}
+    {%- set u = (url|string) -%}
+    {%- set sep = '&' if '?' in u else '?' -%}
+    {{- u ~ sep ~ k ~ '=' ~ (v|string|urlencode) -}}
+  {%- endmacro %}
 
-{% set url_shop     = _safe_url('shop.shop', '/shop') %}
-{% if not url_shop or not (url_shop|string).startswith('/') %}{% set url_shop = '/shop' %}{% endif %}
-{% set url_offers   = url_shop ~ ('?ofertas=1' if '?' not in (url_shop|string) else '&ofertas=1') %}
-{% set url_new      = url_shop ~ ('?sort=new' if '?' not in (url_shop|string) else '&sort=new') %}
-{% set url_featured = '/#destacados' %}
+  {# =========================
+     URLs (endpoint-safe)
+     ========================= #}
+  {% set url_shop     = safe_ep('shop.shop', '/shop') %}
+  {% if not url_shop or not (url_shop|string).startswith('/') %}{% set url_shop = '/shop' %}{% endif %}
 
-{% set url_login    = _safe_url('auth.login_get', '/auth/login') %}
-{% set url_register = _safe_url('auth.register_get', '/auth/register') %}
-{% set url_logout   = _safe_url('auth.logout', '/auth/logout') %}
-{% set url_account  = _safe_url('account.dashboard', '/account') %}
+  {% set url_offers   = url_shop ~ ('?ofertas=1' if '?' not in (url_shop|string) else '&ofertas=1') %}
+  {% set url_new      = url_shop ~ ('?sort=new' if '?' not in (url_shop|string) else '&sort=new') %}
+  {% set url_featured = '/#destacados' %}
 
-{% set _req = (request if request is defined else none) %}
-{% set _next_in = '' %}
-{% if _req and _req.args is defined and _req.args %}
-  {% set _next_in = (_req.args.get('next') if _req.args.get is defined else '') %}
-{% endif %}
-{% set _full = '' %}
-{% if _req and _req.path is defined and _req.path %}{% set _full = _req.path|string %}{% endif %}
-{% set next_after_auth = _safe_next((_next_in if _next_in else _full), url_account) %}
+  {# OJO: estos endpoints tienen que EXISTIR en tus rutas; si no, caen al fallback sin romper #}
+  {% set url_login    = safe_ep('auth.login_get', '/auth/login') %}
+  {% set url_register = safe_ep('auth.register_get', '/auth/register') %}
+  {% set url_logout   = safe_ep('auth.logout', '/auth/logout') %}
 
-{% set _is_auth = false %}
-{% set _cu = (current_user if current_user is defined else none) %}
-{% if _cu and _cu.is_authenticated is defined %}
-  {% set _is_auth = (_cu.is_authenticated == true) %}
-{% elif is_authenticated is defined %}
-  {% set _is_auth = (is_authenticated == true) %}
-{% elif session is defined and session.get is defined %}
-  {% set _is_auth = (session.get('user_id') is not none) %}
-{% endif %}
+  {# Si tu “panel” real es /account (y no account.dashboard), dejalo así. #}
+  {% set url_account  = safe_ep('account.dashboard', '/account') %}
+  {% if not url_account or not (url_account|string).startswith('/') %}{% set url_account = '/account' %}{% endif %}
 
-{% set _tab = '' %}
-{% if _req and _req.args is defined and _req.args %}
-  {% set _tab = (_req.args.get('tab') if _req.args.get is defined else '')|string|lower|trim %}
-  {% if not _tab %}
-    {% set _tab = (_req.args.get('mode') if _req.args.get is defined else '')|string|lower|trim %}
+  {# =========================
+     Request + next
+     ========================= #}
+  {% set _req = (request if request is defined else none) %}
+  {% set _next_in = '' %}
+  {% if _req and _req.args is defined and _req.args and _req.args.get is defined %}
+    {% set _next_in = (_req.args.get('next') or '') %}
   {% endif %}
-{% endif %}
-{% set _wants_login = (_tab == 'login' or _tab == 'signin') %}
-{% set _wants_register = (_tab == 'register' or _tab == 'signup') %}
+  {% set _full = (_req.path|string) if _req and _req.path is defined and _req.path else '' %}
+  {% set next_after_auth = safe_next((_next_in if _next_in else _full), url_account) %}
 
-{% if not _is_auth and (_wants_login or _wants_register) %}
-  {% set _dest = url_login if _wants_login else url_register %}
-  {% set _dest2 = _add_q(_dest, 'next', next_after_auth) %}
-  <meta http-equiv="refresh" content="0;url={{ _dest2|e }}">
-  <main class="ss-page ss-profile ss-account" role="main" aria-label="Redirección">
-    <section class="container ss-profile__wrap" style="padding:24px 0">
-      <div class="ss-card" style="padding:18px">
-        <h1 class="ss-card__title">Redirigiendo…</h1>
-        <p class="ss-card__subtitle">Te estamos llevando a {{ 'iniciar sesión' if _wants_login else 'crear cuenta' }}.</p>
-        <div class="ss-btnrow" role="group" aria-label="Acciones">
-          <a class="ss-btn ss-btn--primary" href="{{ _dest2|e }}">Continuar</a>
-          <a class="ss-btn ss-btn--ghost" href="{{ url_shop|e }}">Volver a la tienda</a>
-        </div>
-      </div>
-    </section>
-  </main>
-{% else %}
+  {# =========================
+     Auth detection (robusto)
+     ========================= #}
+  {% set _is_auth = false %}
+  {% set _cu = (current_user if current_user is defined else none) %}
+  {% if _cu and _cu.is_authenticated is defined %}
+    {% set _is_auth = (_cu.is_authenticated == true) %}
+  {% elif is_authenticated is defined %}
+    {% set _is_auth = (is_authenticated == true) %}
+  {% elif session is defined and session.get is defined %}
+    {% set _is_auth = (session.get('user_id') is not none) %}
+  {% endif %}
 
-{% set name = (user_name if user_name is defined and user_name else '')|string|trim %}
-{% if not name and _cu and _cu.name is defined and _cu.name %}{% set name = (_cu.name|string)|trim %}{% endif %}
-{% if not name and _cu and _cu.email is defined and _cu.email %}{% set name = (_cu.email|string)|trim %}{% endif %}
-{% if not name %}{% set name = 'Usuario' %}{% endif %}
-
-{% set orders   = (orders_count if orders_count is defined and orders_count is not none else 0)|int %}
-{% set favs     = (favorites_count if favorites_count is defined and favorites_count is not none else 0)|int %}
-{% set points   = (skyline_points if skyline_points is defined and skyline_points is not none else 0)|int %}
-{% set next_pts = (next_level_points if next_level_points is defined and next_level_points is not none else 500)|int %}
-{% if next_pts < 1 %}{% set next_pts = 1 %}{% endif %}
-{% set _ratio = (points / next_pts) %}
-{% if _ratio < 0 %}{% set _ratio = 0 %}{% endif %}
-{% if _ratio > 1 %}{% set _ratio = 1 %}{% endif %}
-{% set pct = (_ratio * 100)|round(0)|int %}
-
-{% set login_href = _add_q(url_login, 'next', next_after_auth) %}
-{% set reg_href   = _add_q(url_register, 'next', next_after_auth) %}
-
-<main class="ss-page ss-profile ss-account" id="account" role="main" aria-label="Mi cuenta">
-  <a class="ss-skip" href="#accountMain">Saltar al contenido</a>
-
-  <section class="container ss-profile__wrap" id="accountMain" tabindex="-1">
-    {% if not _is_auth %}
-      <header class="ss-hero ss-hero--profile" aria-label="Acceso a cuenta">
-        <div class="ss-hero__inner">
-          <div class="ss-hero__left">
-            <div class="ss-kicker" aria-label="Sección">
-              <span class="ss-kicker__dot" aria-hidden="true"></span>
-              <span>MI CUENTA</span>
-            </div>
-
-            <h1 class="ss-title">Bienvenido a <span class="ss-title__name">{{ (APP_NAME or "Skyline Store")|e }}</span> 👋</h1>
-
-            <p class="ss-subtitle">Iniciá sesión o creá tu cuenta para acceder a pedidos, puntos, favoritos y beneficios.</p>
-
-            <div class="ss-btnrow" role="group" aria-label="Acciones principales">
-              <a class="ss-btn ss-btn--primary" href="{{ login_href|e }}">Iniciar sesión</a>
-              <a class="ss-btn ss-btn--soft" href="{{ reg_href|e }}">Crear cuenta</a>
-              <a class="ss-btn ss-btn--ghost" href="{{ url_shop|e }}">🛒 Ver tienda</a>
-              <a class="ss-btn ss-btn--warn" href="{{ url_offers|e }}">⚡ Ofertas</a>
-            </div>
-
-            <div class="ss-inline-info" role="list" aria-label="Garantías rápidas">
-              <div class="ss-inline-info__item" role="listitem"><span class="ss-mini-dot" aria-hidden="true"></span><span>Compras protegidas</span></div>
-              <div class="ss-inline-info__item" role="listitem"><span class="ss-mini-dot" aria-hidden="true"></span><span>Pagos seguros</span></div>
-              <div class="ss-inline-info__item" role="listitem"><span class="ss-mini-dot" aria-hidden="true"></span><span>Soporte 24/7</span></div>
-            </div>
-          </div>
-
-          <aside class="ss-card ss-card--points" aria-label="Beneficios" aria-live="polite">
-            <div class="ss-card__head">
-              <div class="ss-card__eyebrow">Beneficios</div>
-              <div class="ss-points" aria-label="Experiencia premium">
-                <div class="ss-points__value">+</div>
-                <div class="ss-points__unit">premium</div>
-              </div>
-            </div>
-
-            <div class="ss-card__hint">Sumá puntos comprando, guardá favoritos y recibí ofertas personalizadas.</div>
-
-            <div class="ss-divider" aria-hidden="true"></div>
-
-            <div class="ss-points-actions" role="group" aria-label="Acciones rápidas">
-              <a class="ss-mini-btn" href="{{ url_new|e }}">Ver novedades</a>
-              <a class="ss-mini-btn ss-mini-btn--primary" href="{{ url_featured|e }}">Ver destacados</a>
-            </div>
-          </aside>
-        </div>
-      </header>
-    {% else %}
-      <header class="ss-hero ss-hero--profile" aria-label="Resumen de cuenta">
-        <div class="ss-hero__inner">
-          <div class="ss-hero__left">
-            <div class="ss-kicker" aria-label="Sección">
-              <span class="ss-kicker__dot" aria-hidden="true"></span>
-              <span>MI CUENTA</span>
-            </div>
-
-            <h1 class="ss-title">Hola, <span class="ss-title__name">{{ name|e }}</span></h1>
-
-            <p class="ss-subtitle">Tu panel premium: pedidos, puntos, accesos rápidos y actividad.</p>
-
-            <div class="ss-chiprow" role="list" aria-label="Indicadores rápidos">
-              {% if orders > 0 %}<span class="ss-chip" role="listitem">Pedidos: <b>{{ orders }}</b></span>{% endif %}
-              {% if favs > 0 %}<span class="ss-chip" role="listitem">Favoritos: <b>{{ favs }}</b></span>{% endif %}
-              <span class="ss-chip" role="listitem">Nivel: <b>Standard</b></span>
-              <span class="ss-chip ss-chip--soft" role="listitem">Soporte: <b>24/7</b></span>
-            </div>
-
-            <div class="ss-btnrow" role="group" aria-label="Acciones principales">
-              <a class="ss-btn ss-btn--primary" href="{{ url_shop|e }}">🛒 Ir a la tienda</a>
-              <a class="ss-btn ss-btn--soft" href="{{ url_featured|e }}">🔥 Destacados</a>
-              <a class="ss-btn ss-btn--warn" href="{{ url_offers|e }}">⚡ Ofertas</a>
-              <a class="ss-btn ss-btn--ghost" href="{{ url_new|e }}">🆕 Novedades</a>
-              <a class="ss-btn ss-btn--ghost" href="{{ url_logout|e }}">Salir</a>
-            </div>
-
-            <div class="ss-inline-info" role="list" aria-label="Garantías rápidas">
-              <div class="ss-inline-info__item" role="listitem"><span class="ss-mini-dot" aria-hidden="true"></span><span>Compras protegidas</span></div>
-              <div class="ss-inline-info__item" role="listitem"><span class="ss-mini-dot" aria-hidden="true"></span><span>Seguimiento de pedidos</span></div>
-              <div class="ss-inline-info__item" role="listitem"><span class="ss-mini-dot" aria-hidden="true"></span><span>Pagos seguros</span></div>
-            </div>
-          </div>
-
-          <aside class="ss-card ss-card--points" aria-label="Puntos Skyline" aria-live="polite">
-            <div class="ss-card__head">
-              <div class="ss-card__eyebrow">Puntos Skyline</div>
-              <div class="ss-points" aria-label="Puntos acumulados">
-                <div class="ss-points__value">{{ points }}</div>
-                <div class="ss-points__unit">pts</div>
-              </div>
-            </div>
-
-            <div class="ss-progress" role="progressbar" aria-label="Progreso al próximo nivel"
-                 aria-valuemin="0" aria-valuemax="{{ next_pts }}" aria-valuenow="{{ points }}">
-              <div class="ss-progress__bar" style="width: {{ pct }}%"></div>
-            </div>
-
-            <div class="ss-card__hint"><b>{{ points }}</b> / {{ next_pts }} pts para el próximo nivel</div>
-
-            <div class="ss-divider" aria-hidden="true"></div>
-
-            <div class="ss-points-actions" role="group" aria-label="Acciones de puntos">
-              <a class="ss-mini-btn" href="{{ url_shop|e }}">Ganar puntos</a>
-              <a class="ss-mini-btn ss-mini-btn--primary" href="{{ url_offers|e }}">Canjear ofertas</a>
-            </div>
-          </aside>
-        </div>
-      </header>
+  {# =========================
+     Tab mode (login/register)
+     ========================= #}
+  {% set _tab = '' %}
+  {% if _req and _req.args is defined and _req.args and _req.args.get is defined %}
+    {% set _tab = (_req.args.get('tab') or '')|string|lower|trim %}
+    {% if not _tab %}
+      {% set _tab = (_req.args.get('mode') or '')|string|lower|trim %}
     {% endif %}
-  </section>
-</main>
+  {% endif %}
+  {% set _wants_login = (_tab == 'login' or _tab == 'signin') %}
+  {% set _wants_register = (_tab == 'register' or _tab == 'signup') %}
 
-{% endif %}
+  {% if not _is_auth and (_wants_login or _wants_register) %}
+    {% set _dest = url_login if _wants_login else url_register %}
+    {% set _dest2 = add_q(_dest, 'next', next_after_auth) %}
+    <meta http-equiv="refresh" content="0;url={{ _dest2|e }}">
+
+    <main class="ss-page ss-profile ss-account" role="main" aria-label="Redirección">
+      <section class="container ss-profile__wrap" style="padding:24px 0">
+        <div class="ss-card" style="padding:18px">
+          <h1 class="ss-card__title">Redirigiendo…</h1>
+          <p class="ss-card__subtitle">Te estamos llevando a {{ 'iniciar sesión' if _wants_login else 'crear cuenta' }}.</p>
+          <div class="ss-btnrow" role="group" aria-label="Acciones">
+            <a class="ss-btn ss-btn--primary" href="{{ _dest2|e }}">Continuar</a>
+            <a class="ss-btn ss-btn--ghost" href="{{ url_shop|e }}">Volver a la tienda</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+  {% else %}
+
+    {# =========================
+       User display
+       ========================= #}
+    {% set name = (user_name if user_name is defined and user_name else '')|string|trim %}
+    {% if not name and _cu and _cu.name is defined and _cu.name %}{% set name = (_cu.name|string)|trim %}{% endif %}
+    {% if not name and _cu and _cu.email is defined and _cu.email %}{% set name = (_cu.email|string)|trim %}{% endif %}
+    {% if not name %}{% set name = 'Usuario' %}{% endif %}
+
+    {% set orders   = (orders_count if orders_count is defined and orders_count is not none else 0)|int %}
+    {% set favs     = (favorites_count if favorites_count is defined and favorites_count is not none else 0)|int %}
+    {% set points   = (skyline_points if skyline_points is defined and skyline_points is not none else 0)|int %}
+    {% set next_pts = (next_level_points if next_level_points is defined and next_level_points is not none else 500)|int %}
+    {% if next_pts < 1 %}{% set next_pts = 1 %}{% endif %}
+    {% set _ratio = (points / next_pts) %}
+    {% if _ratio < 0 %}{% set _ratio = 0 %}{% endif %}
+    {% if _ratio > 1 %}{% set _ratio = 1 %}{% endif %}
+    {% set pct = (_ratio * 100)|round(0)|int %}
+
+    {% set login_href = add_q(url_login, 'next', next_after_auth) %}
+    {% set reg_href   = add_q(url_register, 'next', next_after_auth) %}
+
+    <main class="ss-page ss-profile ss-account" id="account" role="main" aria-label="Mi cuenta">
+      <a class="ss-skip" href="#accountMain">Saltar al contenido</a>
+
+      <section class="container ss-profile__wrap" id="accountMain" tabindex="-1">
+        {% if not _is_auth %}
+          <header class="ss-hero ss-hero--profile" aria-label="Acceso a cuenta">
+            <div class="ss-hero__inner">
+              <div class="ss-hero__left">
+                <div class="ss-kicker" aria-label="Sección">
+                  <span class="ss-kicker__dot" aria-hidden="true"></span>
+                  <span>MI CUENTA</span>
+                </div>
+
+                <h1 class="ss-title">Bienvenido a <span class="ss-title__name">{{ (APP_NAME if APP_NAME is defined and APP_NAME else "Skyline Store")|e }}</span> 👋</h1>
+                <p class="ss-subtitle">Iniciá sesión o creá tu cuenta para acceder a pedidos, puntos, favoritos y beneficios.</p>
+
+                <div class="ss-btnrow" role="group" aria-label="Acciones principales">
+                  <a class="ss-btn ss-btn--primary" href="{{ login_href|e }}">Iniciar sesión</a>
+                  <a class="ss-btn ss-btn--soft" href="{{ reg_href|e }}">Crear cuenta</a>
+                  <a class="ss-btn ss-btn--ghost" href="{{ url_shop|e }}">🛒 Ver tienda</a>
+                  <a class="ss-btn ss-btn--warn" href="{{ url_offers|e }}">⚡ Ofertas</a>
+                </div>
+
+                <div class="ss-inline-info" role="list" aria-label="Garantías rápidas">
+                  <div class="ss-inline-info__item" role="listitem"><span class="ss-mini-dot" aria-hidden="true"></span><span>Compras protegidas</span></div>
+                  <div class="ss-inline-info__item" role="listitem"><span class="ss-mini-dot" aria-hidden="true"></span><span>Pagos seguros</span></div>
+                  <div class="ss-inline-info__item" role="listitem"><span class="ss-mini-dot" aria-hidden="true"></span><span>Soporte 24/7</span></div>
+                </div>
+              </div>
+
+              <aside class="ss-card ss-card--points" aria-label="Beneficios" aria-live="polite">
+                <div class="ss-card__head">
+                  <div class="ss-card__eyebrow">Beneficios</div>
+                  <div class="ss-points" aria-label="Experiencia premium">
+                    <div class="ss-points__value">+</div>
+                    <div class="ss-points__unit">premium</div>
+                  </div>
+                </div>
+
+                <div class="ss-card__hint">Sumá puntos comprando, guardá favoritos y recibí ofertas personalizadas.</div>
+
+                <div class="ss-divider" aria-hidden="true"></div>
+
+                <div class="ss-points-actions" role="group" aria-label="Acciones rápidas">
+                  <a class="ss-mini-btn" href="{{ url_new|e }}">Ver novedades</a>
+                  <a class="ss-mini-btn ss-mini-btn--primary" href="{{ url_featured|e }}">Ver destacados</a>
+                </div>
+              </aside>
+            </div>
+          </header>
+
+        {% else %}
+          <header class="ss-hero ss-hero--profile" aria-label="Resumen de cuenta">
+            <div class="ss-hero__inner">
+              <div class="ss-hero__left">
+                <div class="ss-kicker" aria-label="Sección">
+                  <span class="ss-kicker__dot" aria-hidden="true"></span>
+                  <span>MI CUENTA</span>
+                </div>
+
+                <h1 class="ss-title">Hola, <span class="ss-title__name">{{ name|e }}</span></h1>
+                <p class="ss-subtitle">Tu panel premium: pedidos, puntos, accesos rápidos y actividad.</p>
+
+                <div class="ss-chiprow" role="list" aria-label="Indicadores rápidos">
+                  {% if orders > 0 %}<span class="ss-chip" role="listitem">Pedidos: <b>{{ orders }}</b></span>{% endif %}
+                  {% if favs > 0 %}<span class="ss-chip" role="listitem">Favoritos: <b>{{ favs }}</b></span>{% endif %}
+                  <span class="ss-chip" role="listitem">Nivel: <b>Standard</b></span>
+                  <span class="ss-chip ss-chip--soft" role="listitem">Soporte: <b>24/7</b></span>
+                </div>
+
+                <div class="ss-btnrow" role="group" aria-label="Acciones principales">
+                  <a class="ss-btn ss-btn--primary" href="{{ url_shop|e }}">🛒 Ir a la tienda</a>
+                  <a class="ss-btn ss-btn--soft" href="{{ url_featured|e }}">🔥 Destacados</a>
+                  <a class="ss-btn ss-btn--warn" href="{{ url_offers|e }}">⚡ Ofertas</a>
+                  <a class="ss-btn ss-btn--ghost" href="{{ url_new|e }}">🆕 Novedades</a>
+                  <a class="ss-btn ss-btn--ghost" href="{{ url_logout|e }}">Salir</a>
+                </div>
+
+                <div class="ss-inline-info" role="list" aria-label="Garantías rápidas">
+                  <div class="ss-inline-info__item" role="listitem"><span class="ss-mini-dot" aria-hidden="true"></span><span>Compras protegidas</span></div>
+                  <div class="ss-inline-info__item" role="listitem"><span class="ss-mini-dot" aria-hidden="true"></span><span>Seguimiento de pedidos</span></div>
+                  <div class="ss-inline-info__item" role="listitem"><span class="ss-mini-dot" aria-hidden="true"></span><span>Pagos seguros</span></div>
+                </div>
+              </div>
+
+              <aside class="ss-card ss-card--points" aria-label="Puntos Skyline" aria-live="polite">
+                <div class="ss-card__head">
+                  <div class="ss-card__eyebrow">Puntos Skyline</div>
+                  <div class="ss-points" aria-label="Puntos acumulados">
+                    <div class="ss-points__value">{{ points }}</div>
+                    <div class="ss-points__unit">pts</div>
+                  </div>
+                </div>
+
+                <div class="ss-progress" role="progressbar" aria-label="Progreso al próximo nivel"
+                     aria-valuemin="0" aria-valuemax="{{ next_pts }}" aria-valuenow="{{ points }}">
+                  <div class="ss-progress__bar" style="width: {{ pct }}%"></div>
+                </div>
+
+                <div class="ss-card__hint"><b>{{ points }}</b> / {{ next_pts }} pts para el próximo nivel</div>
+
+                <div class="ss-divider" aria-hidden="true"></div>
+
+                <div class="ss-points-actions" role="group" aria-label="Acciones de puntos">
+                  <a class="ss-mini-btn" href="{{ url_shop|e }}">Ganar puntos</a>
+                  <a class="ss-mini-btn ss-mini-btn--primary" href="{{ url_offers|e }}">Canjear ofertas</a>
+                </div>
+              </aside>
+            </div>
+          </header>
+        {% endif %}
+      </section>
+    </main>
+
+  {% endif %}
 {% endblock %}
