@@ -7,442 +7,169 @@
   <meta name="theme-color" content="#0b1220">
   <title>{{ (APP_NAME or "Skyline Store")|e }} · Crear cuenta</title>
 
-  <link rel="stylesheet" href="{{ (url_for('static', filename='css/auth-register.css') if url_for is defined else '/static/css/auth-register.css') }}">
+  {# CSRF para JS (opcional pero recomendado) #}
+  {% if csrf_token %}
+    <meta name="csrf-token" content="{{ csrf_token|e }}">
+  {% endif %}
+
+  <link rel="stylesheet"
+        href="{{ url_for('static', filename='css/auth-register.css') if url_for is defined else '/static/css/auth-register.css' }}">
 </head>
 
 <body class="auth-page">
-  {% set _login_url = (url_for('auth.login_get', next=next) if url_for is defined else '/auth/login') %}
-  {% set _post_url = (url_for('auth.register') if url_for is defined else '/auth/register') %}
-  {% set _shop = (url_for('shop.shop') if url_for is defined else '/shop') %}
 
-  <main class="auth-wrap" role="main">
-    <section class="auth-card" aria-label="Crear cuenta">
-      <header class="auth-head">
-        <div class="auth-brand">
-          <div class="auth-logo" aria-hidden="true">S</div>
-          <div>
-            <h1 class="auth-title">Crear cuenta</h1>
-            <p class="auth-subtitle">Registrate con tu email. Te enviamos un correo para verificar la cuenta.</p>
-          </div>
+{% set login_url = url_for('auth.login_get', next=next) if url_for is defined else '/auth/login' %}
+{% set post_url  = url_for('auth.register') if url_for is defined else '/auth/register' %}
+{% set shop_url  = url_for('shop.shop') if url_for is defined else '/shop' %}
+
+<main class="auth-wrap" role="main">
+  <section class="auth-card" aria-label="Crear cuenta" data-ss-reg>
+
+    <header class="auth-head">
+      <div class="auth-brand">
+        <div class="auth-logo" aria-hidden="true">S</div>
+        <div>
+          <h1 class="auth-title">Crear cuenta</h1>
+          <p class="auth-subtitle">
+            Registrate con tu email. Te enviaremos un correo para verificar la cuenta.
+          </p>
         </div>
-      </header>
-
-      <div class="auth-body">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-          {% if messages %}
-            <div class="auth-form" role="status" aria-live="polite">
-              {% for cat, msg in messages %}
-                {% set c = (cat or '')|lower %}
-                {% set tone = 'good' if 'success' in c else ('bad' if 'danger' in c or 'error' in c else ('warn' if 'warn' in c else 'info')) %}
-                <div class="auth-alert" data-tone="{{ tone }}">
-                  <div style="min-width:0">
-                    <p class="auth-alert-title">
-                      {{ 'Listo' if tone=='good' else ('Atención' if tone=='warn' else ('Error' if tone=='bad' else 'Aviso')) }}
-                    </p>
-                    <p class="auth-alert-text">{{ msg }}</p>
-                  </div>
-                </div>
-              {% endfor %}
-            </div>
-          {% endif %}
-        {% endwith %}
-
-        <form class="auth-form"
-              id="registerForm"
-              method="post"
-              action="{{ _post_url }}"
-              autocomplete="on"
-              novalidate>
-
-          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-          <input type="hidden" name="next" value="{{ next|default('')|e }}">
-          <input type="text" name="website" value="" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;opacity:0">
-
-          <div class="auth-row">
-            <div class="auth-label">
-              <label for="name">Nombre (opcional)</label>
-              <a href="{{ _login_url }}">Ya tengo cuenta</a>
-            </div>
-            <div class="auth-field">
-              <input class="auth-input"
-                     id="name"
-                     name="name"
-                     type="text"
-                     autocomplete="name"
-                     maxlength="120"
-                     placeholder="Tu nombre"
-                     value="{{ prefill_name|default('')|e }}">
-              <button class="auth-icon-btn" type="button" id="clearName" aria-label="Limpiar nombre">×</button>
-            </div>
-          </div>
-
-          <div class="auth-row">
-            <div class="auth-label">
-              <label for="email">Email</label>
-              <small id="emailPreview"></small>
-            </div>
-            <div class="auth-field">
-              <input class="auth-input"
-                     id="email"
-                     name="email"
-                     type="email"
-                     inputmode="email"
-                     autocomplete="email"
-                     required
-                     minlength="5"
-                     maxlength="254"
-                     placeholder="tu@email.com"
-                     value="{{ prefill_email|default('')|e }}">
-              <button class="auth-icon-btn" type="button" id="pasteEmail" aria-label="Pegar email">⎘</button>
-            </div>
-          </div>
-
-          <div class="auth-grid" role="group" aria-label="Contraseña">
-            <div class="auth-row">
-              <div class="auth-label">
-                <label for="password">Contraseña</label>
-                <small id="capsWarn" style="display:none">Caps Lock</small>
-              </div>
-              <div class="auth-field">
-                <input class="auth-input"
-                       id="password"
-                       name="password"
-                       type="password"
-                       autocomplete="new-password"
-                       required
-                       minlength="8"
-                       maxlength="256"
-                       placeholder="Mínimo 8 caracteres">
-                <button class="auth-icon-btn" type="button" id="togglePw" aria-label="Mostrar u ocultar contraseña">
-                  <svg id="eyeOn" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" stroke="currentColor" stroke-width="1.8"/>
-                    <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="currentColor" stroke-width="1.8"/>
-                  </svg>
-                  <svg id="eyeOff" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="display:none">
-                    <path d="M3 5l18 14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                    <path d="M2 12s3.5-7 10-7c2.1 0 3.9.7 5.4 1.6M22 12s-3.5 7-10 7c-2.2 0-4.1-.7-5.7-1.7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                    <path d="M10 10a3 3 0 0 0 4.2 4.2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                  </svg>
-                </button>
-              </div>
-            </div>
-
-            <div class="auth-row">
-              <div class="auth-label">
-                <label for="password2">Repetir contraseña</label>
-                <small id="pwMatch" style="opacity:.85"></small>
-              </div>
-              <div class="auth-field">
-                <input class="auth-input"
-                       id="password2"
-                       name="password2"
-                       type="password"
-                       autocomplete="new-password"
-                       required
-                       minlength="8"
-                       maxlength="256"
-                       placeholder="Repetí la contraseña">
-                <button class="auth-icon-btn" type="button" id="togglePw2" aria-label="Mostrar u ocultar contraseña (repetir)">
-                  <svg id="eyeOn2" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" stroke="currentColor" stroke-width="1.8"/>
-                    <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="currentColor" stroke-width="1.8"/>
-                  </svg>
-                  <svg id="eyeOff2" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="display:none">
-                    <path d="M3 5l18 14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                    <path d="M2 12s3.5-7 10-7c2.1 0 3.9.7 5.4 1.6M22 12s-3.5 7-10 7c-2.2 0-4.1-.7-5.7-1.7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                    <path d="M10 10a3 3 0 0 0 4.2 4.2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                  </svg>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div class="auth-strength" aria-live="polite">
-            <div class="auth-strength-top">
-              <p class="auth-strength-title">Fortaleza</p>
-              <span class="auth-strength-badge" id="pwTxt">—</span>
-            </div>
-            <div class="auth-meter" aria-hidden="true"><i id="pwBar"></i></div>
-            <ul class="auth-rules" id="pwRules">
-              <li class="auth-rule" data-rule="len"><span class="auth-dot"></span><span>8+ caracteres</span></li>
-              <li class="auth-rule" data-rule="mix"><span class="auth-dot"></span><span>Mayúsculas y minúsculas</span></li>
-              <li class="auth-rule" data-rule="num"><span class="auth-dot"></span><span>Un número</span></li>
-              <li class="auth-rule" data-rule="sym"><span class="auth-dot"></span><span>Un símbolo</span></li>
-            </ul>
-          </div>
-
-          <div class="auth-row">
-            <div class="auth-label">
-              <label for="role">Tipo de cuenta</label>
-              <small>Cliente / Afiliado</small>
-            </div>
-            <div class="auth-field">
-              <select class="auth-input" id="role" name="role" aria-label="Tipo de cuenta">
-                <option value="customer" selected>Cliente</option>
-                <option value="affiliate">Afiliado</option>
-              </select>
-              <input type="hidden" name="want_affiliate" id="want_affiliate" value="0">
-            </div>
-            <p class="auth-hint">Afiliado: ganá comisiones compartiendo tu link.</p>
-          </div>
-
-          <div class="auth-consent">
-            <label class="auth-check">
-              <input type="checkbox" id="terms" required>
-              <span>Acepto los términos y la política de privacidad.</span>
-            </label>
-          </div>
-
-          <div class="auth-actions">
-            <button class="auth-btn primary" id="submitBtn" type="submit">Crear cuenta</button>
-            <a class="auth-btn secondary" href="{{ _shop }}">Seguir comprando</a>
-          </div>
-
-          <div class="auth-divider">verificación</div>
-
-          <div class="auth-meta">
-            <a href="{{ _login_url }}">Iniciar sesión</a>
-            <span class="auth-kbd">/auth/register</span>
-          </div>
-        </form>
       </div>
+    </header>
 
-      <footer class="auth-foot">
-        <span>Después del registro te enviamos un email para verificar tu cuenta.</span>
-      </footer>
-    </section>
-  </main>
+    <div class="auth-body">
 
-  <script src="{{ (url_for('static', filename='js/register.js') if url_for is defined else '/static/js/register.js') }}" defer></script>
-  <script>
-    (function(){
-      const $ = (id)=>document.getElementById(id);
+      {# Flash messages #}
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="auth-form" role="status" aria-live="polite">
+            {% for cat, msg in messages %}
+              {% set c = (cat or '')|lower %}
+              {% set tone = 'good' if 'success' in c else ('bad' if 'danger' in c or 'error' in c else 'info') %}
+              <div class="auth-alert" data-tone="{{ tone }}">
+                <p class="auth-alert-text">{{ msg }}</p>
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
 
-      const form = $("registerForm");
-      const nameEl = $("name");
-      const emailEl = $("email");
-      const pw1 = $("password");
-      const pw2 = $("password2");
-      const roleEl = $("role");
-      const wantAffiliate = $("want_affiliate");
-      const terms = $("terms");
+      <form class="auth-form"
+            id="registerForm"
+            data-register-form
+            method="post"
+            action="{{ post_url }}"
+            novalidate>
 
-      const submitBtn = $("submitBtn");
-      const togglePw = $("togglePw");
-      const togglePw2 = $("togglePw2");
-      const eyeOn = $("eyeOn");
-      const eyeOff = $("eyeOff");
-      const eyeOn2 = $("eyeOn2");
-      const eyeOff2 = $("eyeOff2");
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="next" value="{{ next|default('')|e }}">
 
-      const pasteEmail = $("pasteEmail");
-      const clearName = $("clearName");
+        {# Honeypot #}
+        <input type="text" name="website" tabindex="-1" autocomplete="off"
+               style="position:absolute;left:-9999px;opacity:0" aria-hidden="true">
 
-      const pwBar = $("pwBar");
-      const pwTxt = $("pwTxt");
-      const pwRules = $("pwRules");
-      const capsWarn = $("capsWarn");
-      const pwMatch = $("pwMatch");
-      const emailPreview = $("emailPreview");
+        <!-- Nombre -->
+        <div class="auth-row">
+          <label for="name">Nombre (opcional)</label>
+          <input class="auth-input" id="name" name="name" type="text" maxlength="120"
+                 autocomplete="name" placeholder="Tu nombre">
+          <div class="auth-msg" data-msg-for="name"></div>
+        </div>
 
-      const normEmail = (v)=>String(v||"").trim().toLowerCase().slice(0,254);
-      const validEmail = (v)=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normEmail(v));
-      const normName = (v)=>String(v||"").replace(/\u0000/g,"").replace(/\s+/g," ").trim().slice(0,120);
-      const safeTrim = (v,max)=>String(v||"").replace(/\u0000/g,"").trim().slice(0,max);
+        <!-- Email -->
+        <div class="auth-row">
+          <label for="email">Email</label>
+          <input class="auth-input" id="email" name="email" type="email"
+                 autocomplete="email" required maxlength="254"
+                 placeholder="tu@email.com">
+          <div class="auth-msg" data-msg-for="email"></div>
+        </div>
 
-      const scorePassword = (p)=>{
-        p = p || "";
-        let s = 0;
-        if (p.length >= 8) s += 22;
-        if (p.length >= 12) s += 18;
-        if (/[a-z]/.test(p)) s += 10;
-        if (/[A-Z]/.test(p)) s += 10;
-        if (/\d/.test(p)) s += 15;
-        if (/[^A-Za-z0-9]/.test(p)) s += 20;
-        if (/(.)\1{2,}/.test(p)) s -= 14;
-        if (/password|123456|qwerty|skyline/i.test(p)) s -= 26;
-        return Math.max(0, Math.min(100, s));
-      };
+        <!-- Password -->
+        <div class="auth-row">
+          <label for="password">Contraseña</label>
+          <div class="auth-field">
+            <input class="auth-input" id="password" name="password"
+                   type="password" autocomplete="new-password"
+                   required minlength="8">
+            <button class="auth-icon-btn"
+                    type="button"
+                    data-toggle-pass="password"
+                    aria-label="Mostrar u ocultar contraseña">👁</button>
+          </div>
+          <div class="auth-msg" data-msg-for="password"></div>
+        </div>
 
-      const pwLabel = (s)=>{
-        if (s >= 85) return "muy fuerte";
-        if (s >= 70) return "fuerte";
-        if (s >= 45) return "media";
-        if (s >= 25) return "débil";
-        return "muy débil";
-      };
+        <!-- Password confirm -->
+        <div class="auth-row">
+          <label for="password2">Repetir contraseña</label>
+          <div class="auth-field">
+            <input class="auth-input" id="password2" name="password2"
+                   type="password" autocomplete="new-password"
+                   required minlength="8">
+            <button class="auth-icon-btn"
+                    type="button"
+                    data-toggle-pass="password2"
+                    aria-label="Mostrar u ocultar contraseña">👁</button>
+          </div>
+          <small id="matchHint">• Debe coincidir</small>
+          <div class="auth-msg" data-msg-for="password2"></div>
+        </div>
 
-      const setRule = (key, ok)=>{
-        if (!pwRules) return;
-        const el = pwRules.querySelector('[data-rule="'+key+'"]');
-        if (!el) return;
-        el.classList.toggle("is-ok", !!ok);
-      };
+        <!-- Fortaleza -->
+        <div class="auth-strength">
+          <div class="auth-meter" id="meterBox">
+            <i id="meter"></i>
+          </div>
+          <div id="strengthText">Fuerza: —</div>
+          <ul class="auth-rules">
+            <li id="rLen">8+ caracteres</li>
+            <li id="rMix">Letras y números</li>
+            <li id="rUp">Mayúscula</li>
+            <li id="rSym">Símbolo</li>
+          </ul>
+        </div>
 
-      const updateEmailPreview = ()=>{
-        const e = normEmail(emailEl?.value);
-        if (emailPreview) emailPreview.textContent = validEmail(e) ? ("✔ " + e) : "";
-      };
+        <!-- Tipo de cuenta -->
+        <div class="auth-row">
+          <label for="role">Tipo de cuenta</label>
+          <select class="auth-input" id="role" name="role">
+            <option value="customer" selected>Cliente</option>
+            <option value="affiliate">Afiliado</option>
+          </select>
+          <input type="hidden" id="wantAffiliate" name="want_affiliate" value="0">
+        </div>
 
-      const updateMeter = ()=>{
-        const p = pw1?.value || "";
-        const s = scorePassword(p);
-        if (pwBar) pwBar.style.width = String(s) + "%";
-        if (pwTxt) pwTxt.textContent = pwLabel(s);
-        setRule("len", p.length >= 8);
-        setRule("mix", /[a-z]/.test(p) && /[A-Z]/.test(p));
-        setRule("num", /\d/.test(p));
-        setRule("sym", /[^A-Za-z0-9]/.test(p));
-      };
+        <!-- Términos -->
+        <div class="auth-row">
+          <label class="auth-check">
+            <input type="checkbox" id="terms" required>
+            <span>Acepto los términos y la política de privacidad</span>
+          </label>
+        </div>
 
-      const updateMatch = ()=>{
-        const a = String(pw1?.value || "");
-        const b = String(pw2?.value || "");
-        if (!pwMatch) return;
-        if (!b) { pwMatch.textContent = ""; return; }
-        pwMatch.textContent = (a === b) ? "✔ coincide" : "no coincide";
-      };
+        <!-- Acciones -->
+        <div class="auth-actions">
+          <button class="auth-btn primary" id="submitBtn" type="submit">
+            <span class="ss-reg__btnText">Crear cuenta</span>
+          </button>
+          <a class="auth-btn secondary" href="{{ shop_url }}">Seguir comprando</a>
+        </div>
 
-      const capsState = (ev)=>{
-        try{
-          const on = ev && typeof ev.getModifierState === "function" ? ev.getModifierState("CapsLock") : false;
-          if (capsWarn) capsWarn.style.display = on ? "" : "none";
-        }catch(e){}
-      };
+        <div class="auth-meta">
+          <a href="{{ login_url }}">¿Ya tenés cuenta? Iniciá sesión</a>
+        </div>
 
-      const syncRole = ()=>{
-        const v = String(roleEl?.value || "customer");
-        if (wantAffiliate) wantAffiliate.value = (v === "affiliate") ? "1" : "0";
-      };
+      </form>
+    </div>
 
-      const setBusy = (busy)=>{
-        if (!submitBtn) return;
-        submitBtn.disabled = !!busy;
-        if (busy){
-          submitBtn.dataset._txt = submitBtn.textContent || "Crear cuenta";
-          submitBtn.textContent = "Creando…";
-        } else {
-          submitBtn.textContent = (submitBtn.dataset._txt || "Crear cuenta").trim();
-        }
-      };
+    <footer class="auth-foot">
+      <span>Después del registro te enviamos un email para verificar tu cuenta.</span>
+    </footer>
 
-      togglePw?.addEventListener("click", ()=>{
-        const isPw = pw1.type === "password";
-        pw1.type = isPw ? "text" : "password";
-        if (eyeOn) eyeOn.style.display = isPw ? "none" : "";
-        if (eyeOff) eyeOff.style.display = isPw ? "" : "none";
-        pw1.focus({preventScroll:true});
-      });
+  </section>
+</main>
 
-      togglePw2?.addEventListener("click", ()=>{
-        const isPw = pw2.type === "password";
-        pw2.type = isPw ? "text" : "password";
-        if (eyeOn2) eyeOn2.style.display = isPw ? "none" : "";
-        if (eyeOff2) eyeOff2.style.display = isPw ? "" : "none";
-        pw2.focus({preventScroll:true});
-      });
-
-      pasteEmail?.addEventListener("click", async ()=>{
-        try{
-          if (navigator.clipboard && navigator.clipboard.readText){
-            const t = await navigator.clipboard.readText();
-            const e = normEmail(t);
-            if (e){
-              emailEl.value = e;
-              updateEmailPreview();
-              emailEl.focus({preventScroll:true});
-            }
-          }
-        }catch(e){}
-      });
-
-      clearName?.addEventListener("click", ()=>{
-        if (!nameEl) return;
-        nameEl.value = "";
-        nameEl.focus({preventScroll:true});
-      });
-
-      roleEl?.addEventListener("change", syncRole);
-
-      emailEl?.addEventListener("input", ()=>{
-        emailEl.value = normEmail(emailEl.value);
-        updateEmailPreview();
-      });
-
-      nameEl?.addEventListener("input", ()=>{
-        nameEl.value = normName(nameEl.value);
-      });
-
-      pw1?.addEventListener("input", ()=>{
-        pw1.value = safeTrim(pw1.value, 256);
-        updateMeter();
-        updateMatch();
-      });
-
-      pw2?.addEventListener("input", ()=>{
-        pw2.value = safeTrim(pw2.value, 256);
-        updateMatch();
-      });
-
-      pw1?.addEventListener("keydown", capsState);
-      pw2?.addEventListener("keydown", capsState);
-
-      const preSubmitCheck = ()=>{
-        if (nameEl) nameEl.value = normName(nameEl.value);
-        if (emailEl) emailEl.value = normEmail(emailEl.value);
-        if (pw1) pw1.value = safeTrim(pw1.value, 256);
-        if (pw2) pw2.value = safeTrim(pw2.value, 256);
-
-        syncRole();
-        updateMeter();
-        updateEmailPreview();
-        updateMatch();
-
-        if (!validEmail(emailEl.value)){
-          emailEl.focus();
-          return false;
-        }
-        if (!pw1.value || pw1.value.length < 8){
-          pw1.focus();
-          return false;
-        }
-        if (pw1.value !== pw2.value){
-          pw2.focus();
-          return false;
-        }
-        if (!terms?.checked){
-          terms.focus();
-          return false;
-        }
-        return true;
-      };
-
-      let locked = false;
-      form?.addEventListener("submit", (ev)=>{
-        if (locked){ ev.preventDefault(); return; }
-        if (!preSubmitCheck()){ ev.preventDefault(); return; }
-        locked = true;
-        setBusy(true);
-        try{
-          if (validEmail(emailEl.value)) localStorage.setItem("last_email", emailEl.value);
-          if (nameEl?.value) localStorage.setItem("last_name", nameEl.value);
-        }catch(e){}
-        window.setTimeout(()=>{ locked = false; setBusy(false); }, 9500);
-      });
-
-      try{
-        const lastEmail = localStorage.getItem("last_email") || "";
-        const lastName = localStorage.getItem("last_name") || "";
-        if (emailEl && !emailEl.value && lastEmail) emailEl.value = normEmail(lastEmail);
-        if (nameEl && !nameEl.value && lastName) nameEl.value = normName(lastName);
-      }catch(e){}
-
-      syncRole();
-      updateEmailPreview();
-      updateMeter();
-      updateMatch();
-      window.addEventListener("pageshow", ()=>setBusy(false));
-    })();
-  </script>
+<script src="{{ url_for('static', filename='js/register.js') if url_for is defined else '/static/js/register.js' }}" defer></script>
 </body>
 </html>

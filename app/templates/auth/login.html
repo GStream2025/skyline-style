@@ -1,14 +1,53 @@
+{# app/templates/auth/login.html — Skyline Store (ULTRA PRO / CSP-SAFE / NO-500) #}
 <!doctype html>
-<html lang="es">
+<html lang="es" data-page="auth-login">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="robots" content="noindex,nofollow">
-  <meta name="theme-color" content="#0b1220">
-  <title>{{ (APP_NAME or "Skyline Store")|e }} · Iniciar sesión</title>
+  <meta name="theme-color" content="#0b1120">
 
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="{{ (url_for('static', filename='css/auth-login.css') if url_for is defined else '/static/css/auth-login.css') }}">
+  {# --------- APP NAME safe --------- #}
+  {% set _app = (APP_NAME if APP_NAME is defined and APP_NAME else "Skyline Store")|string|trim %}
+  <title>{{ _app|e }} · Iniciar sesión</title>
+
+  {# --------- CSRF (robusto / NO callable) --------- #}
+  {% set _csrf = '' %}
+  {% if csrf_token_value is defined and csrf_token_value %}
+    {% set _csrf = csrf_token_value %}
+  {% elif g is defined and g and (g.csrf_token is defined) and g.csrf_token %}
+    {% set _csrf = g.csrf_token %}
+  {% elif session is defined and session and session.get is defined and session.get('csrf_token') %}
+    {% set _csrf = session.get('csrf_token') %}
+  {% endif %}
+  {% if _csrf %}<meta name="csrf-token" content="{{ (_csrf|string)|trim|e }}">{% endif %}
+
+  {# --------- next safe --------- #}
+  {% set _next = (next if next is defined and next else '')|string|trim %}
+  {% if request is defined and request and request.args is defined and request.args and request.args.get is defined %}
+    {% if not _next %}{% set _next = (request.args.get('next') or '')|string|trim %}{% endif %}
+  {% endif %}
+  {% if not _next or not _next.startswith('/') or _next.startswith('//') or '://' in _next or '\\' in _next or '\n' in _next or '\r' in _next or '\t' in _next or '\x00' in _next %}
+    {% set _next = '/' %}
+  {% endif %}
+  {% if '?' in _next %}{% set _next = _next.split('?', 1)[0] %}{% endif %}
+  {% if '#' in _next %}{% set _next = _next.split('#', 1)[0] %}{% endif %}
+  {% if not _next %}{% set _next = '/' %}{% endif %}
+
+  {# --------- URLs safe --------- #}
+  {% set _login_post = (url_for('auth.login_post') if url_for is defined else '/auth/login') %}
+  {% set _reg_get    = (url_for('auth.register_get', next=_next) if url_for is defined else '/auth/register') %}
+  {% set _forgot_get = (url_for('auth.forgot_password_get', next=_next) if url_for is defined else '/auth/forgot-password') %}
+  {% set _shop_url   = (url_for('shop.shop') if url_for is defined else '/shop') %}
+  {% set _home_url   = (url_for('main.index') if url_for is defined else '/') %}
+  {% set _support    = (url_for('main.contact') if url_for is defined else '/about') %}
+
+  {# --------- CSS --------- #}
+  <link rel="stylesheet" href="{{ (url_for('static', filename='css/auth-login.css') if url_for is defined else '/static/css/auth-login.css')|e }}">
+
+  {# (opcional) mejora performance: prefetch del JS sin romper CSP #}
+  <link rel="preload" as="script" href="{{ (url_for('static', filename='js/login.js') if url_for is defined else '/static/js/login.js')|e }}">
 </head>
 
 <body class="auth-page">
@@ -16,7 +55,7 @@
     <section class="auth-card" aria-label="Iniciar sesión">
       <header class="auth-head">
         <div class="auth-brand">
-          <div class="auth-logo" aria-hidden="true">S</div>
+          <a class="auth-logo" href="{{ _home_url|e }}" aria-label="Ir al inicio">S</a>
           <div>
             <h1 class="auth-title">Acceso</h1>
             <p class="auth-subtitle">Ingresá con tu email y contraseña para continuar.</p>
@@ -27,16 +66,16 @@
       <div class="auth-body">
         {% with messages = get_flashed_messages(with_categories=true) %}
           {% if messages %}
-            <div class="auth-form" role="status" aria-live="polite">
+            <div class="auth-form" role="status" aria-live="polite" aria-atomic="true">
               {% for cat, msg in messages %}
-                {% set c = (cat or '')|lower %}
+                {% set c = (cat or '')|string|lower %}
                 {% set tone = 'good' if 'success' in c else ('bad' if 'danger' in c or 'error' in c else ('warn' if 'warn' in c else 'info')) %}
-                <div class="auth-alert" data-tone="{{ tone }}">
+                <div class="auth-alert" data-tone="{{ tone|e }}">
                   <div style="min-width:0">
                     <p class="auth-alert-title">
                       {{ 'Listo' if tone=='good' else ('Atención' if tone=='warn' else ('Error' if tone=='bad' else 'Aviso')) }}
                     </p>
-                    <p class="auth-alert-text">{{ msg }}</p>
+                    <p class="auth-alert-text">{{ (msg|string)|e }}</p>
                   </div>
                 </div>
               {% endfor %}
@@ -47,18 +86,21 @@
         <form class="auth-form"
               id="loginForm"
               method="post"
-              action="{{ (url_for('auth.login_post') if url_for is defined else '/auth/login') }}"
+              action="{{ _login_post|e }}"
               autocomplete="on"
               novalidate>
 
-          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-          <input type="hidden" name="next" value="{{ next|default('')|e }}">
-          <input type="text" name="website" value="" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;opacity:0">
+          <input type="hidden" name="csrf_token" value="{{ (_csrf|string)|trim|e }}">
+          <input type="hidden" name="next" value="{{ _next|e }}">
+
+          {# honeypot anti-bots (no molesta a humanos) #}
+          <input type="text" name="website" value="" tabindex="-1" autocomplete="off" aria-hidden="true"
+                 style="position:absolute;left:-9999px;opacity:0;height:0;width:0">
 
           <div class="auth-row">
             <div class="auth-label">
               <label for="email">Email</label>
-              <a href="{{ (url_for('auth.register_get', next=next) if url_for is defined else '/auth/register') }}">Crear cuenta</a>
+              <a href="{{ _reg_get|e }}">Crear cuenta</a>
             </div>
             <div class="auth-field">
               <input class="auth-input"
@@ -71,14 +113,14 @@
                      minlength="5"
                      maxlength="254"
                      placeholder="tu@email.com"
-                     value="{{ prefill_email|default('')|e }}">
+                     value="{{ (prefill_email|default('')|string)|e }}">
             </div>
           </div>
 
           <div class="auth-row">
             <div class="auth-label">
               <label for="password">Contraseña</label>
-              <a href="{{ (url_for('auth.forgot_password_get', next=next) if url_for is defined else '/auth/forgot-password') }}">Olvidé mi contraseña</a>
+              <a href="{{ _forgot_get|e }}">Olvidé mi contraseña</a>
             </div>
             <div class="auth-field">
               <input class="auth-input"
@@ -114,88 +156,25 @@
 
           <div class="auth-actions">
             <button class="auth-btn primary" id="submitBtn" type="submit">Iniciar sesión</button>
-            <a class="auth-btn secondary" href="{{ (url_for('shop.shop') if url_for is defined else '/shop') }}">Seguir comprando</a>
+            <a class="auth-btn secondary" href="{{ _shop_url|e }}">Seguir comprando</a>
           </div>
 
           <div class="auth-divider">o</div>
 
           <div class="auth-meta">
-            <a href="{{ (url_for('auth.register_get', next=next) if url_for is defined else '/auth/register') }}">Crear una cuenta</a>
-            <a href="{{ (url_for('main.index', _external=False) if url_for is defined else '/') }}">Ir al inicio</a>
+            <a href="{{ _reg_get|e }}">Crear una cuenta</a>
+            <a href="{{ _home_url|e }}">Ir al inicio</a>
           </div>
         </form>
       </div>
 
       <footer class="auth-foot">
-        <span>¿Necesitás ayuda? <a href="{{ (url_for('main.contact', _external=False) if url_for is defined else '/about') }}">Soporte</a></span>
+        <span>¿Necesitás ayuda? <a href="{{ _support|e }}">Soporte</a></span>
       </footer>
     </section>
   </main>
 
-  <script src="{{ (url_for('static', filename='js/login.js') if url_for is defined else '/static/js/login.js') }}" defer></script>
-  <script>
-    (function(){
-      const $ = (id)=>document.getElementById(id);
-      const form = $("loginForm");
-      const email = $("email");
-      const pw = $("password");
-      const submitBtn = $("submitBtn");
-      const togglePw = $("togglePw");
-      const eyeOn = $("eyeOn");
-      const eyeOff = $("eyeOff");
-
-      const normalizeEmail = (v)=>String(v||"").trim().toLowerCase().slice(0,254);
-      const validEmail = (v)=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(v));
-
-      const setBusy = (busy)=>{
-        if (!submitBtn) return;
-        submitBtn.disabled = !!busy;
-        if (busy){
-          submitBtn.dataset._txt = submitBtn.textContent || "Iniciar sesión";
-          submitBtn.textContent = "Ingresando…";
-        } else {
-          submitBtn.textContent = (submitBtn.dataset._txt || "Iniciar sesión").trim();
-        }
-      };
-
-      togglePw?.addEventListener("click", ()=>{
-        const isPw = pw.type === "password";
-        pw.type = isPw ? "text" : "password";
-        if (eyeOn) eyeOn.style.display = isPw ? "none" : "";
-        if (eyeOff) eyeOff.style.display = isPw ? "" : "none";
-        pw.focus({preventScroll:true});
-      });
-
-      form?.addEventListener("submit", (ev)=>{
-        const e = normalizeEmail(email?.value);
-        if (email) email.value = e;
-        if (!validEmail(e)){
-          ev.preventDefault();
-          email?.focus();
-          return;
-        }
-        if (!pw?.value || String(pw.value).length < 8){
-          ev.preventDefault();
-          pw?.focus();
-          return;
-        }
-        setBusy(true);
-        window.setTimeout(()=>setBusy(false), 9000);
-      });
-
-      try{
-        if (email && !email.value){
-          const last = localStorage.getItem("last_email") || "";
-          if (last && validEmail(last)) email.value = last;
-        }
-        email?.addEventListener("input", ()=>{
-          const v = normalizeEmail(email.value);
-          if (validEmail(v)) localStorage.setItem("last_email", v);
-        });
-      }catch(e){}
-
-      window.addEventListener("pageshow", ()=>setBusy(false));
-    })();
-  </script>
+  {# ✅ CSP-SAFE: solo scripts externos #}
+  <script src="{{ (url_for('static', filename='js/login.js') if url_for is defined else '/static/js/login.js')|e }}" defer></script>
 </body>
 </html>

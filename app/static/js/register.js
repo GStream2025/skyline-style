@@ -1,15 +1,30 @@
 (() => {
   "use strict";
 
-  const safe = (fn) => { try { return fn(); } catch (_) { return undefined; } };
-  const $ = (sel, el = document) => safe(() => el.querySelector(sel)) || null;
-  const $$ = (sel, el = document) => safe(() => Array.from(el.querySelectorAll(sel))) || [];
-  const onReady = (fn) => {
-    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", fn, { once: true });
-    else fn();
+  /* =========================================================
+     Skyline Store — Register JS (ULTRA PRO v2.0)
+     ✅ Robust / CSP-safe / NO-500 / anti-double-submit / a11y
+  ========================================================= */
+
+  const safe = (fn, fallback) => {
+    try { return fn(); } catch (_) { return fallback; }
   };
 
-  const prefersReduced = safe(() => window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) || false;
+  const trim = (v) => (v == null ? "" : String(v)).trim();
+  const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
+
+  const onReady = (fn) => {
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", fn, { once: true });
+    } else {
+      fn();
+    }
+  };
+
+  const prefersReduced = safe(
+    () => window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    false
+  );
 
   const rafThrottle = (fn) => {
     let raf = 0;
@@ -22,11 +37,22 @@
     };
   };
 
-  const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
-  const trim = (v) => (v == null ? "" : String(v)).trim();
-  const safeText = (v, max = 220) => {
+  const safeText = (v, max = 180) => {
     const s = trim(v).replace(/\u0000/g, "").replace(/\s+/g, " ");
     return s.length > max ? s.slice(0, max) : s;
+  };
+
+  const q = (sel, root = document) => safe(() => root.querySelector(sel), null);
+  const qa = (sel, root = document) => safe(() => Array.from(root.querySelectorAll(sel)), []);
+
+  const focusSafe = (el) => {
+    if (!el || typeof el.focus !== "function") return;
+    try { el.focus({ preventScroll: true }); } catch (_) { try { el.focus(); } catch (__) {} }
+  };
+
+  const scrollToEl = (el) => {
+    if (!el || typeof el.scrollIntoView !== "function") return;
+    try { el.scrollIntoView({ behavior: prefersReduced ? "auto" : "smooth", block: "center" }); } catch (_) {}
   };
 
   const emailLooksOk = (v) => {
@@ -104,17 +130,9 @@
     if (!input || !msgEl) return;
     const msgId = ensureId(msgEl, "msg");
     const cur = trim(input.getAttribute("aria-describedby") || "");
-    if (!cur.includes(msgId)) input.setAttribute("aria-describedby", (cur ? cur + " " : "") + msgId);
-  };
-
-  const focusSafe = (el) => {
-    if (!el || typeof el.focus !== "function") return;
-    try { el.focus({ preventScroll: true }); } catch (_) { try { el.focus(); } catch (__) {} }
-  };
-
-  const scrollToEl = (el) => {
-    if (!el || typeof el.scrollIntoView !== "function") return;
-    try { el.scrollIntoView({ behavior: prefersReduced ? "auto" : "smooth", block: "center" }); } catch (_) {}
+    if (!cur.split(/\s+/).includes(msgId)) {
+      input.setAttribute("aria-describedby", (cur ? cur + " " : "") + msgId);
+    }
   };
 
   const focusFirstInvalid = (root) => {
@@ -135,65 +153,80 @@
 
   const ensureCsrfInput = (form) => {
     if (!form) return true;
-    const existing = form.querySelector('input[name="csrf_token"]');
-    if (existing) {
-      if (!trim(existing.value)) {
-        const meta = getCsrfFromMeta();
-        if (meta) existing.value = meta;
-      }
-      return !!trim(existing.value);
-    }
+
+    let input = form.querySelector('input[name="csrf_token"]');
     const meta = getCsrfFromMeta();
-    const i = document.createElement("input");
-    i.type = "hidden";
-    i.name = "csrf_token";
-    i.value = meta || "";
-    form.appendChild(i);
-    return !!trim(i.value);
+
+    if (!input) {
+      input = document.createElement("input");
+      input.type = "hidden";
+      input.name = "csrf_token";
+      form.appendChild(input);
+    }
+
+    if (!trim(input.value) && meta) input.value = meta;
+    return !!trim(input.value);
+  };
+
+  const findField = (root, id, name) => {
+    return (
+      q(`#${id}`, root) ||
+      (name ? q(`[name="${name}"]`, root) : null) ||
+      null
+    );
   };
 
   onReady(() => safe(() => {
-    const root = document.querySelector("[data-ss-reg]");
-    if (!root) return;
+    // Root recomendado: <div data-ss-reg> ... </div>
+    const root =
+      document.querySelector("[data-ss-reg]") ||
+      document.querySelector("[data-page='register']") ||
+      document;
 
-    root.setAttribute("data-state", "ready");
+    if (root && root.setAttribute) root.setAttribute("data-state", "ready");
 
-    const form = root.querySelector("[data-register-form]") || document.querySelector("#registerForm");
+    const form =
+      q("[data-register-form]", root) ||
+      q("#registerForm", root) ||
+      q("form", root);
+
     if (!form) return;
 
-    const email = root.querySelector("#email");
-    const pass  = root.querySelector("#password");
-    const pass2 = root.querySelector("#password2");
+    const email = findField(root, "email", "email");
+    const pass  = findField(root, "password", "password");
+    const pass2 = findField(root, "password2", "password2");
 
-    const meterBox = root.querySelector("#meterBox");
-    const meter    = root.querySelector("#meter");
-    const strengthText = root.querySelector("#strengthText");
-    const matchHint = root.querySelector("#matchHint");
+    const meterBox = q("#meterBox", root);
+    const meter = q("#meter", root);
+    const strengthText = q("#strengthText", root);
+    const matchHint = q("#matchHint", root);
 
-    const rLen = root.querySelector("#rLen");
-    const rMix = root.querySelector("#rMix");
-    const rUp  = root.querySelector("#rUp");
-    const rSym = root.querySelector("#rSym");
+    const rLen = q("#rLen", root);
+    const rMix = q("#rMix", root);
+    const rUp  = q("#rUp", root);
+    const rSym = q("#rSym", root);
 
-    const aff = root.querySelector("#wantAffiliate");
-    const affBody = root.querySelector("#affBody");
+    const aff = q("#wantAffiliate", root);
+    const affBody = q("#affBody", root);
 
     const submitBtn =
-      root.querySelector("[data-submit]") ||
-      root.querySelector("#submitBtn") ||
-      form.querySelector('button[type="submit"]');
+      q("[data-submit]", root) ||
+      q("#submitBtn", root) ||
+      q('button[type="submit"]', form);
 
-    const submitText = submitBtn ? submitBtn.querySelector(".ss-reg__btnText") : null;
+    const submitText = submitBtn ? q(".ss-reg__btnText", submitBtn) : null;
 
+    // aria-describedby (si existen contenedores data-msg-for)
     safe(() => {
-      const msgEmail = root.querySelector('[data-msg-for="email"]');
-      const msgPass = root.querySelector('[data-msg-for="password"]');
-      const msgPass2 = root.querySelector('[data-msg-for="password2"]');
+      const msgEmail = q('[data-msg-for="email"]', root);
+      const msgPass = q('[data-msg-for="password"]', root);
+      const msgPass2 = q('[data-msg-for="password2"]', root);
       if (email && msgEmail) bindDescribedBy(email, msgEmail);
       if (pass && msgPass) bindDescribedBy(pass, msgPass);
       if (pass2 && msgPass2) bindDescribedBy(pass2, msgPass2);
     });
 
+    // touched state
     const touched = new WeakSet();
     const markTouched = (el) => { if (el) touched.add(el); };
     const isTouched = (el) => (el ? touched.has(el) : false);
@@ -217,52 +250,60 @@
     };
 
     const checkMatch = (silent = false) => {
-      if (!pass || !pass2 || !matchHint) return true;
+      if (!pass || !pass2) return true;
 
       const v1 = String(pass.value || "");
       const v2 = String(pass2.value || "");
 
-      matchHint.classList.remove("ok", "bad");
+      if (matchHint) matchHint.classList.remove("ok", "bad");
 
       if (!v2) {
-        matchHint.textContent = "• Debe coincidir";
+        if (matchHint) matchHint.textContent = "• Debe coincidir";
         setInputState(pass2, "none");
         if (!silent && isTouched(pass2)) setMsg(root, "password2", "", "");
         return false;
       }
 
       if (v1 === v2) {
-        matchHint.textContent = "• Coincide ✅";
-        matchHint.classList.add("ok");
+        if (matchHint) {
+          matchHint.textContent = "• Coincide ✅";
+          matchHint.classList.add("ok");
+        }
         setInputState(pass2, "ok");
         if (!silent && isTouched(pass2)) setMsg(root, "password2", "Perfecto, coincide.", "ok");
         return true;
       }
 
-      matchHint.textContent = "• No coincide";
-      matchHint.classList.add("bad");
+      if (matchHint) {
+        matchHint.textContent = "• No coincide";
+        matchHint.classList.add("bad");
+      }
       setInputState(pass2, "bad");
       if (!silent && isTouched(pass2)) setMsg(root, "password2", "Las contraseñas no coinciden.", "bad");
       return false;
     };
 
-    safe(() => {
-      $$("[data-toggle-pass]", root).forEach((btn) => {
-        btn.addEventListener("click", () => safe(() => {
-          const id = btn.getAttribute("data-toggle-pass") || "";
-          if (!id) return;
+    // Toggle pass (botones: data-toggle-pass="password")
+    qa("[data-toggle-pass]", root).forEach((btn) => {
+      btn.addEventListener("click", () => safe(() => {
+        const id = trim(btn.getAttribute("data-toggle-pass") || "");
+        if (!id) return;
 
-          const input = root.querySelector("#" + id) || root.querySelector(`[name="${id}"]`);
-          if (!input) return;
+        const input =
+          q(`#${id}`, root) ||
+          q(`[name="${id}"]`, root);
 
-          const show = input.type === "password";
-          input.type = show ? "text" : "password";
-          btn.setAttribute("aria-pressed", show ? "true" : "false");
+        if (!input) return;
 
-          const t = btn.getAttribute("data-toggle-text");
-          if (t) btn.textContent = show ? "🙈" : "👁";
-        }));
-      });
+        const show = input.type === "password";
+        input.type = show ? "text" : "password";
+        btn.setAttribute("aria-pressed", show ? "true" : "false");
+
+        const icon = btn.getAttribute("data-toggle-text");
+        if (icon) btn.textContent = show ? "🙈" : "👁";
+
+        focusSafe(input);
+      }));
     });
 
     const capsHint = (input, on) => {
@@ -278,12 +319,12 @@
     const setAffiliate = (open) => {
       if (!affBody) return;
       affBody.classList.toggle("is-open", !!open);
-      $$("input,select,textarea", affBody).forEach((el) => { el.disabled = !open; });
+      qa("input,select,textarea", affBody).forEach((el) => { el.disabled = !open; });
     };
 
     if (aff) {
       setAffiliate(!!aff.checked);
-      aff.addEventListener("change", () => setAffiliate(!!aff.checked));
+      aff.addEventListener("change", () => setAffiliate(!!aff.checked), { passive: true });
     }
 
     const validateEmail = () => {
@@ -308,6 +349,7 @@
 
     const validatePassword = () => {
       if (!pass) return true;
+
       const v = String(pass.value || "");
       const r = scorePassword(v);
 
@@ -339,6 +381,7 @@
       return false;
     };
 
+    // Listeners
     if (email) {
       email.addEventListener("blur", () => { markTouched(email); validateEmail(); }, { passive: true });
       email.addEventListener("input", rafThrottle(() => { if (isTouched(email)) validateEmail(); }), { passive: true });
@@ -352,7 +395,7 @@
         checkMatch(true);
       }), { passive: true });
       pass.addEventListener("keydown", (e) => {
-        if (typeof e.getModifierState === "function") capsHint(pass, !!e.getModifierState("CapsLock"));
+        if (e && typeof e.getModifierState === "function") capsHint(pass, !!e.getModifierState("CapsLock"));
       });
     }
 
@@ -360,15 +403,17 @@
       pass2.addEventListener("blur", () => { markTouched(pass2); checkMatch(); }, { passive: true });
       pass2.addEventListener("input", rafThrottle(() => { markTouched(pass2); checkMatch(); }), { passive: true });
       pass2.addEventListener("keydown", (e) => {
-        if (typeof e.getModifierState === "function") capsHint(pass2, !!e.getModifierState("CapsLock"));
+        if (e && typeof e.getModifierState === "function") capsHint(pass2, !!e.getModifierState("CapsLock"));
       });
     }
 
+    // Enter => validar antes de enviar
     form.addEventListener("keydown", (e) => {
-      if (e.key !== "Enter") return;
+      if (!e || e.key !== "Enter") return;
+
       const t = e.target;
-      if (!t || !(t instanceof HTMLElement)) return;
-      if (t.tagName === "TEXTAREA") return;
+      const tag = t && t.tagName ? String(t.tagName).toUpperCase() : "";
+      if (tag === "TEXTAREA") return;
 
       const okEmail = validateEmail();
       const okPass = validatePassword();
@@ -384,12 +429,13 @@
 
     const setLoading = (on) => {
       inflight = !!on;
-      if (!submitBtn) return;
-      submitBtn.disabled = !!on;
-      submitBtn.classList.toggle("is-loading", !!on);
-      submitBtn.setAttribute("aria-busy", on ? "true" : "false");
+      if (submitBtn) {
+        submitBtn.disabled = !!on;
+        submitBtn.classList.toggle("is-loading", !!on);
+        submitBtn.setAttribute("aria-busy", on ? "true" : "false");
+      }
       if (submitText) submitText.textContent = on ? "Creando cuenta…" : "Crear cuenta";
-      root.setAttribute("data-state", on ? "submitting" : "ready");
+      if (root && root.setAttribute) root.setAttribute("data-state", on ? "submitting" : "ready");
     };
 
     window.addEventListener("pageshow", () => safe(() => setLoading(false)));
@@ -405,7 +451,6 @@
       const okEmail = validateEmail();
       const okPass = validatePassword();
       const okMatch = checkMatch();
-
       const okCsrf = ensureCsrfInput(form);
 
       if (!(okEmail && okPass && okMatch && okCsrf)) {
@@ -413,26 +458,30 @@
 
         if (!okCsrf) {
           setMsg(root, "email", "Sesión vencida. Recargá la página.", "bad");
-          try { window.location.reload(); } catch (_) {}
+          safe(() => window.location.reload());
         }
 
-        root.classList.remove("is-shake");
-        void root.offsetWidth;
-        root.classList.add("is-shake");
+        if (root && root.classList) {
+          root.classList.remove("is-shake");
+          // reflow
+          void root.offsetWidth;
+          root.classList.add("is-shake");
+        }
 
         focusFirstInvalid(root);
-        try { window.scrollTo({ top: 0, behavior: prefersReduced ? "auto" : "smooth" }); } catch (_) {}
+        safe(() => window.scrollTo({ top: 0, behavior: prefersReduced ? "auto" : "smooth" }));
         return;
       }
 
       setLoading(true);
 
+      // failsafe: si no navega por error, destraba
       window.setTimeout(() => {
         if (inflight) setLoading(false);
       }, 12000);
     }));
 
-    // Si querés: auto focus si no hay errores visibles
+    // autofocus si no hay error visible
     safe(() => {
       const first = email || pass || pass2;
       if (first) focusSafe(first);
