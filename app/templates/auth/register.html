@@ -1,191 +1,181 @@
+{# app/templates/auth/register.html — Skyline Store (ULTRA PRO / CSRF-BULLETPROOF / CSP-FRIENDLY) #}
 <!doctype html>
-<html lang="es">
+<html lang="es" data-page="auth-register">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="robots" content="noindex,nofollow">
   <meta name="theme-color" content="#0b1220">
-  <title>{{ (APP_NAME or "Skyline Store")|e }} · Crear cuenta</title>
 
-  {# CSRF para JS (opcional pero recomendado) #}
+  {% set _app = (APP_NAME if APP_NAME is defined and APP_NAME else "Skyline Store")|string|trim %}
+  <title>{{ _app|e }} · Crear cuenta</title>
+
+  {# next seguro #}
+  {% set _next = (next if next is defined and next else '')|string|trim %}
+  {% if request is defined and request and request.args is defined and request.args and request.args.get is defined %}
+    {% if not _next %}{% set _next = (request.args.get('next') or '')|string|trim %}{% endif %}
+  {% endif %}
+  {% if not _next or not _next.startswith('/') or _next.startswith('//') or '://' in _next or '\\' in _next or '\n' in _next or '\r' in _next or '\t' in _next or '\x00' in _next %}
+    {% set _next = '/' %}
+  {% endif %}
+  {% if '?' in _next %}{% set _next = _next.split('?', 1)[0] %}{% endif %}
+  {% if '#' in _next %}{% set _next = _next.split('#', 1)[0] %}{% endif %}
+  {% if not _next %}{% set _next = '/' %}{% endif %}
+
+  {# URLs #}
+  {% set _login_url = (url_for('auth.login_get', next=_next) if url_for is defined else '/auth/login') %}
+  {% set _post_url  = (url_for('auth.register') if url_for is defined else '/auth/register') %}
+  {% set _shop_url  = (url_for('shop.shop') if url_for is defined else '/shop') %}
+  {% set _home_url  = (url_for('main.index') if url_for is defined else '/') %}
+
+  {# CSRF meta (opcional) #}
   {% if csrf_token is defined %}
-    <meta name="csrf-token" content="{{ csrf_token()|e }}">
+    {% set _csrf_meta = csrf_token() %}
+    {% if _csrf_meta %}<meta name="csrf-token" content="{{ _csrf_meta|e }}">{% endif %}
   {% endif %}
 
   <link rel="stylesheet"
-        href="{{ url_for('static', filename='css/auth-register.css') if url_for is defined else '/static/css/auth-register.css' }}">
+        href="{{ (url_for('static', filename='css/auth-register.css') if url_for is defined else '/static/css/auth-register.css')|e }}">
 </head>
 
 <body class="auth-page">
+  <main class="auth-wrap" role="main">
+    <section class="auth-card" aria-label="Crear cuenta" data-ss-reg>
+      <header class="auth-head">
+        <div class="auth-brand">
+          <a class="auth-logo" href="{{ _home_url|e }}" aria-label="Ir al inicio">S</a>
+          <div>
+            <h1 class="auth-title">Crear cuenta</h1>
+            <p class="auth-subtitle">Registrate con tu email. Te enviaremos un correo para verificar la cuenta.</p>
+          </div>
+        </div>
+      </header>
 
-{% set login_url = url_for('auth.login_get', next=next) if url_for is defined else '/auth/login' %}
-{% set post_url  = url_for('auth.register') if url_for is defined else '/auth/register' %}
-{% set shop_url  = url_for('shop.shop') if url_for is defined else '/shop' %}
+      <div class="auth-body">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            <div class="auth-form" role="status" aria-live="polite">
+              {% for cat, msg in messages %}
+                {% set c = (cat or '')|string|lower %}
+                {% set tone = 'good' if 'success' in c else ('bad' if 'danger' in c or 'error' in c else ('warn' if 'warn' in c else 'info')) %}
+                <div class="auth-alert" data-tone="{{ tone|e }}">
+                  <p class="auth-alert-text">{{ (msg|string)|e }}</p>
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+        {% endwith %}
 
-<main class="auth-wrap" role="main">
-  <section class="auth-card" aria-label="Crear cuenta" data-ss-reg>
+        <form class="auth-form"
+              id="registerForm"
+              method="post"
+              action="{{ _post_url|e }}"
+              novalidate>
 
-    <header class="auth-head">
-      <div class="auth-brand">
-        <div class="auth-logo" aria-hidden="true">S</div>
-        <div>
-          <h1 class="auth-title">Crear cuenta</h1>
-          <p class="auth-subtitle">
-            Registrate con tu email. Te enviaremos un correo para verificar la cuenta.
+          {# CSRF REAL: solo si csrf_token() existe #}
+          {% if csrf_token is defined %}
+            <input type="hidden" name="csrf_token" value="{{ csrf_token()|e }}">
+          {% endif %}
+
+          <input type="hidden" name="next" value="{{ _next|e }}">
+
+          {# Honeypot (sin inline styles) #}
+          <input class="hp" type="text" name="website" value="" tabindex="-1" autocomplete="off" aria-hidden="true">
+
+          <div class="auth-row">
+            <label for="name">Nombre (opcional)</label>
+            <input class="auth-input" id="name" name="name" type="text" maxlength="120"
+                   autocomplete="name" placeholder="Tu nombre">
+            <div class="auth-msg" data-msg-for="name"></div>
+          </div>
+
+          <div class="auth-row">
+            <label for="email">Email</label>
+            <input class="auth-input" id="email" name="email" type="email"
+                   autocomplete="email" required maxlength="254"
+                   placeholder="tu@email.com">
+            <div class="auth-msg" data-msg-for="email"></div>
+          </div>
+
+          <div class="auth-row">
+            <label for="password">Contraseña</label>
+            <div class="auth-field">
+              <input class="auth-input" id="password" name="password"
+                     type="password" autocomplete="new-password"
+                     required minlength="8" maxlength="256">
+              <button class="auth-icon-btn"
+                      type="button"
+                      data-toggle-pass="password"
+                      aria-label="Mostrar u ocultar contraseña">👁</button>
+            </div>
+            <div class="auth-msg" data-msg-for="password"></div>
+          </div>
+
+          <div class="auth-row">
+            <label for="password2">Repetir contraseña</label>
+            <div class="auth-field">
+              <input class="auth-input" id="password2" name="password2"
+                     type="password" autocomplete="new-password"
+                     required minlength="8" maxlength="256">
+              <button class="auth-icon-btn"
+                      type="button"
+                      data-toggle-pass="password2"
+                      aria-label="Mostrar u ocultar contraseña">👁</button>
+            </div>
+            <small id="matchHint">• Debe coincidir</small>
+            <div class="auth-msg" data-msg-for="password2"></div>
+          </div>
+
+          <div class="auth-strength" data-strength>
+            <div class="auth-meter" id="meterBox"><i id="meter"></i></div>
+            <div id="strengthText">Fuerza: —</div>
+            <ul class="auth-rules">
+              <li id="rLen">8+ caracteres</li>
+              <li id="rMix">Letras y números</li>
+              <li id="rUp">Mayúscula</li>
+              <li id="rSym">Símbolo</li>
+            </ul>
+          </div>
+
+          <div class="auth-row">
+            <label for="role">Tipo de cuenta</label>
+            <select class="auth-input" id="role" name="role">
+              <option value="customer" selected>Cliente</option>
+              <option value="affiliate">Afiliado</option>
+            </select>
+            <input type="hidden" id="wantAffiliate" name="want_affiliate" value="0">
+          </div>
+
+          <div class="auth-row">
+            <label class="auth-check">
+              <input type="checkbox" id="terms" name="terms" value="1" required>
+              <span>Acepto los términos y la política de privacidad</span>
+            </label>
+          </div>
+
+          <div class="auth-actions">
+            <button class="auth-btn primary" id="submitBtn" type="submit">Crear cuenta</button>
+            <a class="auth-btn secondary" href="{{ _shop_url|e }}">Seguir comprando</a>
+          </div>
+
+          <div class="auth-meta">
+            <a href="{{ _login_url|e }}">¿Ya tenés cuenta? Iniciá sesión</a>
+          </div>
+        </form>
+
+        {% if csrf_token is not defined %}
+          <p class="auth-subtitle" style="opacity:.7;margin-top:14px">
+            Aviso: csrf_token() no está disponible (revisá CSRFProtect / Flask-WTF).
           </p>
-        </div>
-      </div>
-    </header>
-
-    <div class="auth-body">
-
-      {# Flash messages #}
-      {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-          <div class="auth-form" role="status" aria-live="polite">
-            {% for cat, msg in messages %}
-              {% set c = (cat or '')|lower %}
-              {% set tone = 'good' if 'success' in c else ('bad' if 'danger' in c or 'error' in c else 'info') %}
-              <div class="auth-alert" data-tone="{{ tone }}">
-                <p class="auth-alert-text">{{ msg }}</p>
-              </div>
-            {% endfor %}
-          </div>
         {% endif %}
-      {% endwith %}
+      </div>
 
-      <form class="auth-form"
-            id="registerForm"
-            data-register-form
-            method="post"
-            action="{{ post_url }}"
-            novalidate>
+      <footer class="auth-foot">
+        <span>Después del registro te enviamos un email para verificar tu cuenta.</span>
+      </footer>
+    </section>
+  </main>
 
-        {# CSRF real (SIEMPRE) #}
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
-        {# Next seguro (el backend debe sanitizar igual) #}
-        <input type="hidden" name="next" value="{{ next|default('')|e }}">
-
-        {# Honeypot #}
-        <input type="text" name="website" tabindex="-1" autocomplete="off"
-               style="position:absolute;left:-9999px;opacity:0" aria-hidden="true">
-
-        <!-- Nombre -->
-        <div class="auth-row">
-          <label for="name">Nombre (opcional)</label>
-          <input class="auth-input" id="name" name="name" type="text" maxlength="120"
-                 autocomplete="name" placeholder="Tu nombre">
-          <div class="auth-msg" data-msg-for="name"></div>
-        </div>
-
-        <!-- Email -->
-        <div class="auth-row">
-          <label for="email">Email</label>
-          <input class="auth-input" id="email" name="email" type="email"
-                 autocomplete="email" required maxlength="254"
-                 placeholder="tu@email.com">
-          <div class="auth-msg" data-msg-for="email"></div>
-        </div>
-
-        <!-- Password -->
-        <div class="auth-row">
-          <label for="password">Contraseña</label>
-          <div class="auth-field">
-            <input class="auth-input" id="password" name="password"
-                   type="password" autocomplete="new-password"
-                   required minlength="8">
-            <button class="auth-icon-btn"
-                    type="button"
-                    data-toggle-pass="password"
-                    aria-label="Mostrar u ocultar contraseña">👁</button>
-          </div>
-          <div class="auth-msg" data-msg-for="password"></div>
-        </div>
-
-        <!-- Password confirm -->
-        <div class="auth-row">
-          <label for="password2">Repetir contraseña</label>
-          <div class="auth-field">
-            <input class="auth-input" id="password2" name="password2"
-                   type="password" autocomplete="new-password"
-                   required minlength="8">
-            <button class="auth-icon-btn"
-                    type="button"
-                    data-toggle-pass="password2"
-                    aria-label="Mostrar u ocultar contraseña">👁</button>
-          </div>
-          <small id="matchHint">• Debe coincidir</small>
-          <div class="auth-msg" data-msg-for="password2"></div>
-        </div>
-
-        <!-- Fortaleza -->
-        <div class="auth-strength">
-          <div class="auth-meter" id="meterBox">
-            <i id="meter"></i>
-          </div>
-          <div id="strengthText">Fuerza: —</div>
-          <ul class="auth-rules">
-            <li id="rLen">8+ caracteres</li>
-            <li id="rMix">Letras y números</li>
-            <li id="rUp">Mayúscula</li>
-            <li id="rSym">Símbolo</li>
-          </ul>
-        </div>
-
-        <!-- Tipo de cuenta -->
-        <div class="auth-row">
-          <label for="role">Tipo de cuenta</label>
-          <select class="auth-input" id="role" name="role">
-            <option value="customer" selected>Cliente</option>
-            <option value="affiliate">Afiliado</option>
-          </select>
-          <input type="hidden" id="wantAffiliate" name="want_affiliate" value="0">
-        </div>
-
-        <!-- Términos -->
-        <div class="auth-row">
-          <label class="auth-check">
-            <input type="checkbox" id="terms" name="terms" value="1" required>
-            <span>Acepto los términos y la política de privacidad</span>
-          </label>
-        </div>
-
-        <!-- Acciones -->
-        <div class="auth-actions">
-          <button class="auth-btn primary" id="submitBtn" type="submit">
-            <span class="ss-reg__btnText">Crear cuenta</span>
-          </button>
-          <a class="auth-btn secondary" href="{{ shop_url }}">Seguir comprando</a>
-        </div>
-
-        <div class="auth-meta">
-          <a href="{{ login_url }}">¿Ya tenés cuenta? Iniciá sesión</a>
-        </div>
-
-      </form>
-    </div>
-
-    <footer class="auth-foot">
-      <span>Después del registro te enviamos un email para verificar tu cuenta.</span>
-    </footer>
-
-  </section>
-</main>
-
-<script src="{{ url_for('static', filename='js/register.js') if url_for is defined else '/static/js/register.js' }}" defer></script>
-
-<script>
-  // Mantiene consistencia: want_affiliate = 1 cuando role=affiliate
-  (function () {
-    const role = document.getElementById("role");
-    const want = document.getElementById("wantAffiliate");
-    if (!role || !want) return;
-    const sync = () => { want.value = (role.value === "affiliate") ? "1" : "0"; };
-    role.addEventListener("change", sync);
-    sync();
-  })();
-</script>
-
+  <script src="{{ (url_for('static', filename='js/register.js') if url_for is defined else '/static/js/register.js')|e }}" defer></script>
 </body>
 </html>

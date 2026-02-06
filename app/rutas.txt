@@ -60,7 +60,6 @@ C:.
 │           __init__.cpython-312.pyc
 │
 ├───routes
-│   │   abrir_routes_en_orden.ps1
 │   │   account_routes.py
 │   │   address_routes.py
 │   │   admin_auth_routes.py
@@ -216,7 +215,6 @@ C:.
 │   │       register.html
 │   │
 │   ├───auth
-│   │       account.html
 │   │       forgot_password.html
 │   │       login.html
 │   │       register.html
@@ -254,6 +252,7 @@ C:.
 │   ├───errors
 │   │       404.html
 │   │       500.html
+│   │       invalid_request.html
 │   │
 │   ├───marketing
 │   │       marketing_admin.html

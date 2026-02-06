@@ -1,4 +1,4 @@
-# app/routes/auth_routes.py — Skyline Store (FINAL / NO-CSRF-FAIL / PROD SAFE)
+# app/routes/auth_routes.py — Skyline Store (FINAL / PROD SAFE / NO ACCOUNT PAGE)
 from __future__ import annotations
 
 import hashlib
@@ -50,6 +50,7 @@ try:
 except Exception:  # pragma: no cover
     AffiliateProfile = None  # type: ignore
 
+
 log = logging.getLogger("auth_routes")
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
@@ -61,22 +62,20 @@ _FALSE: Set[str] = {"0", "false", "no", "n", "off", "unchecked", "disable", "dis
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _ALLOWED_PUBLIC_ROLES: Set[str] = {"customer", "affiliate"}
 
-# Session-based rate limit (suave, anti-bot)
+# Session-based rate limit (soft anti-bot)
 _RL_WINDOW_SEC = 60
 _RL_MAX = 8
 _RL_STORE_CAP = 250
 _RL_STORE_TTL_SEC = 60 * 25
-_RL_STORE_SESSION_KEY = "rl_store_v9"
+_RL_STORE_SESSION_KEY = "rl_store_v10"
 
 _RL_LOGIN_KEY = "login"
 _RL_REG_KEY = "register"
 _RL_VERIFY_SEND_KEY = "verify_send"
 
-# Password policy (alineado a tu UI)
 _MIN_PASS_LEN = 8
 _MAX_PASS_LEN = 256
 
-# Verify email
 _VERIFY_TTL_MIN = 45
 _VERIFY_RL_SEC = 60
 
@@ -88,19 +87,15 @@ _VERIFY_TOKEN_TS_SESSION_KEY = "verify_token_ts"
 
 _HONEYPOT_FIELD = "website"
 
-TAB_LOGIN = "login"
-TAB_REGISTER = "register"
-
-# prevent redirect loops / sensitive zones
+# No queremos que "next" vaya a auth/admin para evitar loops
 _BLOCKED_NEXT_PREFIXES = ("/auth/", "/admin/")
 _ALLOWED_NEXT_PREFIXES = ("/",)
 
-# External validation (best-effort)
 _VALIDATE_TIMEOUT_SEC = 6
 
 
 # ------------------------
-# time / basics
+# basics / helpers
 # ------------------------
 def _now() -> int:
     return int(time.time())
@@ -131,11 +126,7 @@ def _cfg_int(key: str, default: int, *, min_v: int = 0, max_v: int = 10**9) -> i
         v = int(raw) if raw is not None else int(default)
     except Exception:
         v = default
-    if v < min_v:
-        return min_v
-    if v > max_v:
-        return max_v
-    return v
+    return max(min_v, min(max_v, v))
 
 
 def _env_str(key: str, default: str = "") -> str:
@@ -223,6 +214,7 @@ def _wants_json() -> bool:
             return True
     except Exception:
         pass
+
     return False
 
 
@@ -242,12 +234,6 @@ def _url_for_safe(endpoint: str, **values: Any) -> str:
     return ""
 
 
-def _account_home_url() -> str:
-    ep = str(current_app.config.get("ACCOUNT_HOME_ENDPOINT") or "account.account_home")
-    u = _url_for_safe(ep)
-    return u or "/account"
-
-
 def _normalize_name(name: Any) -> str:
     v = re.sub(r"\s+", " ", _norm(name, max_len=180)).strip()
     return v[:120]
@@ -262,9 +248,48 @@ def _extract_role() -> str:
     return "customer"
 
 
-def _auth_account_url(*, tab: str, nxt: str = "", email: str = "", name: str = "") -> str:
-    tab_v = TAB_LOGIN if tab not in (TAB_LOGIN, TAB_REGISTER) else tab
-    params: Dict[str, Any] = {"tab": tab_v}
+def _home_after_login(user: Any, nxt: str) -> str:
+    # 1) next seguro si viene
+    nxt_clean = _safe_next(nxt)
+    if nxt_clean:
+        return nxt_clean
+
+    # 2) si es admin, dashboard admin si existe
+    try:
+        if bool(getattr(user, "is_admin", False)):
+            u = _url_for_safe("admin.dashboard")
+            if u:
+                return u
+            return "/admin"
+    except Exception:
+        pass
+
+    # 3) preferir profile/dashboard si existe, si no home/shop
+    for ep in ("profile.dashboard", "main.index", "shop.shop"):
+        u = _url_for_safe(ep)
+        if u:
+            return u
+    return "/"
+
+
+def _login_url(nxt: str = "", email: str = "") -> str:
+    params: Dict[str, Any] = {}
+    nxt_clean = _safe_next(nxt)
+    if nxt_clean:
+        params["next"] = nxt_clean
+    if email:
+        params["email"] = _safe_email(email)
+
+    u = _url_for_safe("auth.login_get", **params)
+    if u:
+        return u
+
+    qs = urllib.parse.urlencode({k: v for k, v in params.items() if str(v)}, doseq=False)
+    return "/auth/login" + (("?" + qs) if qs else "")
+
+
+def _register_url(nxt: str = "", email: str = "", name: str = "") -> str:
+    params: Dict[str, Any] = {}
     nxt_clean = _safe_next(nxt)
     if nxt_clean:
         params["next"] = nxt_clean
@@ -273,12 +298,12 @@ def _auth_account_url(*, tab: str, nxt: str = "", email: str = "", name: str = "
     if name:
         params["name"] = _normalize_name(name)
 
-    u = _url_for_safe("auth.account", **params)
+    u = _url_for_safe("auth.register_get", **params)
     if u:
         return u
 
     qs = urllib.parse.urlencode({k: v for k, v in params.items() if str(v)}, doseq=False)
-    return "/auth/account" + (("?" + qs) if qs else "")
+    return "/auth/register" + (("?" + qs) if qs else "")
 
 
 def _client_ip() -> str:
@@ -393,7 +418,7 @@ def _flash(level: str, msg: str) -> None:
 
 
 def _no_store(resp: Response) -> Response:
-    # ✅ clave: evita cache del HTML con CSRF viejo
+    # evita cache del HTML con CSRF viejo
     try:
         resp.headers["Cache-Control"] = "no-store, max-age=0, must-revalidate"
         resp.headers.setdefault("Pragma", "no-cache")
@@ -408,19 +433,29 @@ def _no_store(resp: Response) -> Response:
     return resp
 
 
-def _require_wtf_csrf_or_fail(tab: str, nxt: str):
+def _require_wtf_csrf_or_fail(*, redirect_url: str, status_err: int = 400):
     tok = _norm(request.form.get("csrf_token") or "", max_len=4096)
     if not tok:
-        return _json_or_redirect(ok=False, message="CSRF inválido.", tab=tab, nxt=nxt, status_err=400)
+        return _json_or_redirect(
+            ok=False,
+            message="Solicitud inválida. Recargá la página.",
+            redirect_to=redirect_url,
+            status_err=status_err,
+        )
     try:
         validate_csrf(tok)
     except Exception:
-        return _json_or_redirect(ok=False, message="CSRF inválido.", tab=tab, nxt=nxt, status_err=400)
+        return _json_or_redirect(
+            ok=False,
+            message="Solicitud inválida. Recargá la página.",
+            redirect_to=redirect_url,
+            status_err=status_err,
+        )
     return None
 
 
 def _rotate_wtf_csrf() -> None:
-    # regeneración segura (sin inventar tokens)
+    # regeneración segura
     try:
         session.pop("csrf_token", None)
         generate_csrf()
@@ -437,7 +472,7 @@ def _db_rollback_quiet() -> None:
 
 
 def _clear_auth_session() -> None:
-    # ✅ mantener rl_store y csrf_token de Flask-WTF
+    # mantenemos rate-limit + csrf + verify
     keep_exact = {_RL_STORE_SESSION_KEY, "csrf_token", _VERIFY_TOKEN_SESSION_KEY, _VERIFY_TOKEN_TS_SESSION_KEY}
     keep_prefix = ("verify_rl:",)
     for k in list(session.keys()):
@@ -473,6 +508,7 @@ def _user_password_check(user: Any, password: str) -> bool:
     except Exception:
         ok = False
 
+    # micro-hardening timing
     try:
         secrets.compare_digest("a", "a" if ok else "b")
     except Exception:
@@ -610,9 +646,6 @@ def _save_verify_token_db(user: User, token: str) -> bool:
         return False
 
 
-# ------------------------
-# base url helpers
-# ------------------------
 def _best_scheme() -> str:
     preferred = _norm(
         current_app.config.get("PREFERRED_URL_SCHEME") or _env_str("PREFERRED_URL_SCHEME") or "",
@@ -670,6 +703,7 @@ def _send_verify_email(email: str, verify_url: str) -> None:
     send_email = None
     try:
         from app.services.email_service import send_email as _send_email  # type: ignore
+
         send_email = _send_email
     except Exception:
         send_email = None
@@ -685,6 +719,7 @@ def _send_verify_email(email: str, verify_url: str) -> None:
         except Exception:
             log.exception("send_email failed")
 
+    # fallback: log para debug (no rompe)
     try:
         rid = _norm(request.headers.get("X-Request-Id") or "", max_len=80)
         current_app.logger.info("VERIFY_EMAIL rid=%s to=%s url=%s", rid or "-", email, verify_url)
@@ -692,20 +727,25 @@ def _send_verify_email(email: str, verify_url: str) -> None:
         pass
 
 
-def _bad_auth(tab: str, nxt: str, *, retry_after: int = 0):
-    msg = "Credenciales incorrectas." if tab == TAB_LOGIN else "No se pudo crear la cuenta."
+def _bad_auth(*, redirect_to: str, retry_after: int = 0, generic: str = "Credenciales incorrectas."):
     try:
         time.sleep(0.12)
     except Exception:
         pass
-    return _json_or_redirect(ok=False, message=msg, tab=tab, nxt=nxt, status_err=401, retry_after=retry_after)
+    return _json_or_redirect(
+        ok=False,
+        message=generic,
+        redirect_to=redirect_to,
+        status_err=401,
+        retry_after=retry_after,
+    )
 
 
 def _is_password_reasonable(pw: str) -> bool:
     s = pw or ""
     if len(s) < _MIN_PASS_LEN or len(s) > _MAX_PASS_LEN:
         return False
-    bad = {"password", "password123", "12345678", "qwerty123", "admin12345"}
+    bad = {"password", "password123", "12345678", "qwerty123", "abc123", "admin12345"}
     if s.lower() in bad:
         return False
     has_letter = any(c.isalpha() for c in s)
@@ -714,7 +754,7 @@ def _is_password_reasonable(pw: str) -> bool:
 
 
 # ------------------------
-# Email validation (best-effort, no rompe registro)
+# External email validation (best-effort)
 # ------------------------
 def _email_validation_provider() -> str:
     p = _norm(
@@ -792,27 +832,20 @@ def _json_or_redirect(
     *,
     ok: bool,
     message: str,
-    tab: str,
-    nxt: str,
-    redirect_to: str = "",
+    redirect_to: str,
     status_ok: int = 200,
     status_err: int = 400,
     retry_after: int = 0,
 ):
     if _wants_json():
         status = status_ok if ok else status_err
-        payload: Dict[str, Any] = {"message": message, "tab": tab, "redirect": redirect_to or ""}
+        payload: Dict[str, Any] = {"message": message, "redirect": redirect_to or ""}
         if retry_after:
             payload["retry_after"] = int(retry_after)
         return _json(ok, payload, status)
 
     _flash("success" if ok else "danger", message)
-
-    if redirect_to:
-        return redirect(redirect_to, code=302)
-
-    nxt_clean = _safe_next(nxt)
-    return redirect(_auth_account_url(tab=tab, nxt=nxt_clean), code=302)
+    return redirect(redirect_to or "/", code=302)
 
 
 # ------------------------
@@ -820,7 +853,7 @@ def _json_or_redirect(
 # ------------------------
 @auth_bp.before_request
 def _auth_before_request():
-    # ✅ CSRF Flask-WTF real (evita “Solicitud inválida”)
+    # genera token para templates (GET), sin explotar
     try:
         g.csrf_token = generate_csrf()
     except Exception:
@@ -837,23 +870,42 @@ def _handle_csrf_error(e):
     _ = e
     nxt = _safe_next(request.args.get("next", "")) or "/"
     if _wants_json():
-        return jsonify({"ok": False, "message": "CSRF inválido.", "redirect": ""}), 400
+        return jsonify({"ok": False, "message": "Solicitud inválida. Recargá la página.", "redirect": ""}), 400
     flash("Solicitud inválida. Recargá la página e intentá nuevamente.", "danger")
-    return redirect(_auth_account_url(tab=TAB_LOGIN, nxt=nxt), code=302)
+    return redirect(_login_url(nxt=nxt), code=302)
 
 
 # =========================================================
-# Views
+# Views (NO account page)
 # =========================================================
-@auth_bp.get("/account")
-def account():
+@auth_bp.get("/login")
+@auth_bp.get("/login/")
+def login_get():
     if _is_authenticated():
-        nxt = _safe_next(request.args.get("next", "")) or _account_home_url()
+        nxt = _safe_next(request.args.get("next", "")) or "/"
         return redirect(nxt, code=302)
 
-    tab = _norm(request.args.get("tab", TAB_LOGIN), max_len=24).lower()
-    if tab not in (TAB_LOGIN, TAB_REGISTER):
-        tab = TAB_LOGIN
+    nxt = _safe_next(request.args.get("next", ""))
+    email = _safe_email(request.args.get("email", ""))
+    tok = getattr(g, "csrf_token", "") or generate_csrf()
+
+    return make_response(
+        render_template(
+            "auth/login.html",
+            next=nxt,
+            prefill_email=email,
+            csrf_token_value=tok,
+        ),
+        200,
+    )
+
+
+@auth_bp.get("/register")
+@auth_bp.get("/register/")
+def register_get():
+    if _is_authenticated():
+        nxt = _safe_next(request.args.get("next", "")) or "/"
+        return redirect(nxt, code=302)
 
     nxt = _safe_next(request.args.get("next", ""))
     email = _safe_email(request.args.get("email", ""))
@@ -863,58 +915,34 @@ def account():
 
     return make_response(
         render_template(
-            "auth/account.html",
-            tab=tab,
+            "auth/register.html",
             next=nxt,
             prefill_email=email,
             prefill_name=name,
-            csrf_token_value=tok,  # ✅ templates modernos
-            csrf_token=tok,        # ✅ compat templates viejos
+            csrf_token_value=tok,
         ),
         200,
     )
-
-
-@auth_bp.get("/login")
-@auth_bp.get("/login/")
-def login_get():
-    if _is_authenticated():
-        nxt = _safe_next(request.args.get("next", "")) or _account_home_url()
-        return redirect(nxt, code=302)
-    nxt = _safe_next(request.args.get("next", ""))
-    email = _safe_email(request.args.get("email", ""))
-    return redirect(_auth_account_url(tab=TAB_LOGIN, nxt=nxt, email=email), code=302)
-
-
-@auth_bp.get("/register")
-@auth_bp.get("/register/")
-def register_get():
-    if _is_authenticated():
-        nxt = _safe_next(request.args.get("next", "")) or _account_home_url()
-        return redirect(nxt, code=302)
-    nxt = _safe_next(request.args.get("next", ""))
-    email = _safe_email(request.args.get("email", ""))
-    return redirect(_auth_account_url(tab=TAB_REGISTER, nxt=nxt, email=email), code=302)
 
 
 @auth_bp.get("/signup")
 @auth_bp.get("/signin")
 def compat_aliases():
     p = _norm(request.path or "", max_len=40).lower()
-    tab = TAB_REGISTER if p.endswith("/signup") else TAB_LOGIN
-    return redirect(_auth_account_url(tab=tab), code=302)
+    if p.endswith("/signup"):
+        return redirect(_register_url(), code=302)
+    return redirect(_login_url(), code=302)
 
 
-# ✅ POST login (endpoint = auth.login_post)
 @auth_bp.post("/login")
 def login_post():
     nxt = _safe_next(request.form.get("next", "")) or _safe_next(request.args.get("next", ""))
 
     ok_rl, retry = _rate_limit(_RL_LOGIN_KEY)
     if (not ok_rl) or _is_honeypot_triggered():
-        return _bad_auth(TAB_LOGIN, nxt, retry_after=retry)
+        return _bad_auth(redirect_to=_login_url(nxt=nxt), retry_after=retry, generic="Credenciales incorrectas.")
 
-    csrf_fail = _require_wtf_csrf_or_fail(TAB_LOGIN, nxt)
+    csrf_fail = _require_wtf_csrf_or_fail(redirect_url=_login_url(nxt=nxt), status_err=400)
     if csrf_fail is not None:
         return csrf_fail
 
@@ -922,7 +950,7 @@ def login_post():
     password = _norm(request.form.get("password", ""), max_len=512)
 
     if not _valid_email(email) or not password:
-        return _bad_auth(TAB_LOGIN, nxt)
+        return _bad_auth(redirect_to=_login_url(nxt=nxt, email=email), generic="Credenciales incorrectas.")
 
     user = _get_user_by_email(email)
 
@@ -933,14 +961,15 @@ def login_post():
         ok = False
 
     if not ok:
-        return _bad_auth(TAB_LOGIN, nxt)
+        return _bad_auth(redirect_to=_login_url(nxt=nxt, email=email), generic="Credenciales incorrectas.")
 
     try:
         if hasattr(user, "is_active") and not bool(getattr(user, "is_active", True)):
-            return _bad_auth(TAB_LOGIN, nxt)
+            return _bad_auth(redirect_to=_login_url(nxt=nxt, email=email), generic="No se pudo iniciar sesión.")
     except Exception:
-        return _bad_auth(TAB_LOGIN, nxt)
+        return _bad_auth(redirect_to=_login_url(nxt=nxt, email=email), generic="No se pudo iniciar sesión.")
 
+    # actualizar last login (best-effort)
     try:
         if hasattr(user, "last_login_at"):
             setattr(user, "last_login_at", _utcnow())
@@ -960,32 +989,24 @@ def login_post():
         return _json_or_redirect(
             ok=True,
             message="Sesión iniciada. Te enviamos un email para verificar tu cuenta.",
-            tab=TAB_LOGIN,
-            nxt=nxt,
-            redirect_to=_url_for_safe("auth.verify_send", next=(nxt or "/")) or f"/auth/verify/send?next={nxt or '/'}",
+            redirect_to=_url_for_safe("auth.verify_send", next=(nxt or "/"))
+            or f"/auth/verify/send?next={urllib.parse.quote(nxt or '/')}",
             status_ok=200,
         )
 
-    return _json_or_redirect(
-        ok=True,
-        message="Bienvenido 👋",
-        tab=TAB_LOGIN,
-        nxt=nxt,
-        redirect_to=nxt or _account_home_url(),
-        status_ok=200,
-    )
+    dest = _home_after_login(user, nxt)
+    return _json_or_redirect(ok=True, message="Bienvenido 👋", redirect_to=dest, status_ok=200)
 
 
-# ✅ POST register (endpoint = auth.register) para tu template register.html
 @auth_bp.post("/register", endpoint="register")
 def register():
     nxt = _safe_next(request.form.get("next", "")) or _safe_next(request.args.get("next", ""))
 
     ok_rl, retry = _rate_limit(_RL_REG_KEY)
     if (not ok_rl) or _is_honeypot_triggered():
-        return _bad_auth(TAB_REGISTER, nxt, retry_after=retry)
+        return _bad_auth(redirect_to=_register_url(nxt=nxt), retry_after=retry, generic="No se pudo crear la cuenta.")
 
-    csrf_fail = _require_wtf_csrf_or_fail(TAB_REGISTER, nxt)
+    csrf_fail = _require_wtf_csrf_or_fail(redirect_url=_register_url(nxt=nxt), status_err=400)
     if csrf_fail is not None:
         return csrf_fail
 
@@ -995,28 +1016,48 @@ def register():
     name = _normalize_name(request.form.get("name", ""))
 
     if not _valid_email(email):
-        return _json_or_redirect(ok=False, message="Email inválido.", tab=TAB_REGISTER, nxt=nxt, status_err=400)
+        return _json_or_redirect(
+            ok=False,
+            message="Email inválido.",
+            redirect_to=_register_url(nxt=nxt, email=email, name=name),
+            status_err=400,
+        )
     if password != password2:
-        return _json_or_redirect(ok=False, message="Las contraseñas no coinciden.", tab=TAB_REGISTER, nxt=nxt, status_err=400)
+        return _json_or_redirect(
+            ok=False,
+            message="Las contraseñas no coinciden.",
+            redirect_to=_register_url(nxt=nxt, email=email, name=name),
+            status_err=400,
+        )
     if not _is_password_reasonable(password):
         return _json_or_redirect(
             ok=False,
             message=f"Contraseña inválida (mín {_MIN_PASS_LEN} y con letras+números).",
-            tab=TAB_REGISTER,
-            nxt=nxt,
+            redirect_to=_register_url(nxt=nxt, email=email, name=name),
             status_err=400,
         )
 
     ok_ext, reason = _validate_email_external(email)
     if not ok_ext:
-        return _json_or_redirect(ok=False, message=reason, tab=TAB_REGISTER, nxt=nxt, status_err=400)
+        return _json_or_redirect(
+            ok=False,
+            message=reason,
+            redirect_to=_register_url(nxt=nxt, email=email, name=name),
+            status_err=400,
+        )
 
     if _get_user_by_email(email):
-        return _json_or_redirect(ok=False, message="Ese email ya existe.", tab=TAB_LOGIN, nxt=nxt, status_err=409)
+        return _json_or_redirect(
+            ok=False,
+            message="Ese email ya existe. Iniciá sesión.",
+            redirect_to=_login_url(nxt=nxt, email=email),
+            status_err=409,
+        )
 
     role = _extract_role()
     user = User(email=email)
 
+    # set attrs best-effort
     try:
         if hasattr(user, "name"):
             setattr(user, "name", name)
@@ -1032,7 +1073,12 @@ def register():
         pass
 
     if not _user_password_set(user, password):
-        return _json_or_redirect(ok=False, message="No pudimos crear la cuenta. Reintentá.", tab=TAB_REGISTER, nxt=nxt, status_err=400)
+        return _json_or_redirect(
+            ok=False,
+            message="No pudimos crear la cuenta. Reintentá.",
+            redirect_to=_register_url(nxt=nxt, email=email, name=name),
+            status_err=400,
+        )
 
     try:
         db.session.add(user)
@@ -1048,15 +1094,20 @@ def register():
 
     except IntegrityError:
         _db_rollback_quiet()
-        return _json_or_redirect(ok=False, message="Ese email ya existe.", tab=TAB_LOGIN, nxt=nxt, status_err=409)
+        return _json_or_redirect(
+            ok=False,
+            message="Ese email ya existe. Iniciá sesión.",
+            redirect_to=_login_url(nxt=nxt, email=email),
+            status_err=409,
+        )
     except SQLAlchemyError:
         _db_rollback_quiet()
         log.exception("register SQLAlchemyError")
-        return _bad_auth(TAB_REGISTER, nxt)
+        return _bad_auth(redirect_to=_register_url(nxt=nxt), generic="No se pudo crear la cuenta.")
     except Exception:
         _db_rollback_quiet()
         log.exception("register commit failed")
-        return _bad_auth(TAB_REGISTER, nxt)
+        return _bad_auth(redirect_to=_register_url(nxt=nxt), generic="No se pudo crear la cuenta.")
 
     _set_user_session(user)  # type: ignore[arg-type]
 
@@ -1065,23 +1116,24 @@ def register():
         return _json_or_redirect(
             ok=True,
             message="Cuenta creada ✅ Te enviamos un email para verificar.",
-            tab=TAB_REGISTER,
-            nxt=nxt,
-            redirect_to=_url_for_safe("auth.verify_send", next=(nxt or "/")) or f"/auth/verify/send?next={nxt or '/'}",
+            redirect_to=_url_for_safe("auth.verify_send", next=(nxt or "/"))
+            or f"/auth/verify/send?next={urllib.parse.quote(nxt or '/')}",
             status_ok=201,
         )
 
+    # si no requiere verify, marca verified
     try:
         if hasattr(user, "email_verified"):
             setattr(user, "email_verified", True)
             db.session.add(user)
             db.session.commit()
-            session["email_verified"] = True
-            session.modified = True
+        session["email_verified"] = True
+        session.modified = True
     except Exception:
         _db_rollback_quiet()
 
-    return _json_or_redirect(ok=True, message="Cuenta creada ✅", tab=TAB_REGISTER, nxt=nxt, redirect_to=nxt or _account_home_url(), status_ok=201)
+    dest = _home_after_login(user, nxt)
+    return _json_or_redirect(ok=True, message="Cuenta creada ✅", redirect_to=dest, status_ok=201)
 
 
 @auth_bp.route("/logout", methods=["GET", "POST"])
@@ -1089,7 +1141,7 @@ def logout():
     nxt = _safe_next(request.values.get("next", "")) or "/"
 
     if request.method == "POST":
-        csrf_fail = _require_wtf_csrf_or_fail(TAB_LOGIN, nxt)
+        csrf_fail = _require_wtf_csrf_or_fail(redirect_url=_login_url(nxt=nxt), status_err=400)
         if csrf_fail is not None:
             return csrf_fail
 
@@ -1109,28 +1161,34 @@ def logout():
     return redirect(nxt, code=302)
 
 
+# ------------------------
+# verify email flow
+# ------------------------
 @auth_bp.get("/verify/send")
 def verify_send():
     nxt = _safe_next(request.args.get("next", "")) or "/"
     uid = int(session.get("user_id") or 0)
     email = _safe_email(session.get("user_email") or "")
+
     if not uid or not email:
-        return redirect(_auth_account_url(tab=TAB_LOGIN, nxt=nxt), code=302)
+        _flash("danger", "Iniciá sesión para verificar tu cuenta.")
+        return redirect(_login_url(nxt=nxt, email=email), code=302)
 
     user = db.session.get(User, uid)
     if not user:
         _clear_auth_session()
-        return redirect(_auth_account_url(tab=TAB_LOGIN, nxt=nxt), code=302)
+        _flash("danger", "Iniciá sesión nuevamente.")
+        return redirect(_login_url(nxt=nxt, email=email), code=302)
 
     if bool(getattr(user, "email_verified", False) or getattr(user, "is_verified", False)):
         session["email_verified"] = True
         session.modified = True
         _flash("success", "Tu cuenta ya está verificada ✅")
-        return redirect(nxt, code=302)
+        return redirect(_home_after_login(user, nxt), code=302)
 
     if _verify_rate_limited(email):
         _flash("info", "Ya enviamos un email recién. Esperá 1 minuto y reintentá.")
-        return redirect(_auth_account_url(tab=TAB_LOGIN, nxt=nxt), code=302)
+        return redirect(_login_url(nxt=nxt, email=email), code=302)
 
     token = _make_verify_token()
     saved_db = _save_verify_token_db(user, token)
@@ -1144,8 +1202,12 @@ def verify_send():
 
     _send_verify_email(email, verify_url)
 
-    _flash("success", "Email de verificación enviado ✅")
-    return redirect(_auth_account_url(tab=TAB_LOGIN, nxt=nxt), code=302)
+    # si existe template de confirmación, mostrala
+    try:
+        return make_response(render_template("auth/verify_email.html", next=nxt, email=email), 200)
+    except Exception:
+        _flash("success", "Email de verificación enviado ✅")
+        return redirect(_login_url(nxt=nxt, email=email), code=302)
 
 
 @auth_bp.post("/resend-verification")
@@ -1155,7 +1217,7 @@ def resend_verification():
     ok_rl, retry = _rate_limit(_RL_VERIFY_SEND_KEY)
     if (not ok_rl) or _is_honeypot_triggered():
         _flash("info", "Esperá un momento y reintentá.")
-        r = redirect(_auth_account_url(tab=TAB_LOGIN, nxt=nxt), code=302)
+        r = redirect(_login_url(nxt=nxt), code=302)
         if retry:
             try:
                 r.headers["Retry-After"] = str(int(retry))
@@ -1163,31 +1225,32 @@ def resend_verification():
                 pass
         return r
 
-    csrf_fail = _require_wtf_csrf_or_fail(TAB_LOGIN, nxt)
+    csrf_fail = _require_wtf_csrf_or_fail(redirect_url=_login_url(nxt=nxt), status_err=400)
     if csrf_fail is not None:
         return csrf_fail
 
     uid = int(session.get("user_id") or 0)
     email = _safe_email(session.get("user_email") or request.form.get("email") or "")
+
     if not uid or not email:
         _flash("danger", "Iniciá sesión para reenviar el email.")
-        return redirect(_auth_account_url(tab=TAB_LOGIN, nxt=nxt, email=email), code=302)
+        return redirect(_login_url(nxt=nxt, email=email), code=302)
 
     user = db.session.get(User, uid)
     if not user:
         _clear_auth_session()
         _flash("danger", "Iniciá sesión nuevamente.")
-        return redirect(_auth_account_url(tab=TAB_LOGIN, nxt=nxt, email=email), code=302)
+        return redirect(_login_url(nxt=nxt, email=email), code=302)
 
     if bool(getattr(user, "email_verified", False) or getattr(user, "is_verified", False)):
         session["email_verified"] = True
         session.modified = True
         _flash("success", "Tu cuenta ya está verificada ✅")
-        return redirect(nxt, code=302)
+        return redirect(_home_after_login(user, nxt), code=302)
 
     if _verify_rate_limited(email):
         _flash("info", "Ya enviamos un email recién. Esperá 1 minuto y reintentá.")
-        return redirect(_auth_account_url(tab=TAB_LOGIN, nxt=nxt), code=302)
+        return redirect(_login_url(nxt=nxt, email=email), code=302)
 
     token = _make_verify_token()
     saved_db = _save_verify_token_db(user, token)
@@ -1201,7 +1264,7 @@ def resend_verification():
 
     _send_verify_email(email, verify_url)
     _flash("success", "Correo reenviado ✅ Revisá tu email.")
-    return redirect(_auth_account_url(tab=TAB_LOGIN, nxt=nxt), code=302)
+    return redirect(_login_url(nxt=nxt, email=email), code=302)
 
 
 @auth_bp.get("/verify/<token>")
@@ -1212,18 +1275,18 @@ def verify(token: str):
     uid = int(session.get("user_id") or 0)
     if not uid:
         _flash("danger", "Iniciá sesión para verificar tu cuenta.")
-        return redirect(_auth_account_url(tab=TAB_LOGIN, nxt=nxt), code=302)
+        return redirect(_login_url(nxt=nxt), code=302)
 
     user = db.session.get(User, uid)
     if not user:
         _flash("danger", "Usuario no encontrado.")
-        return redirect(_auth_account_url(tab=TAB_LOGIN, nxt=nxt), code=302)
+        return redirect(_login_url(nxt=nxt), code=302)
 
     if bool(getattr(user, "email_verified", False) or getattr(user, "is_verified", False)):
         session["email_verified"] = True
         session.modified = True
         _flash("success", "Tu cuenta ya está verificada ✅")
-        return redirect(nxt, code=302)
+        return redirect(_home_after_login(user, nxt), code=302)
 
     token_hash = _hash_token(token)
 
@@ -1256,7 +1319,10 @@ def verify(token: str):
 
     if not ok_db and not ok_session:
         _flash("danger", "Token inválido o vencido. Pedí otro email.")
-        return redirect(_url_for_safe("auth.verify_send", next=nxt) or f"/auth/verify/send?next={nxt}", code=302)
+        return redirect(
+            _url_for_safe("auth.verify_send", next=nxt) or f"/auth/verify/send?next={urllib.parse.quote(nxt)}",
+            code=302,
+        )
 
     try:
         if hasattr(user, "email_verified"):
@@ -1276,7 +1342,7 @@ def verify(token: str):
     except Exception:
         _db_rollback_quiet()
         _flash("danger", "No se pudo verificar. Reintentá.")
-        return redirect(_auth_account_url(tab=TAB_LOGIN, nxt=nxt), code=302)
+        return redirect(_login_url(nxt=nxt), code=302)
 
     session["email_verified"] = True
     session.pop(_VERIFY_TOKEN_SESSION_KEY, None)
@@ -1285,7 +1351,7 @@ def verify(token: str):
     _rotate_wtf_csrf()
 
     _flash("success", "Cuenta verificada ✅")
-    return redirect(nxt, code=302)
+    return redirect(_home_after_login(user, nxt), code=302)
 
 
 __all__ = ["auth_bp"]

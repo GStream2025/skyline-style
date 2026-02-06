@@ -2,8 +2,9 @@
   "use strict";
 
   /* =========================================================
-     Skyline Store — Register JS (ULTRA PRO v2.0)
+     Skyline Store — Register JS (ULTRA PRO v2.1)
      ✅ Robust / CSP-safe / NO-500 / anti-double-submit / a11y
+     ✅ FIX: affiliate hidden value, Enter prevent, CSRF handling
   ========================================================= */
 
   const safe = (fn, fallback) => {
@@ -77,6 +78,7 @@
     if (hasSym) score += 15;
     if (s.length >= 14) score += 8;
 
+    // penalizaciones
     if (/^(\w)\1{6,}$/.test(s)) score = Math.min(score, 25);
     if (/password|123456|qwerty|abc123/i.test(s)) score = Math.min(score, 25);
 
@@ -143,7 +145,12 @@
     }
   };
 
-  const setRule = (el, ok) => { if (el) el.style.opacity = ok ? "1" : ".55"; };
+  // sin usar inline styles: depende de tu CSS
+  const setRule = (el, ok) => {
+    if (!el) return;
+    el.classList.toggle("is-ok", !!ok);
+    el.classList.toggle("is-off", !ok);
+  };
 
   const getCsrfFromMeta = () => {
     const meta = document.querySelector('meta[name="csrf-token"]');
@@ -168,19 +175,16 @@
     return !!trim(input.value);
   };
 
-  const findField = (root, id, name) => {
-    return (
-      q(`#${id}`, root) ||
-      (name ? q(`[name="${name}"]`, root) : null) ||
-      null
-    );
-  };
+  const findField = (root, id, name) => (
+    q(`#${id}`, root) ||
+    (name ? q(`[name="${name}"]`, root) : null) ||
+    null
+  );
 
   onReady(() => safe(() => {
-    // Root recomendado: <div data-ss-reg> ... </div>
     const root =
       document.querySelector("[data-ss-reg]") ||
-      document.querySelector("[data-page='register']") ||
+      document.querySelector("[data-page='auth-register']") ||
       document;
 
     if (root && root.setAttribute) root.setAttribute("data-state", "ready");
@@ -206,23 +210,21 @@
     const rUp  = q("#rUp", root);
     const rSym = q("#rSym", root);
 
-    const aff = q("#wantAffiliate", root);
-    const affBody = q("#affBody", root);
+    const roleSel = q("#role", root);
+    const wantAff = q("#wantAffiliate", root); // hidden 0/1
 
     const submitBtn =
       q("[data-submit]", root) ||
       q("#submitBtn", root) ||
       q('button[type="submit"]', form);
 
-    const submitText = submitBtn ? q(".ss-reg__btnText", submitBtn) : null;
-
-    // aria-describedby (si existen contenedores data-msg-for)
+    // aria-describedby
     safe(() => {
       const msgEmail = q('[data-msg-for="email"]', root);
-      const msgPass = q('[data-msg-for="password"]', root);
+      const msgPass  = q('[data-msg-for="password"]', root);
       const msgPass2 = q('[data-msg-for="password2"]', root);
       if (email && msgEmail) bindDescribedBy(email, msgEmail);
-      if (pass && msgPass) bindDescribedBy(pass, msgPass);
+      if (pass  && msgPass)  bindDescribedBy(pass, msgPass);
       if (pass2 && msgPass2) bindDescribedBy(pass2, msgPass2);
     });
 
@@ -230,6 +232,17 @@
     const touched = new WeakSet();
     const markTouched = (el) => { if (el) touched.add(el); };
     const isTouched = (el) => (el ? touched.has(el) : false);
+
+    // affiliate sync FIX (role select => hidden wantAffiliate)
+    const syncAffiliate = () => {
+      if (!roleSel || !wantAff) return;
+      const v = trim(roleSel.value);
+      wantAff.value = (v === "affiliate") ? "1" : "0";
+    };
+    if (roleSel && wantAff) {
+      roleSel.addEventListener("change", syncAffiliate, { passive: true });
+      syncAffiliate();
+    }
 
     const setMeterUI = (val) => {
       if (!meterBox || !meter) return;
@@ -283,24 +296,24 @@
       return false;
     };
 
-    // Toggle pass (botones: data-toggle-pass="password")
+    // Toggle pass
     qa("[data-toggle-pass]", root).forEach((btn) => {
       btn.addEventListener("click", () => safe(() => {
         const id = trim(btn.getAttribute("data-toggle-pass") || "");
         if (!id) return;
 
-        const input =
-          q(`#${id}`, root) ||
-          q(`[name="${id}"]`, root);
-
+        const input = q(`#${id}`, root) || q(`[name="${id}"]`, root);
         if (!input) return;
 
-        const show = input.type === "password";
-        input.type = show ? "text" : "password";
-        btn.setAttribute("aria-pressed", show ? "true" : "false");
+        const showing = input.type === "password";
+        input.type = showing ? "text" : "password";
+        btn.setAttribute("aria-pressed", showing ? "true" : "false");
 
-        const icon = btn.getAttribute("data-toggle-text");
-        if (icon) btn.textContent = show ? "🙈" : "👁";
+        // si querés cambiar icono sin inline scripts:
+        // (deja “👁” si no hay data)
+        const onText = btn.getAttribute("data-text-on") || "🙈";
+        const offText = btn.getAttribute("data-text-off") || "👁";
+        btn.textContent = showing ? onText : offText;
 
         focusSafe(input);
       }));
@@ -315,17 +328,6 @@
       }
       if (!input.classList.contains("is-error")) setMsg(root, name, "CapsLock activado.", "bad");
     };
-
-    const setAffiliate = (open) => {
-      if (!affBody) return;
-      affBody.classList.toggle("is-open", !!open);
-      qa("input,select,textarea", affBody).forEach((el) => { el.disabled = !open; });
-    };
-
-    if (aff) {
-      setAffiliate(!!aff.checked);
-      aff.addEventListener("change", () => setAffiliate(!!aff.checked), { passive: true });
-    }
 
     const validateEmail = () => {
       if (!email) return true;
@@ -381,7 +383,7 @@
       return false;
     };
 
-    // Listeners
+    // listeners
     if (email) {
       email.addEventListener("blur", () => { markTouched(email); validateEmail(); }, { passive: true });
       email.addEventListener("input", rafThrottle(() => { if (isTouched(email)) validateEmail(); }), { passive: true });
@@ -407,7 +409,7 @@
       });
     }
 
-    // Enter => validar antes de enviar
+    // Enter: si falla, prevenir submit y enfocar
     form.addEventListener("keydown", (e) => {
       if (!e || e.key !== "Enter") return;
 
@@ -420,8 +422,10 @@
       const okMatch = checkMatch(true);
 
       if (!(okEmail && okPass && okMatch)) {
+        e.preventDefault();
         markTouched(email); markTouched(pass); markTouched(pass2);
         validateEmail(); validatePassword(); checkMatch();
+        focusFirstInvalid(root);
       }
     });
 
@@ -434,7 +438,6 @@
         submitBtn.classList.toggle("is-loading", !!on);
         submitBtn.setAttribute("aria-busy", on ? "true" : "false");
       }
-      if (submitText) submitText.textContent = on ? "Creando cuenta…" : "Crear cuenta";
       if (root && root.setAttribute) root.setAttribute("data-state", on ? "submitting" : "ready");
     };
 
@@ -456,14 +459,13 @@
       if (!(okEmail && okPass && okMatch && okCsrf)) {
         e.preventDefault();
 
+        // solo si CSRF realmente falta => sugerimos recargar
         if (!okCsrf) {
-          setMsg(root, "email", "Sesión vencida. Recargá la página.", "bad");
-          safe(() => window.location.reload());
+          setMsg(root, "email", "Sesión vencida. Recargá la página e intentá de nuevo.", "bad");
         }
 
         if (root && root.classList) {
           root.classList.remove("is-shake");
-          // reflow
           void root.offsetWidth;
           root.classList.add("is-shake");
         }
@@ -475,13 +477,13 @@
 
       setLoading(true);
 
-      // failsafe: si no navega por error, destraba
+      // failsafe
       window.setTimeout(() => {
         if (inflight) setLoading(false);
       }, 12000);
-    }));
+    })));
 
-    // autofocus si no hay error visible
+    // autofocus
     safe(() => {
       const first = email || pass || pass2;
       if (first) focusSafe(first);

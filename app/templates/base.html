@@ -7,12 +7,11 @@
 
   {# =========================================================
      Skyline Store — base.html (FINAL PRO / NO-500 / JINJA-SAFE)
-     ✅ NO usa try/except (Jinja no lo soporta)
-     ✅ NO revienta por endpoints faltantes (safe_url NO llama url_for)
+     ✅ Sin referencias viejas de /account ni auth/account
+     ✅ No rompe si faltan endpoints (usa safe_url del app si existe)
      ✅ Canonical/OG robustos
-     ✅ CSRF meta estable (WTF o session)
-     ✅ CSS/JS versionados + carga condicional por pantalla
-     ✅ Fetch wrapper compatible + badge persistente
+     ✅ CSRF meta estable
+     ✅ CSS/JS por pantalla (home/auth/admin/shop/cart/etc)
   ========================================================= #}
 
   {% set _req  = request if request is defined else none %}
@@ -24,38 +23,46 @@
   {% set _title = (meta_title if meta_title is defined and meta_title else _app)|string %}
   {% set _desc  = (meta_description if meta_description is defined and meta_description else 'Marketplace premium de tecnología y streetwear.')|string %}
 
-  {# ✅ Mejora: fuente única de versionado para assets (evita des-sync) #}
   {% set _cssv = (ASSET_VER if ASSET_VER is defined and ASSET_VER else '1')|string %}
-
   {% set _nonce = (csp_nonce if csp_nonce is defined and csp_nonce else (nonce if nonce is defined else ''))|string %}
 
-  {# CSRF: soporta Flask-WTF o csrf_token en sesión #}
+  {# CSRF: Flask-WTF o value inyectado #}
   {% set _csrf = '' %}
   {% if csrf_token is defined %}
-    {% set _csrf = (csrf_token() if csrf_token is callable else (csrf_token|string)) %}
+    {% if csrf_token is callable %}
+      {% set _csrf = (csrf_token()|string) %}
+    {% else %}
+      {% set _csrf = (csrf_token|string) %}
+    {% endif %}
   {% elif csrf_token_value is defined and csrf_token_value %}
     {% set _csrf = csrf_token_value|string %}
   {% elif session is defined and session.get is defined %}
     {% set _csrf = (session.get('csrf_token') or '')|string %}
   {% endif %}
 
-  {# Fallback map de rutas (URLs conocidas) #}
+  {# Fallback URLs conocidas (por si no existe safe_url) #}
   {% set _fb = {
     'main.home': '/',
+    'main.index': '/',
     'shop.shop': '/shop',
     'cart.cart_view': '/cart',
-    'auth.account': '/auth/account',
     'auth.login_get': '/auth/login',
-    'auth.register_get': '/auth/register'
+    'auth.register_get': '/auth/register',
+    'auth.logout': '/auth/logout',
+    'admin.login': '/admin/login'
   } %}
 
-  {# ✅ FIX CRÍTICO: safe_url NO llama url_for (evita 500 por endpoint inexistente) #}
-  {% macro safe_url(ep, fb='/') -%}
+  {# ✅ URL helper: usa safe_url (inyectado por tu app) si existe #}
+  {% macro route(ep, fb='/') -%}
     {%- set _fallback = (fb if fb else (_fb.get(ep) if _fb and _fb.get(ep) else '/')) -%}
-    {{- _fallback -}}
+    {%- if safe_url is defined -%}
+      {{- safe_url(ep, _fallback) -}}
+    {%- else -%}
+      {{- _fallback -}}
+    {%- endif -%}
   {%- endmacro %}
 
-  {% macro safe_static(f) -%}
+  {% macro staticv(f) -%}
     {%- set _f = (f|string).lstrip('/') -%}
     {%- if url_for is defined -%}
       {{- url_for('static', filename=_f) ~ '?v=' ~ _cssv -}}
@@ -69,18 +76,16 @@
   {% if _req and _req.url_root is defined and _req.url_root %}
     {% set _canonical = (_req.url_root.rstrip('/') ~ (_path or '/')) %}
   {% endif %}
-  {# normaliza solo para no duplicar con slash final #}
   {% if _path != '/' %}
     {% set _canonical = _canonical.rstrip('/') %}
   {% endif %}
 
-  {% set _og = (og_image if og_image is defined and og_image else safe_static('img/og/og-home.png')) %}
+  {% set _og = (og_image if og_image is defined and og_image else staticv('img/og/og-home.png')) %}
 
   {% set _q = (_args.get('q','') if _args else '')|string %}
   {% if _q|length > 80 %}{% set _q = _q[:80] %}{% endif %}
 
-  {# ✅ Mejora: preconnect para acelerar carga en móvil/desktop #}
-  {% set _origin = ('https://skyline-style.onrender.com') %}
+  {% set _origin = 'https://skyline-style.onrender.com' %}
   {% if _req and _req.url_root is defined and _req.url_root %}
     {% set _origin = _req.url_root.rstrip('/') %}
   {% endif %}
@@ -107,29 +112,24 @@
   <meta name="format-detection" content="telephone=no">
 
   <link rel="preconnect" href="{{ _origin|e }}">
+  <link rel="icon" href="{{ staticv('img/favicon.png') }}" type="image/png">
+  <link rel="preload" as="font" href="{{ staticv('fonts/inter-var.woff2') }}" type="font/woff2" crossorigin="anonymous">
 
-  <link rel="icon" href="{{ safe_static('img/favicon.png') }}" type="image/png">
+  <link rel="preload" as="style" href="{{ staticv('css/ui-core.css')|e }}">
+  <link rel="stylesheet" href="{{ staticv('css/ui-core.css')|e }}">
 
-  {# Preload font si existe (si no existe, solo ensucia logs pero no rompe) #}
-  <link rel="preload" as="font" href="{{ safe_static('fonts/inter-var.woff2') }}" type="font/woff2" crossorigin="anonymous">
+  <link rel="preload" as="style" href="{{ staticv('css/skyline-pro.css')|e }}">
+  <link rel="stylesheet" href="{{ staticv('css/skyline-pro.css')|e }}">
 
-  {% set _ui_core_css = safe_static('css/ui-core.css') %}
-  <link rel="preload" as="style" href="{{ _ui_core_css|e }}">
-  <link rel="stylesheet" href="{{ _ui_core_css|e }}">
-
-  {% set _base_css = safe_static('css/skyline-pro.css') %}
-  <link rel="preload" as="style" href="{{ _base_css|e }}">
-  <link rel="stylesheet" href="{{ _base_css|e }}">
-
-  {# ✅ Mejora: CSS por pantalla si existe (home/auth/account) #}
+  {# CSS por pantalla #}
   {% if _path == '/' %}
-    <link rel="stylesheet" href="{{ safe_static('css/home.css') }}">
+    <link rel="stylesheet" href="{{ staticv('css/home.css') }}">
   {% elif (_path|string).startswith('/auth/login') %}
-    <link rel="stylesheet" href="{{ safe_static('css/auth-login.css') }}">
+    <link rel="stylesheet" href="{{ staticv('css/auth-login.css') }}">
   {% elif (_path|string).startswith('/auth/register') %}
-    <link rel="stylesheet" href="{{ safe_static('css/auth-register.css') }}">
-  {% elif (_path|string).startswith('/account') or (_path|string).startswith('/cuenta') %}
-    <link rel="stylesheet" href="{{ safe_static('css/account.css') }}">
+    <link rel="stylesheet" href="{{ staticv('css/auth-register.css') }}">
+  {% elif (_path|string).startswith('/admin') %}
+    <link rel="stylesheet" href="{{ staticv('css/admin-base.css') }}">
   {% endif %}
 
   {% block extra_head %}{% endblock %}
@@ -138,16 +138,18 @@
 <body>
 <a href="#main" class="skip">Saltar al contenido</a>
 
-{% set home = safe_url('main.home','/') %}
-{% set shop = safe_url('shop.shop','/shop') %}
-{% set cart = safe_url('cart.cart_view','/cart') %}
-{% set account_panel = safe_url('auth.account','/auth/account') %}
+{% set home = route('main.index','/') %}
+{% set shop = route('shop.shop','/shop') %}
+{% set cart = route('cart.cart_view','/cart') %}
+
+{# ✅ DIRECTO (sin /auth/account) #}
+{% set login_url    = '/auth/login' %}
+{% set register_url = '/auth/register' %}
+{% set logout_url   = route('auth.logout','/auth/logout') %}
+{% set admin_login  = route('admin.login','/admin/login') %}
 
 {% set _shop_sep = '&' if '?' in shop else '?' %}
 {% set offers_url = (shop ~ _shop_sep ~ 'ofertas=1') %}
-
-{% set login_url = safe_url('auth.login_get', '/auth/login') %}
-{% set register_url = safe_url('auth.register_get', '/auth/register') %}
 
 {% set user_ok = false %}
 {% if current_user is defined and current_user and current_user.is_authenticated is defined %}
@@ -189,11 +191,12 @@
       </a>
 
       {% if user_ok %}
-        <a href="{{ account_panel|e }}" class="account-link" aria-label="Mi cuenta">
-          👤 <span class="txt"><strong>Mi cuenta</strong><small>Panel</small></span>
-        </a>
+        <div class="account-cta" role="group" aria-label="Sesión">
+          <a href="{{ shop|e }}" class="btn ghost" aria-label="Seguir comprando">Seguir</a>
+          <a href="{{ logout_url|e }}" class="btn primary" aria-label="Salir">Salir</a>
+        </div>
       {% else %}
-        <div class="account-cta" role="group" aria-label="Acceso a cuenta">
+        <div class="account-cta" role="group" aria-label="Acceso">
           <a href="{{ login_url|e }}" class="btn ghost" aria-label="Entrar">Entrar</a>
           <a href="{{ register_url|e }}" class="btn primary" aria-label="Crear cuenta">Crear</a>
         </div>
@@ -218,9 +221,10 @@
       <a href="{{ offers_url|e }}">Ofertas</a>
     </div>
     <div>
-      <strong>Cuenta</strong><br>
+      <strong>Acceso</strong><br>
       <a href="{{ login_url|e }}">Ingresar</a><br>
-      <a href="{{ register_url|e }}">Crear cuenta</a>
+      <a href="{{ register_url|e }}">Crear cuenta</a><br>
+      <a href="{{ admin_login|e }}">Admin</a>
     </div>
     <div>
       <strong>Legal</strong><br>
@@ -229,7 +233,7 @@
     </div>
   </div>
 
-  {% set _year = (now_year if now_year is defined and now_year else (current_year if current_year is defined and current_year else 2026)) %}
+  {% set _year = (now_year if now_year is defined and now_year else (current_year if current_year is defined else 2026)) %}
   <p class="small container">© {{ _year|e }} {{ _app|e }}</p>
 </footer>
 
@@ -259,7 +263,6 @@
     try { localStorage.setItem('skyline_cart_count', String(num)); } catch (_) {}
   };
 
-  // ✅ Badge persistente: si no hay cartCount, usa localStorage
   const readCartCount = () => {
     try {
       const v = Number(window.Skyline.cartCount || 0);
@@ -272,7 +275,6 @@
     return 0;
   };
 
-  // ✅ Fetch wrapper compatible (no usa input.headers)
   const origFetch = window.fetch;
   if (typeof origFetch === 'function' && token && !window.Skyline.__fetchWrapped) {
     window.Skyline.__fetchWrapped = true;
@@ -302,26 +304,22 @@
     };
   }
 
-  // ✅ Siempre restaura badge al volver atrás / cache del navegador
   window.addEventListener('pageshow', () => {
     try { window.Skyline.setCartBadge(readCartCount()); } catch (_) {}
   }, { passive: true });
 
-  // primera pintura
   try { window.Skyline.setCartBadge(readCartCount()); } catch (_) {}
 })();
 </script>
 
-{# ✅ JS por pantalla (existen en /static/js según tu tree) #}
+{# JS por pantalla #}
 {% if _path == '/' %}
-  <script defer src="{{ safe_static('js/home_boot.js') }}"></script>
-  <script defer src="{{ safe_static('js/home.js') }}"></script>
+  <script defer src="{{ staticv('js/home_boot.js') }}"></script>
+  <script defer src="{{ staticv('js/home.js') }}"></script>
 {% elif (_path|string).startswith('/auth/login') %}
-  <script defer src="{{ safe_static('js/login.js') }}"></script>
+  <script defer src="{{ staticv('js/login.js') }}"></script>
 {% elif (_path|string).startswith('/auth/register') %}
-  <script defer src="{{ safe_static('js/register.js') }}"></script>
-{% elif (_path|string).startswith('/account') or (_path|string).startswith('/cuenta') %}
-  <script defer src="{{ safe_static('js/account.js') }}"></script>
+  <script defer src="{{ staticv('js/register.js') }}"></script>
 {% endif %}
 
 {% block extra_js %}{% endblock %}

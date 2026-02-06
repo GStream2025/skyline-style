@@ -1,4 +1,4 @@
-{# app/templates/auth/login.html — Skyline Store (ULTRA PRO / NO-CSRF / CSP-FRIENDLY) #}
+{# app/templates/auth/login.html — Skyline Store (ULTRA PRO / CSRF-BULLETPROOF / CSP-FRIENDLY) #}
 <!doctype html>
 <html lang="es" data-page="auth-login">
 <head>
@@ -8,20 +8,10 @@
   <meta name="robots" content="noindex,nofollow">
   <meta name="theme-color" content="#0b1120">
 
-  {# App name safe #}
   {% set _app = (APP_NAME if APP_NAME is defined and APP_NAME else "Skyline Store")|string|trim %}
   <title>{{ _app|e }} · Iniciar sesión</title>
 
-  {# CSRF robusto: SIEMPRE preferir csrf_token() #}
-  {% set _csrf = '' %}
-  {% if csrf_token is defined %}
-    {% set _csrf = csrf_token() %}
-  {% elif csrf_token_value is defined and csrf_token_value %}
-    {% set _csrf = csrf_token_value %}
-  {% endif %}
-  {% if _csrf %}<meta name="csrf-token" content="{{ _csrf|string|trim|e }}">{% endif %}
-
-  {# next safe (igual validalo en backend) #}
+  {# next seguro #}
   {% set _next = (next if next is defined and next else '')|string|trim %}
   {% if request is defined and request and request.args is defined and request.args and request.args.get is defined %}
     {% if not _next %}{% set _next = (request.args.get('next') or '')|string|trim %}{% endif %}
@@ -33,7 +23,7 @@
   {% if '#' in _next %}{% set _next = _next.split('#', 1)[0] %}{% endif %}
   {% if not _next %}{% set _next = '/' %}{% endif %}
 
-  {# URLs safe #}
+  {# URLs #}
   {% set _login_post = (url_for('auth.login_post') if url_for is defined else '/auth/login') %}
   {% set _reg_get    = (url_for('auth.register_get', next=_next) if url_for is defined else '/auth/register') %}
   {% set _forgot_get = (url_for('auth.forgot_password_get', next=_next) if url_for is defined else '/auth/forgot-password') %}
@@ -41,11 +31,14 @@
   {% set _home_url   = (url_for('main.index') if url_for is defined else '/') %}
   {% set _support    = (url_for('main.contact') if url_for is defined else '/about') %}
 
-  {# CSS #}
   <link rel="stylesheet" href="{{ (url_for('static', filename='css/auth-login.css') if url_for is defined else '/static/css/auth-login.css')|e }}">
-
-  {# preload JS (ok) #}
   <link rel="preload" as="script" href="{{ (url_for('static', filename='js/login.js') if url_for is defined else '/static/js/login.js')|e }}">
+
+  {# opcional: expone token en meta SOLO si csrf_token() existe #}
+  {% if csrf_token is defined %}
+    {% set _csrf_meta = csrf_token() %}
+    {% if _csrf_meta %}<meta name="csrf-token" content="{{ _csrf_meta|e }}">{% endif %}
+  {% endif %}
 </head>
 
 <body class="auth-page">
@@ -88,11 +81,13 @@
               autocomplete="on"
               novalidate>
 
-          {# CSRF: si _csrf quedara vacío, el backend debe rechazar con error claro #}
-          <input type="hidden" name="csrf_token" value="{{ _csrf|string|trim|e }}">
+          {# CSRF REAL: SOLO si csrf_token() existe (Flask-WTF) #}
+          {% if csrf_token is defined %}
+            <input type="hidden" name="csrf_token" value="{{ csrf_token()|e }}">
+          {% endif %}
+
           <input type="hidden" name="next" value="{{ _next|e }}">
 
-          {# Honeypot sin estilos inline (CSP-friendly). Ocultalo con CSS: .hp{position:absolute;left:-9999px;opacity:0;height:0;width:0} #}
           <input class="hp" type="text" name="website" value="" tabindex="-1" autocomplete="off" aria-hidden="true">
 
           <div class="auth-row">
@@ -165,6 +160,13 @@
             <a href="{{ _home_url|e }}">Ir al inicio</a>
           </div>
         </form>
+
+        {# Si no hay csrf_token en el contexto, lo avisamos para debug #}
+        {% if csrf_token is not defined %}
+          <p class="auth-subtitle" style="opacity:.7;margin-top:14px">
+            Aviso: csrf_token() no está disponible (revisá CSRFProtect / Flask-WTF).
+          </p>
+        {% endif %}
       </div>
 
       <footer class="auth-foot">
@@ -173,7 +175,6 @@
     </section>
   </main>
 
-  {# CSP-SAFE: solo scripts externos #}
   <script src="{{ (url_for('static', filename='js/login.js') if url_for is defined else '/static/js/login.js')|e }}" defer></script>
 </body>
 </html>

@@ -121,7 +121,6 @@ def wants_json() -> bool:
 def current_app_config(key: str, default: Any = None) -> Any:
     try:
         from flask import current_app
-
         return current_app.config.get(key, default)
     except Exception:
         return default
@@ -144,7 +143,6 @@ def resp_error(status: int, code: str, message: str):
         headers["Pragma"] = "no-cache"
         headers["Expires"] = "0"
 
-    # ✅ mejora: orden preferido y variables consistentes
     for tpl in (f"errors/{status_i}.html", "errors/error.html", "error.html"):
         try:
             return render_template(tpl, message=msg, status=status_i, code=err), status_i, headers
@@ -200,7 +198,6 @@ def _safe_next_path(v: str) -> str:
         return ""
     if ".." in path_only:
         return ""
-    # ✅ mejora: evita loops a auth/admin directos
     if path_only.startswith(("/auth/", "/admin/")):
         return ""
     return path_only[:512]
@@ -247,7 +244,6 @@ def _register_blueprints(app: Flask) -> dict[str, Any]:
     # Preferred: centralized registrar
     try:
         from app.routes import register_blueprints as reg  # type: ignore
-
         rep = reg(app)
         if isinstance(rep, dict):
             stats["routes_report"] = rep
@@ -256,11 +252,11 @@ def _register_blueprints(app: Flask) -> dict[str, Any]:
     except Exception as e:
         stats["errors"]["app.routes.register_blueprints"] = f"{type(e).__name__}: {e}"
 
-    # Fallback direct imports
+    # Fallback direct imports (según tu estructura)
     candidates = [
         ("app.routes.main_routes", "main_bp"),
         ("app.routes.shop_routes", "shop_bp"),
-        ("app.routes.shop_routes", "shop_compat_bp"),  # ✅ mejora: no te olvides del compat
+        ("app.routes.shop_routes", "shop_compat_bp"),
         ("app.routes.auth_routes", "auth_bp"),
         ("app.routes.account_routes", "account_bp"),
         ("app.routes.cart_routes", "cart_bp"),
@@ -304,20 +300,14 @@ def _register_blueprints(app: Flask) -> dict[str, Any]:
 def _apply_runtime_defaults(app: Flask) -> None:
     is_prod = _is_prod(app)
 
-    app.config.setdefault(
-        "MAX_CONTENT_LENGTH",
-        _env_int("MAX_CONTENT_LENGTH", 2_000_000, min_v=200_000, max_v=25_000_000),
-    )
+    app.config.setdefault("MAX_CONTENT_LENGTH", _env_int("MAX_CONTENT_LENGTH", 2_000_000, min_v=200_000, max_v=25_000_000))
     app.config.setdefault("JSON_SORT_KEYS", False)
     app.config.setdefault("TEMPLATES_AUTO_RELOAD", not is_prod)
     app.config.setdefault("SEND_FILE_MAX_AGE_DEFAULT", 31536000 if is_prod else 0)
 
     app.config.setdefault("SESSION_COOKIE_HTTPONLY", True)
     app.config.setdefault("SESSION_COOKIE_SAMESITE", "Lax")
-    app.config.setdefault(
-        "PERMANENT_SESSION_LIFETIME",
-        timedelta(days=_env_int("SESSION_DAYS", 14, min_v=1, max_v=365)),
-    )
+    app.config.setdefault("PERMANENT_SESSION_LIFETIME", timedelta(days=_env_int("SESSION_DAYS", 14, min_v=1, max_v=365)))
     app.config.setdefault("SESSION_REFRESH_EACH_REQUEST", False)
     app.config.setdefault("PREFERRED_URL_SCHEME", "https" if is_prod else "http")
     app.config.setdefault("SESSION_COOKIE_SECURE", is_prod)
@@ -348,8 +338,10 @@ def _apply_runtime_defaults(app: Flask) -> None:
     app.config.setdefault("STRICT_STARTUP", _env_bool("STRICT_STARTUP", is_prod))
     app.config.setdefault("HEALTH_REVEAL_ERRORS", _env_bool("HEALTH_REVEAL_ERRORS", not is_prod))
 
-    app.config.setdefault("ADMIN_LOGIN_ENDPOINT", _env_str("ADMIN_LOGIN_ENDPOINT", "admin.login"))
-    app.config.setdefault("AUTH_ACCOUNT_ENDPOINT", _env_str("AUTH_ACCOUNT_ENDPOINT", "auth.account"))
+    # endpoints
+    app.config.setdefault("ADMIN_LOGIN_ENDPOINT", _env_str("ADMIN_LOGIN_ENDPOINT", "admin_auth.login_get"))
+    app.config.setdefault("AUTH_LOGIN_ENDPOINT", _env_str("AUTH_LOGIN_ENDPOINT", "auth.login_get"))
+    app.config.setdefault("AUTH_REGISTER_ENDPOINT", _env_str("AUTH_REGISTER_ENDPOINT", "auth.register_get"))
 
     if _is_testing(app):
         app.config.setdefault("TRUST_PROXY_HEADERS", False)
@@ -495,22 +487,31 @@ def _configure_sqlalchemy(app: Flask) -> None:
 
 
 # -----------------------------------------------------------------------------
-# Redirects
+# Redirects (DIRECT login/register)
 # -----------------------------------------------------------------------------
-def _best_redirect_to_account(app: Flask, tab: str) -> Response:
+def _best_redirect_to_auth(app: Flask, which: str) -> Response:
     nxt = _safe_next_path(request.args.get("next", "")) or "/"
-    endpoint = str(app.config.get("AUTH_ACCOUNT_ENDPOINT", "auth.account") or "auth.account")
-    # ✅ mejora: si existe endpoint real, usalo; si no, fallback a path fijo
-    if _endpoint_exists(app, endpoint):
+
+    if which == "login":
+        ep = str(app.config.get("AUTH_LOGIN_ENDPOINT", "auth.login_get") or "auth.login_get")
+        if _endpoint_exists(app, ep):
+            try:
+                return redirect(url_for(ep, next=nxt), code=302)
+            except Exception:
+                pass
+        return redirect("/auth/login?" + urlencode({"next": nxt}), code=302)
+
+    ep = str(app.config.get("AUTH_REGISTER_ENDPOINT", "auth.register_get") or "auth.register_get")
+    if _endpoint_exists(app, ep):
         try:
-            return redirect(url_for(endpoint, tab=tab, next=nxt), code=302)
+            return redirect(url_for(ep, next=nxt), code=302)
         except Exception:
             pass
-    return redirect("/auth/account?" + urlencode({"tab": tab, "next": nxt}), code=302)
+    return redirect("/auth/register?" + urlencode({"next": nxt}), code=302)
 
 
 # -----------------------------------------------------------------------------
-# Jinja helpers (safe_url REAL)
+# Jinja helpers (safe_url)
 # -----------------------------------------------------------------------------
 def _safe_url(app: Flask, endpoint: str, fallback: str = "", **values: Any) -> str:
     ep = (endpoint or "").strip()
@@ -553,7 +554,6 @@ def create_app(overrides: Optional[dict[str, Any]] = None) -> Flask:
     if bool(app.config.get("WTF_CSRF_ENABLED", True)):
         csrf.init_app(app)
 
-    # ✅ mejora: context globals estables (no expone view_functions gigante)
     @app.context_processor
     def _inject_globals():
         app_name = app.config.get("APP_NAME", "Skyline Store")
@@ -580,13 +580,13 @@ def create_app(overrides: Optional[dict[str, Any]] = None) -> Flask:
         g.request_id = rid[:128] if rid else secrets.token_urlsafe(10)
         g._t0 = time.perf_counter()
 
-        # ✅ mejora: aliases /login /register y /auth/login /auth/register sin loops
+        # aliases /login /register y /auth/login /auth/register sin loops
         if request.method in {"GET", "HEAD"}:
             p = request.path.rstrip("/") or "/"
-            if p in {"/login", "/auth/login"}:
-                return _best_redirect_to_account(app, "login")
-            if p in {"/register", "/auth/register"}:
-                return _best_redirect_to_account(app, "register")
+            if p in {"/login"}:
+                return _best_redirect_to_auth(app, "login")
+            if p in {"/register"}:
+                return _best_redirect_to_auth(app, "register")
 
         return None
 
@@ -605,7 +605,6 @@ def create_app(overrides: Optional[dict[str, Any]] = None) -> Flask:
         except Exception:
             pass
 
-        # ✅ mejora: no-store en errores, excepto assets típicos
         if (
             bool(app.config.get("NO_STORE_ERROR_PAGES", True))
             and resp.status_code >= 400
@@ -617,7 +616,6 @@ def create_app(overrides: Optional[dict[str, Any]] = None) -> Flask:
 
         return _apply_security_headers(app, resp)
 
-    # ✅ mejora: init_models no tumba el server si STRICT_STARTUP off
     init_ok = True
     init_err: Optional[str] = None
     try:
@@ -640,45 +638,14 @@ def create_app(overrides: Optional[dict[str, Any]] = None) -> Flask:
 
     stats = _register_blueprints(app)
 
-    # ✅ mejora: no crear fallback si ya existe regla real (evita colisiones)
-    if not _rule_exists(app, "/auth/login"):
-        app.add_url_rule(
-            "/auth/login",
-            "_fallback_auth_login",
-            partial(_best_redirect_to_account, app, "login"),
-            methods=["GET", "HEAD"],
-        )
-
-    if not _rule_exists(app, "/auth/register"):
-        app.add_url_rule(
-            "/auth/register",
-            "_fallback_auth_register",
-            partial(_best_redirect_to_account, app, "register"),
-            methods=["GET", "HEAD"],
-        )
-
-    for rule, endpoint, tab in (
-        ("/login", "_fallback_login", "login"),
-        ("/register", "_fallback_register", "register"),
-    ):
-        if not _rule_exists(app, rule):
-            app.add_url_rule(rule, endpoint, partial(_best_redirect_to_account, app, tab), methods=["GET", "HEAD"])
-
-    # ✅ emergencia /auth/account si falta endpoint
-    account_ep = str(app.config.get("AUTH_ACCOUNT_ENDPOINT", "auth.account") or "auth.account")
-    if not _endpoint_exists(app, account_ep) and not _rule_exists(app, "/auth/account"):
-
-        @app.get("/auth/account")
-        def _emergency_account():
-            tab = (request.args.get("tab") or "login").strip().lower()
-            if tab not in {"login", "register"}:
-                tab = "login"
-            nxt = _safe_next_path(request.args.get("next", "")) or "/"
-            return render_template("auth/account.html", active_tab=tab, next=nxt, prefill_email=""), 200
+    # fallbacks si faltan reglas (no colisionan si ya existen)
+    if not _rule_exists(app, "/login"):
+        app.add_url_rule("/login", "_fallback_login", partial(_best_redirect_to_auth, app, "login"), methods=["GET", "HEAD"])
+    if not _rule_exists(app, "/register"):
+        app.add_url_rule("/register", "_fallback_register", partial(_best_redirect_to_auth, app, "register"), methods=["GET", "HEAD"])
 
     # Root fallback si nadie lo registró
     if not _rule_exists(app, "/"):
-
         @app.get("/")
         def _root():
             for ep in ("main.home", "main.index", "shop.shop"):
@@ -689,7 +656,6 @@ def create_app(overrides: Optional[dict[str, Any]] = None) -> Flask:
                         continue
             return "Skyline Store", 200, {"Cache-Control": "no-store"}
 
-    # ✅ health: útil para Render + debug
     @app.get("/health")
     def health():
         rr = stats.get("routes_report") if isinstance(stats.get("routes_report"), dict) else {}
@@ -710,7 +676,6 @@ def create_app(overrides: Optional[dict[str, Any]] = None) -> Flask:
             "bp_registered": int(stats.get("registered", 0)),
             "bp_failed": int(stats.get("failed", 0)),
             "bp_skipped": int(stats.get("skipped", 0)),
-            "auth_account": bool(_endpoint_exists(app, account_ep) or _rule_exists(app, "/auth/account")),
             "init_models_ok": bool(init_ok),
             "ts": int(time.time()),
         }
@@ -721,7 +686,6 @@ def create_app(overrides: Optional[dict[str, Any]] = None) -> Flask:
             payload["init_models_error"] = init_err
         return payload
 
-    # ✅ ready: check DB real
     @app.get("/ready")
     def ready():
         if _is_testing(app):
@@ -748,7 +712,6 @@ def create_app(overrides: Optional[dict[str, Any]] = None) -> Flask:
             payload["db_error"] = err[:260]
         return payload, (200 if ok else 503)
 
-    # ✅ error handlers
     @app.errorhandler(HTTPException)
     def http_error(e: HTTPException):
         code = int(getattr(e, "code", 500) or 500)
