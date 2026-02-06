@@ -1,9 +1,33 @@
 ﻿{% extends "base.html" %}
 {% block title %}Solicitud inválida{% endblock %}
+
 {% block content %}
-<div class="container" style="padding:40px 0;">
-  <h1 style="font-size:28px;">⚠️ Solicitud inválida</h1>
-  <p>La sesión o el formulario expiró. Recargá la página e intentá de nuevo.</p>
-  <a class="btn" href="{{ url_for('main.index') if 'main' in current_app.blueprints else '/' }}">Volver</a>
-</div>
+<section class="container" style="padding:48px 0;">
+  <div style="max-width:760px;margin:0 auto;">
+    <div style="display:flex;gap:14px;align-items:center;margin-bottom:14px;">
+      <div style="font-size:34px;line-height:1;">⚠️</div>
+      <div>
+        <h1 style="margin:0;font-size:28px;">Solicitud inválida</h1>
+        <p style="margin:6px 0 0;opacity:.8;">
+          La sesión o el formulario expiró. Recargá la página e intentá de nuevo.
+        </p>
+      </div>
+    </div>
+
+    <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);border-radius:14px;padding:16px;margin:18px 0;">
+      <p style="margin:0;opacity:.9;">
+        Si estabas en un formulario (login / registro / checkout), puede haber expirado el token.
+      </p>
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
+        <a href="javascript:location.reload()" class="btn" style="text-decoration:none;">🔄 Recargar</a>
+        <a href="{{ url_for('main.index') }}" class="btn" style="text-decoration:none;">🏠 Ir al inicio</a>
+      </div>
+
+      <p style="margin:12px 0 0;opacity:.65;font-size:13px;">
+        Consejo: si el problema se repite, abrí la página en una pestaña nueva.
+      </p>
+    </div>
+  </div>
+</section>
 {% endblock %}
