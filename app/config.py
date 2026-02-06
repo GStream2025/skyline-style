@@ -1,3 +1,4 @@
+# app/config.py — Skyline Store (Neon-only / CSRF-safe / Prod-hardened)
 from __future__ import annotations
 
 import os
@@ -6,7 +7,7 @@ import secrets
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any, Dict, Optional, Set, Type
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
 
 _TRUE = {"1", "true", "yes", "y", "on", "checked", "enable", "enabled"}
 _FALSE = {"0", "false", "no", "n", "off", "disable", "disabled"}
@@ -79,12 +80,18 @@ def _slug(s: str, fallback: str = "skyline") -> str:
     return out or fallback
 
 
+def _computed_env() -> str:
+    env_ = env_str("ENV", "").strip().lower()
+    flask_env = env_str("FLASK_ENV", "").strip().lower()
+    debug = env_bool("DEBUG", env_bool("FLASK_DEBUG", False))
+    raw = (flask_env or env_ or "production").strip().lower()
+    if raw in {"dev", "development"} or debug:
+        return "development"
+    return "production"
+
+
 def _is_prod(env_value: str) -> bool:
     return (env_value or "").strip().lower() == "production"
-
-
-def _is_sqlite(uri: str) -> bool:
-    return (uri or "").strip().lower().startswith("sqlite:")
 
 
 def normalize_samesite(raw: str, default: str = "Lax") -> str:
@@ -115,21 +122,42 @@ def normalize_site_url(raw: str) -> str:
     return f"{scheme}://{p.netloc}".rstrip("/")
 
 
-def _normalize_db_any(raw: Optional[str]) -> str:
+def _is_localhost_host(host: str) -> bool:
+    h = (host or "").strip().lower()
+    if not h:
+        return False
+    if h in {"localhost", "127.0.0.1"}:
+        return True
+    if h.startswith("localhost:") or h.startswith("127.0.0.1:"):
+        return True
+    return False
+
+
+def _cookie_domain_sane(domain: str) -> str:
+    d = (domain or "").strip().lower()
+    if not d or _is_localhost_host(d):
+        return ""
+    if "://" in d or "/" in d or " " in d:
+        return ""
+    return d
+
+
+def _normalize_db(raw: Optional[str]) -> str:
+    """
+    Make DATABASE_URL safe:
+    - strip quotes
+    - remove accidental newlines
+    - normalize postgres:// -> postgresql://
+    """
     if not raw:
         return ""
-    u = str(raw).strip()
+    u = str(raw).strip().strip('"').strip("'")
+    u = u.replace("\r", "").replace("\n", "").strip()
     if not u:
         return ""
     if u.startswith("postgres://"):
         u = u.replace("postgres://", "postgresql://", 1)
     return u
-
-
-def _require_db_for_prod(uri: str, *, is_prod: bool) -> str:
-    if not is_prod:
-        return uri or "sqlite:///skyline_local.db"
-    return uri
 
 
 def _db_has_hostname(uri: str) -> bool:
@@ -141,16 +169,23 @@ def _db_has_hostname(uri: str) -> bool:
 
 
 def _maybe_force_sslmode_require(uri: str, *, is_prod: bool) -> str:
-    if not is_prod:
+    """
+    In prod, ensure sslmode=require for Postgres unless already present.
+    Works for Neon URLs.
+    """
+    if not uri:
         return uri
-    if _is_sqlite(uri):
+    if not is_prod:
         return uri
     try:
         p = urlparse(uri)
-        q = p.query or ""
-        if "sslmode=" in q.lower():
-            return uri
-        new_q = (q + "&" if q else "") + "sslmode=require"
+        q = dict(parse_qsl(p.query, keep_blank_values=True))
+        # if already present (any case), keep
+        for k in list(q.keys()):
+            if k.lower() == "sslmode":
+                return uri
+        q["sslmode"] = "require"
+        new_q = urlencode(q, doseq=True)
         return urlunparse(p._replace(query=new_q))
     except Exception:
         return uri
@@ -173,42 +208,6 @@ def csp_for_tailwind_cdn() -> Dict[str, list]:
     }
 
 
-def _computed_env() -> str:
-    env_ = env_str("ENV", "").lower()
-    flask_env = env_str("FLASK_ENV", "").lower()
-    debug = env_bool("DEBUG", env_bool("FLASK_DEBUG", False))
-    raw = flask_env or env_ or "production"
-    return "development" if (raw in {"dev", "development"} or debug) else "production"
-
-
-def _secret_fallback(*, is_prod: bool) -> str:
-    if is_prod:
-        return ""
-    base = env_str("DEV_SECRET_KEY", "dev_skyline_fallback_change_me")
-    return base or "dev_skyline_fallback_change_me"
-
-
-def _is_localhost_host(host: str) -> bool:
-    h = (host or "").strip().lower()
-    if not h:
-        return False
-    if h in {"localhost", "127.0.0.1"}:
-        return True
-    if h.startswith("localhost:") or h.startswith("127.0.0.1:"):
-        return True
-    return False
-
-
-def _cookie_domain_sane(domain: str) -> str:
-    d = (domain or "").strip().lower()
-    if not d or _is_localhost_host(d):
-        return ""
-    # Basic sanity: no scheme, no path, no spaces
-    if "://" in d or "/" in d or " " in d:
-        return ""
-    return d
-
-
 @dataclass(frozen=True)
 class _DbResolved:
     uri: str
@@ -216,6 +215,7 @@ class _DbResolved:
 
 
 class BaseConfig:
+    # ---------- ENV ----------
     @classmethod
     def env_name(cls) -> str:
         return _computed_env()
@@ -232,10 +232,20 @@ class BaseConfig:
     def testing(cls) -> bool:
         return env_bool("TESTING", False)
 
+    # ---------- URL / HOST CANONICAL ----------
     @classmethod
     def site_url(cls) -> str:
+        # Prefer SITE_URL, then APP_URL, then Render external URL
         raw = env_str("SITE_URL", env_str("APP_URL", env_str("RENDER_EXTERNAL_URL", "")))
         return normalize_site_url(raw)
+
+    @classmethod
+    def canonical_host(cls) -> str:
+        # Used by your middleware to force single host (prevents CSRF mismatch)
+        site = cls.site_url()
+        if not site:
+            return ""
+        return urlparse(site).netloc
 
     @classmethod
     def preferred_url_scheme(cls) -> str:
@@ -253,60 +263,64 @@ class BaseConfig:
             scheme = "https"
         return scheme
 
+    # ---------- SECRETS ----------
     @classmethod
     def secret_key(cls) -> str:
         k = env_str("SECRET_KEY", "").strip()
         if k:
             return k
-        return _secret_fallback(is_prod=cls.is_prod())
+        # Never auto-generate prod SECRET_KEY (would break sessions across deploys)
+        if cls.is_prod():
+            return ""
+        base = env_str("DEV_SECRET_KEY", "dev_skyline_fallback_change_me")
+        return base or "dev_skyline_fallback_change_me"
 
     @classmethod
     def csrf_secret_key(cls) -> Optional[str]:
         v = env_str("WTF_CSRF_SECRET_KEY", "").strip()
         if v:
             return v
+        # In prod: let Flask-WTF use SECRET_KEY (stable)
         if cls.is_prod():
             return None
         return secrets.token_urlsafe(32)
 
+    # ---------- COOKIES ----------
     @classmethod
     def session_cookie_domain(cls) -> str:
         return _cookie_domain_sane(env_str("SESSION_COOKIE_DOMAIN", ""))
 
+    # ---------- DATABASE (NEON ONLY) ----------
     @classmethod
     def database_resolved(cls) -> _DbResolved:
         """
-        ✅ SINGLE SOURCE OF TRUTH (Production safe):
-        - Prod: ONLY DATABASE_URL is accepted. (Avoids Render/Neon overwrite bugs)
-        - Dev: DATABASE_URL or fallback sqlite.
+        ✅ NEON ONLY:
+        - Prod: MUST use DATABASE_URL (Neon). No alternate env allowed.
+        - Dev: DATABASE_URL preferred, fallback sqlite ONLY if explicitly enabled.
         """
         is_prod = cls.is_prod()
-
-        db_env = _normalize_db_any(os.getenv("DATABASE_URL"))
-        db_env = _require_db_for_prod(db_env, is_prod=is_prod)
+        db_env = _normalize_db(os.getenv("DATABASE_URL"))
 
         if is_prod:
             return _DbResolved(uri=db_env, source="DATABASE_URL")
 
-        # Dev fallback (optional): allow SQLALCHEMY_DATABASE_URI only if explicitly set
-        # but keep DATABASE_URL preferred to avoid future misconfig.
-        alt = _normalize_db_any(env_str("SQLALCHEMY_DATABASE_URI", ""))
-        uri = alt or db_env or "sqlite:///skyline_local.db"
-        src = "SQLALCHEMY_DATABASE_URI" if alt else ("DATABASE_URL" if db_env else "fallback_sqlite")
-        return _DbResolved(uri=uri, source=src)
+        allow_sqlite = env_bool("ALLOW_SQLITE_DEV", default=True)
+        if db_env:
+            return _DbResolved(uri=db_env, source="DATABASE_URL")
+        if allow_sqlite:
+            return _DbResolved(uri="sqlite:///skyline_local.db", source="fallback_sqlite")
+        return _DbResolved(uri="", source="missing_DATABASE_URL")
 
     @classmethod
     def database_uri(cls) -> str:
         r = cls.database_resolved()
         uri = r.uri or ""
-        uri = _maybe_force_sslmode_require(uri, is_prod=cls.is_prod())
-        return uri
+        return _maybe_force_sslmode_require(uri, is_prod=cls.is_prod())
 
     @classmethod
     def engine_options(cls) -> Dict[str, Any]:
         uri = cls.database_uri()
-        if _is_sqlite(uri):
-            # SQLite: avoid pool params and keep it stable
+        if uri.lower().startswith("sqlite:"):
             return {"pool_pre_ping": True}
 
         opts: Dict[str, Any] = {
@@ -316,14 +330,9 @@ class BaseConfig:
             "max_overflow": env_int("DB_MAX_OVERFLOW", 10, min_v=0, max_v=80),
             "pool_timeout": env_int("DB_POOL_TIMEOUT", 30, min_v=5, max_v=120),
         }
-
-        # If your DB URL has sslmode, psycopg will use it; connect_args is optional.
-        # But allow enforcing in prod for non-query URLs.
-        if cls.is_prod() and "sslmode=" not in uri.lower():
-            opts["connect_args"] = {"sslmode": "require"}
-
         return opts
 
+    # ---------- VALIDATION ----------
     @classmethod
     def validate_required(cls) -> None:
         if not cls.is_prod():
@@ -332,17 +341,20 @@ class BaseConfig:
         k = cls.secret_key()
         if not k or len(k) < 32:
             raise RuntimeError("SECRET_KEY faltante o muy corto (>=32). Setealo en Render.")
-        if not cls.site_url():
-            raise RuntimeError("SITE_URL faltante. Setealo en Render (ej: https://tu-app.onrender.com).")
+
+        site = cls.site_url()
+        if not site:
+            raise RuntimeError("SITE_URL (o APP_URL) faltante. Setealo en Render (https://tu-dominio).")
 
         db = cls.database_uri()
         if not db:
-            raise RuntimeError("DATABASE_URL faltante. Setealo en Render/Neon.")
-        if _is_sqlite(db):
-            raise RuntimeError("En producción no se permite SQLite. Configurá Postgres (DATABASE_URL).")
+            raise RuntimeError("DATABASE_URL faltante. Debe ser la de Neon.")
+        if db.lower().startswith("sqlite:"):
+            raise RuntimeError("En producción no se permite SQLite. Usá Neon (DATABASE_URL).")
         if not _db_has_hostname(db):
-            raise RuntimeError("DATABASE_URL inválida: no tiene hostname resolvible.")
+            raise RuntimeError("DATABASE_URL inválida: no tiene hostname.")
 
+    # ---------- FINAL FLASK CONFIG ----------
     @classmethod
     def as_flask_config(cls) -> Dict[str, Any]:
         env_name = cls.env_name()
@@ -367,10 +379,7 @@ class BaseConfig:
         paypal_id = env_str("PAYPAL_CLIENT_ID", "")
         paypal_secret = env_str("PAYPAL_SECRET", "")
 
-        enable_payments = env_bool(
-            "ENABLE_PAYMENTS",
-            default=bool(mp_token or stripe_sk or paypal_secret),
-        )
+        enable_payments = env_bool("ENABLE_PAYMENTS", default=bool(mp_token or stripe_sk or paypal_secret))
 
         printful_key = env_str("PRINTFUL_API_KEY", env_str("PRINTFUL_KEY", env_str("PRINTFUL_API_TOKEN", "")))
         enable_printful = env_bool("ENABLE_PRINTFUL", default=bool(printful_key))
@@ -381,7 +390,6 @@ class BaseConfig:
 
         csrf_secret = cls.csrf_secret_key()
 
-        # Mail defaults: keep empty in prod unless explicitly configured
         mail_server = env_str("MAIL_SERVER", "")
         mail_sender = env_str("MAIL_DEFAULT_SENDER", "")
 
@@ -397,6 +405,10 @@ class BaseConfig:
             "PORT": port,
             "PREFERRED_URL_SCHEME": scheme,
             "SECRET_KEY": cls.secret_key(),
+            # Canonical host (use in middleware to redirect to single host)
+            "CANONICAL_HOST": cls.canonical_host(),
+            "CANONICAL_SCHEME": scheme,
+            "FORCE_CANONICAL_HOST": env_bool("FORCE_CANONICAL_HOST", default=is_prod),
             # Proxy/HTTPS
             "TRUST_PROXY_HEADERS": env_bool("TRUST_PROXY_HEADERS", default=is_prod),
             "FORCE_HTTPS": env_bool("FORCE_HTTPS", default=is_prod),
@@ -419,7 +431,7 @@ class BaseConfig:
             "WTF_CSRF_TIME_LIMIT": env_opt_int("WTF_CSRF_TIME_LIMIT", 3600, min_v=300, max_v=86400),
             "WTF_CSRF_SSL_STRICT": env_bool("WTF_CSRF_SSL_STRICT", default=is_prod),
             "WTF_CSRF_SECRET_KEY": csrf_secret,
-            # SQLAlchemy (derived from DATABASE_URL)
+            # SQLAlchemy (NEON via DATABASE_URL)
             "SQLALCHEMY_DATABASE_URI": cls.database_uri(),
             "SQLALCHEMY_TRACK_MODIFICATIONS": False,
             "SQLALCHEMY_ECHO": env_bool("SQLALCHEMY_ECHO", default=False),
@@ -458,7 +470,7 @@ class BaseConfig:
             "MAIL_USERNAME": env_str("MAIL_USERNAME", ""),
             "MAIL_PASSWORD": env_str("MAIL_PASSWORD", ""),
             "MAIL_DEFAULT_SENDER": mail_sender,
-            # Security headers policy (for your middleware to apply)
+            # Security headers policy (for your middleware)
             "CONTENT_SECURITY_POLICY": csp_for_tailwind_cdn(),
             # Flask templating/json
             "JSON_SORT_KEYS": env_bool("JSON_SORT_KEYS", default=False),
